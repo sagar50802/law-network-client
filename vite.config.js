@@ -2,7 +2,7 @@ import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
 
 export default defineConfig({
-  base: '/',  // ✅ Add this line
+  base: '/', // ensures relative paths in production
   plugins: [react()],
   clearScreen: false,
   server: {
@@ -10,8 +10,18 @@ export default defineConfig({
     strictPort: true,
     open: true,
     proxy: {
-      "/api": { target: "http://localhost:5000", changeOrigin: true },
-      "/uploads": { target: "http://localhost:5000", changeOrigin: true }
+      "/api": {
+        target: 'https://law-network-api.onrender.com',
+        changeOrigin: true,
+      },
+      "/uploads": {
+        target: 'https://law-network-api.onrender.com',
+        changeOrigin: true,
+      },
     },
+  },
+  publicDir: "public", // ✅ ensure _redirects is copied into dist
+  build: {
+    outDir: "dist",     // ✅ confirm output directory
   },
 });
