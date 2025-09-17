@@ -5,8 +5,9 @@
   "type": "module",
   "scripts": {
     "dev": "vite --port 5173 --open",
-    "build": "vite build",
-    "preview": "vite preview"
+    "build": "vite build && npm run copy-redirects",
+    "preview": "vite preview",
+    "copy-redirects": "copy public\\_redirects dist\\_redirects || cp public/_redirects dist/_redirects"
   },
   "dependencies": {
     "axios": "^1.12.2",
