@@ -284,33 +284,25 @@ export default function PDFViewer() {
     await load();
   };
 
-   const uploadPDF = async (e) => {
+    const uploadPDF = async (e) => {
   e.preventDefault();
   if (!sid || !form.file) return;
 
-  // Step 1: Upload file to GridFS
   const fd = new FormData();
-  fd.append("file", form.file);
-  const res = await fetch(`${API_BASE}/api/gridfs/upload`, {
-    method: "POST",
-    body: fd,
-  });
-  const json = await res.json();
+  fd.append("title", form.title || "Untitled");
+  fd.append("locked", String(form.locked));
+  fd.append("pdf", form.file);  // must match backend multer.single("pdf")
 
-  // Step 2: Save chapter record in /api/pdfs with GridFS filename as url
   await fetch(`${API_BASE}/api/pdfs/subjects/${sid}/chapters`, {
     method: "POST",
-    headers: { ...authHeaders(), "Content-Type": "application/json" },
-    body: JSON.stringify({
-      title: form.title || "Untitled",
-      locked: form.locked,
-      url: `/api/gridfs/file/${json.filename}`, // ⬅️ GridFS path
-    }),
+    headers: authHeaders(), // keep your token/auth if needed
+    body: fd,
   });
 
   setForm({ title: "", file: null, locked: true });
   await load();
 };
+
 
   const delChapter = async (cid) => {
     await fetch(`${API_BASE}/api/pdfs/subjects/${sid}/chapters/${cid}`, {
