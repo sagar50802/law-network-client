@@ -5,7 +5,7 @@
   "type": "module",
   "scripts": {
     "dev": "vite --port 5173 --open",
-    "build": "vite build",
+    "build": "vite build && (copy public\\_redirects dist\\_redirects || cp public/_redirects dist/_redirects)",
     "preview": "vite preview"
   },
   "dependencies": {
