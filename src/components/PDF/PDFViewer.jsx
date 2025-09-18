@@ -1,4 +1,6 @@
 // src/components/pdfs/PDFViewer.jsx
+const API_BASE = import.meta.env.VITE_API_URL;
+
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import { API_BASE, fetchJSON, authHeaders } from "../../utils/api";
@@ -561,11 +563,11 @@ export default function PDFViewer() {
               }`}
               onContextMenu={(e) => e.preventDefault()}
             >
-              <Document
-                file={`${API_BASE}${chapter.url}`}
-                onLoadSuccess={onDocLoad}
-                renderMode="canvas"
-                loading={<div className="p-6 text-gray-500">Loading PDF…</div>}
+              < Document
+      file={`${API_BASE}${chapter.url}`}   // ✅ full backend URL
+      onLoadSuccess={onDocLoad}
+      renderMode="canvas"
+      loading={<div className="p-6 text-gray-500">Loading PDF…</div>}
               >
                 <Page
                   pageNumber={page}
