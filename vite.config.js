@@ -20,8 +20,9 @@ export default defineConfig({
       },
     },
   },
-  publicDir: "public", // ✅ ensure _redirects is copied into dist
+  publicDir: "public", // ✅ this copies normal files
   build: {
-    outDir: "dist",     // ✅ confirm output directory
+    outDir: "dist",
+    copyPublicDir: true, // ✅ force Vite to copy everything from /public
   },
 });
