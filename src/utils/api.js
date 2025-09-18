@@ -91,7 +91,15 @@ export async function uploadFile(path, file, field = "file", extra = {}, opts = 
 }
 
 // ✅ Absolute media path resolver
-export const absUrl = (p) => (/^https?:\/\//i.test(p) ? p : apiUrl(p));
+ // ✅ Absolute media path resolver
+export const absUrl = (p) => {
+  if (/^https?:\/\//i.test(p)) return p;       // already full URL
+  if (p.startsWith("/uploads/")) {
+    return `https://law-network-api.onrender.com${p}`; // serve media correctly
+  }
+  return apiUrl(p); // keep API calls same
+};
+
 
 // ✅ Default export (bundle everything)
 export default {
