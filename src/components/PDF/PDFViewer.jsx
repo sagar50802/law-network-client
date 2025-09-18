@@ -1,5 +1,4 @@
-// src/components/pdfs/PDFViewer.jsx
-const API_BASE = import.meta.env.VITE_API_URL;
+// src/components/pdfs/PDFViewer.
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
