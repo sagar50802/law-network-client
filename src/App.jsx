@@ -21,6 +21,9 @@ import Plagiarism from "./pages/Plagiarism.jsx";
 // ✅ NEW: Scholar Space page
 import ScholarPage from "./pages/ScholarPage.jsx";
 
+// ✅ NEW: PDF Demo page (for GridFS testing)
+import PdfDemo from "./pages/PdfDemo.jsx";
+
 function NotFound() {
   return (
     <div className="flex flex-col items-center justify-center py-24 text-center">
@@ -60,6 +63,8 @@ export default function App() {
             <Route path="/scholar" element={<ScholarPage />} />
             {/* ✅ NEW route */}
             <Route path="/plagiarism" element={<Plagiarism />} />
+            {/* ✅ PDF Demo route */}
+            <Route path="/pdfdemo" element={<PdfDemo />} />
 
             {/* Admin */}
             <Route path="/admin/login" element={<AdminLogin />} />
