@@ -2,7 +2,7 @@
 
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
-import { API_BASE, fetchJSON, authHeaders } from "../../utils/api";
+import { API_BASE, fetchJSON, authHeaders, absUrl } from "../../utils/api";
 import usePreviewLock from "../../hooks/usePreviewLock";
 import IfOwnerOnly from "../common/IfOwnerOnly";
 import QROverlay from "../common/QROverlay";
@@ -562,8 +562,7 @@ export default function PDFViewer() {
               }`}
               onContextMenu={(e) => e.preventDefault()}
             >
-              < Document
-      file={`${API_BASE}${chapter.url}`}   // ✅ full backend URL
+              <Document file={absUrl(chapter.url)}  // ✅ full backend URL
       onLoadSuccess={onDocLoad}
       renderMode="canvas"
       loading={<div className="p-6 text-gray-500">Loading PDF…</div>}
