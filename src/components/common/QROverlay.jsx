@@ -113,10 +113,6 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
 
   if (!open) return null;
 
-  // ✅ compute progress width for graph bar
-  const completedSteps = [pending.step1, pending.step2, pending.step3].filter(Boolean).length;
-  const progressWidth = `${(completedSteps / 3) * 100}%`;
-
   return (
     <div className="fixed inset-y-0 right-0 bg-white shadow-2xl w-full max-w-md z-50 overflow-y-auto">
       <div className="p-5 relative">
@@ -133,12 +129,19 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
           {feature} – {title}
         </h3>
 
-        {/* ✅ Step Graph */}
-        <div className="step-graph mb-4">
-          <div className="step-graph-progress" style={{ width: progressWidth }}></div>
-          <div className={`step-node ${pending?.step1 ? "active" : "step-1-blink"}`}>1</div>
-          <div className={`step-node ${pending?.step2 ? "active" : "step-2-blink"}`}>2</div>
-          <div className={`step-node ${pending?.step3 ? "active" : "step-3-blink"}`}>3</div>
+        {/* ✅ Progress Graph */}
+        <div className="flex justify-between mb-4 text-xs md:text-sm font-semibold">
+          <div className={`flex-1 text-center ${pending?.step1 ? "text-green-600" : "step-1-blink"}`}>
+            Step 1: Scan QR {pending?.step1 && <span className="tick-animate">✅</span>}
+          </div>
+          <div className="flex-1 text-center">───</div>
+          <div className={`flex-1 text-center ${pending?.step2 ? "text-green-600" : "step-2-blink"}`}>
+            Step 2: Fill Info {pending?.step2 && <span className="tick-animate">✅</span>}
+          </div>
+          <div className="flex-1 text-center">───</div>
+          <div className={`flex-1 text-center ${pending?.step3 ? "text-green-600" : "step-3-blink"}`}>
+            Step 3: Upload Screenshot {pending?.step3 && <span className="tick-animate">✅</span>}
+          </div>
         </div>
 
         {/* QR Image */}
@@ -149,18 +152,22 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
               alt="QR code"
               className={`w-full h-56 object-contain border rounded-xl bg-gray-50 ${pending?.step1 ? "" : "cursor-pointer qr-glow"}`}
               onClick={() => {
+                // Step 1 → mark complete + redirect
                 setPending((s) => ({ ...s, step1: true }));
                 setTimeout(() => {
                   window.location.href = "upi://pay";
-                }, 2000); // 2s delay
+                }, 1500); // 1.5s delay
               }}
             />
             {!pending?.step1 && (
-              <p className="text-xs text-gray-600 mt-1">Click QR to Scan &amp; Pay</p>
+              <p className="step-1-blink text-xs mt-1">
+                कृपया QR Code पर टैप करें और स्कैन करें (Tap QR to Scan & Pay)
+              </p>
             )}
             {pending?.step1 && (
-              <p className="text-green-600 text-xs font-semibold animate-blink">
-                कृपया payment के बाद स्क्रीन शॉट लेना ना भूले (Please don't forget to take screenshot after payment done)
+              <p className="step-1-blink text-xs mt-1">
+                कृपया payment के बाद स्क्रीन शॉट लेना ना भूले  
+                <br />(Please don't forget to take screenshot after payment done)
               </p>
             )}
           </div>
@@ -220,6 +227,7 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
           )
         ) : (
           <form onSubmit={handleSubmit} className="grid gap-3">
+            <p className="step-2-blink text-sm">👉 Please fill your info details</p>
             <input
               placeholder="Your Name"
               className="border rounded p-2"
@@ -258,6 +266,7 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
             />
 
             {/* Screenshot block */}
+            <p className="step-3-blink text-sm">👉 Step 3: Upload your payment screenshot</p>
             <div className="border rounded-xl p-3 text-sm bg-pink-50 relative">
               <label className="flex items-center justify-between text-pink-600 font-semibold mb-2">
                 <span>Upload Payment Screenshot</span>
