@@ -1,6 +1,6 @@
 // src/components/videos/VideoGallery.jsx
 import { useEffect, useRef, useState } from "react";
-import { API_BASE, fetchJSON, authHeaders } from "../../utils/api";
+import { API_BASE, fetchJSON, authHeaders, absUrl } from "../../utils/api";
 import IfOwnerOnly from "../common/IfOwnerOnly";
 import usePreviewLock from "../../hooks/usePreviewLock";
 import QROverlay from "../common/QROverlay";
@@ -67,7 +67,7 @@ export default function VideoGallery() {
     } catch {}
   };
 
-  // Read access by id + aliases (name/slug) and choose the latest expiry
+  // Read access by id + aliases and choose the latest expiry
   const getAccessForPlaylist = async (pl) => {
     const candidates = [];
     candidates.push(await loadAccess("playlist", pl.id, email));
@@ -75,19 +75,16 @@ export default function VideoGallery() {
     if (pl.slug) candidates.push(await loadAccess("playlist", pl.slug, email));
     const valid = candidates.filter((x) => x?.expiry && x.expiry > Date.now());
     if (valid.length === 0) return null;
-    // pick the farthest (latest) expiry
     return valid.reduce((a, b) => (a.expiry > b.expiry ? a : b));
   };
 
   const applyGrant = async ({ featureId, expiry, message }) => {
-    // Try to normalize to a real playlist id; if not yet possible, queue
     const normalizedId = resolvePlaylistId(featureId);
     if (!normalizedId) {
       pendingEventsRef.current.push({ type: "grant", featureId, expiry, message });
       return;
     }
 
-    // persist under normalized id and flip UI
     persistLocalAccess(normalizedId, expiry);
     setAccessMap((prev) => ({
       ...prev,
@@ -107,7 +104,6 @@ export default function VideoGallery() {
       } catch {}
     }
 
-    // confirm with backend
     const fresh = await loadAccess("playlist", normalizedId, email);
     setAccessMap((prev) => ({ ...prev, [normalizedId]: fresh }));
   };
@@ -134,7 +130,7 @@ export default function VideoGallery() {
 
     const newAccess = {};
     for (const pl of pls) {
-      newAccess[pl.id] = await getAccessForPlaylist(pl); // ← id + aliases
+      newAccess[pl.id] = await getAccessForPlaylist(pl);
     }
     setAccessMap(newAccess);
     setAccessLoading(false);
@@ -145,7 +141,7 @@ export default function VideoGallery() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // Reconcile any queued events once playlists exist
+  // Reconcile queued events once playlists exist
   useEffect(() => {
     if (!playlists.length || pendingEventsRef.current.length === 0) return;
     const queue = pendingEventsRef.current.splice(0, pendingEventsRef.current.length);
@@ -162,13 +158,12 @@ export default function VideoGallery() {
     if (p && p.items?.[0]) setClip(p.items[0]);
   }, [pid, playlists]);
 
-  // Refresh all (keeps UI smooth)
   const refreshAllAccess = async () => {
     if (playlists.length === 0) return;
     setAccessLoading(true);
     const next = {};
     for (const pl of playlists) {
-      next[pl.id] = await getAccessForPlaylist(pl); // ← id + aliases
+      next[pl.id] = await getAccessForPlaylist(pl);
     }
     setAccessMap(next);
     setAccessLoading(false);
@@ -190,7 +185,6 @@ export default function VideoGallery() {
       return applyRevoke({ featureId: detail.featureId });
     }
 
-    // fallback: verify this single feature
     const normalizedId = resolvePlaylistId(detail.featureId) || detail.featureId;
     const stillHas = await loadAccess("playlist", normalizedId, email);
     setAccessMap((prev) => ({ ...prev, [normalizedId]: stillHas }));
@@ -202,24 +196,20 @@ export default function VideoGallery() {
     }
   });
 
-  // Refresh on window focus
   useEffect(() => {
     const onFocus = () => {
       refreshAllAccess();
     };
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playlists, email]);
 
-  // 🔔 NEW: listen for silent app-wide refresh signals
   useEffect(() => {
     const doRefresh = () => refreshAllAccess();
     window.addEventListener("softRefresh", doRefresh);
     return () => window.removeEventListener("softRefresh", doRefresh);
   }, []);
 
-  // Refresh exactly when the nearest expiry hits
   useEffect(() => {
     const now = Date.now();
     let nextExpiry = Infinity;
@@ -234,7 +224,6 @@ export default function VideoGallery() {
     return () => clearTimeout(t);
   }, [accessMap]);
 
-  // Per-video preview cutoff (10s) → auto-open overlay only when locked
   const lock = usePreviewLock({
     type: "video",
     id: clip?.id || "none",
@@ -251,7 +240,7 @@ export default function VideoGallery() {
 
     const onTimeUpdate = () => {
       const plAccess = accessMap[pid];
-      if (plAccess?.expiry && plAccess.expiry > Date.now()) return; // unlocked → no overlay
+      if (plAccess?.expiry && plAccess.expiry > Date.now()) return;
       if (!lock.unlocked && el.currentTime >= 10 && !overlayOpenedForThisPlayback) {
         el.pause();
         const currentPl = playlists.find((x) => x.id === pid);
@@ -455,14 +444,13 @@ export default function VideoGallery() {
         </IfOwnerOnly>
       </aside>
 
-      {/* Main Player (blurs while overlay is open) */}
+      {/* Main Player */}
       <div
         ref={panelRef}
         className={`md:col-span-2 border rounded-2xl bg-white p-5 relative ${
           playlistOverlay ? "blur-sm opacity-80 pointer-events-none" : ""
         }`}
       >
-        {/* 🎉 Congrats toast */}
         {grantToast && (
           <div className="absolute top-3 right-3 z-20 bg-green-600 text-white text-sm px-3 py-2 rounded-lg shadow">
             {grantToast}
@@ -503,16 +491,18 @@ export default function VideoGallery() {
             </div>
 
             <div className="rounded-xl border p-3 bg-black">
-              <video
-                ref={videoRef}
-                src={`${API_BASE}${clip.url}`}
-                controls
-                preload="metadata"
-                className="w-full rounded-lg"
-                controlsList="nodownload noplaybackrate noremoteplayback"
-                disablePictureInPicture
-                onContextMenu={(e) => e.preventDefault()}
-              />
+               {/* ✅ Updated here */}
+<video
+  ref={videoRef}
+  src={absUrl(clip.url)}
+  controls
+  preload="metadata"
+  className="w-full rounded-lg"
+  controlsList="nodownload noplaybackrate noremoteplayback"
+  disablePictureInPicture
+  onContextMenu={(e) => e.preventDefault()}
+/>
+
             </div>
           </>
         ) : (
@@ -565,7 +555,6 @@ export default function VideoGallery() {
         </IfOwnerOnly>
       </div>
 
-      {/* QROverlay kept OUTSIDE the blurred panel so it stays crisp */}
       {playlistOverlay && (
         <QROverlay
           open={!!playlistOverlay}

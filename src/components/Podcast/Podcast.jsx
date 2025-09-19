@@ -1,6 +1,6 @@
 // src/components/podcasts/Podcast.jsx
 import { useEffect, useRef, useState } from "react";
-import { API_BASE, fetchJSON, authHeaders } from "../../utils/api";
+import { API_BASE, fetchJSON, authHeaders, absUrl } from "../../utils/api";
 import IfOwnerOnly from "../common/IfOwnerOnly";
 import usePreviewLock from "../../hooks/usePreviewLock";
 import QROverlay from "../common/QROverlay";
@@ -576,16 +576,17 @@ export default function Podcast() {
 
             {/* Premium dark player */}
             <div className="rounded-2xl p-4 bg-[#121212] text-white shadow-lg">
-              {/* hidden native element (drives playback & preview) */}
-              <audio
-                ref={audioRef}
-                src={`${API_BASE}${track.url}`}
-                preload="metadata"
-                controls={false}
-                controlsList="nodownload noplaybackrate"
-                className="sr-only"
-                onContextMenu={(e) => e.preventDefault()}
-              />
+               {/* ✅ updated here */}
+<audio
+  ref={audioRef}
+  src={absUrl(track.url)}
+  preload="metadata"
+  controls={false}
+  controlsList="nodownload noplaybackrate"
+  className="sr-only"
+  onContextMenu={(e) => e.preventDefault()}
+/>
+
 
               <div className="flex items-center gap-4">
                 {/* Cover/placeholder */}

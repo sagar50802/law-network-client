@@ -1,10 +1,11 @@
 import { useEffect, useRef, useState, useMemo } from "react";
-import { getJSON, upload, delJSON, absUrl } from "../../utils/api";
+import { getJSON, upload, delJSON } from "../../utils/api";
 import IfOwnerOnly from "../common/IfOwnerOnly";
 // import QROverlay from "../common/QROverlay"; // QR overlay not used anymore
 import { loadAccess } from "../../utils/access";
 // import AccessTimer from "../common/AccessTimer"; // not used after free-unlock
 import useSubmissionStream from "../../hooks/useSubmissionStream";
+import { SmartImg } from "../common/SmartMedia"; // ✅ safe media wrapper
 
 /* ---------- helpers ---------- */
 function stripHtml(html = "") {
@@ -14,7 +15,6 @@ function readingTimeFromHtml(html = "") {
   const words = stripHtml(html).split(/\s+/).filter(Boolean).length;
   return Math.max(1, Math.ceil(words / 180));
 }
-// normalize expiry to ms (handles Date, ISO string, number)
 function toMs(x) {
   if (!x) return 0;
   if (typeof x === "number") return x;
@@ -59,7 +59,7 @@ function ArticleCard({ a, email }) {
     async function onGranted(e) {
       const d = e.detail || {};
       if (d.feature === "article" && d.featureId === (a.id || a._id) && d.email === email) {
-        setForceUnlocked(true); // prevent any flicker
+        setForceUnlocked(true);
         const v = await loadAccess("article", a.id || a._id, email);
         setAccess(v || null);
         setOpen(false);
@@ -84,15 +84,12 @@ function ArticleCard({ a, email }) {
     };
   }, [a.id, a._id, email]);
 
-  // Clicking "Read more" now permanently unlocks this article for the session
   async function openOverlay() {
-    setForceUnlocked(true); // ✅ Direct unlock
+    setForceUnlocked(true);
     setOpen(false);
   }
 
-  // free articles are always unlocked
   const isFree = !!(a?.isFree ?? a?.free);
-  // ✅ Always unlocked once user clicks "Read more"
   const unlocked = isFree || forceUnlocked;
 
   useEffect(() => {
@@ -106,8 +103,9 @@ function ArticleCard({ a, email }) {
     >
       {(a.image || a.imageUrl) && (
         <div className="w-full bg-gray-50 rounded-t-2xl">
-          <img
-            src={absUrl(a.image || a.imageUrl)}
+          {/* ✅ swapped <img> with SmartImg */}
+          <SmartImg
+            src={a.image || a.imageUrl}
             alt=""
             className="w-full max-h-64 object-contain mx-auto"
             loading="lazy"
@@ -139,7 +137,6 @@ function ArticleCard({ a, email }) {
       <div className="p-4">
         {unlocked ? (
           <>
-            {/* Progress bar */}
             <div className="article-progress" style={{ width: "0%" }}></div>
 
             {a.allowHtml ? (
@@ -175,7 +172,6 @@ function ArticleCard({ a, email }) {
         ) : (
           <div className="relative">
             <p className="leading-7 text-[17px] text-gray-700">{preview}…</p>
-            {/* Fade effect */}
             <div className="pointer-events-none absolute inset-x-0 -bottom-2 h-10 bg-gradient-to-t from-white to-transparent" />
             <div className="mt-3 flex items-center justify-between">
               <button
@@ -197,8 +193,6 @@ function ArticleCard({ a, email }) {
 
 /**
  * Article list
- * - Default: Articles page (feed + compact admin column)
- * - embed: just the feed
  */
 export default function Article({ limit, embed = false }) {
   const [items, setItems] = useState([]);
@@ -211,7 +205,6 @@ export default function Article({ limit, embed = false }) {
   });
 
   const [email] = useState(() => localStorage.getItem("userEmail") || "");
-
   useSubmissionStream(email);
 
   async function load() {
@@ -260,7 +253,6 @@ export default function Article({ limit, embed = false }) {
 
   const list = limit ? items.slice(0, limit) : items;
 
-  // ---------- EMBED MODE ----------
   if (embed) {
     return (
       <div className="space-y-6">
@@ -284,13 +276,11 @@ export default function Article({ limit, embed = false }) {
     );
   }
 
-  // ---------- DEFAULT MODE (Articles page) ----------
   return (
     <section
       id="articles"
       className="w-[90%] mx-auto py-8 grid gap-6 md:[grid-template-columns:minmax(0,1fr)_max-content]"
     >
-      {/* Feed */}
       <div className="space-y-6">
         {list.map((a) => (
           <div key={a.id || a._id} className="relative">
@@ -310,7 +300,6 @@ export default function Article({ limit, embed = false }) {
         {list.length === 0 && <div className="text-gray-400">No articles yet</div>}
       </div>
 
-      {/* Admin compose */}
       <IfOwnerOnly>
         <form
           onSubmit={create}

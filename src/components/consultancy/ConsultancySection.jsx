@@ -1,7 +1,7 @@
-// client/src/components/consultancy/ConsultancySection.jsx
 import { useEffect, useRef, useState } from "react";
 import { API_BASE, authHeaders } from "../../utils/api";
 import IfOwnerOnly from "../common/IfOwnerOnly";
+import { SmartImg } from "../common/SmartMedia";   // ✅ use SmartImg
 
 /* ---------- helpers ---------- */
 function safeAuthHeaders() {
@@ -66,7 +66,7 @@ export default function ConsultancySection({ autoScroll = true }) {
   }
   useEffect(() => { load(); }, []);
 
-  // Vertical auto-scroll with smooth up<->down reversal + brief dwell at ends
+  // Vertical auto-scroll with smooth up<->down reversal + dwell at ends
   useEffect(() => {
     if (!autoScroll) return;
     const el = railRef.current;
@@ -75,10 +75,10 @@ export default function ConsultancySection({ autoScroll = true }) {
     let raf = 0;
     let last = performance.now();
 
-     const SPEED = 108;      // px/sec (you can nudge 96/108 if you want faster)
-    const DWELL = 650;     // ms pause when reaching top/bottom
-    const dirRef = { cur: 1 };     // 1 = down, -1 = up
-    let holdUntil = 0;             // timestamp until which we pause at ends
+    const SPEED = 108;
+    const DWELL = 650;
+    const dirRef = { cur: 1 };
+    let holdUntil = 0;
 
     const io = new IntersectionObserver(([entry]) => {
       visibleRef.current = entry?.isIntersecting ?? true;
@@ -90,7 +90,6 @@ export default function ConsultancySection({ autoScroll = true }) {
       last = now;
 
       if (visibleRef.current && !pausedRef.current && el.scrollHeight > el.clientHeight) {
-        // hold at the ends for a moment before reversing
         if (now >= holdUntil) {
           const max = el.scrollHeight - el.clientHeight;
           const delta = (SPEED * dt) / 1000 * dirRef.cur;
@@ -177,7 +176,6 @@ export default function ConsultancySection({ autoScroll = true }) {
     finally { setBusy(false); }
   }
 
-  // 0% extra top spacing, so it butts up nicely with Articles in your layout
   return (
     <section className="mt-0">
       <div className="flex items-center justify-between mb-2">
@@ -252,26 +250,20 @@ export default function ConsultancySection({ autoScroll = true }) {
   );
 }
 
-/* ---------- Card: photo first (contain), details below ---------- */
+/* ---------- Card ---------- */
 function Card({ item, onReplace, onDelete }) {
-  const imgPath =
-    item.image?.startsWith?.("/uploads")
-      ? `${API_BASE}${item.image}`
-      : item.imageUrl || `${API_BASE}${item.image || ""}`;
-
   return (
     <div className="w-full rounded-2xl border bg-white shadow-sm ring-1 ring-black/5">
       <div className="relative p-2">
         <div
           className="h-[260px] md:h-[280px] rounded-xl bg-gradient-to-br from-gray-50 to-gray-100
-                     flex items-center justify-center overflow-hidden ring-1 ring-gray-200"
+                      flex items-center justify-center overflow-hidden ring-1 ring-gray-200"
         >
-          {imgPath ? (
-            <img
-              src={imgPath}
+          {item.image ? (
+            <SmartImg
+              src={item.image}
               alt={item.title || "Consultancy"}
               className="max-h-[96%] max-w-[96%] object-contain transition-transform duration-500"
-              loading="lazy"
             />
           ) : (
             <div className="text-gray-400 text-sm">No image</div>
