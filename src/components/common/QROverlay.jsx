@@ -113,6 +113,13 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
 
   if (!open) return null;
 
+  // ✅ progress step calculation
+  let progressClass = "";
+  if (pending?.step3) progressClass = "step-graph-progress step-3";
+  else if (pending?.step2) progressClass = "step-graph-progress step-2";
+  else if (pending?.step1) progressClass = "step-graph-progress step-1";
+  else progressClass = "step-graph-progress";
+
   return (
     <div className="fixed inset-y-0 right-0 bg-white shadow-2xl w-full max-w-md z-50 overflow-y-auto">
       <div className="p-5 relative">
@@ -129,17 +136,23 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
           {feature} – {title}
         </h3>
 
-        {/* ✅ Progress Graph */}
+        {/* ✅ Progress Graph with bar */}
+        <div className="step-graph mb-4 text-xs md:text-sm font-semibold">
+          <div className={progressClass}></div>
+          <div className={`step-node ${pending?.step1 ? "active" : ""}`}>1</div>
+          <div className={`step-node ${pending?.step2 ? "active" : ""}`}>2</div>
+          <div className={`step-node ${pending?.step3 ? "active" : ""}`}>3</div>
+        </div>
+
+        {/* ✅ Step Labels */}
         <div className="flex justify-between mb-4 text-xs md:text-sm font-semibold">
-          <div className={`flex-1 text-center ${pending?.step1 ? "text-green-600" : "step-1-blink"}`}>
+          <div className={pending?.step1 ? "text-green-600" : "step-1-blink"}>
             Step 1: Scan QR {pending?.step1 && <span className="tick-animate">✅</span>}
           </div>
-          <div className="flex-1 text-center">───</div>
-          <div className={`flex-1 text-center ${pending?.step2 ? "text-green-600" : "step-2-blink"}`}>
+          <div className={pending?.step2 ? "text-green-600" : "step-2-blink"}>
             Step 2: Fill Info {pending?.step2 && <span className="tick-animate">✅</span>}
           </div>
-          <div className="flex-1 text-center">───</div>
-          <div className={`flex-1 text-center ${pending?.step3 ? "text-green-600" : "step-3-blink"}`}>
+          <div className={pending?.step3 ? "text-green-600" : "step-3-blink"}>
             Step 3: Upload Screenshot {pending?.step3 && <span className="tick-animate">✅</span>}
           </div>
         </div>
@@ -156,7 +169,7 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
                 setPending((s) => ({ ...s, step1: true }));
                 setTimeout(() => {
                   window.location.href = "upi://pay";
-                }, 1500); // 1.5s delay
+                }, 900); // 0.9s delay
               }}
             />
             {!pending?.step1 && (
