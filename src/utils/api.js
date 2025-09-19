@@ -90,16 +90,21 @@ export async function uploadFile(path, file, field = "file", extra = {}, opts = 
   return upload(path, fd, opts);
 }
 
-// ✅ Absolute media path resolver
+
  // ✅ Absolute media path resolver
 export const absUrl = (p) => {
-  if (/^https?:\/\//i.test(p)) return p;       // already full URL
-  if (p.startsWith("/uploads/")) {
-    return `https://law-network-api.onrender.com${p}`; // serve media correctly
-  }
-  return apiUrl(p); // keep API calls same
-};
+  if (!p) return "";
+  if (/^https?:\/\//i.test(p)) return p; // already absolute
 
+  if (p.startsWith("/uploads/")) {
+    // Always serve static files from backend
+    const backend = (import.meta.env.VITE_API_BASE || "https://lawnetwork-api.onrender.com/api")
+      .replace(/\/api$/, ""); // drop /api if present
+    return backend + p;
+  }
+
+  return apiUrl(p); // normal API paths
+};
 
 // ✅ Default export (bundle everything)
 export default {
