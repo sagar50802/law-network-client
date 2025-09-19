@@ -137,40 +137,42 @@ function ArticleCard({ a, email }) {
       </div>
 
       {/* Body */}
-      <div className="p-4">
-        {unlocked ? (
-          a.allowHtml ? (
-            // HTML mode: keep author's CSS intact
-            <div className="not-prose html-embed">
-              <style>{`
-                .html-embed img, .html-embed video, .html-embed iframe { max-width: 100%; height: auto; }
-                .html-embed .container { max-width: 100%; }
-              `}</style>
-              <div dangerouslySetInnerHTML={{ __html: a.content }} />
-            </div>
-          ) : (
-            <div className="prose max-w-none prose-p:leading-7 prose-p:my-3 prose-img:rounded-lg prose-img:max-h-96 prose-img:object-contain">
-              <p className="leading-7">{a.content}</p>
-            </div>
-          )
-        ) : (
-          <div className="relative">
-            <p className="leading-7 text-[17px] text-gray-700">{preview}…</p>
-            <div className="pointer-events-none absolute inset-x-0 -bottom-2 h-10 bg-gradient-to-t from-white to-transparent" />
-            <div className="mt-3 flex items-center justify-between">
-              <button
-                className="inline-flex items-center gap-2 rounded-lg bg-black px-3 py-1.5 text-sm font-medium text-white hover:opacity-90"
-                onClick={openOverlay}
-              >
-                Read more
-              </button>
-              <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700">
-                Locked
-              </span>
-            </div>
-          </div>
-        )}
+<div className="p-4">
+  {unlocked ? (
+    a.allowHtml ? (
+      <div className="not-prose html-embed overflow-y-auto max-h-[400px] pr-2">
+        <style>{`
+          .html-embed img, .html-embed video, .html-embed iframe { max-width: 100%; height: auto; }
+          .html-embed .container { max-width: 100%; }
+        `}</style>
+        <div dangerouslySetInnerHTML={{ __html: a.content }} />
       </div>
+    ) : (
+      <div className="prose max-w-none overflow-y-auto max-h-[400px] pr-2
+                      prose-p:leading-7 prose-p:my-3 prose-img:rounded-lg
+                      prose-img:max-h-96 prose-img:object-contain">
+        <p className="leading-7">{a.content}</p>
+      </div>
+    )
+  ) : (
+    <div className="relative">
+      <p className="leading-7 text-[17px] text-gray-700">{preview}…</p>
+      <div className="pointer-events-none absolute inset-x-0 -bottom-2 h-10 bg-gradient-to-t from-white to-transparent" />
+      <div className="mt-3 flex items-center justify-between">
+        <button
+          className="inline-flex items-center gap-2 rounded-lg bg-black px-3 py-1.5 text-sm font-medium text-white hover:opacity-90"
+          onClick={openOverlay}
+        >
+          Read more
+        </button>
+        <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700">
+          Locked
+        </span>
+      </div>
+    </div>
+  )}
+</div>
+
 
       {/* ❌ No QROverlay — removed intentionally */}
     </article>
