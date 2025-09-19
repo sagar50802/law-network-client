@@ -1,4 +1,3 @@
-// client/src/components/common/QROverlay.jsx
 import { useEffect, useState } from "react";
 import { API_BASE } from "../../utils/api";
 import { savePending, loadPending } from "../../utils/pending";
@@ -12,12 +11,9 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
   const [cfg, setCfg] = useState({ url: "", currency: "₹", plans: {} });
   const [selectedPlan, setSelectedPlan] = useState(null);
   const [form, setForm] = useState({ name: "", phone: "", email: "", file: null });
-  const [pending, setPending] = useState(null);
+  const [pending, setPending] = useState({});
   const [unlocking, setUnlocking] = useState(false);
   const [submitting, setSubmitting] = useState(false);
-
-  // NEW: for QR scanning state
-  const [scanning, setScanning] = useState(false);
 
   // fetch QR config
   async function fetchConfig() {
@@ -56,18 +52,13 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
     if (status === "approved" && approved) {
       setUnlocking(true);
       const t = setTimeout(() => {
-        // save access first
         saveAccess(feature, featureId, form.email, expiry, message);
-
-        // hide unlocking + close overlay
         setUnlocking(false);
         if (typeof onClose === "function") onClose();
 
-        // optional silent refresh signals
         window.dispatchEvent(new Event("focus"));
         window.dispatchEvent(new CustomEvent("softRefresh", { detail: { feature, featureId } }));
 
-        // 🔁 one-time auto reload
         setTimeout(() => window.location.reload(), 150);
       }, 15000);
       return () => clearTimeout(t);
@@ -103,6 +94,9 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
           planKey: selectedPlan,
           name: form.name,
           email: form.email,
+          step1: pending.step1,
+          step2: pending.step2,
+          step3: pending.step3,
         };
         setPending(record);
         savePending(feature, featureId, form.email, record);
@@ -117,16 +111,11 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
     }
   }
 
-  // ✅ handle "Scan QR" click
-  const handleScanClick = () => {
-    setScanning(true);
-    setTimeout(() => {
-      // simulate redirect to UPI app
-      window.location.href = "upi://pay?pa=example@upi&pn=LawNetwork&am=200&cu=INR";
-    }, 4000); // 4 seconds
-  };
-
   if (!open) return null;
+
+  // ✅ compute progress width for graph bar
+  const completedSteps = [pending.step1, pending.step2, pending.step3].filter(Boolean).length;
+  const progressWidth = `${(completedSteps / 3) * 100}%`;
 
   return (
     <div className="fixed inset-y-0 right-0 bg-white shadow-2xl w-full max-w-md z-50 overflow-y-auto">
@@ -144,27 +133,35 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
           {feature} – {title}
         </h3>
 
+        {/* ✅ Step Graph */}
+        <div className="step-graph mb-4">
+          <div className="step-graph-progress" style={{ width: progressWidth }}></div>
+          <div className={`step-node ${pending?.step1 ? "active" : "step-1-blink"}`}>1</div>
+          <div className={`step-node ${pending?.step2 ? "active" : "step-2-blink"}`}>2</div>
+          <div className={`step-node ${pending?.step3 ? "active" : "step-3-blink"}`}>3</div>
+        </div>
+
         {/* QR Image */}
         {cfg.url ? (
           <div className="mb-4 text-center">
             <img
               src={`${API_BASE}${cfg.url}?t=${Date.now()}`}
               alt="QR code"
-              className={`w-full h-56 object-contain border rounded-xl bg-gray-50 
-                ${scanning ? "animate-pulse border-4 border-green-500" : ""}`}
+              className={`w-full h-56 object-contain border rounded-xl bg-gray-50 ${pending?.step1 ? "" : "cursor-pointer qr-glow"}`}
+              onClick={() => {
+                setPending((s) => ({ ...s, step1: true }));
+                setTimeout(() => {
+                  window.location.href = "upi://pay";
+                }, 2000); // 2s delay
+              }}
             />
-            {!scanning ? (
-              <button
-                onClick={handleScanClick}
-                className="mt-2 text-sm text-blue-600 underline"
-              >
-                👉 Scan this QR to pay (Step 1)
-              </button>
-            ) : (
-              <div className="mt-2 text-green-600 font-semibold animate-bounce">
-                कृपया payment के बाद स्क्रीन शॉट लेना ना भूले <br />
-                (Please don't forget to take screenshot after payment done)
-              </div>
+            {!pending?.step1 && (
+              <p className="text-xs text-gray-600 mt-1">Click QR to Scan &amp; Pay</p>
+            )}
+            {pending?.step1 && (
+              <p className="text-green-600 text-xs font-semibold animate-blink">
+                कृपया payment के बाद स्क्रीन शॉट लेना ना भूले (Please don't forget to take screenshot after payment done)
+              </p>
             )}
           </div>
         ) : (
@@ -172,11 +169,6 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
             No QR uploaded yet
           </div>
         )}
-
-        {/* Step 2 note */}
-        <p className="text-xs text-gray-500 text-center mb-4">
-          Step 2: Fill your info below and upload screenshot
-        </p>
 
         {/* Plans */}
         <div className="flex gap-2 mb-4">
@@ -196,7 +188,7 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
         </div>
 
         {/* Pending OR Form */}
-        {pending ? (
+        {pending?.id ? (
           unlocking ? (
             <>
               <UnlockWait onDone={() => setUnlocking(false)} />
@@ -232,32 +224,73 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
               placeholder="Your Name"
               className="border rounded p-2"
               value={form.name}
-              onChange={(e) => setForm((s) => ({ ...s, name: e.target.value }))}
+              onChange={(e) => {
+                const val = e.target.value;
+                setForm((s) => ({ ...s, name: val }));
+                if (val && form.phone && form.email) {
+                  setPending((s) => ({ ...s, step2: true }));
+                }
+              }}
             />
             <input
               placeholder="Phone"
               className="border rounded p-2"
               value={form.phone}
-              onChange={(e) => setForm((s) => ({ ...s, phone: e.target.value }))}
+              onChange={(e) => {
+                const val = e.target.value;
+                setForm((s) => ({ ...s, phone: val }));
+                if (val && form.name && form.email) {
+                  setPending((s) => ({ ...s, step2: true }));
+                }
+              }}
             />
             <input
               placeholder="Gmail"
               className="border rounded p-2"
               value={form.email}
-              onChange={(e) => setForm((s) => ({ ...s, email: e.target.value }))}
+              onChange={(e) => {
+                const val = e.target.value;
+                setForm((s) => ({ ...s, email: val }));
+                if (val && form.name && form.phone) {
+                  setPending((s) => ({ ...s, step2: true }));
+                }
+              }}
             />
 
-            {/* Screenshot upload */}
+            {/* Screenshot block */}
             <div className="border rounded-xl p-3 text-sm bg-pink-50 relative">
               <label className="flex items-center justify-between text-pink-600 font-semibold mb-2">
                 <span>Upload Payment Screenshot</span>
+                <span
+                  className="flex items-center gap-3 text-green-600 animate-bounce select-none
+                             drop-shadow-[0_0_8px_rgba(34,197,94,0.45)]"
+                >
+                  <svg
+                    className="w-8 h-8 md:w-9 md:h-9"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
+                    <path d="M12 4v12" />
+                    <path d="M8 12l4 4 4-4" />
+                  </svg>
+                  <span className="text-green-700 font-extrabold text-base md:text-lg uppercase tracking-wide">
+                    Browse HERE TO UPLOAD PAYMENT SCREENSHOT
+                  </span>
+                </span>
               </label>
+
               <input
                 type="file"
                 accept="image/*"
-                onChange={(e) =>
-                  setForm((s) => ({ ...s, file: e.target.files?.[0] || null }))
-                }
+                onChange={(e) => {
+                  const file = e.target.files?.[0] || null;
+                  setForm((s) => ({ ...s, file }));
+                  if (file) setPending((s) => ({ ...s, step3: true }));
+                }}
               />
             </div>
 
