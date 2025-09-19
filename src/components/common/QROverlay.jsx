@@ -16,6 +16,9 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
   const [unlocking, setUnlocking] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
+  // NEW: for QR scanning state
+  const [scanning, setScanning] = useState(false);
+
   // fetch QR config
   async function fetchConfig() {
     try {
@@ -60,19 +63,18 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
         setUnlocking(false);
         if (typeof onClose === "function") onClose();
 
-        // optional silent refresh signals (won't hurt even with reload)
+        // optional silent refresh signals
         window.dispatchEvent(new Event("focus"));
         window.dispatchEvent(new CustomEvent("softRefresh", { detail: { feature, featureId } }));
 
-        // 🔁 one-time auto reload of current page
-        // (no loop: we only call this after a confirmed approval event)
+        // 🔁 one-time auto reload
         setTimeout(() => window.location.reload(), 150);
-      }, 15000); // ← 15 seconds
+      }, 15000);
       return () => clearTimeout(t);
     }
   }, [status, approved, expiry, message, feature, featureId, form.email, onClose]);
 
-  // submit form (unchanged)
+  // submit form
   async function handleSubmit(e) {
     e.preventDefault();
     if (!selectedPlan) return alert("Select a plan");
@@ -115,6 +117,15 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
     }
   }
 
+  // ✅ handle "Scan QR" click
+  const handleScanClick = () => {
+    setScanning(true);
+    setTimeout(() => {
+      // simulate redirect to UPI app
+      window.location.href = "upi://pay?pa=example@upi&pn=LawNetwork&am=200&cu=INR";
+    }, 4000); // 4 seconds
+  };
+
   if (!open) return null;
 
   return (
@@ -135,21 +146,37 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
 
         {/* QR Image */}
         {cfg.url ? (
-          <div className="mb-4">
+          <div className="mb-4 text-center">
             <img
               src={`${API_BASE}${cfg.url}?t=${Date.now()}`}
               alt="QR code"
-              className="w-full h-56 object-contain border rounded-xl bg-gray-50"
+              className={`w-full h-56 object-contain border rounded-xl bg-gray-50 
+                ${scanning ? "animate-pulse border-4 border-green-500" : ""}`}
             />
-            <p className="text-xs text-center text-gray-600 mt-1">
-              Scan this QR to pay
-            </p>
+            {!scanning ? (
+              <button
+                onClick={handleScanClick}
+                className="mt-2 text-sm text-blue-600 underline"
+              >
+                👉 Scan this QR to pay (Step 1)
+              </button>
+            ) : (
+              <div className="mt-2 text-green-600 font-semibold animate-bounce">
+                कृपया payment के बाद स्क्रीन शॉट लेना ना भूले <br />
+                (Please don't forget to take screenshot after payment done)
+              </div>
+            )}
           </div>
         ) : (
           <div className="w-full h-56 flex items-center justify-center border rounded-xl text-gray-400">
             No QR uploaded yet
           </div>
         )}
+
+        {/* Step 2 note */}
+        <p className="text-xs text-gray-500 text-center mb-4">
+          Step 2: Fill your info below and upload screenshot
+        </p>
 
         {/* Plans */}
         <div className="flex gap-2 mb-4">
@@ -173,7 +200,6 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
           unlocking ? (
             <>
               <UnlockWait onDone={() => setUnlocking(false)} />
-              {/* 🎉 Friendly congrats line during the 15s handover */}
               <div className="mt-3 text-center text-green-600 font-extrabold text-base">
                 🎉 Congratulations! Access granted. Finalizing in 15&nbsp;seconds…
               </div>
@@ -221,33 +247,11 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
               onChange={(e) => setForm((s) => ({ ...s, email: e.target.value }))}
             />
 
-            {/* Screenshot block with BIG green animated down-arrow cue */}
+            {/* Screenshot upload */}
             <div className="border rounded-xl p-3 text-sm bg-pink-50 relative">
               <label className="flex items-center justify-between text-pink-600 font-semibold mb-2">
                 <span>Upload Payment Screenshot</span>
-                <span
-                  className="flex items-center gap-3 text-green-600 animate-bounce select-none
-                             drop-shadow-[0_0_8px_rgba(34,197,94,0.45)]"
-                  aria-label="Tap here to upload screenshot"
-                >
-                  <svg
-                    className="w-8 h-8 md:w-9 md:h-9"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
-                    <path d="M12 4v12" />
-                    <path d="M8 12l4 4 4-4" />
-                  </svg>
-                  <span className="text-green-700 font-extrabold text-base md:text-lg uppercase tracking-wide">
-                    Browse HERE TO UPLOAD PAYMENT SCREENSHOT
-                  </span>
-                </span>
               </label>
-
               <input
                 type="file"
                 accept="image/*"

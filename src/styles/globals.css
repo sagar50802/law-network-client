@@ -85,3 +85,20 @@
   background-color: #3b82f6; /* blue-500 */
   transition: width 0.2s ease;
 }
+
+/* -----------------------------
+   ✅ New: QR Scan Glow Animation
+----------------------------- */
+@keyframes qr-glow {
+  0%, 100% {
+    box-shadow: 0 0 8px 2px rgba(34,197,94,0.7);
+  }
+  50% {
+    box-shadow: 0 0 16px 4px rgba(34,197,94,1);
+  }
+}
+.qr-glow {
+  animation: qr-glow 1s infinite;
+  border: 4px solid #22c55e; /* green-500 */
+  border-radius: 12px;
+}
