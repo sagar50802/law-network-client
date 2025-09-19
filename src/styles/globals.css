@@ -57,3 +57,31 @@
   scrollbar-width: thin;
   scrollbar-color: rgba(100,116,139,0.6) transparent;
 }
+
+/* -----------------------------
+   Article fade overlay for locked previews
+----------------------------- */
+.article-fade {
+  position: relative;
+  max-height: 160px; /* show ~60 words */
+  overflow: hidden;
+}
+.article-fade::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 4rem; /* fade height */
+  background: linear-gradient(to top, white, transparent);
+  pointer-events: none;
+}
+
+/* -----------------------------
+   Scroll progress bar (unlocked)
+----------------------------- */
+.article-progress {
+  height: 4px;
+  background-color: #3b82f6; /* blue-500 */
+  transition: width 0.2s ease;
+}
