@@ -99,9 +99,19 @@ function ArticleCard({ a, email }) {
     if (open && unlocked) setOpen(false);
   }, [open, unlocked]);
 
+  // scroll progress handler
+  function handleScroll(e) {
+    const el = e.target;
+    const percent = (el.scrollTop / (el.scrollHeight - el.clientHeight)) * 100;
+    const bar = el.parentElement.querySelector(".progress-bar");
+    if (bar) bar.style.width = percent + "%";
+  }
+
   return (
     <article
-      className="relative overflow-hidden rounded-2xl border bg-white/95 shadow-sm"
+      className="relative overflow-hidden rounded-2xl border bg-white/95 shadow-sm
+                 transition-transform duration-300 hover:scale-[1.01] hover:shadow-md
+                 max-h-[550px]"
       ref={cardRef}
     >
       {(a.image || a.imageUrl) && (
@@ -128,7 +138,6 @@ function ArticleCard({ a, email }) {
               Free
             </span>
           ) : unlocked ? (
-            // ✅ No AccessTimer / expiry message anymore
             <span className="text-xs px-2 py-0.5 rounded-full bg-green-100 text-green-700">
               Reading unlocked
             </span>
@@ -137,44 +146,56 @@ function ArticleCard({ a, email }) {
       </div>
 
       {/* Body */}
-<div className="p-4">
-  {unlocked ? (
-    a.allowHtml ? (
-      <div className="not-prose html-embed overflow-y-auto max-h-[400px] pr-2">
-        <style>{`
-          .html-embed img, .html-embed video, .html-embed iframe { max-width: 100%; height: auto; }
-          .html-embed .container { max-width: 100%; }
-        `}</style>
-        <div dangerouslySetInnerHTML={{ __html: a.content }} />
-      </div>
-    ) : (
-      <div className="prose max-w-none overflow-y-auto max-h-[400px] pr-2
-                      prose-p:leading-7 prose-p:my-3 prose-img:rounded-lg
-                      prose-img:max-h-96 prose-img:object-contain">
-        <p className="leading-7">{a.content}</p>
-      </div>
-    )
-  ) : (
-    <div className="relative">
-      <p className="leading-7 text-[17px] text-gray-700">{preview}…</p>
-      <div className="pointer-events-none absolute inset-x-0 -bottom-2 h-10 bg-gradient-to-t from-white to-transparent" />
-      <div className="mt-3 flex items-center justify-between">
-        <button
-          className="inline-flex items-center gap-2 rounded-lg bg-black px-3 py-1.5 text-sm font-medium text-white hover:opacity-90"
-          onClick={openOverlay}
-        >
-          Read more
-        </button>
-        <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700">
-          Locked
-        </span>
-      </div>
-    </div>
-  )}
-</div>
+      <div className="p-4 relative">
+        {unlocked ? (
+          a.allowHtml ? (
+            <div
+              className="not-prose html-embed overflow-y-auto max-h-[400px] pr-2 scrollbar-thin"
+              onScroll={handleScroll}
+            >
+              <style>{`
+                .html-embed img, .html-embed video, .html-embed iframe { max-width: 100%; height: auto; }
+                .html-embed .container { max-width: 100%; }
+              `}</style>
+              <div dangerouslySetInnerHTML={{ __html: a.content }} />
+            </div>
+          ) : (
+            <div
+              className="prose max-w-none overflow-y-auto max-h-[400px] pr-2
+                         prose-p:leading-7 prose-p:my-3 prose-img:rounded-lg
+                         prose-img:max-h-96 prose-img:object-contain scrollbar-thin"
+              onScroll={handleScroll}
+            >
+              <p className="leading-7">{a.content}</p>
+            </div>
+          )
+        ) : (
+          <div className="relative">
+            <p className="leading-7 text-[17px] text-gray-700">{preview}…</p>
+            <div className="pointer-events-none absolute inset-x-0 -bottom-2 h-10 bg-gradient-to-t from-white to-transparent" />
+            <div className="mt-3 flex items-center justify-between">
+              <button
+                className="inline-flex items-center gap-2 rounded-lg bg-black px-3 py-1.5 text-sm font-medium text-white hover:opacity-90"
+                onClick={openOverlay}
+              >
+                Read more
+              </button>
+              <span className="text-xs px-2 py-0.5 rounded-full bg-red-100 text-red-700">
+                Locked
+              </span>
+            </div>
+          </div>
+        )}
 
+        {/* Fade overlay to hint scroll */}
+        <div className="pointer-events-none absolute bottom-0 left-0 right-0 h-8 bg-gradient-to-t from-white to-transparent" />
 
-      {/* ❌ No QROverlay — removed intentionally */}
+        {/* Tiny progress bar at top */}
+        <div
+          className="progress-bar absolute top-0 left-0 h-1 bg-blue-500 transition-all duration-150"
+          style={{ width: "0%" }}
+        />
+      </div>
     </article>
   );
 }
@@ -194,10 +215,10 @@ export default function Article({ limit, embed = false }) {
     image: null,
   });
 
-  // email for access checks (saved previously by overlay; harmless to keep)
+  // email for access checks
   const [email] = useState(() => localStorage.getItem("userEmail") || "");
 
-  // live grant/revoke events (SSE)
+  // live grant/revoke events
   useSubmissionStream(email);
 
   async function load() {
@@ -296,7 +317,7 @@ export default function Article({ limit, embed = false }) {
         {list.length === 0 && <div className="text-gray-400">No articles yet</div>}
       </div>
 
-      {/* Admin compose — compact/narrow; collapses to 0 width when hidden for users */}
+      {/* Admin compose */}
       <IfOwnerOnly>
         <form
           onSubmit={create}
