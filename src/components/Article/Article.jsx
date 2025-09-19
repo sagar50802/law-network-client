@@ -1,9 +1,9 @@
 import { useEffect, useRef, useState, useMemo } from "react";
 import { getJSON, upload, delJSON, absUrl } from "../../utils/api";
 import IfOwnerOnly from "../common/IfOwnerOnly";
-// import QROverlay from "../common/QROverlay"; // not used anymore
+// import QROverlay from "../common/QROverlay"; // QR overlay not used anymore
 import { loadAccess } from "../../utils/access";
-// import AccessTimer from "../common/AccessTimer"; // not used anymore
+// import AccessTimer from "../common/AccessTimer"; // not used after free-unlock
 import useSubmissionStream from "../../hooks/useSubmissionStream";
 
 /* ---------- helpers ---------- */
@@ -26,8 +26,7 @@ function ArticleCard({ a, email }) {
   const [open, setOpen] = useState(false);
   const [access, setAccess] = useState(null);
   const [forceUnlocked, setForceUnlocked] = useState(false);
-  const [scrollPercent, setScrollPercent] = useState(0);
-  const bodyRef = useRef(null);
+  const cardRef = useRef(null);
 
   // initial access load
   useEffect(() => {
@@ -43,24 +42,14 @@ function ArticleCard({ a, email }) {
 
   // derived display bits
   const plain = useMemo(() => stripHtml(a.content || ""), [a.content]);
-  const preview = useMemo(
-    () => plain.split(/\s+/).slice(0, 60).join(" "),
-    [plain]
-  );
-  const readMin = useMemo(
-    () => readingTimeFromHtml(a.content || ""),
-    [a.content]
-  );
+  const preview = useMemo(() => plain.split(/\s+/).slice(0, 60).join(" "), [plain]);
+  const readMin = useMemo(() => readingTimeFromHtml(a.content || ""), [a.content]);
 
   // react to global access events for THIS article
   useEffect(() => {
     async function refreshIfMatch(e) {
       const d = e.detail || {};
-      if (
-        d.feature === "article" &&
-        d.featureId === (a.id || a._id) &&
-        d.email === email
-      ) {
+      if (d.feature === "article" && d.featureId === (a.id || a._id) && d.email === email) {
         const v = await loadAccess("article", a.id || a._id, email);
         setAccess(v || null);
         const ms = toMs(v?.expiry);
@@ -69,12 +58,8 @@ function ArticleCard({ a, email }) {
     }
     async function onGranted(e) {
       const d = e.detail || {};
-      if (
-        d.feature === "article" &&
-        d.featureId === (a.id || a._id) &&
-        d.email === email
-      ) {
-        setForceUnlocked(true); // prevent flicker
+      if (d.feature === "article" && d.featureId === (a.id || a._id) && d.email === email) {
+        setForceUnlocked(true); // prevent any flicker
         const v = await loadAccess("article", a.id || a._id, email);
         setAccess(v || null);
         setOpen(false);
@@ -114,23 +99,10 @@ function ArticleCard({ a, email }) {
     if (open && unlocked) setOpen(false);
   }, [open, unlocked]);
 
-  // track scroll for progress bar
-  useEffect(() => {
-    if (!unlocked || !bodyRef.current) return;
-    const el = bodyRef.current;
-    function handleScroll() {
-      const pct =
-        (el.scrollTop / (el.scrollHeight - el.clientHeight || 1)) * 100;
-      setScrollPercent(pct);
-    }
-    el.addEventListener("scroll", handleScroll);
-    return () => el.removeEventListener("scroll", handleScroll);
-  }, [unlocked]);
-
   return (
     <article
       className="relative overflow-hidden rounded-2xl border bg-white/95 shadow-sm"
-      ref={bodyRef}
+      ref={cardRef}
     >
       {(a.image || a.imageUrl) && (
         <div className="w-full bg-gray-50 rounded-t-2xl">
@@ -167,30 +139,44 @@ function ArticleCard({ a, email }) {
       <div className="p-4">
         {unlocked ? (
           <>
-            <div
-              ref={bodyRef}
-              className="overflow-y-auto max-h-[400px] pr-2"
-            >
-              {a.allowHtml ? (
-                <div className="not-prose html-embed">
-                  <style>{`
-                    .html-embed img, .html-embed video, .html-embed iframe { max-width: 100%; height: auto; }
-                    .html-embed .container { max-width: 100%; }
-                  `}</style>
-                  <div dangerouslySetInnerHTML={{ __html: a.content }} />
-                </div>
-              ) : (
-                <div className="prose max-w-none prose-p:leading-7 prose-p:my-3 prose-img:rounded-lg prose-img:max-h-96 prose-img:object-contain">
-                  <p className="leading-7">{a.content}</p>
-                </div>
-              )}
-            </div>
-            {/* Blue progress bar */}
-            <div className="h-1 bg-blue-500 transition-all" style={{ width: `${scrollPercent}%` }} />
+            {/* Progress bar */}
+            <div className="article-progress" style={{ width: "0%" }}></div>
+
+            {a.allowHtml ? (
+              <div
+                className="not-prose html-embed overflow-y-auto max-h-[400px] pr-2 relative"
+                onScroll={(e) => {
+                  const el = e.currentTarget;
+                  const progress = (el.scrollTop / (el.scrollHeight - el.clientHeight)) * 100;
+                  el.parentElement.querySelector(".article-progress").style.width = progress + "%";
+                }}
+              >
+                <style>{`
+                  .html-embed img, .html-embed video, .html-embed iframe { max-width: 100%; height: auto; }
+                  .html-embed .container { max-width: 100%; }
+                `}</style>
+                <div dangerouslySetInnerHTML={{ __html: a.content }} />
+              </div>
+            ) : (
+              <div
+                className="prose max-w-none overflow-y-auto max-h-[400px] pr-2 relative
+                           prose-p:leading-7 prose-p:my-3 prose-img:rounded-lg
+                           prose-img:max-h-96 prose-img:object-contain"
+                onScroll={(e) => {
+                  const el = e.currentTarget;
+                  const progress = (el.scrollTop / (el.scrollHeight - el.clientHeight)) * 100;
+                  el.parentElement.querySelector(".article-progress").style.width = progress + "%";
+                }}
+              >
+                <p className="leading-7">{a.content}</p>
+              </div>
+            )}
           </>
         ) : (
-          <div className="relative article-fade">
+          <div className="relative">
             <p className="leading-7 text-[17px] text-gray-700">{preview}…</p>
+            {/* Fade effect */}
+            <div className="pointer-events-none absolute inset-x-0 -bottom-2 h-10 bg-gradient-to-t from-white to-transparent" />
             <div className="mt-3 flex items-center justify-between">
               <button
                 className="inline-flex items-center gap-2 rounded-lg bg-black px-3 py-1.5 text-sm font-medium text-white hover:opacity-90"
@@ -225,6 +211,7 @@ export default function Article({ limit, embed = false }) {
   });
 
   const [email] = useState(() => localStorage.getItem("userEmail") || "");
+
   useSubmissionStream(email);
 
   async function load() {
@@ -252,13 +239,7 @@ export default function Article({ limit, embed = false }) {
       fd.append("isFree", String(form.isFree));
       if (form.image) fd.append("image", form.image);
       await upload("/api/articles", fd);
-      setForm({
-        title: "",
-        content: "",
-        allowHtml: false,
-        isFree: false,
-        image: null,
-      });
+      setForm({ title: "", content: "", allowHtml: false, isFree: false, image: null });
       await load();
       alert("✅ Article published");
     } catch (err) {
@@ -298,14 +279,12 @@ export default function Article({ limit, embed = false }) {
             </IfOwnerOnly>
           </div>
         ))}
-        {list.length === 0 && (
-          <div className="text-gray-400">No articles yet</div>
-        )}
+        {list.length === 0 && <div className="text-gray-400">No articles yet</div>}
       </div>
     );
   }
 
-  // ---------- DEFAULT MODE ----------
+  // ---------- DEFAULT MODE (Articles page) ----------
   return (
     <section
       id="articles"
@@ -328,9 +307,7 @@ export default function Article({ limit, embed = false }) {
             </IfOwnerOnly>
           </div>
         ))}
-        {list.length === 0 && (
-          <div className="text-gray-400">No articles yet</div>
-        )}
+        {list.length === 0 && <div className="text-gray-400">No articles yet</div>}
       </div>
 
       {/* Admin compose */}
@@ -359,22 +336,18 @@ export default function Article({ limit, embed = false }) {
             <input
               type="checkbox"
               checked={form.allowHtml}
-              onChange={(e) =>
-                setForm({ ...form, allowHtml: e.target.checked })
-              }
+              onChange={(e) => setForm({ ...form, allowHtml: e.target.checked })}
             />
-            Render as HTML
+            Render as HTML (viewer sees formatted content)
           </label>
 
           <label className="flex items-center gap-2">
             <input
               type="checkbox"
               checked={form.isFree}
-              onChange={(e) =>
-                setForm({ ...form, isFree: e.target.checked })
-              }
+              onChange={(e) => setForm({ ...form, isFree: e.target.checked })}
             />
-            Make Free
+            Make this article Free (no unlock)
           </label>
 
           <label className="border rounded px-2 py-1.5 cursor-pointer w-fit">
@@ -383,15 +356,11 @@ export default function Article({ limit, embed = false }) {
               type="file"
               accept="image/*"
               className="hidden"
-              onChange={(e) =>
-                setForm({ ...form, image: e.target.files?.[0] || null })
-              }
+              onChange={(e) => setForm({ ...form, image: e.target.files?.[0] || null })}
             />
           </label>
 
-          <button className="bg-black text-white px-3 py-1.5 rounded w-fit">
-            Publish
-          </button>
+          <button className="bg-black text-white px-3 py-1.5 rounded w-fit">Publish</button>
         </form>
       </IfOwnerOnly>
     </section>
