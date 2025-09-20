@@ -1,5 +1,3 @@
-// client/src/utils/api.js
-
 // ✅ Decide base depending on environment
 let RAW_BASE;
 
@@ -35,7 +33,7 @@ export function authHeaders() {
 
 // ✅ Resolve absolute API URL
 export function apiUrl(path) {
-  if (/^https?:\/\//i.test(path)) return path; // if already full URL
+  if (/^https?:\/\//i.test(path)) return path; // already full URL
   return join(API_BASE, path); // fallback to /api/*
 }
 
@@ -75,7 +73,7 @@ export const putJSON   = (p, d, o) => requestJSON(p, { ...o, method: "PUT",   bo
 export const patchJSON = (p, d, o) => requestJSON(p, { ...o, method: "PATCH", body: d });
 export const delJSON   = (p, o)    => requestJSON(p, { ...o, method: "DELETE" });
 
-// ✅ Compatibility alias (so old code using fetchJSON still works)
+// ✅ Compatibility alias
 export const fetchJSON = getJSON;
 
 // ✅ File upload helpers
@@ -90,23 +88,22 @@ export async function uploadFile(path, file, field = "file", extra = {}, opts = 
   return upload(path, fd, opts);
 }
 
-
- // ✅ Absolute media path resolver
+// ✅ Absolute media path resolver
 export const absUrl = (p) => {
   if (!p) return "";
   if (/^https?:\/\//i.test(p)) return p; // already absolute
 
+  // Always serve static files from backend (not client)
   if (p.startsWith("/uploads/")) {
-    // Always serve static files from backend
-    const backend = (import.meta.env.VITE_API_BASE || "https://lawnetwork-api.onrender.com/api")
+    const backendRoot = (import.meta.env.VITE_API_BASE || "https://lawnetwork-api.onrender.com/api")
       .replace(/\/api$/, ""); // drop /api if present
-    return backend + p;
+    return backendRoot + p;
   }
 
   return apiUrl(p); // normal API paths
 };
 
-// ✅ Default export (bundle everything)
+// ✅ Default export
 export default {
   API_BASE,
   authHeaders,
