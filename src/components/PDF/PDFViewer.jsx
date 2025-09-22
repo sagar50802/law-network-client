@@ -1,5 +1,3 @@
-// src/components/pdfs/PDFViewer.
-
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import { API_BASE, fetchJSON, authHeaders, absUrl } from "../../utils/api";
@@ -285,25 +283,24 @@ export default function PDFViewer() {
     await load();
   };
 
-    const uploadPDF = async (e) => {
-  e.preventDefault();
-  if (!sid || !form.file) return;
+  const uploadPDF = async (e) => {
+    e.preventDefault();
+    if (!sid || !form.file) return;
 
-  const fd = new FormData();
-  fd.append("title", form.title || "Untitled");
-  fd.append("locked", String(form.locked));
-  fd.append("pdf", form.file);  // must match backend multer.single("pdf")
+    const fd = new FormData();
+    fd.append("title", form.title || "Untitled");
+    fd.append("locked", String(form.locked));
+    fd.append("pdf", form.file); // must match backend multer.single("pdf")
 
-  await fetch(`${API_BASE}/api/pdfs/subjects/${sid}/chapters`, {
-    method: "POST",
-    headers: authHeaders(), // keep your token/auth if needed
-    body: fd,
-  });
+    await fetch(`${API_BASE}/api/pdfs/subjects/${sid}/chapters`, {
+      method: "POST",
+      headers: authHeaders(), // keep your token/auth if needed
+      body: fd,
+    });
 
-  setForm({ title: "", file: null, locked: true });
-  await load();
-};
-
+    setForm({ title: "", file: null, locked: true });
+    await load();
+  };
 
   const delChapter = async (cid) => {
     await fetch(`${API_BASE}/api/pdfs/subjects/${sid}/chapters/${cid}`, {
@@ -339,8 +336,7 @@ export default function PDFViewer() {
   const canPrev = useMemo(() => page > 1, [page]);
   const canNext = useMemo(() => page < numPages, [page, numPages]);
 
-  const unlocked =
-    accessMap[sid]?.expiry && accessMap[sid].expiry > Date.now();
+  const unlocked = accessMap[sid]?.expiry && accessMap[sid].expiry > Date.now();
 
   return (
     <section
@@ -562,10 +558,11 @@ export default function PDFViewer() {
               }`}
               onContextMenu={(e) => e.preventDefault()}
             >
-              <Document file={absUrl(chapter.url)}  // ✅ full backend URL
-      onLoadSuccess={onDocLoad}
-      renderMode="canvas"
-      loading={<div className="p-6 text-gray-500">Loading PDF…</div>}
+              <Document
+                file={absUrl(chapter.url)} // ✅ full backend URL
+                onLoadSuccess={onDocLoad}
+                renderMode="canvas"
+                loading={<div className="p-6 text-gray-500">Loading PDF…</div>}
               >
                 <Page
                   pageNumber={page}
@@ -619,7 +616,10 @@ export default function PDFViewer() {
       {/* Admin upload (kept outside the blurred panel logic) */}
       {chapter && (
         <IfOwnerOnly>
-          <form onSubmit={uploadPDF} className="md:col-span-3 mt-6 border-t pt-4 grid gap-2">
+          <form
+            onSubmit={uploadPDF}
+            className="md:col-span-3 mt-6 border-t pt-4 grid gap-2"
+          >
             <div className="font-semibold">Upload chapter (PDF) to subject</div>
             <div className="grid md:grid-cols-3 gap-2">
               <input
@@ -632,7 +632,8 @@ export default function PDFViewer() {
                 <input
                   type="checkbox"
                   checked={form.locked}
-                  onChange={(e) => setForm({ ...form, locked: e.target.checked })}
+                  onChange={(e) =>
+                    setForm({ ...form, locked: e.target.checked })}
                 />
                 Locked by default
               </label>
