@@ -1,15 +1,14 @@
+// client/src/utils/api.js
+
 // ✅ Decide base depending on environment
 let RAW_BASE;
 
 if (import.meta.env?.VITE_API_BASE) {
-  // use .env if provided
-  RAW_BASE = import.meta.env.VITE_API_BASE;
+  RAW_BASE = import.meta.env.VITE_API_BASE; // from .env
 } else if (window.location.hostname === "localhost") {
-  // local dev → backend on localhost:2025
-  RAW_BASE = "http://localhost:2025/api";
+  RAW_BASE = "http://localhost:2025/api"; // dev
 } else {
-  // production (Render backend URL)
-  RAW_BASE = "https://lawnetwork-api.onrender.com/api";
+  RAW_BASE = "https://lawnetwork-api.onrender.com/api"; // prod
 }
 
 RAW_BASE = RAW_BASE.trim();
@@ -23,7 +22,7 @@ function join(base, path) {
     .replace(/([^:]\/)\/+/g, "$1");
 }
 
-// ✅ Injects admin auth headers if key exists in localStorage
+// ✅ Inject admin auth headers if key exists in localStorage
 export function authHeaders() {
   const key = localStorage.getItem("ownerKey");
   return key
@@ -33,6 +32,7 @@ export function authHeaders() {
 
 // ✅ Resolve absolute API URL
 export function apiUrl(path) {
+  if (!path) return "";
   if (/^https?:\/\//i.test(path)) return path; // already full URL
   return join(API_BASE, path); // fallback to /api/*
 }
@@ -68,8 +68,8 @@ async function requestJSON(path, options = {}) {
 
 // ✅ Shorthand wrappers
 export const getJSON   = (p, o) => requestJSON(p, { ...o, method: "GET" });
-export const postJSON  = (p, d, o) => requestJSON(p, { ...o, method: "POST",  body: d });
-export const putJSON   = (p, d, o) => requestJSON(p, { ...o, method: "PUT",   body: d });
+export const postJSON  = (p, d, o) => requestJSON(p, { ...o, method: "POST", body: d });
+export const putJSON   = (p, d, o) => requestJSON(p, { ...o, method: "PUT", body: d });
 export const patchJSON = (p, d, o) => requestJSON(p, { ...o, method: "PATCH", body: d });
 export const delJSON   = (p, o)    => requestJSON(p, { ...o, method: "DELETE" });
 
@@ -97,7 +97,7 @@ export const absUrl = (p) => {
   if (p.startsWith("/uploads/")) {
     const backendRoot = (import.meta.env.VITE_API_BASE || "https://lawnetwork-api.onrender.com/api")
       .replace(/\/api$/, ""); // drop /api if present
-    return backendRoot + p;
+    return join(backendRoot, p);
   }
 
   return apiUrl(p); // normal API paths
