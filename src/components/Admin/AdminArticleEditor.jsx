@@ -1,8 +1,8 @@
+// client/src/components/Admin/AdminArticleEditor.jsx
 import { useEffect, useState } from "react";
 import {
   getJSON,
   postJSON,
-  upload,
   deleteJSON,
   authHeaders,
 } from "../../utils/api";
@@ -11,19 +11,19 @@ export default function AdminArticleEditor() {
   const [articles, setArticles] = useState([]);
   const [title, setTitle] = useState("");
   const [content, setContent] = useState("");
-  const [allowHtml, setAllowHtml] = useState(false);
-  const [file, setFile] = useState(null);
+  const [image, setImage] = useState("");
+  const [link, setLink] = useState("");
+  const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
 
   async function load() {
     try {
+      setError("");
       const r = await getJSON("/articles", { headers: authHeaders() });
-      setArticles(
-        Array.isArray(r)
-          ? r
-          : r.articles || r.items || r.data || []
-      );
-    } catch (err) {
-      console.error("❌ Failed to load articles", err);
+      setArticles(Array.isArray(r?.articles) ? r.articles : []);
+    } catch (e) {
+      console.error(e);
+      setError("Failed to load articles");
       setArticles([]);
     }
   }
@@ -32,96 +32,120 @@ export default function AdminArticleEditor() {
     load();
   }, []);
 
-  async function onSubmit(e) {
+  async function addArticle(e) {
     e.preventDefault();
+    if (!title.trim() || !content.trim()) return alert("Title and content required");
+
     try {
-      if (file) {
-        const fd = new FormData();
-        fd.append("title", title);
-        fd.append("content", content);
-        fd.append("allowHtml", String(allowHtml));
-        fd.append("image", file);
-        await upload("/articles", fd, { headers: authHeaders() });
-      } else {
-        await postJSON(
-          "/articles",
-          { title, content, allowHtml },
-          { headers: authHeaders() }
-        );
-      }
+      setBusy(true);
+      await postJSON(
+        "/articles",
+        { title, content, image, link },
+        { headers: authHeaders() }
+      );
       setTitle("");
       setContent("");
-      setAllowHtml(false);
-      setFile(null);
+      setImage("");
+      setLink("");
       await load();
-      alert("✅ Article published");
     } catch (err) {
-      console.error("❌ Failed to publish article", err);
-      alert("Article publish failed, check console");
+      alert("Create article failed: " + (err?.message || err));
+    } finally {
+      setBusy(false);
     }
   }
 
-  async function onDel(id) {
+  async function deleteArticle(id) {
+    if (!id) return;
+    if (!confirm("Delete this article?")) return;
+
     try {
-      await deleteJSON(`/articles/${id}`, { headers: authHeaders() });
+      setBusy(true);
+      await deleteJSON(`/articles/${encodeURIComponent(id)}`, {
+        headers: authHeaders(),
+      });
       await load();
     } catch (err) {
-      console.error("❌ Failed to delete article", err);
+      alert("Delete failed: " + (err?.message || err));
+    } finally {
+      setBusy(false);
     }
   }
 
   return (
     <div className="space-y-4">
-      <form
-        onSubmit={onSubmit}
-        className="grid gap-2 border rounded p-3 max-w-sm"
-      >
+      {/* Create article form */}
+      <form onSubmit={addArticle} className="space-y-2">
         <input
-          className="border p-2 rounded"
+          className="border p-2 rounded w-full"
           placeholder="Title"
           value={title}
           onChange={(e) => setTitle(e.target.value)}
+          disabled={busy}
         />
         <textarea
-          className="border p-2 rounded h-32"
+          className="border p-2 rounded w-full h-32"
           placeholder="Content"
           value={content}
           onChange={(e) => setContent(e.target.value)}
+          disabled={busy}
         />
-        <label className="text-sm flex items-center gap-2">
-          <input
-            type="checkbox"
-            checked={allowHtml}
-            onChange={(e) => setAllowHtml(e.target.checked)}
-          />
-          Allow HTML rendering
-        </label>
         <input
-          type="file"
-          accept="image/*"
-          onChange={(e) => setFile(e.target.files?.[0] || null)}
+          className="border p-2 rounded w-full"
+          placeholder="Image URL (optional)"
+          value={image}
+          onChange={(e) => setImage(e.target.value)}
+          disabled={busy}
         />
-        <button className="bg-black text-white px-3 py-1 rounded">
-          Publish
+        <input
+          className="border p-2 rounded w-full"
+          placeholder="External link (optional)"
+          value={link}
+          onChange={(e) => setLink(e.target.value)}
+          disabled={busy}
+        />
+        <button
+          type="submit"
+          className="bg-black text-white px-3 rounded disabled:opacity-60"
+          disabled={busy}
+        >
+          Add Article
         </button>
       </form>
 
-      <ul className="space-y-2">
-        {articles.map((a) => (
-          <li
-            key={a._id || a.id}
-            className="flex items-center justify-between"
-          >
-            <span>{a.title}</span>
-            <button
-              onClick={() => onDel(a._id || a.id)}
-              className="text-red-600 text-sm"
+      {/* Article list */}
+      <div className="space-y-2">
+        <h4 className="font-semibold">Articles</h4>
+        <ul className="space-y-2">
+          {articles.map((a) => (
+            <li
+              key={a._id || a.id}
+              className="border rounded p-2 flex items-center justify-between"
             >
-              Delete
-            </button>
-          </li>
-        ))}
-      </ul>
+              <div className="truncate">
+                <div className="font-medium">{a.title}</div>
+                <div className="text-xs text-gray-500">
+                  {a.link || "No external link"}
+                </div>
+              </div>
+              <button
+                className="text-red-600 text-sm"
+                onClick={() => deleteArticle(a._id || a.id)}
+                disabled={busy}
+              >
+                Delete
+              </button>
+            </li>
+          ))}
+          {articles.length === 0 && (
+            <li className="text-gray-400">No articles yet</li>
+          )}
+        </ul>
+      </div>
+
+      {error && (
+        <div className="text-sm whitespace-pre-wrap text-red-600">{error}</div>
+      )}
     </div>
   );
 }

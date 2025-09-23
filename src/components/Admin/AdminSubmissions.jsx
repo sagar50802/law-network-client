@@ -1,12 +1,18 @@
+// client/src/components/Admin/AdminSubmissions.jsx
 import { useEffect, useMemo, useState } from "react";
-import { getJSON, postJSON, delJSON, absUrl } from "../../utils/api";
+import {
+  getJSON,
+  postJSON,
+  deleteJSON,
+  absUrl,
+} from "../../utils/api";
 import useAccessSync from "../../hooks/useAccessSync";
 import AccessTimer from "../common/AccessTimer";
 
 export default function AdminSubmissions() {
   const [items, setItems] = useState([]);
   const [selected, setSelected] = useState(new Set());
-  const [busy, setBusy] = useState(false); // for batch delete
+  const [busy, setBusy] = useState(false);
 
   const [filter, setFilter] = useState("all"); // all | pending | approved
   const [q, setQ] = useState("");
@@ -14,6 +20,7 @@ export default function AdminSubmissions() {
   const [autoApprove, setAutoApprove] = useState(
     localStorage.getItem("autoApproveSubmissions") === "true"
   );
+
   useEffect(() => {
     localStorage.setItem("autoApproveSubmissions", autoApprove);
   }, [autoApprove]);
@@ -22,31 +29,35 @@ export default function AdminSubmissions() {
     Array.isArray(r) ? r : r?.items || r?.data || r?.submissions || [];
 
   async function load() {
-    const r = await getJSON("/submissions");
-    const arr = normalize(r);
-    setItems(arr);
+    try {
+      const r = await getJSON("/submissions");
+      const arr = normalize(r);
+      setItems(arr);
 
-    // keep selection valid after refresh
-    setSelected((old) =>
-      new Set([...old].filter((id) => arr.some((x) => (x._id || x.id) === id)))
-    );
+      // keep selection valid after refresh
+      setSelected((old) =>
+        new Set([...old].filter((id) => arr.some((x) => (x._id || x.id) === id)))
+      );
 
-    // Auto approval mode
-    if (autoApprove) {
-      const pending = arr.filter((s) => !s.approved && !s.revoked);
-      for (const sub of pending) {
-        const plan = (sub.plan?.label || "").toLowerCase();
-        let seconds = 60 * 60 * 24; // default 1 day
-        if (plan.includes("week")) seconds = 60 * 60 * 24 * 7;
-        if (plan.includes("month")) seconds = 60 * 60 * 24 * 30;
-        if (plan.includes("year")) seconds = 60 * 60 * 24 * 365;
-        if (plan.includes("day")) seconds = 60 * 60 * 24;
-        await approveOne(sub, seconds, true);
+      // auto approve if enabled
+      if (autoApprove) {
+        const pending = arr.filter((s) => !s.approved && !s.revoked);
+        for (const sub of pending) {
+          const plan = (sub.plan?.label || "").toLowerCase();
+          let seconds = 60 * 60 * 24; // default 1 day
+          if (plan.includes("week")) seconds = 60 * 60 * 24 * 7;
+          if (plan.includes("month")) seconds = 60 * 60 * 24 * 30;
+          if (plan.includes("year")) seconds = 60 * 60 * 24 * 365;
+          if (plan.includes("day")) seconds = 60 * 60 * 24;
+          await approveOne(sub, seconds, true);
+        }
       }
+    } catch (err) {
+      console.error("Failed to load submissions", err);
     }
   }
 
-  // ✅ INIT: read auto-mode from server then load table
+  // init: read auto-mode from server then load
   useEffect(() => {
     (async () => {
       try {
@@ -55,10 +66,9 @@ export default function AdminSubmissions() {
       } catch {}
       await load();
     })();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  // ✅ Persist auto-mode to server whenever user toggles it
+  // persist auto-mode to server whenever toggled
   useEffect(() => {
     (async () => {
       try {
@@ -67,13 +77,12 @@ export default function AdminSubmissions() {
     })();
   }, [autoApprove]);
 
-  // Auto refresh every 7s
+  // auto refresh every 7s
   useEffect(() => {
     const interval = setInterval(() => {
       load();
     }, 7000);
     return () => clearInterval(interval);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [autoApprove]);
 
   useAccessSync((detail) => {
@@ -86,7 +95,7 @@ export default function AdminSubmissions() {
     try {
       await postJSON(`/submissions/${id}/approve`, { seconds });
 
-      // Broadcast immediate event with 20s fast unlock
+      // broadcast immediate event
       const ctx = sub.context || {};
       const featureId = ctx.id || ctx.playlist || ctx.subject;
       const type = ctx.type;
@@ -115,7 +124,7 @@ export default function AdminSubmissions() {
       );
     } catch (err) {
       console.warn("Approve failed, fallback", err);
-      await delJSON(`/submissions/${id}`);
+      await deleteJSON(`/submissions/${id}`);
     }
   }
 
@@ -124,7 +133,7 @@ export default function AdminSubmissions() {
     try {
       await postJSON(`/submissions/${id}/revoke`, {});
     } catch {
-      await delJSON(`/submissions/${id}`);
+      await deleteJSON(`/submissions/${id}`);
     }
 
     const ctx = sub.context || {};
@@ -145,11 +154,10 @@ export default function AdminSubmissions() {
     );
   }
 
-  // Single delete
   async function deleteOne(sub) {
     const id = sub._id || sub.id;
     try {
-      await delJSON(`/submissions/${id}`);
+      await deleteJSON(`/submissions/${id}`);
     } catch (e) {
       console.warn("Delete failed", e);
     }
@@ -161,7 +169,6 @@ export default function AdminSubmissions() {
     });
   }
 
-  // Batch delete
   async function deleteMany() {
     if (selected.size === 0) return;
     setBusy(true);
@@ -173,7 +180,7 @@ export default function AdminSubmissions() {
           const s = mapById.get(id);
           if (s) {
             try {
-              await delJSON(`/submissions/${id}`);
+              await deleteJSON(`/submissions/${id}`);
             } catch (e) {
               console.warn("Batch delete failed for", id, e);
             }
@@ -202,27 +209,22 @@ export default function AdminSubmissions() {
     setSelected((s) => (s.size === allIds.length ? new Set() : new Set(allIds)));
   }
 
-  // pretty content mapping (video / podcast / notebook / article)
+  // content info
   const getContentInfo = (s) => {
     const ctx = s.context || {};
     const raw = (ctx.type || s.type || s.subjectLabel || "").toLowerCase();
     let label = "—";
     let icon = "•";
     if (raw.includes("playlist") || raw.includes("video")) {
-      label = "Video";
-      icon = "🎬";
+      label = "Video"; icon = "🎬";
     } else if (raw.includes("podcast")) {
-      label = "Podcast";
-      icon = "🎧";
+      label = "Podcast"; icon = "🎧";
     } else if (raw.includes("pdf") || raw.includes("notebook")) {
-      label = "Notebook";
-      icon = "📓";
+      label = "Notebook"; icon = "📓";
     } else if (raw.includes("article")) {
-      label = "Article";
-      icon = "📰";
+      label = "Article"; icon = "📰";
     } else if (raw) {
-      label = raw;
-      icon = "•";
+      label = raw; icon = "•";
     }
     const subject = ctx.id || ctx.playlist || ctx.subject || s.subjectLabel || "";
     return { label, icon, subject };
@@ -250,7 +252,7 @@ export default function AdminSubmissions() {
         <h3 className="text-lg font-semibold">User Submissions</h3>
         <span className="text-sm text-gray-500">({items.length})</span>
 
-        {/* Batch selection + batch delete */}
+        {/* Batch delete */}
         <div className="flex items-center gap-2 text-sm">
           <span className="text-gray-600">{selected.size} selected</span>
           <button
@@ -304,9 +306,7 @@ export default function AdminSubmissions() {
               <th className="px-3 py-2">#</th>
               <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Name</th>
               <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Plan</th>
-              {/* NEW: Content type */}
               <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Content</th>
-              {/* NEW: Screenshot */}
               <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Screenshot</th>
               <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Gmail</th>
               <th className="px-3 py-2 text-left text-xs font-medium text-gray-500 uppercase">Created</th>
@@ -330,8 +330,6 @@ export default function AdminSubmissions() {
                   <td className="px-3 py-2">{idx + 1}</td>
                   <td className="px-3 py-2 text-sm">{s.name || "-"}</td>
                   <td className="px-3 py-2 text-sm">{s.plan?.label || "-"}</td>
-
-                  {/* Content type cell */}
                   <td className="px-3 py-2 text-sm text-gray-700">
                     <div className="flex items-center gap-2">
                       <span>{icon}</span>
@@ -339,14 +337,10 @@ export default function AdminSubmissions() {
                         {label}
                       </span>
                     </div>
-                    {subject ? (
-                      <div className="text-xs text-gray-500 truncate mt-0.5">
-                        {subject}
-                      </div>
-                    ) : null}
+                    {subject && (
+                      <div className="text-xs text-gray-500 truncate mt-0.5">{subject}</div>
+                    )}
                   </td>
-
-                  {/* Screenshot cell */}
                   <td className="px-3 py-2">
                     {s.proofUrl ? (
                       <a href={absUrl(s.proofUrl)} target="_blank" rel="noreferrer">
@@ -356,24 +350,19 @@ export default function AdminSubmissions() {
                           className="w-20 h-14 object-cover rounded shadow-sm"
                         />
                       </a>
-                    ) : (
-                      "—"
-                    )}
+                    ) : "—"}
                   </td>
-
                   <td className="px-3 py-2 text-sm">{s.email || s.gmail || "-"}</td>
                   <td className="px-3 py-2 text-sm">{new Date(s.createdAt).toLocaleString()}</td>
                   <td className="px-3 py-2 text-sm">
-                    {s.revoked
-                      ? "🔒 Revoked"
-                      : s.expiry
-                      ? (
-                        <div className="flex items-center gap-1">
-                          <span className="text-green-600 font-bold">✓</span>
-                          <AccessTimer timeLeftMs={s.expiry - Date.now()} />
-                        </div>
-                      )
-                      : "—"}
+                    {s.revoked ? (
+                      "🔒 Revoked"
+                    ) : s.expiry ? (
+                      <div className="flex items-center gap-1">
+                        <span className="text-green-600 font-bold">✓</span>
+                        <AccessTimer timeLeftMs={s.expiry - Date.now()} />
+                      </div>
+                    ) : "—"}
                   </td>
                   <td className="px-3 py-2 text-sm flex gap-2">
                     {autoApprove ? (
@@ -385,7 +374,7 @@ export default function AdminSubmissions() {
                       className="px-2 py-1 rounded border text-red-600"
                       onClick={() => revokeOne(s)}
                     >
-                      Revoke Access
+                      Revoke
                     </button>
                     <button
                       className="px-2 py-1 rounded border text-gray-700"
@@ -399,7 +388,6 @@ export default function AdminSubmissions() {
             })}
             {filtered.length === 0 && (
               <tr>
-                {/* updated colSpan (now 10 columns + checkbox = 10 with # included) */}
                 <td colSpan={10} className="px-3 py-6 text-center text-gray-400">
                   No submissions
                 </td>

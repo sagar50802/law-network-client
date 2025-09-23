@@ -1,17 +1,24 @@
-import { useEffect, useMemo, useState } from "react";
-import { getJSON, postJSON, upload, delJSON, authHeaders } from "../../utils/api";
+// client/src/components/Admin/AdminPodcastEditor.jsx
+import { useEffect, useState } from "react";
+import {
+  getJSON,
+  postJSON,
+  upload,
+  deleteJSON,
+  absUrl,
+  authHeaders,
+} from "../../utils/api";
 
 export default function AdminPodcastEditor() {
   const [playlists, setPlaylists] = useState([]);
-  const [sel, setSel] = useState(""); // selected playlist id/key
+  const [sel, setSel] = useState("");
   const [newName, setNewName] = useState("");
 
   const [title, setTitle] = useState("");
-  const [author, setAuthor] = useState("");
   const [file, setFile] = useState(null);
   const [url, setUrl] = useState("");
-  const [error, setError] = useState("");
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
 
   const normalize = (r) => {
     if (Array.isArray(r)) return r;
@@ -34,12 +41,10 @@ export default function AdminPodcastEditor() {
             ? keep._id || keep.id || keep.name
             : arr[0]._id || arr[0].id || arr[0].name
         );
-      } else {
-        setSel("");
-      }
+      } else setSel("");
     } catch (e) {
       console.error(e);
-      setError("Failed to load podcasts");
+      setError("Failed to load podcast playlists");
       setPlaylists([]);
       setSel("");
     }
@@ -48,10 +53,7 @@ export default function AdminPodcastEditor() {
     load();
   }, []);
 
-  const selected = useMemo(
-    () => playlists.find((p) => (p._id || p.id || p.name) === sel),
-    [playlists, sel]
-  );
+  const selected = playlists.find((p) => (p._id || p.id || p.name) === sel);
 
   // create playlist
   async function addPlaylist() {
@@ -59,12 +61,14 @@ export default function AdminPodcastEditor() {
     if (!name) return;
     try {
       setBusy(true);
-      setError("");
-      await postJSON("/podcasts/playlists", { name }, { headers: authHeaders() });
+      await postJSON(
+        "/podcasts/playlists",
+        { name },
+        { headers: authHeaders() }
+      );
       setNewName("");
       await load();
     } catch (err) {
-      console.error(err);
       alert("Create playlist failed: " + (err?.message || err));
     } finally {
       setBusy(false);
@@ -74,68 +78,46 @@ export default function AdminPodcastEditor() {
   // delete playlist
   async function deletePlaylist(id) {
     if (!id) return;
-    if (!confirm("Delete this playlist and all its items?")) return;
+    if (!confirm("Delete this playlist and all its podcasts?")) return;
+
+    setBusy(true);
     try {
-      setBusy(true);
-      setError("");
-      await delJSON(`/podcasts/${encodeURIComponent(id)}`, { headers: authHeaders() });
-      if (sel === id) setSel("");
-      await load();
-    } catch (err) {
-      try {
-        await delJSON(`/podcasts/playlists/${encodeURIComponent(id)}`, { headers: authHeaders() });
-        if (sel === id) setSel("");
-        await load();
-      } catch (err2) {
-        console.error(err2);
-        alert("Delete playlist failed: " + (err2?.message || err2));
-      }
+      await deleteJSON(`/podcasts/${encodeURIComponent(id)}`, {
+        headers: authHeaders(),
+      });
+    } catch {
+      await deleteJSON(`/podcasts/playlists/${encodeURIComponent(id)}`, {
+        headers: authHeaders(),
+      });
     } finally {
       setBusy(false);
     }
+    if (sel === id) setSel("");
+    await load();
   }
 
-  // upload audio
-  async function uploadAudio(e) {
+  // upload podcast
+  async function uploadPodcast(e) {
     e?.preventDefault?.();
     const key = selected?._id || selected?.id || selected?.name || sel;
     if (!key) return alert("Select a playlist first");
-    if (!file && !url) return alert("Choose a .mp3 file or paste a direct audio URL");
+    if (!file && !url) return alert("Choose a file or paste a direct audio URL");
 
     const fd = new FormData();
     fd.append("playlist", key);
     fd.append("title", title || "Untitled");
-    fd.append("author", author || "");
     if (file) fd.append("file", file);
     else fd.append("url", url);
 
     try {
       setBusy(true);
-      setError("");
       await upload("/podcasts/items", fd, { headers: authHeaders() });
       setTitle("");
-      setAuthor("");
       setFile(null);
       setUrl("");
       await load();
     } catch (err) {
-      alert("Upload failed:\n" + (err?.message || String(err)));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  // delete one item
-  async function deleteAudio(itemId) {
-    if (!itemId) return;
-    try {
-      setBusy(true);
-      setError("");
-      await delJSON(`/podcasts/items/${encodeURIComponent(itemId)}`, { headers: authHeaders() });
-      await load();
-    } catch (err) {
-      console.error(err);
-      alert("Delete failed: " + (err?.message || err));
+      alert("Upload failed: " + (err?.message || err));
     } finally {
       setBusy(false);
     }
@@ -153,16 +135,16 @@ export default function AdminPodcastEditor() {
           disabled={busy}
         />
         <button
-          onClick={addPlaylist}
           className="bg-black text-white px-3 rounded disabled:opacity-60"
+          onClick={addPlaylist}
           disabled={busy || !newName.trim()}
         >
           Add Playlist
         </button>
       </div>
 
-      {/* Playlists + selection + upload form */}
       <div className="grid grid-cols-1 md:grid-cols-2 gap-3">
+        {/* Playlists */}
         <div className="space-y-2">
           {playlists.map((p) => {
             const id = p._id || p.id || p.name;
@@ -194,22 +176,18 @@ export default function AdminPodcastEditor() {
               </div>
             );
           })}
-          {playlists.length === 0 && <div className="text-gray-400">No playlists yet</div>}
+          {playlists.length === 0 && (
+            <div className="text-gray-400">No playlists yet</div>
+          )}
         </div>
 
-        <form onSubmit={uploadAudio} className="space-y-2">
+        {/* Upload to selected */}
+        <form onSubmit={uploadPodcast} className="space-y-2">
           <input
             className="border p-2 rounded w-full"
             placeholder="Title"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            disabled={busy}
-          />
-          <input
-            className="border p-2 rounded w-full"
-            placeholder="Author / Speaker"
-            value={author}
-            onChange={(e) => setAuthor(e.target.value)}
             disabled={busy}
           />
           <input
@@ -241,10 +219,7 @@ export default function AdminPodcastEditor() {
         </form>
       </div>
 
-      {error && (
-        <div className="text-sm whitespace-pre-wrap text-red-600">{error}</div>
-      )}
-
+      {/* Items in selected */}
       {selected && (
         <div className="space-y-2">
           <div className="flex items-center justify-between">
@@ -259,32 +234,25 @@ export default function AdminPodcastEditor() {
               Delete Playlist
             </button>
           </div>
+
           <ul className="space-y-2">
             {(selected.items || []).map((it) => (
-              <li
-                key={it._id || it.id}
-                className="border rounded p-2 flex items-center justify-between"
-              >
-                <div>
-                  <div className="font-medium">{it.title}</div>
-                  <div className="text-xs text-gray-500">
-                    {it.author || it.artist}
-                  </div>
+              <li key={it._id || it.id} className="border rounded p-2">
+                <div className="font-medium">{it.title}</div>
+                <div className="text-xs text-gray-500 break-all">
+                  {absUrl(it.url)}
                 </div>
-                <button
-                  className="text-red-600 text-sm"
-                  onClick={() => deleteAudio(it._id || it.id)}
-                  disabled={busy}
-                >
-                  Delete
-                </button>
               </li>
             ))}
             {(selected.items?.length ?? 0) === 0 && (
-              <li className="text-gray-400">No audios yet</li>
+              <li className="text-gray-400">No podcasts yet</li>
             )}
           </ul>
         </div>
+      )}
+
+      {error && (
+        <div className="text-sm whitespace-pre-wrap text-red-600">{error}</div>
       )}
     </div>
   );

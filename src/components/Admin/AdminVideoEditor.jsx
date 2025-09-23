@@ -30,9 +30,7 @@ export default function AdminVideoEditor() {
       if (arr.length) {
         const keep = arr.find((p) => (p._id || p.id || p.name) === sel);
         setSel(
-          keep
-            ? keep._id || keep.id || keep.name
-            : arr[0]._id || arr[0].id || arr[0].name
+          keep ? (keep._id || keep.id || keep.name) : (arr[0]._id || arr[0].id || arr[0].name)
         );
       } else setSel("");
     } catch (e) {
@@ -51,6 +49,7 @@ export default function AdminVideoEditor() {
     [playlists, sel]
   );
 
+  // create playlist
   async function addPlaylist() {
     const name = newName.trim();
     if (!name) return;
@@ -66,16 +65,15 @@ export default function AdminVideoEditor() {
     }
   }
 
+  // delete playlist
   async function deletePlaylist(id) {
     if (!id) return;
     if (!confirm("Delete this playlist and all its videos?")) return;
 
     setBusy(true);
     try {
-      // primary
       await delJSON(`/videos/${encodeURIComponent(id)}`, { headers: authHeaders() });
     } catch {
-      // compatibility path
       await delJSON(`/videos/playlists/${encodeURIComponent(id)}`, { headers: authHeaders() });
     } finally {
       setBusy(false);
@@ -84,6 +82,7 @@ export default function AdminVideoEditor() {
     await load();
   }
 
+  // upload video
   async function uploadVideo(e) {
     e?.preventDefault?.();
     const key = selected?._id || selected?.id || selected?.name || sel;
@@ -146,9 +145,7 @@ export default function AdminVideoEditor() {
               >
                 <div>
                   <div className="font-medium">{p.name}</div>
-                  <div className="text-xs text-gray-500">
-                    {(p.items?.length ?? 0)} items
-                  </div>
+                  <div className="text-xs text-gray-500">{(p.items?.length ?? 0)} items</div>
                 </div>
                 <button
                   className="text-red-600 text-sm"
@@ -163,9 +160,7 @@ export default function AdminVideoEditor() {
               </div>
             );
           })}
-          {playlists.length === 0 && (
-            <div className="text-gray-400">No playlists yet</div>
-          )}
+          {playlists.length === 0 && <div className="text-gray-400">No playlists yet</div>}
         </div>
 
         {/* Upload to selected */}
@@ -192,8 +187,7 @@ export default function AdminVideoEditor() {
           />
           {selected && (
             <div className="text-xs text-gray-500">
-              Selected key:{" "}
-              <code>{selected._id || selected.id || selected.name}</code>
+              Selected key: <code>{selected._id || selected.id || selected.name}</code>
             </div>
           )}
           <button
@@ -226,9 +220,7 @@ export default function AdminVideoEditor() {
             {(selected.items || []).map((it) => (
               <li key={it._id || it.id} className="border rounded p-2">
                 <div className="font-medium">{it.title}</div>
-                <div className="text-xs text-gray-500 break-all">
-                  {absUrl(it.url)}
-                </div>
+                <div className="text-xs text-gray-500 break-all">{absUrl(it.url)}</div>
               </li>
             ))}
             {(selected.items?.length ?? 0) === 0 && (
@@ -238,9 +230,7 @@ export default function AdminVideoEditor() {
         </div>
       )}
 
-      {error && (
-        <div className="text-sm whitespace-pre-wrap text-red-600">{error}</div>
-      )}
+      {error && <div className="text-sm whitespace-pre-wrap text-red-600">{error}</div>}
     </div>
   );
 }

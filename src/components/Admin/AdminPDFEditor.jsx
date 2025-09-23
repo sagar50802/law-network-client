@@ -5,8 +5,8 @@ import {
   postJSON,
   upload,
   deleteJSON,
-  authHeaders,
   absUrl,
+  authHeaders,
 } from "../../utils/api";
 
 export default function AdminPDFEditor() {
@@ -16,17 +16,27 @@ export default function AdminPDFEditor() {
   const [title, setTitle] = useState("");
   const [file, setFile] = useState(null);
   const [busy, setBusy] = useState(false);
+  const [error, setError] = useState("");
   const fileRef = useRef(null);
 
   async function load() {
-    const r = await getJSON("/pdfs", { headers: authHeaders() });
-    setSubjects(r.subjects || []);
-    if (!sel && r.subjects?.[0]) setSel(r.subjects[0].id);
+    try {
+      setError("");
+      const r = await getJSON("/pdfs", { headers: authHeaders() });
+      setSubjects(r.subjects || []);
+      if (!sel && r.subjects?.[0]) setSel(r.subjects[0].id);
+    } catch (e) {
+      console.error(e);
+      setError("Failed to load PDF subjects");
+      setSubjects([]);
+      setSel("");
+    }
   }
   useEffect(() => {
     load();
   }, []);
 
+  // create subject
   async function addSubject() {
     if (!newName.trim()) return;
     setBusy(true);
@@ -38,11 +48,14 @@ export default function AdminPDFEditor() {
       );
       setNewName("");
       await load();
+    } catch (err) {
+      alert("Create subject failed: " + (err?.message || err));
     } finally {
       setBusy(false);
     }
   }
 
+  // delete subject
   async function deleteSubject(id) {
     if (!confirm("Delete subject and all chapters?")) return;
     setBusy(true);
@@ -50,11 +63,14 @@ export default function AdminPDFEditor() {
       await deleteJSON(`/pdfs/subjects/${id}`, { headers: authHeaders() });
       if (sel === id) setSel("");
       await load();
+    } catch (err) {
+      alert("Delete subject failed: " + (err?.message || err));
     } finally {
       setBusy(false);
     }
   }
 
+  // add chapter
   async function addChapter(e) {
     e.preventDefault();
     if (!sel || !file) return;
@@ -62,21 +78,37 @@ export default function AdminPDFEditor() {
     fd.append("title", title || "Untitled");
     fd.append("locked", "true");
     fd.append("pdf", file);
-    await upload(`/pdfs/subjects/${sel}/chapters`, fd, {
-      headers: authHeaders(),
-    });
-    setTitle("");
-    setFile(null);
-    if (fileRef.current) fileRef.current.value = "";
-    await load();
+
+    try {
+      setBusy(true);
+      await upload(`/pdfs/subjects/${sel}/chapters`, fd, {
+        headers: authHeaders(),
+      });
+      setTitle("");
+      setFile(null);
+      if (fileRef.current) fileRef.current.value = "";
+      await load();
+    } catch (err) {
+      alert("Upload chapter failed: " + (err?.message || err));
+    } finally {
+      setBusy(false);
+    }
   }
 
+  // delete chapter
   async function delChapter(cid) {
     if (!confirm("Delete this chapter?")) return;
-    await deleteJSON(`/pdfs/subjects/${sel}/chapters/${cid}`, {
-      headers: authHeaders(),
-    });
-    await load();
+    try {
+      setBusy(true);
+      await deleteJSON(`/pdfs/subjects/${sel}/chapters/${cid}`, {
+        headers: authHeaders(),
+      });
+      await load();
+    } catch (err) {
+      alert("Delete chapter failed: " + (err?.message || err));
+    } finally {
+      setBusy(false);
+    }
   }
 
   const selected = subjects.find((s) => s.id === sel);
@@ -94,8 +126,8 @@ export default function AdminPDFEditor() {
         />
         <button
           onClick={addSubject}
-          className="bg-black text-white px-3 rounded"
-          disabled={busy}
+          className="bg-black text-white px-3 rounded disabled:opacity-60"
+          disabled={busy || !newName.trim()}
         >
           Add
         </button>
@@ -124,6 +156,7 @@ export default function AdminPDFEditor() {
                   e.stopPropagation();
                   deleteSubject(s.id);
                 }}
+                disabled={busy}
               >
                 Delete
               </button>
@@ -141,22 +174,22 @@ export default function AdminPDFEditor() {
             placeholder="Chapter title"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
+            disabled={busy}
           />
           <input
             ref={fileRef}
             type="file"
             accept="application/pdf"
             onChange={(e) => setFile(e.target.files?.[0] || null)}
+            disabled={busy}
           />
           {selected && (
-            <div className="text-xs text-gray-500">
-              Subject: {selected.name}
-            </div>
+            <div className="text-xs text-gray-500">Subject: {selected.name}</div>
           )}
           <button
             type="submit"
-            className="bg-black text-white px-3 rounded"
-            disabled={!sel || !file}
+            className="bg-black text-white px-3 rounded disabled:opacity-60"
+            disabled={!sel || !file || busy}
           >
             Upload
           </button>
@@ -176,7 +209,7 @@ export default function AdminPDFEditor() {
                 <div className="truncate">
                   <div className="font-medium">{ch.title}</div>
                   <a
-                    href={absUrl(ch.url)} // ✅ fixed
+                    href={absUrl(ch.url)} // ✅ ensure absolute URL
                     target="_blank"
                     rel="noreferrer"
                     className="text-xs underline text-blue-600"
@@ -187,6 +220,7 @@ export default function AdminPDFEditor() {
                 <button
                   className="text-red-600 text-sm"
                   onClick={() => delChapter(ch.id)}
+                  disabled={busy}
                 >
                   Delete
                 </button>
@@ -198,6 +232,8 @@ export default function AdminPDFEditor() {
           </ul>
         </div>
       )}
+
+      {error && <div className="text-sm text-red-600">{error}</div>}
     </div>
   );
 }
