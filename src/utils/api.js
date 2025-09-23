@@ -1,3 +1,5 @@
+// client/src/utils/api.js
+
 // 🌐 Base API URL
 // In development -> http://localhost:5000
 // In production -> your Render backend (without /api at end)
@@ -18,7 +20,7 @@ export function absUrl(p) {
   return API_BASE + p;
 }
 
-// 🔹 JSON Helpers
+// 🔹 Helpers
 async function requestJSON(url, options = {}) {
   const res = await fetch(absUrl(url), {
     ...options,
@@ -26,7 +28,7 @@ async function requestJSON(url, options = {}) {
       "Content-Type": "application/json",
       ...(options.headers || {}),
     },
-    credentials: "include", // needed for cookies/session
+    credentials: "include",
   });
 
   if (!res.ok) {
@@ -59,19 +61,5 @@ export function deleteJSON(url) {
   });
 }
 
-// 🔹 File Upload Helper (multipart/form-data)
-export async function upload(url, file, fieldName = "file") {
-  const formData = new FormData();
-  formData.append(fieldName, file);
-
-  const res = await fetch(absUrl(url), {
-    method: "POST",
-    body: formData,
-    credentials: "include",
-  });
-
-  if (!res.ok) {
-    throw new Error(`Upload failed: ${res.status} ${res.statusText}`);
-  }
-  return res.json();
-}
+// ✅ Alias for legacy imports
+export const delJSON = deleteJSON;
