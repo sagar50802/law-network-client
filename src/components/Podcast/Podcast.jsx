@@ -1,6 +1,6 @@
 // src/components/podcasts/Podcast.jsx
 import { useEffect, useRef, useState } from "react";
-import { API_BASE, fetchJSON, authHeaders, absUrl } from "../../utils/api";
+import { API_BASE, getJSON, authHeaders, absUrl } from "../../utils/api";
 import IfOwnerOnly from "../common/IfOwnerOnly";
 import usePreviewLock from "../../hooks/usePreviewLock";
 import QROverlay from "../common/QROverlay";
