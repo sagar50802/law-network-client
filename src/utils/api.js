@@ -20,7 +20,7 @@ export function absUrl(p) {
   return API_BASE + p;
 }
 
-// 🔹 Helpers
+// 🔹 Core JSON fetcher
 async function requestJSON(url, options = {}) {
   const res = await fetch(absUrl(url), {
     ...options,
@@ -37,6 +37,7 @@ async function requestJSON(url, options = {}) {
   return res.json();
 }
 
+// ── JSON helpers ──────────────────────────────
 export function getJSON(url) {
   return requestJSON(url);
 }
@@ -61,5 +62,27 @@ export function deleteJSON(url) {
   });
 }
 
-// ✅ Alias for legacy imports
+// ✅ Alias for consistency
 export const delJSON = deleteJSON;
+
+// ── File Upload helper ─────────────────────────
+export async function upload(url, file, extraData = {}) {
+  const formData = new FormData();
+  formData.append("file", file);
+
+  // attach any extra fields (like title, description)
+  for (const [k, v] of Object.entries(extraData)) {
+    formData.append(k, v);
+  }
+
+  const res = await fetch(absUrl(url), {
+    method: "POST",
+    body: formData,
+    credentials: "include",
+  });
+
+  if (!res.ok) {
+    throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+  }
+  return res.json();
+}
