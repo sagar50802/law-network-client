@@ -25,10 +25,22 @@ function absUrl(p) {
 }
 
 /**
+ * Normalize endpoint: ensure it starts with `/api/`
+ */
+function normalizeUrl(url) {
+  if (!url.startsWith("/api/")) {
+    if (url.startsWith("/")) return "/api" + url;
+    return "/api/" + url;
+  }
+  return url;
+}
+
+/**
  * Standard JSON fetchers
  */
 async function getJSON(url) {
-  const res = await fetch(API_BASE + url, {
+  url = normalizeUrl(url);
+  const res = await fetch(API_BASE.replace(/\/api$/, "") + url, {
     credentials: "include",
     headers: { "Content-Type": "application/json" },
   });
@@ -37,7 +49,8 @@ async function getJSON(url) {
 }
 
 async function postJSON(url, data) {
-  const res = await fetch(API_BASE + url, {
+  url = normalizeUrl(url);
+  const res = await fetch(API_BASE.replace(/\/api$/, "") + url, {
     method: "POST",
     credentials: "include",
     headers: { "Content-Type": "application/json" },
@@ -48,7 +61,8 @@ async function postJSON(url, data) {
 }
 
 async function putJSON(url, data) {
-  const res = await fetch(API_BASE + url, {
+  url = normalizeUrl(url);
+  const res = await fetch(API_BASE.replace(/\/api$/, "") + url, {
     method: "PUT",
     credentials: "include",
     headers: { "Content-Type": "application/json" },
@@ -59,7 +73,8 @@ async function putJSON(url, data) {
 }
 
 async function deleteJSON(url) {
-  const res = await fetch(API_BASE + url, {
+  url = normalizeUrl(url);
+  const res = await fetch(API_BASE.replace(/\/api$/, "") + url, {
     method: "DELETE",
     credentials: "include",
   });
@@ -77,7 +92,8 @@ async function delJSON(url) {
  * Used for images, audio, video, PDFs, etc.
  */
 async function upload(url, formData) {
-  const res = await fetch(API_BASE + url, {
+  url = normalizeUrl(url);
+  const res = await fetch(API_BASE.replace(/\/api$/, "") + url, {
     method: "POST",
     credentials: "include",
     body: formData,
