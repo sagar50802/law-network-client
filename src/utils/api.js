@@ -86,3 +86,13 @@ export async function upload(url, file, extraData = {}) {
   }
   return res.json();
 }
+// 🔹 Upload helper (for FormData like images, PDFs, etc.)
+export async function upload(url, formData) {
+  const res = await fetch(absUrl(url), {
+    method: "POST",
+    body: formData,
+    credentials: "include",
+  });
+  if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
+  return res.json();
+}

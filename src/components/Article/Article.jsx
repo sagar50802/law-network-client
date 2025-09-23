@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useMemo } from "react";
-import { getJSON, postJSON, deleteJSON } from "../../utils/api";
+import { getJSON, postJSON, deleteJSON, upload } from "../../utils/api";
 import IfOwnerOnly from "../common/IfOwnerOnly";
 // import QROverlay from "../common/QROverlay"; // QR overlay not used anymore
 import { loadAccess } from "../../utils/access";
@@ -243,7 +243,7 @@ export default function Article({ limit, embed = false }) {
 
   async function remove(id) {
     try {
-      await delJSON(`/api/articles/${id}`);
+      await deleteJSON(`/api/articles/${id}`);
       await load();
     } catch (err) {
       console.error("Delete failed:", err);
