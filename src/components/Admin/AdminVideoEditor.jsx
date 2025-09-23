@@ -1,6 +1,6 @@
 // client/src/components/Admin/AdminVideoEditor.jsx
 import { useEffect, useMemo, useState } from "react";
-import { getJSON, postJSON, upload, delJSON, absUrl } from "../../utils/api";
+import { getJSON, postJSON, upload, delJSON, absUrl, authHeaders } from "../../utils/api";
 
 export default function AdminVideoEditor() {
   const [playlists, setPlaylists] = useState([]);
@@ -24,23 +24,30 @@ export default function AdminVideoEditor() {
   async function load() {
     try {
       setError("");
-      const r = await getJSON("/api/videos");
+      const r = await getJSON("/videos", { headers: authHeaders() });
       const arr = normalize(r);
       setPlaylists(arr);
       if (arr.length) {
-        const keep = arr.find(p => (p._id || p.id || p.name) === sel);
-        setSel(keep ? (keep._id || keep.id || keep.name) : (arr[0]._id || arr[0].id || arr[0].name));
+        const keep = arr.find((p) => (p._id || p.id || p.name) === sel);
+        setSel(
+          keep
+            ? keep._id || keep.id || keep.name
+            : arr[0]._id || arr[0].id || arr[0].name
+        );
       } else setSel("");
     } catch (e) {
       console.error(e);
       setError("Failed to load video playlists");
-      setPlaylists([]); setSel("");
+      setPlaylists([]);
+      setSel("");
     }
   }
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+  }, []);
 
   const selected = useMemo(
-    () => playlists.find(p => (p._id || p.id || p.name) === sel),
+    () => playlists.find((p) => (p._id || p.id || p.name) === sel),
     [playlists, sel]
   );
 
@@ -49,12 +56,14 @@ export default function AdminVideoEditor() {
     if (!name) return;
     try {
       setBusy(true);
-      await postJSON("/api/videos/playlists", { name });
+      await postJSON("/videos/playlists", { name }, { headers: authHeaders() });
       setNewName("");
       await load();
     } catch (err) {
       alert("Create playlist failed: " + (err?.message || err));
-    } finally { setBusy(false); }
+    } finally {
+      setBusy(false);
+    }
   }
 
   async function deletePlaylist(id) {
@@ -64,10 +73,10 @@ export default function AdminVideoEditor() {
     setBusy(true);
     try {
       // primary
-      await delJSON(`/api/videos/${encodeURIComponent(id)}`);
+      await delJSON(`/videos/${encodeURIComponent(id)}`, { headers: authHeaders() });
     } catch {
       // compatibility path
-      await delJSON(`/api/videos/playlists/${encodeURIComponent(id)}`);
+      await delJSON(`/videos/playlists/${encodeURIComponent(id)}`, { headers: authHeaders() });
     } finally {
       setBusy(false);
     }
@@ -84,16 +93,21 @@ export default function AdminVideoEditor() {
     const fd = new FormData();
     fd.append("playlist", key);
     fd.append("title", title || "Untitled");
-    if (file) fd.append("file", file); else fd.append("url", url);
+    if (file) fd.append("file", file);
+    else fd.append("url", url);
 
     try {
       setBusy(true);
-      await upload("/api/videos/items", fd);
-      setTitle(""); setFile(null); setUrl("");
+      await upload("/videos/items", fd, { headers: authHeaders() });
+      setTitle("");
+      setFile(null);
+      setUrl("");
       await load();
     } catch (err) {
       alert("Upload failed: " + (err?.message || err));
-    } finally { setBusy(false); }
+    } finally {
+      setBusy(false);
+    }
   }
 
   return (
@@ -125,16 +139,23 @@ export default function AdminVideoEditor() {
             return (
               <div
                 key={id}
-                className={`border rounded p-2 flex items-center justify-between cursor-pointer ${active ? "ring-2 ring-blue-500" : ""}`}
+                className={`border rounded p-2 flex items-center justify-between cursor-pointer ${
+                  active ? "ring-2 ring-blue-500" : ""
+                }`}
                 onClick={() => setSel(id)}
               >
                 <div>
                   <div className="font-medium">{p.name}</div>
-                  <div className="text-xs text-gray-500">{(p.items?.length ?? 0)} items</div>
+                  <div className="text-xs text-gray-500">
+                    {(p.items?.length ?? 0)} items
+                  </div>
                 </div>
                 <button
                   className="text-red-600 text-sm"
-                  onClick={(e) => { e.stopPropagation(); deletePlaylist(id); }}
+                  onClick={(e) => {
+                    e.stopPropagation();
+                    deletePlaylist(id);
+                  }}
                   disabled={busy}
                 >
                   Delete
@@ -142,7 +163,9 @@ export default function AdminVideoEditor() {
               </div>
             );
           })}
-          {playlists.length === 0 && <div className="text-gray-400">No playlists yet</div>}
+          {playlists.length === 0 && (
+            <div className="text-gray-400">No playlists yet</div>
+          )}
         </div>
 
         {/* Upload to selected */}
@@ -169,7 +192,8 @@ export default function AdminVideoEditor() {
           />
           {selected && (
             <div className="text-xs text-gray-500">
-              Selected key: <code>{selected._id || selected.id || selected.name}</code>
+              Selected key:{" "}
+              <code>{selected._id || selected.id || selected.name}</code>
             </div>
           )}
           <button
@@ -189,7 +213,9 @@ export default function AdminVideoEditor() {
             <h4 className="font-semibold">Items in “{selected.name}”</h4>
             <button
               className="text-red-600 text-sm"
-              onClick={() => deletePlaylist(selected._id || selected.id || selected.name)}
+              onClick={() =>
+                deletePlaylist(selected._id || selected.id || selected.name)
+              }
               disabled={busy}
             >
               Delete Playlist
@@ -200,15 +226,21 @@ export default function AdminVideoEditor() {
             {(selected.items || []).map((it) => (
               <li key={it._id || it.id} className="border rounded p-2">
                 <div className="font-medium">{it.title}</div>
-                <div className="text-xs text-gray-500 break-all">{absUrl(it.url)}</div>
+                <div className="text-xs text-gray-500 break-all">
+                  {absUrl(it.url)}
+                </div>
               </li>
             ))}
-            {(selected.items?.length ?? 0) === 0 && <li className="text-gray-400">No videos yet</li>}
+            {(selected.items?.length ?? 0) === 0 && (
+              <li className="text-gray-400">No videos yet</li>
+            )}
           </ul>
         </div>
       )}
 
-      {error && <div className="text-sm whitespace-pre-wrap text-red-600">{error}</div>}
+      {error && (
+        <div className="text-sm whitespace-pre-wrap text-red-600">{error}</div>
+      )}
     </div>
   );
 }

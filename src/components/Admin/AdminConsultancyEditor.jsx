@@ -1,5 +1,11 @@
 import { useEffect, useState } from "react";
-import { API_BASE, getJSON, delJSON, authHeaders } from "../../utils/api";
+import {
+  API_BASE,
+  getJSON,
+  deleteJSON,
+  authHeaders,
+  absUrl,
+} from "../../utils/api";
 
 /* ---- headers for multipart ---- */
 function safeAuthHeaders() {
@@ -18,14 +24,14 @@ async function uploadSlide({ title, intro, file }) {
   fd.append("title", title || "Untitled");
   if (intro != null) fd.append("intro", intro);
   if (file) fd.append("image", file);
-  const res = await fetch(`${API_BASE}/api/consultancy`, {
+  const res = await fetch(`${API_BASE}/consultancy`, {
     method: "POST",
     headers: safeAuthHeaders(),
     body: fd,
   });
   if (!res.ok) {
     const msg = await res.text().catch(() => "");
-    throw new Error(`POST /api/consultancy ${res.status}: ${msg}`);
+    throw new Error(`POST /consultancy ${res.status}: ${msg}`);
   }
   return res.json();
 }
@@ -35,14 +41,14 @@ async function patchSlide(id, { title, intro, file }) {
   if (title != null) fd.append("title", title);
   if (intro != null) fd.append("intro", intro);
   if (file) fd.append("image", file);
-  const res = await fetch(`${API_BASE}/api/consultancy/${id}`, {
+  const res = await fetch(`${API_BASE}/consultancy/${id}`, {
     method: "PATCH",
     headers: safeAuthHeaders(),
     body: fd,
   });
   if (!res.ok) {
     const msg = await res.text().catch(() => "");
-    throw new Error(`PATCH /api/consultancy/${id} ${res.status}: ${msg}`);
+    throw new Error(`PATCH /consultancy/${id} ${res.status}: ${msg}`);
   }
   return res.json();
 }
@@ -57,7 +63,7 @@ export default function AdminConsultancyEditor() {
   const [file, setFile] = useState(null);
 
   async function load() {
-    const r = await getJSON("/api/consultancy");
+    const r = await getJSON("/consultancy");
     setSlides(r?.slides || r?.items || []);
   }
   useEffect(() => { load(); }, []);
@@ -104,7 +110,7 @@ export default function AdminConsultancyEditor() {
   async function remove(id) {
     if (!confirm("Delete this slide?")) return;
     setBusy(true);
-    try { await delJSON(`/api/consultancy/${id}`); await load(); }
+    try { await deleteJSON(`/consultancy/${id}`); await load(); }
     catch (err) { console.error(err); alert("Failed to delete"); }
     finally { setBusy(false); }
   }
@@ -144,7 +150,7 @@ export default function AdminConsultancyEditor() {
             <div className="space-y-2">
               <div className="text-sm text-gray-500">#{idx + 1}</div>
               <img
-                src={s.image ? `${API_BASE}${s.image}` : `${API_BASE}${s.imageUrl || ""}`}
+                src={s.image ? absUrl(s.image) : absUrl(s.imageUrl || "")}
                 alt=""
                 className="w-full max-h-56 object-contain rounded-lg bg-gray-50"
                 loading="lazy"

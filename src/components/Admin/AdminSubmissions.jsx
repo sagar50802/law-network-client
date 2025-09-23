@@ -22,7 +22,7 @@ export default function AdminSubmissions() {
     Array.isArray(r) ? r : r?.items || r?.data || r?.submissions || [];
 
   async function load() {
-    const r = await getJSON("/api/submissions");
+    const r = await getJSON("/submissions");
     const arr = normalize(r);
     setItems(arr);
 
@@ -50,7 +50,7 @@ export default function AdminSubmissions() {
   useEffect(() => {
     (async () => {
       try {
-        const r = await getJSON("/api/submissions/auto-mode");
+        const r = await getJSON("/submissions/auto-mode");
         if (r?.success) setAutoApprove(!!r.auto);
       } catch {}
       await load();
@@ -62,7 +62,7 @@ export default function AdminSubmissions() {
   useEffect(() => {
     (async () => {
       try {
-        await postJSON("/api/submissions/auto-mode", { auto: !!autoApprove });
+        await postJSON("/submissions/auto-mode", { auto: !!autoApprove });
       } catch {}
     })();
   }, [autoApprove]);
@@ -84,7 +84,7 @@ export default function AdminSubmissions() {
   async function approveOne(sub, seconds, isAuto = false) {
     const id = sub._id || sub.id;
     try {
-      await postJSON(`/api/submissions/${id}/approve`, { seconds });
+      await postJSON(`/submissions/${id}/approve`, { seconds });
 
       // Broadcast immediate event with 20s fast unlock
       const ctx = sub.context || {};
@@ -115,16 +115,16 @@ export default function AdminSubmissions() {
       );
     } catch (err) {
       console.warn("Approve failed, fallback", err);
-      await delJSON(`/api/submissions/${id}`);
+      await delJSON(`/submissions/${id}`);
     }
   }
 
   async function revokeOne(sub) {
     const id = sub._id || sub.id;
     try {
-      await postJSON(`/api/submissions/${id}/revoke`, {});
+      await postJSON(`/submissions/${id}/revoke`, {});
     } catch {
-      await delJSON(`/api/submissions/${id}`);
+      await delJSON(`/submissions/${id}`);
     }
 
     const ctx = sub.context || {};
@@ -149,7 +149,7 @@ export default function AdminSubmissions() {
   async function deleteOne(sub) {
     const id = sub._id || sub.id;
     try {
-      await delJSON(`/api/submissions/${id}`);
+      await delJSON(`/submissions/${id}`);
     } catch (e) {
       console.warn("Delete failed", e);
     }
@@ -173,7 +173,7 @@ export default function AdminSubmissions() {
           const s = mapById.get(id);
           if (s) {
             try {
-              await delJSON(`/api/submissions/${id}`);
+              await delJSON(`/submissions/${id}`);
             } catch (e) {
               console.warn("Batch delete failed for", id, e);
             }
