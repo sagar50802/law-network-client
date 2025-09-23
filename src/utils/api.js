@@ -1,9 +1,9 @@
-// client/src/utils/api.js
+// src/utils/api.js
 
 let RAW_BASE = import.meta.env.VITE_API_BASE || "";
 
 if (!RAW_BASE) {
-  if (window.location.hostname === "localhost") {
+  if (typeof window !== "undefined" && window.location.hostname === "localhost") {
     RAW_BASE = "http://localhost:2025"; // dev fallback (no /api here)
   } else {
     RAW_BASE = "https://lawnetwork-api.onrender.com"; // prod fallback (no /api here)
@@ -11,32 +11,37 @@ if (!RAW_BASE) {
 }
 
 RAW_BASE = RAW_BASE.trim();
+export const API_BASE = RAW_BASE.replace(/\/+$/, ""); // no trailing slash
 
-// ✅ Always ensure base has NO trailing slash
-export const API_BASE = RAW_BASE.replace(/\/+$/, "");
-
-// ✅ Join helper
+// join helper (keeps single slashes)
 function join(base, path) {
   return (base ? `${base}${path.startsWith("/") ? "" : "/"}${path}` : path)
     .replace(/([^:]\/)\/+/g, "$1");
 }
 
-// ✅ Auth headers for admin
+// owner/admin headers
 export function authHeaders() {
   const key = localStorage.getItem("ownerKey");
-  return key
-    ? { Authorization: `Bearer ${key}`, "X-Owner-Key": key }
-    : {};
+  return key ? { Authorization: `Bearer ${key}`, "X-Owner-Key": key } : {};
 }
 
-// ✅ API URL builder (always add /api prefix here)
+// BUILD ABSOLUTE API URL
 export function apiUrl(path) {
   if (!path) return "";
+
+  // already absolute → return as-is
   if (/^https?:\/\//i.test(path)) return path;
-  return join(API_BASE, `/api${path.startsWith("/") ? path : "/" + path}`);
+
+  // ✅ strip any leading "api" so we never get /api/api/...
+  // handles "/api/xxx", "api/xxx", "//api/xxx"
+  let rel = path.trim().replace(/^\/+/, "");
+  if (rel.toLowerCase().startsWith("api/")) rel = rel.slice(4); // drop "api/"
+
+  // now add our single /api prefix
+  return join(API_BASE, `/api/${rel}`);
 }
 
-// ✅ Core request
+// core request
 async function requestJSON(path, options = {}) {
   const { method = "GET", headers = {}, body } = options;
 
@@ -65,14 +70,14 @@ async function requestJSON(path, options = {}) {
   return ct.includes("application/json") ? res.json() : res.text();
 }
 
-// ✅ Shorthand wrappers
+// shorthands
 export const getJSON   = (p, o)    => requestJSON(p, { ...o, method: "GET" });
 export const postJSON  = (p, d, o) => requestJSON(p, { ...o, method: "POST", body: d });
 export const putJSON   = (p, d, o) => requestJSON(p, { ...o, method: "PUT", body: d });
 export const patchJSON = (p, d, o) => requestJSON(p, { ...o, method: "PATCH", body: d });
 export const delJSON   = (p, o)    => requestJSON(p, { ...o, method: "DELETE" });
 
-// ✅ Upload helpers
+// uploads
 export async function upload(path, formData, opts = {}) {
   return requestJSON(path, { ...opts, method: "POST", body: formData });
 }
@@ -84,15 +89,11 @@ export async function uploadFile(path, file, field = "file", extra = {}, opts = 
   return upload(path, fd, opts);
 }
 
-// ✅ Absolute static media resolver
+// absolute media URLs
 export const absUrl = (p) => {
   if (!p) return "";
   if (/^https?:\/\//i.test(p)) return p;
-
-  if (p.startsWith("/uploads/")) {
-    return join(API_BASE, p);
-  }
-
+  if (p.startsWith("/uploads/")) return join(API_BASE, p);
   return apiUrl(p);
 };
 
