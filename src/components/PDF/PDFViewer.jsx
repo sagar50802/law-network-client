@@ -1,6 +1,6 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
-import { API_BASE, fetchJSON, authHeaders, absUrl } from "../../utils/api";
+import { API_BASE, getJSON, authHeaders, absUrl } from "../../utils/api";
 import usePreviewLock from "../../hooks/usePreviewLock";
 import IfOwnerOnly from "../common/IfOwnerOnly";
 import QROverlay from "../common/QROverlay";
