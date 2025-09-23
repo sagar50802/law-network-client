@@ -1,71 +1,112 @@
 // client/src/utils/api.js
 
-// 🌐 Base API URL
-const rawBase = import.meta.env.VITE_API_BASE || "http://localhost:5000";
-export const API_BASE = rawBase.replace(/\/$/, ""); // remove trailing slash
+/**
+ * Central API helpers for frontend
+ * Used across Article, Consultancy, Video, Podcast, PDF, Banner, QR, etc.
+ */
 
-// Absolute URL resolver
-export function absUrl(p) {
+const API_BASE =
+  import.meta.env.VITE_API_BASE?.replace(/\/+$/, "") ||
+  "http://localhost:5000/api";
+
+/**
+ * Build absolute URL for static files served from backend `/uploads/*`
+ * Ensures correct backend domain instead of frontend domain
+ */
+function absUrl(p) {
   if (!p) return "";
-  if (p.startsWith("http")) return p;
+  if (p.startsWith("http://") || p.startsWith("https://")) return p;
 
-  // Special case for /uploads
   if (p.startsWith("/uploads/")) {
-    const backend = API_BASE.replace(/\/api$/, "");
-    return backend + p;
+    const backendBase = API_BASE.replace(/\/api$/, "");
+    return backendBase + p;
   }
   return API_BASE + p;
 }
 
-// Internal JSON fetch helper
-async function requestJSON(url, options = {}) {
-  const res = await fetch(absUrl(url), {
-    ...options,
-    headers: {
-      "Content-Type": "application/json",
-      ...(options.headers || {}),
-    },
+/**
+ * Standard JSON fetchers
+ */
+async function getJSON(url) {
+  const res = await fetch(API_BASE + url, {
     credentials: "include",
+    headers: { "Content-Type": "application/json" },
   });
-  if (!res.ok) throw new Error(`HTTP ${res.status}: ${res.statusText}`);
+  if (!res.ok) throw new Error(`${url} ${res.status}`);
   return res.json();
 }
 
-// ── JSON helpers ──
-export function getJSON(url) {
-  return requestJSON(url);
-}
-export function postJSON(url, data) {
-  return requestJSON(url, {
+async function postJSON(url, data) {
+  const res = await fetch(API_BASE + url, {
     method: "POST",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
   });
+  if (!res.ok) throw new Error(`${url} ${res.status}`);
+  return res.json();
 }
-export function putJSON(url, data) {
-  return requestJSON(url, {
+
+async function putJSON(url, data) {
+  const res = await fetch(API_BASE + url, {
     method: "PUT",
+    credentials: "include",
+    headers: { "Content-Type": "application/json" },
     body: JSON.stringify(data),
   });
-}
-export function deleteJSON(url) {
-  return requestJSON(url, { method: "DELETE" });
-}
-
-// ── Upload helper ──
-export async function upload(url, formData) {
-  const res = await fetch(absUrl(url), {
-    method: "POST",
-    body: formData,
-    credentials: "include",
-  });
-  if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
+  if (!res.ok) throw new Error(`${url} ${res.status}`);
   return res.json();
 }
 
-// ── Auth headers (for owner-only actions) ──
-export function authHeaders() {
-  const key =
-    localStorage.getItem("ownerKey") || sessionStorage.getItem("ownerKey");
-  if (!key) return {};
-  return { "X-Owner-Key": key };
+async function deleteJSON(url) {
+  const res = await fetch(API_BASE + url, {
+    method: "DELETE",
+    credentials: "include",
+  });
+  if (!res.ok) throw new Error(`${url} ${res.status}`);
+  return res.json();
 }
+
+// Alias for backwards compatibility
+async function delJSON(url) {
+  return deleteJSON(url);
+}
+
+/**
+ * Upload helper (FormData)
+ * Used for images, audio, video, PDFs, etc.
+ */
+async function upload(url, formData) {
+  const res = await fetch(API_BASE + url, {
+    method: "POST",
+    credentials: "include",
+    body: formData,
+  });
+  if (!res.ok) throw new Error(`${url} ${res.status}`);
+  return res.json();
+}
+
+/**
+ * Owner/admin auth headers
+ * Reads key from localStorage (hidden from normal viewers)
+ */
+function authHeaders() {
+  const key = localStorage.getItem("ownerKey");
+  return key
+    ? {
+        "X-Owner-Key": key,
+      }
+    : {};
+}
+
+export {
+  API_BASE,
+  absUrl,
+  getJSON,
+  postJSON,
+  putJSON,
+  deleteJSON,
+  delJSON, // alias
+  upload,
+  authHeaders,
+};
