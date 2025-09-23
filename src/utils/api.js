@@ -1,22 +1,21 @@
 // client/src/utils/api.js
 
-// ✅ Base API URL
 let RAW_BASE = import.meta.env.VITE_API_BASE || "";
 
 if (!RAW_BASE) {
   if (window.location.hostname === "localhost") {
-    RAW_BASE = "http://localhost:2025/api"; // dev fallback
+    RAW_BASE = "http://localhost:2025"; // dev fallback (no /api here)
   } else {
-    RAW_BASE = "https://lawnetwork-api.onrender.com/api"; // prod fallback
+    RAW_BASE = "https://lawnetwork-api.onrender.com"; // prod fallback (no /api here)
   }
 }
 
 RAW_BASE = RAW_BASE.trim();
 
-// ✅ Clean final base (remove trailing /)
+// ✅ Always ensure base has NO trailing slash
 export const API_BASE = RAW_BASE.replace(/\/+$/, "");
 
-// ✅ Join helper (avoids double slashes)
+// ✅ Join helper
 function join(base, path) {
   return (base ? `${base}${path.startsWith("/") ? "" : "/"}${path}` : path)
     .replace(/([^:]\/)\/+/g, "$1");
@@ -30,18 +29,11 @@ export function authHeaders() {
     : {};
 }
 
-// ✅ API URL builder (fixes /api/api problem)
+// ✅ API URL builder (always add /api prefix here)
 export function apiUrl(path) {
   if (!path) return "";
-
-  // 🔹 Always send /api/* paths to backend API_BASE
-  if (path.startsWith("/api/")) {
-    return join(API_BASE, path.replace(/^\/api\//, ""));
-  }
-
-  if (/^https?:\/\//i.test(path)) return path; // already absolute
-
-  return join(API_BASE, path);
+  if (/^https?:\/\//i.test(path)) return path;
+  return join(API_BASE, `/api${path.startsWith("/") ? path : "/" + path}`);
 }
 
 // ✅ Core request
@@ -80,9 +72,6 @@ export const putJSON   = (p, d, o) => requestJSON(p, { ...o, method: "PUT", body
 export const patchJSON = (p, d, o) => requestJSON(p, { ...o, method: "PATCH", body: d });
 export const delJSON   = (p, o)    => requestJSON(p, { ...o, method: "DELETE" });
 
-// ✅ Compatibility alias
-export const fetchJSON = getJSON;
-
 // ✅ Upload helpers
 export async function upload(path, formData, opts = {}) {
   return requestJSON(path, { ...opts, method: "POST", body: formData });
@@ -100,11 +89,8 @@ export const absUrl = (p) => {
   if (!p) return "";
   if (/^https?:\/\//i.test(p)) return p;
 
-  // Always load from backend, not client
   if (p.startsWith("/uploads/")) {
-    const backendRoot = (import.meta.env.VITE_API_BASE || "https://lawnetwork-api.onrender.com/api")
-      .replace(/\/api$/, ""); // strip /api
-    return join(backendRoot, p);
+    return join(API_BASE, p);
   }
 
   return apiUrl(p);
@@ -119,7 +105,6 @@ export default {
   putJSON,
   patchJSON,
   delJSON,
-  fetchJSON,
   upload,
   uploadFile,
   absUrl,
