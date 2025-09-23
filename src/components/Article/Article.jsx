@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useMemo } from "react";
-import { getJSON, upload, delJSON } from "../../utils/api";
+import { getJSON, postJSON, deleteJSON } from "../../utils/api";
 import IfOwnerOnly from "../common/IfOwnerOnly";
 // import QROverlay from "../common/QROverlay"; // QR overlay not used anymore
 import { loadAccess } from "../../utils/access";
