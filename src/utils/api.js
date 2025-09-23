@@ -1,14 +1,14 @@
 // client/src/utils/api.js
 
-// ✅ Decide base depending on environment
-let RAW_BASE;
+// ✅ Base API URL
+let RAW_BASE = import.meta.env.VITE_API_BASE || "";
 
-if (import.meta.env?.VITE_API_BASE) {
-  RAW_BASE = import.meta.env.VITE_API_BASE; // from .env
-} else if (window.location.hostname === "localhost") {
-  RAW_BASE = "http://localhost:2025/api"; // dev
-} else {
-  RAW_BASE = "https://lawnetwork-api.onrender.com/api"; // prod
+if (!RAW_BASE) {
+  if (window.location.hostname === "localhost") {
+    RAW_BASE = "http://localhost:2025/api"; // dev fallback
+  } else {
+    RAW_BASE = "https://lawnetwork-api.onrender.com/api"; // prod fallback
+  }
 }
 
 RAW_BASE = RAW_BASE.trim();
@@ -16,13 +16,13 @@ RAW_BASE = RAW_BASE.trim();
 // ✅ Clean final base (remove trailing /)
 export const API_BASE = RAW_BASE.replace(/\/+$/, "");
 
-// ✅ Helper to join base + path without duplicate slashes
+// ✅ Join helper (avoids double slashes)
 function join(base, path) {
   return (base ? `${base}${path.startsWith("/") ? "" : "/"}${path}` : path)
     .replace(/([^:]\/)\/+/g, "$1");
 }
 
-// ✅ Inject admin auth headers if key exists in localStorage
+// ✅ Auth headers for admin
 export function authHeaders() {
   const key = localStorage.getItem("ownerKey");
   return key
@@ -30,14 +30,14 @@ export function authHeaders() {
     : {};
 }
 
-// ✅ Resolve absolute API URL
+// ✅ API URL builder
 export function apiUrl(path) {
   if (!path) return "";
-  if (/^https?:\/\//i.test(path)) return path; // already full URL
-  return join(API_BASE, path); // fallback to /api/*
+  if (/^https?:\/\//i.test(path)) return path; // already absolute
+  return join(API_BASE, path);
 }
 
-// ✅ Core request logic
+// ✅ Core request
 async function requestJSON(path, options = {}) {
   const { method = "GET", headers = {}, body } = options;
 
@@ -67,7 +67,7 @@ async function requestJSON(path, options = {}) {
 }
 
 // ✅ Shorthand wrappers
-export const getJSON   = (p, o) => requestJSON(p, { ...o, method: "GET" });
+export const getJSON   = (p, o)    => requestJSON(p, { ...o, method: "GET" });
 export const postJSON  = (p, d, o) => requestJSON(p, { ...o, method: "POST", body: d });
 export const putJSON   = (p, d, o) => requestJSON(p, { ...o, method: "PUT", body: d });
 export const patchJSON = (p, d, o) => requestJSON(p, { ...o, method: "PATCH", body: d });
@@ -76,7 +76,7 @@ export const delJSON   = (p, o)    => requestJSON(p, { ...o, method: "DELETE" })
 // ✅ Compatibility alias
 export const fetchJSON = getJSON;
 
-// ✅ File upload helpers
+// ✅ Upload helpers
 export async function upload(path, formData, opts = {}) {
   return requestJSON(path, { ...opts, method: "POST", body: formData });
 }
@@ -88,22 +88,21 @@ export async function uploadFile(path, file, field = "file", extra = {}, opts = 
   return upload(path, fd, opts);
 }
 
-// ✅ Absolute media path resolver
+// ✅ Absolute static media resolver
 export const absUrl = (p) => {
   if (!p) return "";
-  if (/^https?:\/\//i.test(p)) return p; // already absolute
+  if (/^https?:\/\//i.test(p)) return p;
 
-  // Always serve static files from backend (not client)
+  // Always load from backend, not client
   if (p.startsWith("/uploads/")) {
     const backendRoot = (import.meta.env.VITE_API_BASE || "https://lawnetwork-api.onrender.com/api")
-      .replace(/\/api$/, ""); // drop /api if present
+      .replace(/\/api$/, ""); // strip /api
     return join(backendRoot, p);
   }
 
-  return apiUrl(p); // normal API paths
+  return apiUrl(p);
 };
 
-// ✅ Default export
 export default {
   API_BASE,
   authHeaders,
