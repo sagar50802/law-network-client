@@ -30,10 +30,17 @@ export function authHeaders() {
     : {};
 }
 
-// ✅ API URL builder
+// ✅ API URL builder (fixes /api/api problem)
 export function apiUrl(path) {
   if (!path) return "";
+
+  // 🔹 Always send /api/* paths to backend API_BASE
+  if (path.startsWith("/api/")) {
+    return join(API_BASE, path.replace(/^\/api\//, ""));
+  }
+
   if (/^https?:\/\//i.test(path)) return path; // already absolute
+
   return join(API_BASE, path);
 }
 
