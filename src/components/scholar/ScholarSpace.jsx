@@ -1,6 +1,6 @@
 // client/src/components/scholar/ScholarSpace.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
-import { API_BASE, fetchJSON, postJSON, authHeaders } from "../../utils/api";
+import { API_BASE, getJSON, postJSON, authHeaders } from "../../utils/api";
 import IfOwnerOnly from "../common/IfOwnerOnly";
 
 /** identity is stored as { name, email } in localStorage */
@@ -25,7 +25,7 @@ export default function ScholarSpace() {
 
   // boot
   useEffect(() => { (async () => {
-    const r = await fetchJSON(`${API_BASE}/api/scholar/groups`);
+    const r = await getJSON(`${API_BASE}/api/scholar/groups`);
     if (r.success) setGroups(r.groups);
   })(); }, []);
 
@@ -33,11 +33,11 @@ export default function ScholarSpace() {
   useEffect(() => {
     if (!active || !identity) return;
     (async () => {
-      const r1 = await fetchJSON(`${API_BASE}/api/scholar/groups/${active._id}?email=${encodeURIComponent(identity.email)}`);
+      const r1 = await getJSON(`${API_BASE}/api/scholar/groups/${active._id}?email=${encodeURIComponent(identity.email)}`);
       if (r1.success) setMembership(r1.membership || null);
 
       const url = `${API_BASE}/api/scholar/groups/${active._id}/messages${since ? `?since=${encodeURIComponent(since)}` : ""}`;
-      const r2 = await fetchJSON(url);
+      const r2 = await getJSON(url);
       if (r2.success) {
         setMessages(prev => (since ? [...prev, ...r2.messages] : r2.messages));
         if (r2.messages.length) {
@@ -52,7 +52,7 @@ export default function ScholarSpace() {
     if (!active || !identity) return;
     const id = setInterval(async () => {
       const url = `${API_BASE}/api/scholar/groups/${active._id}/messages${since ? `?since=${encodeURIComponent(since)}` : ""}`;
-      const r = await fetchJSON(url);
+      const r = await getJSON(url);
       if (r.success && r.messages.length) {
         setMessages(prev => [...prev, ...r.messages]);
         setSince(r.messages[r.messages.length - 1].createdAt);
@@ -70,7 +70,7 @@ export default function ScholarSpace() {
     const payload = Object.fromEntries(fd.entries());
     setPending(true);
     try {
-      const r = await fetchJSON(`${API_BASE}/api/scholar/groups`, {
+      const r = await getJSON(`${API_BASE}/api/scholar/groups`, {
         method: "POST",
         headers: { "Content-Type": "application/json", ...authHeaders() },
         body: JSON.stringify(payload),

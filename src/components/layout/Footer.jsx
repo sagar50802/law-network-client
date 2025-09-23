@@ -1,5 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { fetchJSON } from "/src/utils/api.js";
+import { API_BASE, getJSON, authHeaders, absUrl } from "../../utils/api";
+
 
 const Footer = () => {
   const [footerData, setFooterData] = useState(null);
@@ -8,7 +9,7 @@ const Footer = () => {
   useEffect(() => {
     const fetchFooter = async () => {
       try {
-        const data = await fetchJSON("/footer");
+        const data = await  getJSON("/footer");
         setFooterData(data);
       } catch (err) {
         console.error("Footer fetch error:", err);

@@ -123,7 +123,7 @@ export default function VideoGallery() {
   // ---------- data load ----------
   const load = async () => {
     setAccessLoading(true);
-    const r = await fetchJSON(`${API_BASE}/api/videos`);
+    const r = await getJSON(`${API_BASE}/api/videos`);
     const pls = r.playlists || [];
     setPlaylists(pls);
     if (!pid && pls[0]) setPid(pls[0].id);

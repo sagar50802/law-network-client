@@ -122,7 +122,7 @@ export default function PDFViewer() {
   // ---------- data load ----------
   const load = async () => {
     setAccessLoading(true);
-    const r = await fetchJSON(`${API_BASE}/api/pdfs`);
+    const r = await getJSON(`${API_BASE}/api/pdfs`);
     const subs = r.subjects || [];
     setSubjects(subs);
     if (!sid && subs[0]) setSid(subs[0].id);

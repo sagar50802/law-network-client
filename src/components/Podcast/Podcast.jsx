@@ -117,7 +117,7 @@ export default function Podcast() {
   /* ---------------- data load ---------------- */
   const load = async () => {
     setAccessLoading(true);
-    const r = await fetchJSON(`${API_BASE}/api/podcasts`);
+    const r = await getJSON(`${API_BASE}/api/podcasts`);
     const pls = r.playlists || [];
     setPlaylists(pls);
     if (!pid && pls[0]) setPid(pls[0].id);

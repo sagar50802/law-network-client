@@ -1,5 +1,5 @@
 import { useEffect, useState } from "react";
-import { API_BASE, fetchJSON, authHeaders } from "../utils/api";
+import { API_BASE, getJSON, authHeaders, absUrl } from "../../utils/api";
 import IfOwnerOnly from "../common/IfOwnerOnly";
 
 export default function NewsTicker() {
@@ -7,7 +7,7 @@ export default function NewsTicker() {
   const [form, setForm] = useState({ title: "", link: "", image: null });
 
   const load = async () => {
-    const r = await fetchJSON(`${API_BASE}/api/news`);
+    const r = await getJSON(`${API_BASE}/api/news`);
     setItems(r.news || []);
   };
   useEffect(() => { load(); }, []);

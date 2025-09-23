@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from 'react';
-import { API_BASE, fetchJSON, authHeaders } from '../utils/api';
+import { API_BASE, getJSON, authHeaders, absUrl } from "../../utils/api";
 import IfOwnerOnly from '../common/IfOwnerOnly';
 
 export default function HeroBanner() {
@@ -8,7 +8,7 @@ export default function HeroBanner() {
   const intervalRef = useRef(null);
 
   const load = async () => {
-    const r = await fetchJSON(`${API_BASE}/api/banners`);
+    const r = await  getJSON(`${API_BASE}/api/banners`);
     setItems(r.banners || []);
   };
   useEffect(() => { load(); }, []);
