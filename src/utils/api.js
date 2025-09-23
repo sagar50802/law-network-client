@@ -96,3 +96,12 @@ export async function upload(url, formData) {
   if (!res.ok) throw new Error(`Upload failed: ${res.status}`);
   return res.json();
 }
+// 🔹 Auth headers (for owner-only actions)
+export function authHeaders() {
+  const key =
+    localStorage.getItem("ownerKey") || sessionStorage.getItem("ownerKey");
+  if (!key) return {};
+  return {
+    "X-Owner-Key": key,
+  };
+}
