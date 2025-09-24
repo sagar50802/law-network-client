@@ -11,10 +11,12 @@ const API_BASE = (import.meta.env.VITE_API_BASE || "http://localhost:5000")
  */
 function buildUrl(url) {
   if (!url.startsWith("/")) url = "/" + url;
-  // prevent accidental /api/api duplication
-  if (url.startsWith("/api/")) {
+
+  // Prevent accidental /api/api duplication
+  if (API_BASE.endsWith("/api") && url.startsWith("/api/")) {
     url = url.replace(/^\/api/, "");
   }
+
   return API_BASE + url;
 }
 
