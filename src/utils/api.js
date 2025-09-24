@@ -4,8 +4,15 @@
  */
 
 const API_BASE =
-  (import.meta.env.VITE_API_BASE || "http://localhost:5000")
-    .replace(/\/+$/, ""); // no trailing slash
+  (import.meta.env.VITE_API_BASE || "http://localhost:5000").replace(/\/+$/, ""); // no trailing slash
+
+/**
+ * Ensure URL is joined correctly without double /api
+ */
+function buildUrl(url) {
+  if (!url.startsWith("/")) url = "/" + url;
+  return API_BASE + url;
+}
 
 /**
  * Build absolute URL for static files served from backend `/uploads/*`
@@ -18,7 +25,7 @@ export function absUrl(p) {
   if (p.startsWith("/uploads/")) {
     return API_BASE.replace(/\/api$/, "") + p;
   }
-  return API_BASE + p;
+  return buildUrl(p);
 }
 
 /**
@@ -26,13 +33,13 @@ export function absUrl(p) {
  * ⚠️ For GET we avoid Content-Type and credentials to prevent preflight.
  */
 export async function getJSON(url, init = {}) {
-  const res = await fetch(API_BASE + url, { method: "GET", ...init });
+  const res = await fetch(buildUrl(url), { method: "GET", ...init });
   if (!res.ok) throw new Error(`${url} ${res.status}`);
   return res.json();
 }
 
 export async function postJSON(url, data, init = {}) {
-  const res = await fetch(API_BASE + url, {
+  const res = await fetch(buildUrl(url), {
     method: "POST",
     headers: { "Content-Type": "application/json", ...(init.headers || {}) },
     body: JSON.stringify(data ?? {}),
@@ -43,7 +50,7 @@ export async function postJSON(url, data, init = {}) {
 }
 
 export async function putJSON(url, data, init = {}) {
-  const res = await fetch(API_BASE + url, {
+  const res = await fetch(buildUrl(url), {
     method: "PUT",
     headers: { "Content-Type": "application/json", ...(init.headers || {}) },
     body: JSON.stringify(data ?? {}),
@@ -54,21 +61,19 @@ export async function putJSON(url, data, init = {}) {
 }
 
 export async function deleteJSON(url, init = {}) {
-  const res = await fetch(API_BASE + url, { method: "DELETE", ...init });
+  const res = await fetch(buildUrl(url), { method: "DELETE", ...init });
   if (!res.ok) throw new Error(`${url} ${res.status}`);
   return res.json();
 }
 
-// Alias for backwards compatibility
 export const delJSON = deleteJSON;
 
 /**
  * Upload helper (FormData)
  * Used for images, audio, video, PDFs, etc.
- * ⚠️ Do not set Content-Type manually → lets browser add boundary
  */
 export async function upload(url, formData, init = {}) {
-  const res = await fetch(API_BASE + url, {
+  const res = await fetch(buildUrl(url), {
     method: "POST",
     body: formData,
     ...init,
@@ -79,7 +84,6 @@ export async function upload(url, formData, init = {}) {
 
 /**
  * Owner/admin auth headers
- * Reads key from localStorage (hidden from normal viewers)
  */
 export function authHeaders() {
   const key = localStorage.getItem("ownerKey");
