@@ -3,16 +3,15 @@
  * Used across Article, Consultancy, Video, Podcast, PDF, Banner, QR, etc.
  */
 
-const API_BASE =
-  (import.meta.env.VITE_API_BASE || "http://localhost:5000")
-    .replace(/\/+$/, ""); // strip trailing slash
+const API_BASE = (import.meta.env.VITE_API_BASE || "http://localhost:5000")
+  .replace(/\/+$/, ""); // strip trailing slash
 
 /**
  * Ensure URL is joined correctly without double /api
  */
 function buildUrl(url) {
   if (!url.startsWith("/")) url = "/" + url;
-  // prevent double /api/api
+  // prevent accidental /api/api duplication
   if (url.startsWith("/api/")) url = url.replace(/^\/api/, "");
   return API_BASE + url;
 }
