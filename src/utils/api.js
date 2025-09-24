@@ -12,7 +12,7 @@ const API_BASE = (import.meta.env.VITE_API_BASE || "http://localhost:5000")
 function buildUrl(url) {
   if (!url.startsWith("/")) url = "/" + url;
 
-  // Prevent accidental /api/api duplication
+  // ✅ Prevent accidental /api/api duplication
   if (API_BASE.endsWith("/api") && url.startsWith("/api/")) {
     url = url.replace(/^\/api/, "");
   }
@@ -27,7 +27,7 @@ export function absUrl(p) {
   if (!p) return "";
   if (/^https?:\/\//i.test(p)) return p;
 
-  // Always point uploads to backend root (drop trailing /api if present)
+  // ✅ Always point uploads to backend root (drop trailing /api if present)
   if (p.startsWith("/uploads/")) {
     return API_BASE.replace(/\/api$/, "") + p;
   }
