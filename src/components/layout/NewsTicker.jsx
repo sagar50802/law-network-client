@@ -5,9 +5,8 @@ import {
   getJSON,
   upload,
   deleteJSON,
-  absUrl,         // for rendering image URLs safely
-  buildUrl,       // for making absolute API URLs without /api/api
-  authHeaders,    // (not needed with upload(), but used on DELETE)
+  absUrl,
+  authHeaders,
 } from "../utils/api";
 
 export default function NewsTicker() {
@@ -17,7 +16,6 @@ export default function NewsTicker() {
 
   async function load() {
     try {
-      // ALWAYS go through helpers so /api/api can’t happen
       const r = await getJSON("/api/news");
       setItems(r.news || r.items || []);
     } catch (e) {
@@ -37,7 +35,7 @@ export default function NewsTicker() {
       if (form.link?.trim()) fd.append("link", form.link.trim());
       if (form.image) fd.append("image", form.image);
 
-      // upload() adds X-Owner-Key + credentials and handles Content-Type
+      // upload() adds X-Owner-Key and credentials for you
       await upload("/api/news", fd);
 
       setForm({ title: "", link: "", image: null });
@@ -61,26 +59,20 @@ export default function NewsTicker() {
   return (
     <section className="border-y bg-white">
       <div className="max-w-6xl mx-auto px-4 py-3">
-        {/* Ticker row */}
         <div className="flex gap-6 overflow-x-auto items-center">
           {items.length === 0 && <div className="text-gray-400">No news yet</div>}
           {items.map((n) => (
             <div key={n.id} className="flex items-center gap-3 shrink-0">
               {n.image ? (
                 <img
-                  src={absUrl(n.image)}       // works for /api/files/... or /uploads/...
+                  src={absUrl(n.image)}
                   alt=""
                   className="w-12 h-12 object-cover rounded-lg"
                   loading="lazy"
                 />
               ) : null}
               {n.link ? (
-                <a
-                  className="text-blue-600 hover:underline"
-                  href={n.link}
-                  target="_blank"
-                  rel="noreferrer"
-                >
+                <a className="text-blue-600 hover:underline" href={n.link} target="_blank" rel="noreferrer">
                   {n.title}
                 </a>
               ) : (
@@ -95,7 +87,6 @@ export default function NewsTicker() {
           ))}
         </div>
 
-        {/* Admin mini form */}
         <IfOwnerOnly>
           <form onSubmit={add} className="flex flex-wrap gap-2 items-center mt-3">
             <input
@@ -116,15 +107,10 @@ export default function NewsTicker() {
                 type="file"
                 accept="image/*"
                 className="hidden"
-                onChange={(e) =>
-                  setForm({ ...form, image: e.target.files?.[0] || null })
-                }
+                onChange={(e) => setForm({ ...form, image: e.target.files?.[0] || null })}
               />
             </label>
-            <button
-              className="bg-black text-white px-4 py-2 rounded disabled:opacity-50"
-              disabled={saving}
-            >
+            <button className="bg-black text-white px-4 py-2 rounded disabled:opacity-50" disabled={saving}>
               {saving ? "Saving…" : "Add"}
             </button>
           </form>
