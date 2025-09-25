@@ -4,11 +4,17 @@ import { getJSON } from "../../utils/api";
 
 export default function Navbar() {
   const [articleCount, setArticleCount] = useState(0);
+  const [consultancyCount, setConsultancyCount] = useState(0); // ✅ NEW
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
     getJSON("/api/articles")
       .then((r) => setArticleCount((r.articles || r.data || []).length))
+      .catch(() => {});
+
+    // ✅ Fetch consultancy count (items list from /api/consultancy)
+    getJSON("/api/consultancy")
+      .then((r) => setConsultancyCount((r.items || r.slides || []).length))
       .catch(() => {});
   }, []);
 
@@ -24,7 +30,13 @@ export default function Navbar() {
           <a href="/videos" className="hover:text-blue-600">Video Gallery</a>
           <a href="/notebook" className="hover:text-blue-600">PDF Notebook</a>
           <a href="/plagiarism" className="hover:text-blue-600">Plagiarism</a>
-          {/* ✅ NEW: Scholar Space */}
+
+          {/* ✅ NEW: Consultancy (scrolls to home section) */}
+          <a href="/#consultancy" className="hover:text-blue-600">
+            Consultancy{consultancyCount ? ` (${consultancyCount})` : ""}
+          </a>
+
+          {/* ✅ Scholar Space */}
           <a href="/scholar" className="hover:text-blue-600">Scholar Space</a>
 
           {isOwner() && (
@@ -50,12 +62,14 @@ export default function Navbar() {
       {/* Mobile drawer */}
       {open && (
         <div className="md:hidden px-4 pb-3 flex flex-col gap-2">
-          <a href="/articles">Articles</a>
+          <a href="/articles">Articles{articleCount ? ` (${articleCount})` : ""}</a>
           <a href="/podcasts">Podcasts</a>
           <a href="/videos">Video Gallery</a>
           <a href="/notebook">PDF Notebook</a>
           <a href="/plagiarism">Plagiarism</a>
-          {/* ✅ fixed path (no space) */}
+          {/* ✅ Consultancy link for mobile */}
+          <a href="/#consultancy">Consultancy{consultancyCount ? ` (${consultancyCount})` : ""}</a>
+          {/* ✅ Scholar */}
           <a href="/scholar">Scholar Space</a>
           {isOwner() && <a href="/admin/dashboard" className="underline">Admin</a>}
         </div>
