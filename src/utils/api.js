@@ -5,50 +5,54 @@
 
 import { API_BASE as CONST_API_BASE } from "./constants.js";
 
-// Resolve API base just once, supporting both:
-// - VITE_API_URL  (e.g. https://law-network.onrender.com/api)
-// - VITE_BACKEND_URL (e.g. https://law-network.onrender.com)
-// - fallback (local dev)
-const API_BASE = String(
+// Resolve API base just once:
+// - VITE_API_URL (may already include /api)
+// - VITE_BACKEND_URL (bare origin, no /api)
+// - fallback (local)
+const RAW_BASE = String(
   CONST_API_BASE ||
   import.meta.env.VITE_API_URL ||
   import.meta.env.VITE_BACKEND_URL ||
   "http://localhost:5000"
 ).replace(/\/+$/, ""); // strip trailing slash
 
-// Compute the backend origin (no trailing /api) for static files
-const API_ORIGIN = API_BASE.endsWith("/api") ? API_BASE.slice(0, -4) : API_BASE;
+// If RAW_BASE already ends with /api keep it, else append /api once.
+const API_BASE = RAW_BASE.endsWith("/api") ? RAW_BASE : `${RAW_BASE}/api`;
 
-/**
- * Ensure URL is joined correctly without double /api
- */
-function buildUrl(url) {
-  if (!url.startsWith("/")) url = "/" + url;
+// Backend origin without /api (for legacy /uploads/*)
+const API_ORIGIN = API_BASE.slice(0, -4);
 
-  // Prevent accidental /api/api duplication when API_BASE already includes /api
-  if (API_BASE.endsWith("/api") && url.startsWith("/api/")) {
-    url = url.slice(4); // drop the first "/api"
-  }
-  return API_BASE + url;
+/** Safe join that never produces /api/api/... */
+function buildUrl(url = "") {
+  let u = String(url);
+  if (!u.startsWith("/")) u = "/" + u;
+  if (API_BASE.endsWith("/api") && u.startsWith("/api/")) u = u.replace(/^\/api/, "");
+  return API_BASE + u;
 }
 
-/**
- * Build absolute URL for static files served from backend `/uploads/*`
- */
+/** Absolute URL for server-served paths */
 export function absUrl(p) {
   if (!p) return "";
   if (/^https?:\/\//i.test(p)) return p;
-  if (p.startsWith("/uploads/")) {
-    return API_ORIGIN + p; // always from backend origin
-  }
+  // Legacy static uploads
+  if (p.startsWith("/uploads/")) return API_ORIGIN + p;
+  // GridFS and other API paths
   return buildUrl(p);
 }
 
-/**
- * Standard JSON fetchers
- */
+/** Owner/admin auth header (if present in localStorage) */
+export function authHeaders() {
+  const key = localStorage.getItem("ownerKey");
+  return key ? { "X-Owner-Key": key } : {};
+}
+
+// Always send credentials for CORS cookies
+const BASE_INIT = { credentials: "include" };
+
+/* ---------------- JSON helpers ---------------- */
+
 export async function getJSON(url, init = {}) {
-  const res = await fetch(buildUrl(url), { method: "GET", ...init });
+  const res = await fetch(buildUrl(url), { method: "GET", ...BASE_INIT, ...init });
   if (!res.ok) throw new Error(`${url} ${res.status}`);
   return res.json();
 }
@@ -56,8 +60,13 @@ export async function getJSON(url, init = {}) {
 export async function postJSON(url, data, init = {}) {
   const res = await fetch(buildUrl(url), {
     method: "POST",
-    headers: { "Content-Type": "application/json", ...(init.headers || {}) },
+    headers: {
+      "Content-Type": "application/json",
+      ...authHeaders(),
+      ...(init.headers || {}),
+    },
     body: JSON.stringify(data ?? {}),
+    ...BASE_INIT,
     ...init,
   });
   if (!res.ok) throw new Error(`${url} ${res.status}`);
@@ -67,8 +76,13 @@ export async function postJSON(url, data, init = {}) {
 export async function putJSON(url, data, init = {}) {
   const res = await fetch(buildUrl(url), {
     method: "PUT",
-    headers: { "Content-Type": "application/json", ...(init.headers || {}) },
+    headers: {
+      "Content-Type": "application/json",
+      ...authHeaders(),
+      ...(init.headers || {}),
+    },
     body: JSON.stringify(data ?? {}),
+    ...BASE_INIT,
     ...init,
   });
   if (!res.ok) throw new Error(`${url} ${res.status}`);
@@ -76,32 +90,29 @@ export async function putJSON(url, data, init = {}) {
 }
 
 export async function deleteJSON(url, init = {}) {
-  const res = await fetch(buildUrl(url), { method: "DELETE", ...init });
+  const res = await fetch(buildUrl(url), {
+    method: "DELETE",
+    headers: { ...authHeaders(), ...(init.headers || {}) },
+    ...BASE_INIT,
+    ...init,
+  });
   if (!res.ok) throw new Error(`${url} ${res.status}`);
   return res.json();
 }
 export const delJSON = deleteJSON;
 
-/**
- * Upload helper (FormData)
- */
+/* ---------------- FormData upload ---------------- */
+
 export async function upload(url, formData, init = {}) {
   const res = await fetch(buildUrl(url), {
     method: "POST",
+    headers: { ...authHeaders(), ...(init.headers || {}) }, // do NOT set Content-Type
     body: formData,
+    ...BASE_INIT,
     ...init,
   });
   if (!res.ok) throw new Error(`${url} ${res.status}`);
   return res.json();
 }
 
-/**
- * Owner/admin auth headers
- */
-export function authHeaders() {
-  const key = localStorage.getItem("ownerKey");
-  return key ? { "X-Owner-Key": key } : {};
-}
-
-// Exports (keep names used elsewhere)
 export { API_BASE, API_ORIGIN, buildUrl };
