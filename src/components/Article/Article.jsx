@@ -103,7 +103,6 @@ function ArticleCard({ a, email }) {
     >
       {(a.image || a.imageUrl) && (
         <div className="w-full bg-gray-50 rounded-t-2xl">
-          {/* ✅ swapped <img> with SmartImg */}
           <SmartImg
             src={a.image || a.imageUrl}
             alt=""
@@ -144,8 +143,10 @@ function ArticleCard({ a, email }) {
                 className="not-prose html-embed overflow-y-auto max-h-[400px] pr-2 relative"
                 onScroll={(e) => {
                   const el = e.currentTarget;
-                  const progress = (el.scrollTop / (el.scrollHeight - el.clientHeight)) * 100;
-                  el.parentElement.querySelector(".article-progress").style.width = progress + "%";
+                  const progress =
+                    (el.scrollTop / (el.scrollHeight - el.clientHeight)) * 100;
+                  el.parentElement.querySelector(".article-progress").style.width =
+                    progress + "%";
                 }}
               >
                 <style>{`
@@ -161,8 +162,10 @@ function ArticleCard({ a, email }) {
                            prose-img:max-h-96 prose-img:object-contain"
                 onScroll={(e) => {
                   const el = e.currentTarget;
-                  const progress = (el.scrollTop / (el.scrollHeight - el.clientHeight)) * 100;
-                  el.parentElement.querySelector(".article-progress").style.width = progress + "%";
+                  const progress =
+                    (el.scrollTop / (el.scrollHeight - el.clientHeight)) * 100;
+                  el.parentElement.querySelector(".article-progress").style.width =
+                    progress + "%";
                 }}
               >
                 <p className="leading-7">{a.content}</p>
@@ -209,7 +212,10 @@ export default function Article({ limit, embed = false }) {
 
   async function load() {
     const r = await getJSON("/api/articles");
-    setItems(r.articles || r.data || []);
+    // 👇 include `items` so it matches your route response
+    const list =
+      Array.isArray(r) ? r : (r.items || r.articles || r.data || []);
+    setItems(list);
   }
   useEffect(() => {
     load();
@@ -231,8 +237,10 @@ export default function Article({ limit, embed = false }) {
       fd.append("allowHtml", String(form.allowHtml));
       fd.append("isFree", String(form.isFree));
       if (form.image) fd.append("image", form.image);
-      // ✅ send owner key for admin route
+
+      // 👇 send owner key so admin routes work everywhere
       await upload("/api/articles", fd, { headers: authHeaders() });
+
       setForm({ title: "", content: "", allowHtml: false, isFree: false, image: null });
       await load();
       alert("✅ Article published");
@@ -244,7 +252,7 @@ export default function Article({ limit, embed = false }) {
 
   async function remove(id) {
     try {
-      // ✅ send owner key for admin route
+      // 👇 send owner key here too
       await deleteJSON(`/api/articles/${id}`, { headers: authHeaders() });
       await load();
     } catch (err) {
@@ -347,7 +355,9 @@ export default function Article({ limit, embed = false }) {
               type="file"
               accept="image/*"
               className="hidden"
-              onChange={(e) => setForm({ ...form, image: e.target.files?.[0] || null })}
+              onChange={(e) =>
+                setForm({ ...form, image: e.target.files?.[0] || null })
+              }
             />
           </label>
 
