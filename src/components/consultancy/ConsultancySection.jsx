@@ -1,7 +1,15 @@
+// client/src/components/ConsultancySection.jsx
 import { useEffect, useRef, useState } from "react";
-import { API_BASE, authHeaders } from "../../utils/api";
+import {
+  API_BASE,            // kept (even if unused sometimes)
+  authHeaders,
+  getJSON,
+  upload as uploadApi,
+  deleteJSON,
+  buildUrl,            // ✅ prevents /api/api duplication
+} from "../../utils/api";
 import IfOwnerOnly from "../common/IfOwnerOnly";
-import { SmartImg } from "../common/SmartMedia";   // ✅ use SmartImg
+import { SmartImg } from "../common/SmartMedia";   // ✅ uses absUrl under the hood
 
 /* ---------- helpers ---------- */
 function safeAuthHeaders() {
@@ -13,25 +21,24 @@ function safeAuthHeaders() {
   if (h["x-owner-key"]) out["x-owner-key"] = h["x-owner-key"];
   return out;
 }
+
+// Create
 async function uploadSlide({ title, intro, file }) {
   const fd = new FormData();
   fd.append("title", title || "Untitled");
   if (intro != null) fd.append("intro", intro);
   if (file) fd.append("image", file);
-  const res = await fetch(`${API_BASE}/api/consultancy`, {
-    method: "POST",
-    headers: safeAuthHeaders(),
-    body: fd,
-  });
-  if (!res.ok) throw new Error(`POST /api/consultancy ${res.status}`);
-  return res.json();
+  // ✅ use central upload helper with a RELATIVE path
+  return uploadApi("/api/consultancy", fd, { headers: safeAuthHeaders() });
 }
+
+// Patch (needs PATCH verb, so use fetch but build URL safely)
 async function patchSlide(id, { title, intro, file }) {
   const fd = new FormData();
   if (title != null) fd.append("title", title);
   if (intro != null) fd.append("intro", intro);
   if (file) fd.append("image", file);
-  const res = await fetch(`${API_BASE}/api/consultancy/${id}`, {
+  const res = await fetch(buildUrl(`/api/consultancy/${id}`), {
     method: "PATCH",
     headers: safeAuthHeaders(),
     body: fd,
@@ -39,12 +46,10 @@ async function patchSlide(id, { title, intro, file }) {
   if (!res.ok) throw new Error(`PATCH /api/consultancy/${id} ${res.status}`);
   return res.json();
 }
+
+// Delete
 async function delSlide(id) {
-  const res = await fetch(`${API_BASE}/api/consultancy/${id}`, {
-    method: "DELETE",
-    headers: safeAuthHeaders(),
-  });
-  if (!res.ok) throw new Error(`DELETE /api/consultancy/${id} ${res.status}`);
+  await deleteJSON(`/api/consultancy/${id}`, { headers: safeAuthHeaders() });
 }
 
 /* ---------- component ---------- */
@@ -58,7 +63,8 @@ export default function ConsultancySection({ autoScroll = true }) {
 
   async function load() {
     try {
-      const r = await fetch(`${API_BASE}/api/consultancy`).then((x) => x.json());
+      // ✅ relative path via helper (avoids /api/api)
+      const r = await getJSON("/api/consultancy");
       setItems(r?.items || r?.slides || []);
     } catch (e) {
       console.error("Consultancy load failed:", e);
