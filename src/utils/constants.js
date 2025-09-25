@@ -19,11 +19,11 @@ export const PLAN_OPTIONS = [
 ];
 
 /**
- * Robust API base detection (works on Render and locally):
+ * Robust API base detection:
  *  - VITE_BACKEND_URL = "https://law-network.onrender.com"
  *  - VITE_API_URL     = "https://law-network.onrender.com/api"
- *  - If neither present:
- *      * on Render (hosted), default to https://law-network.onrender.com
+ *  - If neither set:
+ *      * on Render (hosted domain), default to https://law-network.onrender.com
  *      * locally, default to http://localhost:5000
  */
 const ENV_BACKEND = (import.meta?.env?.VITE_BACKEND_URL ?? "").trim();
@@ -39,14 +39,14 @@ const DEFAULT_PROD = "https://law-network.onrender.com";
 const DEFAULT_DEV  = "http://localhost:5000";
 
 let raw = ENV_BACKEND || ENV_API || (isHostedProd ? DEFAULT_PROD : DEFAULT_DEV);
-raw = raw.replace(/\/+$/, "");              // trim trailing slash(es)
+raw = raw.replace(/\/+$/, "");         // trim trailing slashes
 const endsWithApi = /\/api$/i.test(raw);
 
-// Origin without /api
+// Origin (no /api)
 export const BASE_URL = endsWithApi ? raw.replace(/\/api$/i, "") : raw;
 
 // Full /api base
 export const API_BASE = endsWithApi ? raw : `${BASE_URL}/api`;
 
-// Legacy alias (some files may import this)
+// Legacy alias used elsewhere
 export { API_BASE as apiurl };
