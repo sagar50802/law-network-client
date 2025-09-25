@@ -3,8 +3,21 @@
  * Used across Article, Consultancy, Video, Podcast, PDF, Banner, QR, etc.
  */
 
-const API_BASE = (import.meta.env.VITE_API_BASE || "http://localhost:5000")
-  .replace(/\/+$/, ""); // strip trailing slash
+import { API_BASE as CONST_API_BASE } from "./constants.js";
+
+// Resolve API base just once, supporting both:
+// - VITE_API_URL  (e.g. https://law-network.onrender.com/api)
+// - VITE_BACKEND_URL (e.g. https://law-network.onrender.com)
+// - fallback (local dev)
+const API_BASE = String(
+  CONST_API_BASE ||
+  import.meta.env.VITE_API_URL ||
+  import.meta.env.VITE_BACKEND_URL ||
+  "http://localhost:5000"
+).replace(/\/+$/, ""); // strip trailing slash
+
+// Compute the backend origin (no trailing /api) for static files
+const API_ORIGIN = API_BASE.endsWith("/api") ? API_BASE.slice(0, -4) : API_BASE;
 
 /**
  * Ensure URL is joined correctly without double /api
@@ -12,11 +25,10 @@ const API_BASE = (import.meta.env.VITE_API_BASE || "http://localhost:5000")
 function buildUrl(url) {
   if (!url.startsWith("/")) url = "/" + url;
 
-  // ✅ Prevent accidental /api/api duplication
+  // Prevent accidental /api/api duplication when API_BASE already includes /api
   if (API_BASE.endsWith("/api") && url.startsWith("/api/")) {
-    url = url.replace(/^\/api/, "");
+    url = url.slice(4); // drop the first "/api"
   }
-
   return API_BASE + url;
 }
 
@@ -26,10 +38,8 @@ function buildUrl(url) {
 export function absUrl(p) {
   if (!p) return "";
   if (/^https?:\/\//i.test(p)) return p;
-
-  // ✅ Always point uploads to backend root (drop trailing /api if present)
   if (p.startsWith("/uploads/")) {
-    return API_BASE.replace(/\/api$/, "") + p;
+    return API_ORIGIN + p; // always from backend origin
   }
   return buildUrl(p);
 }
@@ -93,5 +103,5 @@ export function authHeaders() {
   return key ? { "X-Owner-Key": key } : {};
 }
 
-// Exports
-export { API_BASE, buildUrl };
+// Exports (keep names used elsewhere)
+export { API_BASE, API_ORIGIN, buildUrl };
