@@ -1,6 +1,5 @@
-// client/src/components/HeroBanner.jsx
 import { useEffect, useRef, useState } from "react";
-import { getJSON, upload as uploadReq, deleteJSON, authHeaders, absUrl } from "../../utils/api";
+import { getJSON, deleteJSON, upload, authHeaders, absUrl } from "../../utils/api";
 import IfOwnerOnly from "../common/IfOwnerOnly";
 
 export default function HeroBanner() {
@@ -9,8 +8,8 @@ export default function HeroBanner() {
   const intervalRef = useRef(null);
 
   async function load() {
-    const r = await getJSON("/api/banners");
-    setItems(r.items || r.banners || []); // supports both shapes
+    const r = await getJSON("/api/banners");       // ✅ relative, helper adds base
+    setItems(r.banners || []);
   }
   useEffect(() => { load(); }, []);
 
@@ -27,26 +26,24 @@ export default function HeroBanner() {
     const f = e.target.files?.[0]; if (!f) return;
     const fd = new FormData();
     fd.append("file", f);
-    await uploadReq("/api/banners", fd, { headers: authHeaders(), credentials: "include" });
+    await upload("/api/banners", fd, { headers: authHeaders() });   // ✅ helper
     await load();
   }
-
   async function del(id) {
-    await deleteJSON(`/api/banners/${id}`, { headers: authHeaders(), credentials: "include" });
+    await deleteJSON(`/api/banners/${id}`, { headers: authHeaders() }); // ✅ helper
     await load();
   }
 
   const curr = items[i] || null;
-  const isVideo = curr && ((curr.type || "").startsWith("video") || /\.mp4($|\?)/i.test(curr.url));
 
   return (
     <section className="relative overflow-hidden">
       <div className="max-w-6xl mx-auto px-4 py-4">
         <div className="relative rounded-2xl overflow-hidden bg-gray-100 aspect-[16/6]">
           {curr ? (
-            isVideo ? (
+            curr.type?.startsWith("video") ? (
               <video
-                src={absUrl(curr.url)}
+                src={absUrl(curr.url)}              // ✅ files come from root, not /api
                 className="w-full h-full object-cover"
                 autoPlay
                 muted
@@ -55,7 +52,7 @@ export default function HeroBanner() {
               />
             ) : (
               <img
-                src={absUrl(curr.url)}
+                src={absUrl(curr.url)}              // ✅ use absUrl
                 className="w-full h-full object-cover"
                 alt="banner"
                 loading="lazy"
@@ -67,13 +64,13 @@ export default function HeroBanner() {
 
           {/* arrows */}
           <button
-            onClick={() => setI((n) => (n - 1 + items.length) % Math.max(items.length, 1))}
+            onClick={() => setI((v) => (v - 1 + items.length) % Math.max(items.length, 1))}
             className="absolute left-2 top-1/2 -translate-y-1/2 bg-white/70 rounded-full px-3 py-1"
           >
             ‹
           </button>
           <button
-            onClick={() => setI((n) => (n + 1) % Math.max(items.length, 1))}
+            onClick={() => setI((v) => (v + 1) % Math.max(items.length, 1))}
             className="absolute right-2 top-1/2 -translate-y-1/2 bg-white/70 rounded-full px-3 py-1"
           >
             ›
@@ -96,7 +93,7 @@ export default function HeroBanner() {
           {items.length > 0 && (
             <button
               className="ml-auto text-sm px-3 py-1 rounded border"
-              onClick={() => del(items[i]._id || items[i].id)}
+              onClick={() => del(items[i].id)}
             >
               Delete Current
             </button>
