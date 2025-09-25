@@ -1,6 +1,20 @@
+// client/src/components/NewsTicker.jsx
 import { useEffect, useState } from "react";
 import IfOwnerOnly from "./common/IfOwnerOnly";
-import { getJSON, upload, deleteJSON, absUrl } from "../utils/api";
+import { buildUrl, absUrl, authHeaders } from "../utils/api";
+
+// Build safe API URLs (guarantees no /api/api duplication)
+const api = (p) => buildUrl(p);
+
+// Small fetch helper (keeps your error behavior)
+async function json(url, opts) {
+  const res = await fetch(url, opts);
+  if (!res.ok) {
+    const text = await res.text().catch(() => "");
+    throw new Error(`${res.status} ${res.statusText} – ${text || url}`);
+  }
+  return res.json();
+}
 
 export default function NewsTicker() {
   const [items, setItems] = useState([]);
@@ -9,27 +23,34 @@ export default function NewsTicker() {
 
   async function load() {
     try {
-      const r = await getJSON("/api/news");
+      const r = await json(api("/api/news"), { credentials: "include" });
       setItems(r.news || r.items || []);
     } catch (e) {
       console.error("Load news failed:", e);
       setItems([]);
     }
   }
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+  }, []);
 
   async function add(e) {
     e.preventDefault();
     if (!form.title.trim()) return alert("Title is required");
+
     setSaving(true);
     try {
       const fd = new FormData();
       fd.append("title", form.title.trim());
-      fd.append("link", (form.link || "").trim());
+      fd.append("link", form.link.trim());
       if (form.image) fd.append("image", form.image);
 
-      // upload() already sends X-Owner-Key and credentials
-      await upload("/api/news", fd);
+      await json(api("/api/news"), {
+        method: "POST",
+        headers: authHeaders(), // adds X-Owner-Key
+        body: fd,
+        credentials: "include",
+      });
 
       setForm({ title: "", link: "", image: null });
       await load();
@@ -42,7 +63,11 @@ export default function NewsTicker() {
 
   async function del(id) {
     try {
-      await deleteJSON(`/api/news/${id}`);
+      await json(api(`/api/news/${id}`), {
+        method: "DELETE",
+        headers: authHeaders(),
+        credentials: "include",
+      });
       await load();
     } catch (e) {
       alert(`DELETE /api/news/${id} failed\n${e.message}`);
@@ -52,25 +77,33 @@ export default function NewsTicker() {
   return (
     <section className="border-y bg-white">
       <div className="max-w-6xl mx-auto px-4 py-3">
+        {/* Ticker row */}
         <div className="flex gap-6 overflow-x-auto items-center">
           {items.length === 0 && <div className="text-gray-400">No news yet</div>}
           {items.map((n) => (
             <div key={n.id} className="flex items-center gap-3 shrink-0">
               {n.image ? (
                 <img
-                  src={absUrl(n.image)}
+                  src={absUrl(n.image)} // works for /api/files/... and /uploads/...
                   alt=""
                   className="w-12 h-12 object-cover rounded-lg"
                   loading="lazy"
                 />
               ) : null}
+
               {n.link ? (
-                <a className="text-blue-600 hover:underline" href={n.link} target="_blank" rel="noreferrer">
+                <a
+                  className="text-blue-600 hover:underline"
+                  href={n.link}
+                  target="_blank"
+                  rel="noreferrer"
+                >
                   {n.title}
                 </a>
               ) : (
                 <span className="text-gray-800">{n.title}</span>
               )}
+
               <IfOwnerOnly>
                 <button className="text-xs text-red-600" onClick={() => del(n.id)}>
                   Delete
@@ -80,6 +113,7 @@ export default function NewsTicker() {
           ))}
         </div>
 
+        {/* Admin mini form */}
         <IfOwnerOnly>
           <form onSubmit={add} className="flex flex-wrap gap-2 items-center mt-3">
             <input
@@ -100,10 +134,16 @@ export default function NewsTicker() {
                 type="file"
                 accept="image/*"
                 className="hidden"
-                onChange={(e) => setForm({ ...form, image: e.target.files?.[0] || null })}
+                onChange={(e) =>
+                  setForm({ ...form, image: e.target.files?.[0] || null })
+                }
               />
             </label>
-            <button className="bg-black text-white px-4 py-2 rounded disabled:opacity-50" disabled={saving}>
+            <button
+              className="bg-black text-white px-4 py-2 rounded disabled:opacity-50"
+              disabled={saving}
+              type="submit"
+            >
               {saving ? "Saving…" : "Add"}
             </button>
           </form>
