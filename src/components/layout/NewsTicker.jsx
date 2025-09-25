@@ -34,10 +34,7 @@ export default function NewsTicker() {
       fd.append("title", form.title.trim());
       if (form.link?.trim()) fd.append("link", form.link.trim());
       if (form.image) fd.append("image", form.image);
-
-      // upload() adds X-Owner-Key and credentials for you
-      await upload("/api/news", fd);
-
+      await upload("/api/news", fd);           // ← uses helpers, no double /api
       setForm({ title: "", link: "", image: null });
       await load();
     } catch (e) {
@@ -65,7 +62,7 @@ export default function NewsTicker() {
             <div key={n.id} className="flex items-center gap-3 shrink-0">
               {n.image ? (
                 <img
-                  src={absUrl(n.image)}
+                  src={absUrl(n.image)}              // works for /api/files/... or /uploads/...
                   alt=""
                   className="w-12 h-12 object-cover rounded-lg"
                   loading="lazy"
