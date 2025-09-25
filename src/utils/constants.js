@@ -11,16 +11,32 @@ export const FAST_UNLOCK_SECONDS = 20;
 export const buildAccessKey = (type, id) => `LN_ACCESS::${type}::${id}`;
 export const buildOverlayKey = (type, id) => `LN_OVERLAY::${type}::${id}`;
 
-// Subscription plans (used in admin dashboard + QR unlock overlay)
+// Subscription plans
 export const PLAN_OPTIONS = [
-  { key: 'weekly', label: 'Weekly', color: 'emerald', minutes: 10080 },
-  { key: 'monthly', label: 'Monthly', color: 'indigo', minutes: 43200 },
-  { key: 'yearly', label: 'Yearly', color: 'amber', minutes: 525600 }
+  { key: "weekly",  label: "Weekly",  color: "emerald", minutes: 10080 },
+  { key: "monthly", label: "Monthly", color: "indigo",  minutes: 43200 },
+  { key: "yearly",  label: "Yearly",  color: "amber",   minutes: 525600 },
 ];
 
-// ✅ Backend base URL (used in api.js)
-export const BASE_URL = import.meta.env.VITE_BACKEND_URL || "http://localhost:5000";
-export const API_BASE = `${BASE_URL}/api`;
+// -------- API base detection --------
+// Accept either:
+//   VITE_BACKEND_URL = "https://law-network.onrender.com"   (origin)
+//   VITE_API_URL     = "https://law-network.onrender.com/api" (full api)
+const RAW =
+  import.meta.env.VITE_BACKEND_URL ??
+  import.meta.env.VITE_API_URL ??
+  "";
 
-// ✅ Alias to avoid mismatch
+let base = RAW.trim();
+if (base.endsWith("/")) base = base.slice(0, -1);
+
+// If value already ends with /api, use it as API base; otherwise append /api
+export const API_BASE = /\/api$/.test(base)
+  ? base
+  : `${(base || "https://law-network.onrender.com")}/api`;
+
+// Also expose BASE_URL (origin only)
+export const BASE_URL = API_BASE.replace(/\/api$/, "");
+
+// Legacy alias
 export { API_BASE as apiurl };
