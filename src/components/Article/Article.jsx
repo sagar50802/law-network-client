@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState, useMemo } from "react";
-import { getJSON, postJSON, deleteJSON, upload } from "../../utils/api";
+import { getJSON, postJSON, deleteJSON, upload, authHeaders } from "../../utils/api";
 import IfOwnerOnly from "../common/IfOwnerOnly";
 // import QROverlay from "../common/QROverlay"; // QR overlay not used anymore
 import { loadAccess } from "../../utils/access";
@@ -231,7 +231,8 @@ export default function Article({ limit, embed = false }) {
       fd.append("allowHtml", String(form.allowHtml));
       fd.append("isFree", String(form.isFree));
       if (form.image) fd.append("image", form.image);
-      await upload("/api/articles", fd);
+      // ✅ send owner key for admin route
+      await upload("/api/articles", fd, { headers: authHeaders() });
       setForm({ title: "", content: "", allowHtml: false, isFree: false, image: null });
       await load();
       alert("✅ Article published");
@@ -243,7 +244,8 @@ export default function Article({ limit, embed = false }) {
 
   async function remove(id) {
     try {
-      await deleteJSON(`/api/articles/${id}`);
+      // ✅ send owner key for admin route
+      await deleteJSON(`/api/articles/${id}`, { headers: authHeaders() });
       await load();
     } catch (err) {
       console.error("Delete failed:", err);
