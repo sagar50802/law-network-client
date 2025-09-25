@@ -1,15 +1,11 @@
+// client/src/components/common/SmartMedia.jsx
+import React from "react";
 import { absUrl } from "../../utils/api";
 
-/**
- * SmartImg → safe <img> that always resolves backend URLs
- */
-export function SmartImg({ src, alt = "", className = "", ...rest }) {
-  return <img src={absUrl(src)} alt={alt} className={className} {...rest} />;
+export function SmartImg({ src, ...rest }) {
+  // Accept absolute URLs or /uploads/* and normalize
+  const real = absUrl(src || "");
+  return <img src={real} {...rest} />;
 }
 
-/**
- * SmartVideo → safe <video> that always resolves backend URLs
- */
-export function SmartVideo({ src, className = "", ...rest }) {
-  return <video src={absUrl(src)} className={className} {...rest} />;
-}
+// (Keep/extend with SmartVideo etc. if you already had them)
