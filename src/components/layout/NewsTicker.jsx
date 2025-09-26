@@ -10,8 +10,8 @@ export default function NewsTicker() {
 
   async function load() {
     try {
-      const r = await getJSON("/api/news");
-      setItems(r.items || r.news || []);
+      const r = await getJSON("/api/news");            // ✅ uses helper
+      setItems(r.news || r.items || []);
     } catch (e) {
       console.error("Load news failed:", e);
       setItems([]);
@@ -26,9 +26,9 @@ export default function NewsTicker() {
     try {
       const fd = new FormData();
       fd.append("title", form.title.trim());
-      fd.append("link", (form.link || "").trim());
+      if (form.link)  fd.append("link", form.link.trim());
       if (form.image) fd.append("image", form.image);
-      await upload("/api/news", fd); // sends credentials + X-Owner-Key
+      await upload("/api/news", fd);                   // ✅ adds X-Owner-Key + credentials
       setForm({ title: "", link: "", image: null });
       await load();
     } catch (e) {
@@ -40,7 +40,7 @@ export default function NewsTicker() {
 
   async function del(id) {
     try {
-      await delJSON(`/api/news/${id}`);
+      await delJSON(`/api/news/${id}`);                // ✅ helper
       await load();
     } catch (e) {
       alert(`DELETE /api/news/${id} failed\n${e.message}`);
@@ -57,7 +57,7 @@ export default function NewsTicker() {
             <div key={n.id} className="flex items-center gap-3 shrink-0">
               {n.image ? (
                 <img
-                  src={absUrl(n.image)}
+                  src={absUrl(n.image)}                 // ✅ absolute via helper
                   alt=""
                   className="w-12 h-12 object-cover rounded-lg"
                   loading="lazy"
@@ -100,9 +100,7 @@ export default function NewsTicker() {
                 type="file"
                 accept="image/*"
                 className="hidden"
-                onChange={(e) =>
-                  setForm({ ...form, image: e.target.files?.[0] || null })
-                }
+                onChange={(e) => setForm({ ...form, image: e.target.files?.[0] || null })}
               />
             </label>
             <button className="bg-black text-white px-4 py-2 rounded disabled:opacity-50" disabled={saving}>
