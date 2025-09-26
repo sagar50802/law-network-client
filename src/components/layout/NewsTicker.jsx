@@ -1,7 +1,6 @@
-// client/src/components/NewsTicker.jsx
 import { useEffect, useState } from "react";
 import IfOwnerOnly from "./common/IfOwnerOnly";
-import { getJSON, upload, delJSON, absUrl, authHeaders } from "../utils/api";
+import { getJSON, upload, delJSON, absUrl } from "../utils/api";
 
 export default function NewsTicker() {
   const [items, setItems] = useState([]);
@@ -10,8 +9,8 @@ export default function NewsTicker() {
 
   async function load() {
     try {
-      const r = await getJSON("/api/news");
-      setItems(r.items || r.news || []);
+      const r = await getJSON("/api/news"); // uses buildUrl internally
+      setItems(r.news || r.items || []);
     } catch (e) {
       console.error("Load news failed:", e);
       setItems([]);
@@ -26,13 +25,13 @@ export default function NewsTicker() {
     try {
       const fd = new FormData();
       fd.append("title", form.title.trim());
-      fd.append("link", (form.link || "").trim());
+      if (form.link?.trim()) fd.append("link", form.link.trim());
       if (form.image) fd.append("image", form.image);
-      await upload("/api/news", fd, { headers: authHeaders() });
+      await upload("/api/news", fd); // sends X-Owner-Key, credentials
       setForm({ title: "", link: "", image: null });
       await load();
     } catch (e) {
-      alert(`POST /api/news failed\n${e.message}`);
+      alert(`POST /api/news failed\n${e.message || e}`);
     } finally {
       setSaving(false);
     }
@@ -40,30 +39,37 @@ export default function NewsTicker() {
 
   async function del(id) {
     try {
-      await delJSON(`/api/news/${id}`, { headers: authHeaders() });
+      await delJSON(`/api/news/${id}`);
       await load();
     } catch (e) {
-      alert(`DELETE /api/news/${id} failed\n${e.message}`);
+      alert(`DELETE /api/news/${id} failed\n${e.message || e}`);
     }
   }
 
   return (
     <section className="border-y bg-white">
       <div className="max-w-6xl mx-auto px-4 py-3">
+        {/* Ticker row */}
         <div className="flex gap-6 overflow-x-auto items-center">
           {items.length === 0 && <div className="text-gray-400">No news yet</div>}
           {items.map((n) => (
             <div key={n.id || n._id} className="flex items-center gap-3 shrink-0">
               {n.image ? (
                 <img
-                  src={absUrl(n.image)}
+                  src={absUrl(n.image)}              // ✅ robust: works for /api/files/... or https://...
                   alt=""
-                  className="w-12 h-12 object-cover rounded-lg"
+                  className="h-12 w-20 object-cover rounded-lg"  // a bit larger than 48px square
                   loading="lazy"
+                  referrerPolicy="no-referrer"
                 />
               ) : null}
               {n.link ? (
-                <a className="text-blue-600 hover:underline" href={n.link} target="_blank" rel="noreferrer">
+                <a
+                  className="text-blue-600 hover:underline"
+                  href={n.link}
+                  target="_blank"
+                  rel="noreferrer"
+                >
                   {n.title}
                 </a>
               ) : (
@@ -78,6 +84,7 @@ export default function NewsTicker() {
           ))}
         </div>
 
+        {/* Admin mini form */}
         <IfOwnerOnly>
           <form onSubmit={add} className="flex flex-wrap gap-2 items-center mt-3">
             <input
@@ -101,7 +108,10 @@ export default function NewsTicker() {
                 onChange={(e) => setForm({ ...form, image: e.target.files?.[0] || null })}
               />
             </label>
-            <button className="bg-black text-white px-4 py-2 rounded disabled:opacity-50" disabled={saving}>
+            <button
+              className="bg-black text-white px-4 py-2 rounded disabled:opacity-50"
+              disabled={saving}
+            >
               {saving ? "Saving…" : "Add"}
             </button>
           </form>
