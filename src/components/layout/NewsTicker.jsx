@@ -9,7 +9,7 @@ export default function NewsTicker() {
 
   async function load() {
     try {
-      const r = await getJSON("/api/news"); // uses buildUrl internally
+      const r = await getJSON("/api/news"); // normalized by utils/api
       setItems(r.news || r.items || []);
     } catch (e) {
       console.error("Load news failed:", e);
@@ -27,7 +27,7 @@ export default function NewsTicker() {
       fd.append("title", form.title.trim());
       if (form.link?.trim()) fd.append("link", form.link.trim());
       if (form.image) fd.append("image", form.image);
-      await upload("/api/news", fd); // sends X-Owner-Key, credentials
+      await upload("/api/news", fd); // sends X-Owner-Key & credentials
       setForm({ title: "", link: "", image: null });
       await load();
     } catch (e) {
@@ -56,20 +56,16 @@ export default function NewsTicker() {
             <div key={n.id || n._id} className="flex items-center gap-3 shrink-0">
               {n.image ? (
                 <img
-                  src={absUrl(n.image)}              // ✅ robust: works for /api/files/... or https://...
+                  src={absUrl(n.image)}
                   alt=""
-                  className="h-12 w-20 object-cover rounded-lg"  // a bit larger than 48px square
+                  className="h-16 w-16 object-cover rounded-lg"
                   loading="lazy"
                   referrerPolicy="no-referrer"
+                  onError={(ev) => { ev.currentTarget.style.display = "none"; }}
                 />
               ) : null}
               {n.link ? (
-                <a
-                  className="text-blue-600 hover:underline"
-                  href={n.link}
-                  target="_blank"
-                  rel="noreferrer"
-                >
+                <a className="text-blue-600 hover:underline" href={n.link} target="_blank" rel="noreferrer">
                   {n.title}
                 </a>
               ) : (
