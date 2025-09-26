@@ -1,7 +1,7 @@
 // client/src/components/NewsTicker.jsx
 import { useEffect, useState } from "react";
 import IfOwnerOnly from "./common/IfOwnerOnly";
-import { getJSON, upload, delJSON, absUrl } from "../utils/api";
+import { getJSON, upload, delJSON, absUrl, authHeaders } from "../utils/api";
 
 export default function NewsTicker() {
   const [items, setItems] = useState([]);
@@ -11,7 +11,7 @@ export default function NewsTicker() {
   async function load() {
     try {
       const r = await getJSON("/api/news");
-      setItems(r.news || r.items || []);
+      setItems(r.items || r.news || []);
     } catch (e) {
       console.error("Load news failed:", e);
       setItems([]);
@@ -26,9 +26,9 @@ export default function NewsTicker() {
     try {
       const fd = new FormData();
       fd.append("title", form.title.trim());
-      if (form.link)  fd.append("link", form.link.trim());
+      fd.append("link", (form.link || "").trim());
       if (form.image) fd.append("image", form.image);
-      await upload("/api/news", fd);      // adds X-Owner-Key + credentials
+      await upload("/api/news", fd, { headers: authHeaders() });
       setForm({ title: "", link: "", image: null });
       await load();
     } catch (e) {
@@ -40,7 +40,7 @@ export default function NewsTicker() {
 
   async function del(id) {
     try {
-      await delJSON(`/api/news/${id}`);
+      await delJSON(`/api/news/${id}`, { headers: authHeaders() });
       await load();
     } catch (e) {
       alert(`DELETE /api/news/${id} failed\n${e.message}`);
@@ -53,7 +53,7 @@ export default function NewsTicker() {
         <div className="flex gap-6 overflow-x-auto items-center">
           {items.length === 0 && <div className="text-gray-400">No news yet</div>}
           {items.map((n) => (
-            <div key={n.id} className="flex items-center gap-3 shrink-0">
+            <div key={n.id || n._id} className="flex items-center gap-3 shrink-0">
               {n.image ? (
                 <img
                   src={absUrl(n.image)}
@@ -70,7 +70,7 @@ export default function NewsTicker() {
                 <span className="text-gray-800">{n.title}</span>
               )}
               <IfOwnerOnly>
-                <button className="text-xs text-red-600" onClick={() => del(n.id)}>
+                <button className="text-xs text-red-600" onClick={() => del(n.id || n._id)}>
                   Delete
                 </button>
               </IfOwnerOnly>
