@@ -2,11 +2,7 @@
 import { useEffect, useState } from "react";
 import IfOwnerOnly from "./common/IfOwnerOnly";
 import {
-  getJSON,
-  upload,
-  deleteJSON,
-  absUrl,
-  authHeaders,
+  getJSON, upload, deleteJSON, absUrl, authHeaders,
 } from "../utils/api";
 
 export default function NewsTicker() {
@@ -16,7 +12,7 @@ export default function NewsTicker() {
 
   async function load() {
     try {
-      const r = await getJSON("/api/news");
+      const r = await getJSON("/api/news");          // ← helper prevents /api/api
       setItems(r.news || r.items || []);
     } catch (e) {
       console.error("Load news failed:", e);
@@ -34,7 +30,8 @@ export default function NewsTicker() {
       fd.append("title", form.title.trim());
       if (form.link?.trim()) fd.append("link", form.link.trim());
       if (form.image) fd.append("image", form.image);
-      await upload("/api/news", fd);           // ← uses helpers, no double /api
+
+      await upload("/api/news", fd);                 // ← helper adds X-Owner-Key + credentials
       setForm({ title: "", link: "", image: null });
       await load();
     } catch (e) {
@@ -62,7 +59,7 @@ export default function NewsTicker() {
             <div key={n.id} className="flex items-center gap-3 shrink-0">
               {n.image ? (
                 <img
-                  src={absUrl(n.image)}              // works for /api/files/... or /uploads/...
+                  src={absUrl(n.image)}             // works for /api/files/... or /uploads/...
                   alt=""
                   className="w-12 h-12 object-cover rounded-lg"
                   loading="lazy"
