@@ -1,4 +1,3 @@
-// client/src/components/Admin/AdminPodcastEditor.jsx
 import { useEffect, useState } from "react";
 import {
   getJSON,
@@ -97,7 +96,7 @@ export default function AdminPodcastEditor() {
   }
 
   // upload podcast
-    async function uploadPodcast(e) {
+  async function uploadPodcast(e) {
     e?.preventDefault?.();
     const key = selected?._id || selected?.id || selected?.name || sel;
     if (!key) return alert("Select a playlist first");
@@ -105,13 +104,18 @@ export default function AdminPodcastEditor() {
 
     const fd = new FormData();
     fd.append("title", title || "Untitled");
-    if (file) fd.append("audio", file);        // ⬅️ changed from file→audio
+    fd.append("artist", "");
+    fd.append("locked", true);
+    // ⬅️ IMPORTANT: field name must be "audio" to match router.post upload.single("audio")
+    if (file) fd.append("audio", file);
     else fd.append("url", url);
 
     try {
       setBusy(true);
-      // ⬅️ changed URL to real backend route:
-      await upload(`/api/podcasts/playlists/${encodeURIComponent(key)}/items`, fd, { headers: authHeaders() });
+      // ⬅️ IMPORTANT: endpoint must match router.post("/playlists/:pid/items")
+      await upload(`/podcasts/playlists/${encodeURIComponent(key)}/items`, fd, {
+        headers: authHeaders(),
+      });
       setTitle("");
       setFile(null);
       setUrl("");
@@ -122,7 +126,6 @@ export default function AdminPodcastEditor() {
       setBusy(false);
     }
   }
-
 
   return (
     <div className="space-y-4">
