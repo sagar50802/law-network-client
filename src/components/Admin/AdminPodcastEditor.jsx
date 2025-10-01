@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import {
   getJSON,
-  postJSON,
   upload,
   deleteJSON,
   absUrl,
@@ -30,7 +29,7 @@ export default function AdminPodcastEditor() {
   async function load() {
     try {
       setError("");
-      const r = await getJSON("/podcasts", { headers: authHeaders() });
+      const r = await getJSON("/api/podcasts", { headers: authHeaders() });
       const arr = normalize(r);
       setPlaylists(arr);
       if (arr.length) {
@@ -54,17 +53,20 @@ export default function AdminPodcastEditor() {
 
   const selected = playlists.find((p) => (p._id || p.id || p.name) === sel);
 
-  // create playlist
+  // ✅ create playlist – fixed Content-Type and /api path
   async function addPlaylist() {
     const name = newName.trim();
     if (!name) return;
     try {
       setBusy(true);
-      await postJSON(
-        "/podcasts/playlists",
-        { name },
-        { headers: authHeaders() }
-      );
+      await fetch(`/api/podcasts/playlists`, {
+        method: "POST",
+        headers: {
+          ...authHeaders(),
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify({ name }),
+      });
       setNewName("");
       await load();
     } catch (err) {
@@ -81,11 +83,11 @@ export default function AdminPodcastEditor() {
 
     setBusy(true);
     try {
-      await deleteJSON(`/podcasts/${encodeURIComponent(id)}`, {
+      await deleteJSON(`/api/podcasts/playlists/${encodeURIComponent(id)}`, {
         headers: authHeaders(),
       });
     } catch {
-      await deleteJSON(`/podcasts/playlists/${encodeURIComponent(id)}`, {
+      await deleteJSON(`/api/podcasts/${encodeURIComponent(id)}`, {
         headers: authHeaders(),
       });
     } finally {
@@ -106,14 +108,12 @@ export default function AdminPodcastEditor() {
     fd.append("title", title || "Untitled");
     fd.append("artist", "");
     fd.append("locked", true);
-    // ⬅️ IMPORTANT: field name must be "audio" to match router.post upload.single("audio")
     if (file) fd.append("audio", file);
     else fd.append("url", url);
 
     try {
       setBusy(true);
-      // ⬅️ IMPORTANT: endpoint must match router.post("/playlists/:pid/items")
-      await upload(`/podcasts/playlists/${encodeURIComponent(key)}/items`, fd, {
+      await upload(`/api/podcasts/playlists/${encodeURIComponent(key)}/items`, fd, {
         headers: authHeaders(),
       });
       setTitle("");
