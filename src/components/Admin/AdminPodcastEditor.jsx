@@ -97,21 +97,21 @@ export default function AdminPodcastEditor() {
   }
 
   // upload podcast
-  async function uploadPodcast(e) {
+    async function uploadPodcast(e) {
     e?.preventDefault?.();
     const key = selected?._id || selected?.id || selected?.name || sel;
     if (!key) return alert("Select a playlist first");
     if (!file && !url) return alert("Choose a file or paste a direct audio URL");
 
     const fd = new FormData();
-    fd.append("playlist", key);
     fd.append("title", title || "Untitled");
-    if (file) fd.append("file", file);
+    if (file) fd.append("audio", file);        // ⬅️ changed from file→audio
     else fd.append("url", url);
 
     try {
       setBusy(true);
-      await upload("/podcasts/items", fd, { headers: authHeaders() });
+      // ⬅️ changed URL to real backend route:
+      await upload(`/api/podcasts/playlists/${encodeURIComponent(key)}/items`, fd, { headers: authHeaders() });
       setTitle("");
       setFile(null);
       setUrl("");
@@ -122,6 +122,7 @@ export default function AdminPodcastEditor() {
       setBusy(false);
     }
   }
+
 
   return (
     <div className="space-y-4">
