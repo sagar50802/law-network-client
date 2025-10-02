@@ -12,7 +12,7 @@ import {
 export default function AdminPodcastEditor() {
   /* ---------------- state ---------------- */
   const [playlists, setPlaylists] = useState([]);
-  const [sel, setSel] = useState("");           // selected playlist id/_id/name
+  const [sel, setSel] = useState("");           // selected playlist id
   const [newName, setNewName] = useState("");
 
   const [title, setTitle] = useState("");
@@ -29,7 +29,7 @@ export default function AdminPodcastEditor() {
 
   /* ---------------- helpers ---------------- */
   const selected = useMemo(
-    () => playlists.find((p) => (p._id || p.id || p.name) === sel),
+    () => playlists.find((p) => (p._id || p.id) === sel),
     [playlists, sel]
   );
 
@@ -51,10 +51,8 @@ export default function AdminPodcastEditor() {
       const arr = normalize(r);
       setPlaylists(arr);
       if (arr.length) {
-        const keep = arr.find((p) => (p._id || p.id || p.name) === sel);
-        setSel(
-          keep ? (keep._id || keep.id || keep.name) : (arr[0]._id || arr[0].id || arr[0].name)
-        );
+        const keep = arr.find((p) => (p._id || p.id) === sel);
+        setSel(keep ? (keep._id || keep.id) : (arr[0]._id || arr[0].id));
       } else {
         setSel("");
       }
@@ -90,18 +88,11 @@ export default function AdminPodcastEditor() {
     if (!confirm("Delete this playlist and all its podcasts?")) return;
     setBusy(true);
     try {
-      // server supports /podcasts/playlists/:id (preferred)
       log(`DELETE /podcasts/playlists/${id}`);
       await deleteJSON(`/podcasts/playlists/${encodeURIComponent(id)}`, { headers: authHeaders() });
-    } catch (e1) {
-      // fallback /podcasts/:id if older route exists
-      try {
-        log(`DELETE /podcasts/${id} (fallback)`);
-        await deleteJSON(`/podcasts/${encodeURIComponent(id)}`, { headers: authHeaders() });
-      } catch (e2) {
-        warn(" delete failed:", e1, e2);
-        alert("Delete playlist failed");
-      }
+    } catch (e) {
+      warn(" delete failed:", e);
+      alert("Delete playlist failed");
     } finally {
       setBusy(false);
       if (sel === id) setSel("");
@@ -112,70 +103,43 @@ export default function AdminPodcastEditor() {
   /* ---------------- upload item (audio or url) ---------------- */
   async function uploadItem(e) {
     e?.preventDefault?.();
-    const key = selected?._id || selected?.id || selected?.name || sel;
+    const key = selected?._id || selected?.id || sel;
     if (!key) return alert("Select a playlist first");
     if (!file && !url.trim()) return alert("Choose a file or paste a direct audio URL");
 
-    // fresh FormData builder per attempt
-    const buildFD = (fileField) => {
-      const fd = new FormData();
-      fd.append("title", title || "Untitled");
-      fd.append("artist", artist || "");
-      fd.append("locked", locked ? "true" : "false");
-      if (file) fd.append(fileField, file);
-      if (url.trim()) fd.append("url", url.trim());
-      return fd;
-    };
+    const fd = new FormData();
+    fd.append("title", title || "Untitled");
+    fd.append("artist", artist || "");
+    fd.append("locked", locked ? "true" : "false");
+    if (file) fd.append("audio", file);  // always "audio"
+    if (url.trim()) fd.append("url", url.trim());
 
     setBusy(true);
     try {
-      // TRY 1: nested route, field "audio"
-      log(`UPLOAD /podcasts/playlists/${key}/items  (field=audio)`);
-      await upload(`/podcasts/playlists/${encodeURIComponent(key)}/items`, buildFD("audio"), {
+      log(`UPLOAD /podcasts/playlists/${key}/items`);
+      await upload(`/podcasts/playlists/${encodeURIComponent(key)}/items`, fd, {
         headers: authHeaders(),
       });
-      log(" success TRY 1");
-    } catch (e1) {
-      warn(" TRY 1 failed:", e1);
-      try {
-        // TRY 2: nested route, field "file"
-        log(`UPLOAD /podcasts/playlists/${key}/items  (field=file)`);
-        await upload(`/podcasts/playlists/${encodeURIComponent(key)}/items`, buildFD("file"), {
-          headers: authHeaders(),
-        });
-        log(" success TRY 2");
-      } catch (e2) {
-        warn(" TRY 2 failed:", e2);
-        try {
-          // TRY 3: flat route with playlist in body
-          const fd = buildFD(file ? "file" : "audio");
-          fd.append("playlist", key);
-          log("UPLOAD /podcasts/items  (with playlist)");
-          await upload(`/podcasts/items`, fd, { headers: authHeaders() });
-          log(" success TRY 3");
-        } catch (e3) {
-          warn(" TRY 3 failed:", e3);
-          alert("Upload failed. Check server logs for /podcasts…/items");
-          setBusy(false);
-          return;
-        }
-      }
+      log(" success");
+      // reset
+      setTitle("");
+      setArtist("");
+      setFile(null);
+      setUrl("");
+      setLocked(true);
+      await load();
+    } catch (err) {
+      warn("Upload failed:", err);
+      alert("Upload failed. Check server logs for details.");
+    } finally {
+      setBusy(false);
     }
-
-    // reset
-    setTitle("");
-    setArtist("");
-    setFile(null);
-    setUrl("");
-    setLocked(true);
-    setBusy(false);
-    await load();
   }
 
-  /* ---------------- delete/toggle individual item ---------------- */
+  /* ---------------- delete individual item ---------------- */
   async function removeItem(iid) {
     if (!confirm("Delete this audio item?")) return;
-    const key = selected?._id || selected?.id || selected?.name || sel;
+    const key = selected?._id || selected?.id || sel;
     if (!key || !iid) return;
     setBusy(true);
     try {
@@ -221,7 +185,7 @@ export default function AdminPodcastEditor() {
       >
         <option value="">Select playlist…</option>
         {playlists.map((p) => {
-          const id = p._id || p.id || p.name;
+          const id = p._id || p.id;
           return (
             <option key={id} value={id}>
               {p.name}
@@ -254,14 +218,12 @@ export default function AdminPodcastEditor() {
           disabled={busy}
         />
         <div className="text-sm">
-          <label className="inline-flex items-center gap-2">
-            <input
-              type="file"
-              accept="audio/*"
-              onChange={(e) => setFile(e.target.files?.[0] || null)}
-              disabled={busy}
-            />
-          </label>
+          <input
+            type="file"
+            accept="audio/*"
+            onChange={(e) => setFile(e.target.files?.[0] || null)}
+            disabled={busy}
+          />
         </div>
         <label className="flex items-center gap-2 text-sm">
           <input
@@ -289,7 +251,7 @@ export default function AdminPodcastEditor() {
             </h4>
             <button
               className="text-red-600 text-sm"
-              onClick={() => deletePlaylist(selected._id || selected.id || selected.name)}
+              onClick={() => deletePlaylist(selected._id || selected.id)}
               disabled={busy}
             >
               Delete Playlist
