@@ -86,6 +86,9 @@ export default function QREditor() {
 
   if (!cfg) return null;
 
+  // 👇 DEBUG line to see what URL is generated
+  console.log("QR debug:", cfg.url, `${API_ORIGIN}${cfg.url}?t=${uploadTime}`);
+
   return (
     <IfOwnerOnly>
       <div className="max-w-6xl mx-auto px-4 py-8 bg-white rounded-2xl border mt-8">
