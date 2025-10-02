@@ -117,7 +117,7 @@ export default function Podcast() {
   /* ---------------- data load ---------------- */
   const load = async () => {
     setAccessLoading(true);
-    const r = await getJSON(`${API_BASE}/api/podcasts`);
+    const r = await getJSON("/podcasts");
     const pls = r.playlists || [];
     setPlaylists(pls);
     if (!pid && pls[0]) setPid(pls[0].id);
@@ -262,7 +262,7 @@ export default function Podcast() {
 
   const createPlaylist = async (e) => {
     e.preventDefault();
-    await fetch(`${API_BASE}/api/podcasts/playlists`, {
+     await fetch(`${API_BASE}/podcasts/playlists`, {
       method: "POST",
       headers: { ...authHeaders(), "Content-Type": "application/json" },
       body: JSON.stringify({ name: newPlName || "New Playlist" }),
@@ -279,7 +279,7 @@ export default function Podcast() {
     fd.append("artist", form.artist || "");
     fd.append("locked", String(form.locked));
     fd.append("audio", form.audio);
-    await fetch(`${API_BASE}/api/podcasts/playlists/${pid}/items`, {
+    await fetch(`${API_BASE}/podcasts/playlists/${pid}/items`, {
       method: "POST",
       headers: authHeaders(),
       body: fd,
