@@ -1,6 +1,6 @@
 // client/src/components/Admin/AdminPodcastEditor.jsx
 import { useEffect, useState } from "react";
-import { getJSON, postJSON, upload, delJSON, authHeaders } from "../../utils/api";
+import { getJSON, upload, delJSON, authHeaders } from "../../utils/api";
 
 export default function AdminPodcastEditor() {
   const [playlists, setPlaylists] = useState([]);
@@ -23,7 +23,7 @@ export default function AdminPodcastEditor() {
     try {
       setError("");
       log("GET /api/podcasts");
-      const r = await getJSON("/api/podcasts");
+      const r = await getJSON("/api/podcasts", { headers: authHeaders() });
       log(" response:", r);
       const list = Array.isArray(r?.playlists) ? r.playlists : [];
       setPlaylists(list);
@@ -36,21 +36,33 @@ export default function AdminPodcastEditor() {
     }
   }
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); /* on mount */ }, []);
 
+  // --- FIXED: must send JSON with Content-Type so express.json() parses it ---
   async function createPlaylist() {
     const name = newName.trim();
     if (!name) return;
     setBusy(true);
     try {
       log("POST /api/podcasts/playlists", { name });
-      const r = await postJSON("/api/podcasts/playlists", { name }, { headers: authHeaders() });
-      log(" response:", r);
+      const r = await fetch("/api/podcasts/playlists", {
+        method: "POST",
+        headers: {
+          ...authHeaders(),
+          "Content-Type": "application/json", // ✅ REQUIRED
+        },
+        body: JSON.stringify({ name }),
+      });
+      if (!r.ok) {
+        const txt = await r.text().catch(() => "");
+        throw new Error(`HTTP ${r.status} ${r.statusText} ${txt}`);
+      }
+      log(" response:", await r.json().catch(() => ({})));
       setNewName("");
       await load();
     } catch (err) {
       warn(" create failed:", err);
-      alert("Create playlist failed: " + (err?.message || err));
+      alert("Create playlist failed: /api/podcasts/playlists " + (err?.message || err));
     } finally { setBusy(false); }
   }
 
@@ -99,8 +111,13 @@ export default function AdminPodcastEditor() {
     setBusy(true);
     try {
       log(`PATCH /api/podcasts/playlists/${pid}/items/${iid}/lock`, { locked: next });
-      const r = await postJSON(`/api/podcasts/playlists/${pid}/items/${iid}/lock`, { locked: next }, { headers: authHeaders() });
-      log(" response:", r);
+      const r = await fetch(`/api/podcasts/playlists/${pid}/items/${iid}/lock`, {
+        method: "PATCH",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ locked: next }),
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status} ${r.statusText}`);
+      log(" response:", await r.json().catch(() => ({})));
       await load();
     } catch (e) {
       warn(" toggle lock failed:", e);
