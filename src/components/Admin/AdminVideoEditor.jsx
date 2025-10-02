@@ -1,4 +1,3 @@
-// client/src/components/Admin/AdminVideoEditor.jsx
 import { useEffect, useMemo, useState } from "react";
 import { getJSON, postJSON, upload, delJSON, absUrl, authHeaders } from "../../utils/api";
 
@@ -13,6 +12,9 @@ export default function AdminVideoEditor() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
+  const log  = (...a) => console.log("[AdminVideos]", ...a);
+  const warn = (...a) => console.warn("[AdminVideos]", ...a);
+
   const normalize = (r) => {
     if (Array.isArray(r)) return r;
     if (Array.isArray(r?.playlists)) return r.playlists;
@@ -24,7 +26,9 @@ export default function AdminVideoEditor() {
   async function load() {
     try {
       setError("");
-      const r = await getJSON("/videos", { headers: authHeaders() });
+      log("GET /api/videos");
+      const r = await getJSON("/api/videos", { headers: authHeaders() });
+      log(" response:", r);
       const arr = normalize(r);
       setPlaylists(arr);
       if (arr.length) {
@@ -34,15 +38,13 @@ export default function AdminVideoEditor() {
         );
       } else setSel("");
     } catch (e) {
-      console.error(e);
+      warn(e);
       setError("Failed to load video playlists");
       setPlaylists([]);
       setSel("");
     }
   }
-  useEffect(() => {
-    load();
-  }, []);
+  useEffect(() => { load(); }, []);
 
   const selected = useMemo(
     () => playlists.find((p) => (p._id || p.id || p.name) === sel),
@@ -55,10 +57,12 @@ export default function AdminVideoEditor() {
     if (!name) return;
     try {
       setBusy(true);
-      await postJSON("/videos/playlists", { name }, { headers: authHeaders() });
+      log("POST /api/videos/playlists", { name });
+      await postJSON("/api/videos/playlists", { name }, { headers: authHeaders() });
       setNewName("");
       await load();
     } catch (err) {
+      warn("Create playlist failed:", err);
       alert("Create playlist failed: " + (err?.message || err));
     } finally {
       setBusy(false);
@@ -72,9 +76,11 @@ export default function AdminVideoEditor() {
 
     setBusy(true);
     try {
-      await delJSON(`/videos/${encodeURIComponent(id)}`, { headers: authHeaders() });
+      log(`DELETE /api/videos/${id}`);
+      await delJSON(`/api/videos/${encodeURIComponent(id)}`, { headers: authHeaders() });
     } catch {
-      await delJSON(`/videos/playlists/${encodeURIComponent(id)}`, { headers: authHeaders() });
+      log(`DELETE /api/videos/playlists/${id}`);
+      await delJSON(`/api/videos/playlists/${encodeURIComponent(id)}`, { headers: authHeaders() });
     } finally {
       setBusy(false);
     }
@@ -97,12 +103,14 @@ export default function AdminVideoEditor() {
 
     try {
       setBusy(true);
-      await upload("/videos/items", fd, { headers: authHeaders() });
+      log("UPLOAD /api/videos/items", { key, hasFile: !!file, hasUrl: !!url });
+      await upload("/api/videos/items", fd, { headers: authHeaders() });
       setTitle("");
       setFile(null);
       setUrl("");
       await load();
     } catch (err) {
+      warn("Upload failed:", err);
       alert("Upload failed: " + (err?.message || err));
     } finally {
       setBusy(false);
