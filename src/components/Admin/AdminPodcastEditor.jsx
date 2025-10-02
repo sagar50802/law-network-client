@@ -1,228 +1,153 @@
+// src/components/Admin/AdminPodcastEditor.jsx
 import { useEffect, useState } from "react";
-import { API_BASE, getJSON, authHeaders } from "../../utils/api";
+import { API_BASE, authHeaders, getJSON } from "../../utils/api";
 
 export default function AdminPodcastEditor() {
   const [playlists, setPlaylists] = useState([]);
-  const [newPlName, setNewPlName] = useState("");
+  const [newPl, setNewPl] = useState("");
   const [pid, setPid] = useState("");
   const [form, setForm] = useState({
     title: "",
-    speaker: "",
-    externalUrl: "",
-    locked: true,
+    artist: "",
+    url: "",
     audio: null,
+    locked: true,
   });
 
-  /* ---------------- Load existing playlists ---------------- */
   const load = async () => {
-    try {
-      const r = await getJSON("/podcasts"); // ✅ no /api here
-      setPlaylists(r.playlists || []);
-      if (!pid && (r.playlists || []).length) setPid(r.playlists[0].id);
-    } catch (err) {
-      console.error("[AdminPodcast] load error:", err);
-    }
+    const r = await getJSON(`${API_BASE}/podcasts`);
+    setPlaylists(r.playlists || []);
+    if (!pid && r.playlists?.length) setPid(r.playlists[0]._id || r.playlists[0].id);
   };
 
   useEffect(() => {
     load();
   }, []);
 
-  /* ---------------- Create / Delete playlist ---------------- */
-  const createPlaylist = async (e) => {
+  const createPl = async (e) => {
     e.preventDefault();
-    if (!newPlName.trim()) return;
-    try {
-      const resp = await fetch(`${API_BASE}/podcasts/playlists`, {
-        method: "POST",
-        headers: { ...authHeaders(), "Content-Type": "application/json" },
-        body: JSON.stringify({ title: newPlName.trim() }), // backend expects title
-      });
-      if (!resp.ok) throw new Error(await resp.text());
-      setNewPlName("");
-      await load();
-    } catch (err) {
-      console.error("[AdminPodcast] create failed:", err);
-      alert("Create playlist failed");
-    }
+    if (!newPl) return;
+    const r = await fetch(`${API_BASE}/podcasts/playlists`, {
+      method: "POST",
+      headers: { ...authHeaders(), "Content-Type": "application/json" },
+      body: JSON.stringify({ name: newPl }),
+    });
+    if (!r.ok) alert("Create playlist failed");
+    setNewPl("");
+    await load();
   };
 
-  const deletePlaylist = async (plId) => {
+  const deletePl = async (id) => {
     if (!window.confirm("Delete this playlist?")) return;
-    try {
-      const resp = await fetch(`${API_BASE}/podcasts/playlists/${plId}`, {
-        method: "DELETE",
-        headers: authHeaders(),
-      });
-      if (!resp.ok) throw new Error(await resp.text());
-      if (pid === plId) setPid("");
-      await load();
-    } catch (err) {
-      console.error("[AdminPodcast] delete failed:", err);
-      alert("Delete playlist failed");
-    }
+    const r = await fetch(`${API_BASE}/podcasts/playlists/${id}`, {
+      method: "DELETE",
+      headers: authHeaders(),
+    });
+    if (!r.ok) alert("Delete playlist failed");
+    await load();
   };
 
-  /* ---------------- Upload audio into playlist ---------------- */
   const uploadAudio = async (e) => {
     e.preventDefault();
-    if (!pid || !form.audio) {
-      alert("Select playlist and choose an audio file first");
-      return;
-    }
+    if (!pid) return alert("Select a playlist first");
+    if (!form.audio && !form.url) return alert("Choose file or URL");
+
     const fd = new FormData();
     fd.append("title", form.title || "Untitled");
-    fd.append("artist", form.speaker || "");
-    fd.append("externalUrl", form.externalUrl || "");
+    fd.append("artist", form.artist || "");
     fd.append("locked", String(form.locked));
-    fd.append("audio", form.audio);
+    if (form.audio) fd.append("audio", form.audio);
+    if (form.url) fd.append("url", form.url);
 
-    try {
-      const resp = await fetch(`${API_BASE}/podcasts/playlists/${pid}/items`, {
-        method: "POST",
-        headers: authHeaders(),
-        body: fd,
-      });
-      if (!resp.ok) throw new Error(await resp.text());
-      setForm({
-        title: "",
-        speaker: "",
-        externalUrl: "",
-        locked: true,
-        audio: null,
-      });
-      await load();
-    } catch (err) {
-      console.error("[AdminPodcast] upload failed:", err);
-      alert("Upload audio failed");
-    }
+    const r = await fetch(`${API_BASE}/podcasts/playlists/${pid}/items`, {
+      method: "POST",
+      headers: authHeaders(),
+      body: fd,
+    });
+    if (!r.ok) alert("Upload failed");
+    setForm({ title: "", artist: "", url: "", audio: null, locked: true });
+    await load();
   };
 
-  const deleteItem = async (iid) => {
-    if (!window.confirm("Delete this audio item?")) return;
-    try {
-      const resp = await fetch(
-        `${API_BASE}/podcasts/playlists/${pid}/items/${iid}`,
-        {
-          method: "DELETE",
-          headers: authHeaders(),
-        }
-      );
-      if (!resp.ok) throw new Error(await resp.text());
-      await load();
-    } catch (err) {
-      console.error("[AdminPodcast] delete item failed:", err);
-      alert("Delete audio failed");
-    }
-  };
-
-  /* ---------------- Render ---------------- */
   return (
-    <div className="space-y-6">
-      <h2 className="font-bold text-lg">Manage Podcasts</h2>
+    <div className="p-4 space-y-4 border rounded">
+      <h3 className="font-semibold">Manage Podcasts</h3>
 
-      {/* Create playlist */}
-      <form onSubmit={createPlaylist} className="flex gap-2">
+      {/* create playlist */}
+      <form onSubmit={createPl} className="flex gap-2">
         <input
           className="border rounded p-2 flex-1"
           placeholder="New playlist name"
-          value={newPlName}
-          onChange={(e) => setNewPlName(e.target.value)}
+          value={newPl}
+          onChange={(e) => setNewPl(e.target.value)}
         />
-        <button className="bg-black text-white px-3 rounded">Add</button>
+        <button className="bg-black text-white px-3 rounded">Add Playlist</button>
       </form>
 
-      {/* List playlists */}
-      <div className="space-y-2">
+      {/* choose playlist */}
+      <select
+        className="border rounded p-2 w-full"
+        value={pid || ""}
+        onChange={(e) => setPid(e.target.value)}
+      >
+        <option value="">Select playlist…</option>
         {playlists.map((p) => (
-          <div
-            key={p.id}
-            className={`p-2 border rounded flex items-center justify-between ${
-              pid === p.id ? "bg-gray-50" : ""
-            }`}
-          >
+          <option key={p._id || p.id} value={p._id || p.id}>
+            {p.name}
+          </option>
+        ))}
+      </select>
+
+      {/* upload audio */}
+      <form onSubmit={uploadAudio} className="space-y-2">
+        <input
+          className="border rounded p-2 w-full"
+          placeholder="Title"
+          value={form.title}
+          onChange={(e) => setForm({ ...form, title: e.target.value })}
+        />
+        <input
+          className="border rounded p-2 w-full"
+          placeholder="Speaker (optional)"
+          value={form.artist}
+          onChange={(e) => setForm({ ...form, artist: e.target.value })}
+        />
+        <input
+          className="border rounded p-2 w-full"
+          placeholder="External audio URL (optional)"
+          value={form.url}
+          onChange={(e) => setForm({ ...form, url: e.target.value })}
+        />
+        <input
+          type="file"
+          accept="audio/*"
+          onChange={(e) => setForm({ ...form, audio: e.target.files[0] })}
+        />
+        <label className="flex items-center gap-2">
+          <input
+            type="checkbox"
+            checked={form.locked}
+            onChange={(e) => setForm({ ...form, locked: e.target.checked })}
+          />
+          Locked (requires access)
+        </label>
+        <button className="bg-blue-600 text-white px-4 py-1 rounded">Upload</button>
+      </form>
+
+      {/* list playlists with delete */}
+      <div className="space-y-1">
+        {playlists.map((p) => (
+          <div key={p._id || p.id} className="flex items-center justify-between border p-2 rounded">
+            <span>{p.name}</span>
             <button
-              className="font-medium"
-              onClick={() => setPid(p.id)}
-              title="Select"
-            >
-              {p.title || p.name}
-            </button>
-            <button
-              className="text-xs text-red-600"
-              onClick={() => deletePlaylist(p.id)}
+              className="text-red-600 text-sm"
+              onClick={() => deletePl(p._id || p.id)}
             >
               Delete
             </button>
           </div>
         ))}
-        {playlists.length === 0 && (
-          <div className="text-sm text-gray-500">No playlists yet</div>
-        )}
       </div>
-
-      {/* Upload audio into selected playlist */}
-      {pid && (
-        <form onSubmit={uploadAudio} className="space-y-2 border-t pt-3">
-          <h3 className="font-semibold text-sm">Add audio to playlist</h3>
-          <input
-            className="border rounded p-2 w-full"
-            placeholder="Title"
-            value={form.title}
-            onChange={(e) => setForm({ ...form, title: e.target.value })}
-          />
-          <input
-            className="border rounded p-2 w-full"
-            placeholder="Speaker (optional)"
-            value={form.speaker}
-            onChange={(e) => setForm({ ...form, speaker: e.target.value })}
-          />
-          <input
-            className="border rounded p-2 w-full"
-            placeholder="External audio URL (optional)"
-            value={form.externalUrl}
-            onChange={(e) => setForm({ ...form, externalUrl: e.target.value })}
-          />
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={form.locked}
-              onChange={(e) => setForm({ ...form, locked: e.target.checked })}
-            />
-            Locked (requires access)
-          </label>
-          <input
-            type="file"
-            accept="audio/*"
-            onChange={(e) => setForm({ ...form, audio: e.target.files[0] })}
-          />
-          <button className="bg-blue-600 text-white px-4 py-2 rounded">
-            Upload
-          </button>
-        </form>
-      )}
-
-      {/* Show current playlist items */}
-      {pid &&
-        playlists
-          .find((pl) => pl.id === pid)
-          ?.items?.map((it) => (
-            <div
-              key={it.id}
-              className="flex items-center justify-between border rounded p-2 mt-2"
-            >
-              <div>
-                <div className="text-sm font-medium">{it.title}</div>
-                <div className="text-xs text-gray-500">{it.artist}</div>
-              </div>
-              <button
-                className="text-xs text-red-600"
-                onClick={() => deleteItem(it.id)}
-              >
-                Delete
-              </button>
-            </div>
-          ))}
     </div>
   );
 }
