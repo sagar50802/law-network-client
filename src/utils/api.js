@@ -52,7 +52,12 @@ const BASE_INIT = { credentials: "include" };
 /* ---------------- JSON helpers ---------------- */
 
 export async function getJSON(url, init = {}) {
-  const res = await fetch(buildUrl(url), { method: "GET", ...BASE_INIT, ...init });
+  const res = await fetch(buildUrl(url), {
+    method: "GET",
+    headers: { ...(init.headers || {}), ...authHeaders() }, // attach admin key automatically
+    ...BASE_INIT,
+    ...init,
+  });
   if (!res.ok) throw new Error(`${url} ${res.status}`);
   return res.json();
 }
