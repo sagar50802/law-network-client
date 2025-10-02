@@ -1,5 +1,13 @@
+// client/src/components/Admin/AdminVideoEditor.jsx
 import { useEffect, useMemo, useState } from "react";
-import { getJSON, postJSON, upload, delJSON, absUrl } from "../../utils/api";
+import {
+  getJSON,
+  postJSON,
+  upload,
+  deleteJSON,
+  absUrl,
+  authHeaders,
+} from "../../utils/api";
 
 export default function AdminVideoEditor() {
   const [playlists, setPlaylists] = useState([]);
@@ -9,26 +17,27 @@ export default function AdminVideoEditor() {
   const [title, setTitle] = useState("");
   const [file, setFile] = useState(null);
   const [url, setUrl] = useState("");
-  const [locked, setLocked] = useState(true);
-
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
-  const log = (...a) => console.log("[AdminVideo]", ...a);
+  const log  = (...a) => console.log("[AdminVideo]", ...a);
   const warn = (...a) => console.warn("[AdminVideo]", ...a);
 
-  const selected = useMemo(
-    () => playlists.find((p) => (p._id || p.id || p.name) === sel),
-    [playlists, sel]
-  );
+  const normalize = (r) => {
+    if (Array.isArray(r)) return r;
+    if (Array.isArray(r?.playlists)) return r.playlists;
+    if (Array.isArray(r?.items)) return r.items;
+    if (Array.isArray(r?.data)) return r.data;
+    return [];
+  };
 
   async function load() {
     try {
       setError("");
       log("GET /videos");
-      const r = await getJSON("/videos");
+      const r = await getJSON("/videos", { headers: authHeaders() });
       log(" response:", r);
-      const arr = Array.isArray(r?.playlists) ? r.playlists : [];
+      const arr = normalize(r);
       setPlaylists(arr);
       if (arr.length) {
         const keep = arr.find((p) => (p._id || p.id || p.name) === sel);
@@ -43,100 +52,89 @@ export default function AdminVideoEditor() {
       setSel("");
     }
   }
+  useEffect(() => { load(); }, []);
 
-  useEffect(() => {
-    load();
-  }, []);
+  const selected = useMemo(
+    () => playlists.find((p) => (p._id || p.id || p.name) === sel),
+    [playlists, sel]
+  );
 
-  // create playlist
   async function addPlaylist() {
     const name = newName.trim();
     if (!name) return;
     try {
       setBusy(true);
       log("POST /videos/playlists", { name });
-      await postJSON("/videos/playlists", { name });
+      await postJSON("/videos/playlists", { name }, { headers: authHeaders() });
       setNewName("");
       await load();
     } catch (err) {
       warn(" create failed:", err);
-      alert("Create playlist failed: " + (err?.message || err));
+      alert("Create playlist failed");
     } finally {
       setBusy(false);
     }
   }
 
-  // delete playlist
   async function deletePlaylist(id) {
     if (!id) return;
     if (!confirm("Delete this playlist and all its videos?")) return;
 
     setBusy(true);
     try {
+      // preferred
       log(`DELETE /videos/playlists/${id}`);
-      await delJSON(`/videos/playlists/${encodeURIComponent(id)}`);
-    } catch {
-      warn(" delete (playlists/:id) failed, trying /videos/:id");
-      await delJSON(`/videos/${encodeURIComponent(id)}`);
+      await deleteJSON(`/videos/playlists/${encodeURIComponent(id)}`, {
+        headers: authHeaders(),
+      });
+    } catch (e1) {
+      try {
+        // fallback
+        log(`DELETE /videos/${id} (fallback)`);
+        await deleteJSON(`/videos/${encodeURIComponent(id)}`, {
+          headers: authHeaders(),
+        });
+      } catch (e2) {
+        warn(" delete failed:", e1, e2);
+        alert("Delete playlist failed");
+      }
     } finally {
       setBusy(false);
+      if (sel === id) setSel("");
+      await load();
     }
-    if (sel === id) setSel("");
-    await load();
   }
 
-  // upload video
   async function uploadVideo(e) {
     e?.preventDefault?.();
     const key = selected?._id || selected?.id || selected?.name || sel;
     if (!key) return alert("Select a playlist first");
-    if (!file && !url.trim()) return alert("Choose a file or paste a direct video URL");
+    if (!file && !url) return alert("Choose a file or paste a direct video URL");
 
     const fd = new FormData();
-    fd.append("playlist", key);
     fd.append("title", title || "Untitled");
-    fd.append("locked", String(locked));
-    if (file) fd.append("file", file);
-    if (url) fd.append("url", url.trim());
+    if (file) fd.append("file", file);   // your server accepts file|video|upload
+    else fd.append("url", url);
 
     try {
       setBusy(true);
-      log("UPLOAD /videos/items", { playlist: key, hasFile: !!file, url: url.trim() || "(none)" });
-      await upload("/videos/items", fd);
+      log("POST /videos/items", { playlist: key, hasFile: !!file, url: url || "(none)" });
+      fd.append("playlist", key); // routes support /videos/items with playlist in body
+      await upload("/videos/items", fd, { headers: authHeaders() });
       setTitle("");
       setFile(null);
       setUrl("");
-      setLocked(true);
       await load();
     } catch (err) {
       warn(" upload failed:", err);
-      alert("Upload failed: " + (err?.message || err));
-    } finally {
-      setBusy(false);
-    }
-  }
-
-  // delete a video item
-  async function deleteItem(itemId) {
-    if (!itemId) return;
-    if (!confirm("Delete this video?")) return;
-    try {
-      setBusy(true);
-      log(`DELETE /videos/items/${itemId}`);
-      await delJSON(`/videos/items/${encodeURIComponent(itemId)}`);
-      await load();
-    } catch (err) {
-      warn(" delete item failed:", err);
-      alert("Delete failed: " + (err?.message || err));
+      alert("Upload failed");
     } finally {
       setBusy(false);
     }
   }
 
   return (
-    <section className="space-y-4">
-      <h3 className="font-semibold text-lg">Manage Videos</h3>
-
+    <div className="space-y-4">
       {/* Create playlist */}
       <div className="flex gap-2">
         <input
@@ -171,7 +169,9 @@ export default function AdminVideoEditor() {
               >
                 <div>
                   <div className="font-medium">{p.name}</div>
-                  <div className="text-xs text-gray-500">{(p.items?.length ?? 0)} items</div>
+                  <div className="text-xs text-gray-500">
+                    {(p.items?.length ?? 0)} items
+                  </div>
                 </div>
                 <button
                   className="text-red-600 text-sm"
@@ -186,7 +186,9 @@ export default function AdminVideoEditor() {
               </div>
             );
           })}
-          {playlists.length === 0 && <div className="text-gray-400">No playlists yet</div>}
+          {playlists.length === 0 && (
+            <div className="text-gray-400">No playlists yet</div>
+          )}
         </div>
 
         {/* Upload to selected */}
@@ -216,21 +218,12 @@ export default function AdminVideoEditor() {
               Selected key: <code>{selected._id || selected.id || selected.name}</code>
             </div>
           )}
-          <label className="flex items-center gap-2 text-sm">
-            <input
-              type="checkbox"
-              checked={locked}
-              onChange={(e) => setLocked(e.target.checked)}
-              disabled={busy}
-            />
-            Locked (requires access)
-          </label>
           <button
             type="submit"
-            className="bg-blue-600 text-white px-3 rounded disabled:opacity-60"
+            className="bg-black text-white px-3 rounded disabled:opacity-60"
             disabled={busy || !sel}
           >
-            {busy ? "Uploading…" : "Upload"}
+            Upload
           </button>
         </form>
       </div>
@@ -242,7 +235,9 @@ export default function AdminVideoEditor() {
             <h4 className="font-semibold">Items in “{selected.name}”</h4>
             <button
               className="text-red-600 text-sm"
-              onClick={() => deletePlaylist(selected._id || selected.id || selected.name)}
+              onClick={() =>
+                deletePlaylist(selected._id || selected.id || selected.name)
+              }
               disabled={busy}
             >
               Delete Playlist
@@ -252,17 +247,8 @@ export default function AdminVideoEditor() {
           <ul className="space-y-2">
             {(selected.items || []).map((it) => (
               <li key={it._id || it.id} className="border rounded p-2">
-                <div className="font-medium">{it.title} {it.locked ? "🔒" : "🔓"}</div>
+                <div className="font-medium">{it.title}</div>
                 <div className="text-xs text-gray-500 break-all">{absUrl(it.url)}</div>
-                <div className="mt-2">
-                  <button
-                    className="text-red-600 text-xs border px-2 py-1 rounded"
-                    onClick={() => deleteItem(it._id || it.id)}
-                    disabled={busy}
-                  >
-                    Delete
-                  </button>
-                </div>
               </li>
             ))}
             {(selected.items?.length ?? 0) === 0 && (
@@ -272,7 +258,9 @@ export default function AdminVideoEditor() {
         </div>
       )}
 
-      {error && <div className="text-sm whitespace-pre-wrap text-red-600">{error}</div>}
-    </section>
+      {error && (
+        <div className="text-sm whitespace-pre-wrap text-red-600">{error}</div>
+      )}
+    </div>
   );
 }
