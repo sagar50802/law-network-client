@@ -129,6 +129,7 @@ export default function Podcast() {
   };
 
   useEffect(() => {
+    console.log("[Podcast page] loading playlists…");
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -576,17 +577,18 @@ export default function Podcast() {
 
             {/* Premium dark player */}
             <div className="rounded-2xl p-4 bg-[#121212] text-white shadow-lg">
-               {/* ✅ updated here */}
-<audio
-  ref={audioRef}
-  src={absUrl(track.url)}
-  preload="metadata"
-  controls={false}
-  controlsList="nodownload noplaybackrate"
-  className="sr-only"
-  onContextMenu={(e) => e.preventDefault()}
-/>
-
+              {/* Hidden native audio element used by the custom controls */}
+              <audio
+                ref={audioRef}
+                src={absUrl(track.url)}
+                preload="metadata"
+                controls={false}
+                controlsList="nodownload noplaybackrate"
+                className="sr-only"
+                onPlay={() => console.log("[Podcast] playing:", track.title, absUrl(track.url))}
+                onPause={() => console.log("[Podcast] paused:", track.title)}
+                onContextMenu={(e) => e.preventDefault()}
+              />
 
               <div className="flex items-center gap-4">
                 {/* Cover/placeholder */}
