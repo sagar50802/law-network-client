@@ -29,7 +29,8 @@ export default function AdminPodcastEditor() {
   async function load() {
     try {
       setError("");
-      const r = await getJSON("/api/podcasts", { headers: authHeaders() });
+      // ✅ no /api prefix; helpers add it
+      const r = await getJSON("/podcasts", { headers: authHeaders() });
       const arr = normalize(r);
       setPlaylists(arr);
       if (arr.length) {
@@ -53,7 +54,7 @@ export default function AdminPodcastEditor() {
 
   const selected = playlists.find((p) => (p._id || p.id || p.name) === sel);
 
-  // ✅ create playlist – fixed Content-Type and /api path
+  // ✅ create playlist
   async function addPlaylist() {
     const name = newName.trim();
     if (!name) return;
@@ -83,11 +84,11 @@ export default function AdminPodcastEditor() {
 
     setBusy(true);
     try {
-      await deleteJSON(`/api/podcasts/playlists/${encodeURIComponent(id)}`, {
+      await deleteJSON(`/podcasts/playlists/${encodeURIComponent(id)}`, {
         headers: authHeaders(),
       });
     } catch {
-      await deleteJSON(`/api/podcasts/${encodeURIComponent(id)}`, {
+      await deleteJSON(`/podcasts/${encodeURIComponent(id)}`, {
         headers: authHeaders(),
       });
     } finally {
@@ -113,9 +114,11 @@ export default function AdminPodcastEditor() {
 
     try {
       setBusy(true);
-      await upload(`/api/podcasts/playlists/${encodeURIComponent(key)}/items`, fd, {
-        headers: authHeaders(),
-      });
+      await upload(
+        `/podcasts/playlists/${encodeURIComponent(key)}/items`,
+        fd,
+        { headers: authHeaders() }
+      );
       setTitle("");
       setFile(null);
       setUrl("");
