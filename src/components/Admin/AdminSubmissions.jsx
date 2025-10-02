@@ -5,7 +5,6 @@ import {
   postJSON,
   deleteJSON,
   absUrl,
-  authHeaders, // ✅ needed for admin GETs
 } from "../../utils/api";
 import useAccessSync from "../../hooks/useAccessSync";
 import AccessTimer from "../common/AccessTimer";
@@ -31,8 +30,7 @@ export default function AdminSubmissions() {
 
   async function load() {
     try {
-      // ✅ send admin header on GET
-      const r = await getJSON("/submissions", { headers: authHeaders() });
+      const r = await getJSON("/submissions");
       const arr = normalize(r);
       setItems(arr);
 
@@ -63,10 +61,7 @@ export default function AdminSubmissions() {
   useEffect(() => {
     (async () => {
       try {
-        // ✅ send admin header on GET
-        const r = await getJSON("/submissions/auto-mode", {
-          headers: authHeaders(),
-        });
+        const r = await getJSON("/submissions/auto-mode");
         if (r?.success) setAutoApprove(!!r.auto);
       } catch {}
       await load();
@@ -77,7 +72,6 @@ export default function AdminSubmissions() {
   useEffect(() => {
     (async () => {
       try {
-        // POST already sends X-Owner-Key via postJSON
         await postJSON("/submissions/auto-mode", { auto: !!autoApprove });
       } catch {}
     })();
@@ -99,7 +93,6 @@ export default function AdminSubmissions() {
   async function approveOne(sub, seconds, isAuto = false) {
     const id = sub._id || sub.id;
     try {
-      // POST already attaches admin header
       await postJSON(`/submissions/${id}/approve`, { seconds });
 
       // broadcast immediate event
@@ -393,7 +386,7 @@ export default function AdminSubmissions() {
                 </tr>
               );
             })}
-            {(filtered.length === 0) && (
+            {filtered.length === 0 && (
               <tr>
                 <td colSpan={10} className="px-3 py-6 text-center text-gray-400">
                   No submissions
