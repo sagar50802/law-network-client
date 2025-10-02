@@ -1,6 +1,11 @@
-// client/src/components/Admin/QREditor.jsx
 import { useEffect, useState } from "react";
-import { getJSON, upload, delJSON, authHeaders, absUrl } from "../../utils/api";
+import {
+  getJSON,
+  upload,
+  delJSON,
+  authHeaders,
+  API_ORIGIN, // ✅ use backend origin directly
+} from "../../utils/api";
 import IfOwnerOnly from "../common/IfOwnerOnly";
 
 export default function QREditor() {
@@ -12,19 +17,23 @@ export default function QREditor() {
   const ownerKey = localStorage.getItem("ownerKey");
 
   async function load() {
-    const r = await getJSON("/api/qr");
-    if (r?.success) {
-      setCfg(r.qr);
-      setForm({
-        currency: r.qr.currency || "₹",
-        weeklyLabel: r.qr.plans.weekly.label,
-        weeklyPrice: r.qr.plans.weekly.price,
-        monthlyLabel: r.qr.plans.monthly.label,
-        monthlyPrice: r.qr.plans.monthly.price,
-        yearlyLabel: r.qr.plans.yearly.label,
-        yearlyPrice: r.qr.plans.yearly.price,
-        image: null,
-      });
+    try {
+      const r = await getJSON("/api/qr");
+      if (r?.success) {
+        setCfg(r.qr);
+        setForm({
+          currency: r.qr.currency || "₹",
+          weeklyLabel: r.qr.plans.weekly.label,
+          weeklyPrice: r.qr.plans.weekly.price,
+          monthlyLabel: r.qr.plans.monthly.label,
+          monthlyPrice: r.qr.plans.monthly.price,
+          yearlyLabel: r.qr.plans.yearly.label,
+          yearlyPrice: r.qr.plans.yearly.price,
+          image: null,
+        });
+      }
+    } catch (e) {
+      console.error("Failed to load QR config:", e);
     }
   }
 
@@ -35,9 +44,7 @@ export default function QREditor() {
   async function save(e) {
     e.preventDefault();
     if (!ownerKey) {
-      alert(
-        "⚠️ No ownerKey found in localStorage.\nRun in console:\nlocalStorage.setItem('ownerKey', 'LAWNOWNER2025')"
-      );
+      alert("⚠️ No ownerKey found in localStorage.\nRun in console:\nlocalStorage.setItem('ownerKey', 'LAWNOWNER2025')");
       return;
     }
     setBusy(true);
@@ -90,7 +97,7 @@ export default function QREditor() {
             <div className="w-64 h-64 border rounded-xl overflow-hidden bg-gray-50">
               {cfg.url ? (
                 <img
-                  src={`${absUrl(cfg.url)}?t=${uploadTime}`} // ✅ use absUrl here
+                  src={`${API_ORIGIN}${cfg.url}?t=${uploadTime}`} // ✅ force backend origin
                   alt="QR"
                   className="w-full h-full object-contain"
                 />
@@ -118,16 +125,13 @@ export default function QREditor() {
               <p className="font-semibold mb-1">Current Plans:</p>
               <ul className="list-disc pl-4">
                 <li>
-                  {cfg.plans.weekly?.label} – {cfg.currency}
-                  {cfg.plans.weekly?.price}
+                  {cfg.plans.weekly?.label} – {cfg.currency}{cfg.plans.weekly?.price}
                 </li>
                 <li>
-                  {cfg.plans.monthly?.label} – {cfg.currency}
-                  {cfg.plans.monthly?.price}
+                  {cfg.plans.monthly?.label} – {cfg.currency}{cfg.plans.monthly?.price}
                 </li>
                 <li>
-                  {cfg.plans.yearly?.label} – {cfg.currency}
-                  {cfg.plans.yearly?.price}
+                  {cfg.plans.yearly?.label} – {cfg.currency}{cfg.plans.yearly?.price}
                 </li>
               </ul>
             </div>
@@ -139,9 +143,7 @@ export default function QREditor() {
             <input
               className="border rounded p-2 w-24"
               value={form.currency}
-              onChange={(e) =>
-                setForm((s) => ({ ...s, currency: e.target.value }))
-              }
+              onChange={(e) => setForm((s) => ({ ...s, currency: e.target.value }))}
             />
 
             <label>Weekly Plan</label>
@@ -149,18 +151,14 @@ export default function QREditor() {
               className="border rounded p-2"
               value={form.weeklyLabel}
               placeholder="Weekly Label"
-              onChange={(e) =>
-                setForm((s) => ({ ...s, weeklyLabel: e.target.value }))
-              }
+              onChange={(e) => setForm((s) => ({ ...s, weeklyLabel: e.target.value }))}
             />
             <input
               className="border rounded p-2"
               type="number"
               value={form.weeklyPrice}
               placeholder="Weekly Price"
-              onChange={(e) =>
-                setForm((s) => ({ ...s, weeklyPrice: e.target.value }))
-              }
+              onChange={(e) => setForm((s) => ({ ...s, weeklyPrice: e.target.value }))}
             />
 
             <label>Monthly Plan</label>
@@ -168,18 +166,14 @@ export default function QREditor() {
               className="border rounded p-2"
               value={form.monthlyLabel}
               placeholder="Monthly Label"
-              onChange={(e) =>
-                setForm((s) => ({ ...s, monthlyLabel: e.target.value }))
-              }
+              onChange={(e) => setForm((s) => ({ ...s, monthlyLabel: e.target.value }))}
             />
             <input
               className="border rounded p-2"
               type="number"
               value={form.monthlyPrice}
               placeholder="Monthly Price"
-              onChange={(e) =>
-                setForm((s) => ({ ...s, monthlyPrice: e.target.value }))
-              }
+              onChange={(e) => setForm((s) => ({ ...s, monthlyPrice: e.target.value }))}
             />
 
             <label>Yearly Plan</label>
@@ -187,30 +181,21 @@ export default function QREditor() {
               className="border rounded p-2"
               value={form.yearlyLabel}
               placeholder="Yearly Label"
-              onChange={(e) =>
-                setForm((s) => ({ ...s, yearlyLabel: e.target.value }))
-              }
+              onChange={(e) => setForm((s) => ({ ...s, yearlyLabel: e.target.value }))}
             />
             <input
               className="border rounded p-2"
               type="number"
               value={form.yearlyPrice}
               placeholder="Yearly Price"
-              onChange={(e) =>
-                setForm((s) => ({ ...s, yearlyPrice: e.target.value }))
-              }
+              onChange={(e) => setForm((s) => ({ ...s, yearlyPrice: e.target.value }))}
             />
 
             <label>QR Image</label>
             <input
               type="file"
               accept="image/*"
-              onChange={(e) =>
-                setForm((s) => ({
-                  ...s,
-                  image: e.target.files?.[0] || null,
-                }))
-              }
+              onChange={(e) => setForm((s) => ({ ...s, image: e.target.files?.[0] || null }))}
             />
 
             <button
