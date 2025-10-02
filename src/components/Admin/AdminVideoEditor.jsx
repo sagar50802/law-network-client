@@ -1,5 +1,6 @@
+// client/src/components/Admin/AdminVideoEditor.jsx
 import { useEffect, useMemo, useState } from "react";
-import { getJSON, postJSON, upload, delJSON, absUrl, authHeaders } from "../../utils/api";
+import { getJSON, upload, delJSON, absUrl, authHeaders } from "../../utils/api";
 
 export default function AdminVideoEditor() {
   const [playlists, setPlaylists] = useState([]);
@@ -12,9 +13,6 @@ export default function AdminVideoEditor() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
-  const log  = (...a) => console.log("[AdminVideos]", ...a);
-  const warn = (...a) => console.warn("[AdminVideos]", ...a);
-
   const normalize = (r) => {
     if (Array.isArray(r)) return r;
     if (Array.isArray(r?.playlists)) return r.playlists;
@@ -23,11 +21,14 @@ export default function AdminVideoEditor() {
     return [];
   };
 
+  function log(...a) { console.log("[AdminVideo]", ...a); }
+  function warn(...a) { console.warn("[AdminVideo]", ...a); }
+
   async function load() {
     try {
       setError("");
       log("GET /api/videos");
-      const r = await getJSON("/api/videos", { headers: authHeaders() });
+      const r = await getJSON("/api/videos", { headers: authHeaders() }); // ✅ ensure /api
       log(" response:", r);
       const arr = normalize(r);
       setPlaylists(arr);
@@ -38,7 +39,7 @@ export default function AdminVideoEditor() {
         );
       } else setSel("");
     } catch (e) {
-      warn(e);
+      warn(" load failed:", e);
       setError("Failed to load video playlists");
       setPlaylists([]);
       setSel("");
@@ -51,44 +52,52 @@ export default function AdminVideoEditor() {
     [playlists, sel]
   );
 
-  // create playlist
+  // --- FIXED: send JSON with Content-Type ---
   async function addPlaylist() {
     const name = newName.trim();
     if (!name) return;
     try {
       setBusy(true);
       log("POST /api/videos/playlists", { name });
-      await postJSON("/api/videos/playlists", { name }, { headers: authHeaders() });
+      const r = await fetch("/api/videos/playlists", {
+        method: "POST",
+        headers: {
+          ...authHeaders(),
+          "Content-Type": "application/json", // ✅ REQUIRED
+        },
+        body: JSON.stringify({ name }),
+      });
+      if (!r.ok) throw new Error(`HTTP ${r.status} ${r.statusText}`);
+      log(" response:", await r.json().catch(() => ({})));
       setNewName("");
       await load();
     } catch (err) {
-      warn("Create playlist failed:", err);
+      warn(" create failed:", err);
       alert("Create playlist failed: " + (err?.message || err));
     } finally {
       setBusy(false);
     }
   }
 
-  // delete playlist
   async function deletePlaylist(id) {
     if (!id) return;
     if (!confirm("Delete this playlist and all its videos?")) return;
 
     setBusy(true);
     try {
-      log(`DELETE /api/videos/${id}`);
-      await delJSON(`/api/videos/${encodeURIComponent(id)}`, { headers: authHeaders() });
-    } catch {
-      log(`DELETE /api/videos/playlists/${id}`);
-      await delJSON(`/api/videos/playlists/${encodeURIComponent(id)}`, { headers: authHeaders() });
+      log(`DELETE /api/videos/${encodeURIComponent(id)}`);
+      try {
+        await delJSON(`/api/videos/${encodeURIComponent(id)}`, { headers: authHeaders() });
+      } catch {
+        await delJSON(`/api/videos/playlists/${encodeURIComponent(id)}`, { headers: authHeaders() });
+      }
+      await load();
     } finally {
       setBusy(false);
     }
     if (sel === id) setSel("");
-    await load();
   }
 
-  // upload video
   async function uploadVideo(e) {
     e?.preventDefault?.();
     const key = selected?._id || selected?.id || selected?.name || sel;
@@ -103,14 +112,15 @@ export default function AdminVideoEditor() {
 
     try {
       setBusy(true);
-      log("UPLOAD /api/videos/items", { key, hasFile: !!file, hasUrl: !!url });
-      await upload("/api/videos/items", fd, { headers: authHeaders() });
+      log("UPLOAD /api/videos/items", { playlist: key, hasFile: !!file, hasUrl: !!url });
+      const r = await upload("/api/videos/items", fd, { headers: authHeaders() });
+      log(" response:", r);
       setTitle("");
       setFile(null);
       setUrl("");
       await load();
     } catch (err) {
-      warn("Upload failed:", err);
+      warn(" upload failed:", err);
       alert("Upload failed: " + (err?.message || err));
     } finally {
       setBusy(false);
