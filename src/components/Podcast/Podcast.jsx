@@ -26,14 +26,17 @@ export default function Podcast() {
 
   const [email] = useState(() => localStorage.getItem("userEmail") || "");
 
+  // ✅ MISSING BEFORE — added now:
+  const [newPlName, setNewPlName] = useState(""); // <— admin “New playlist name” input
+
   // live events
   useSubmissionStream(email);
 
   const pendingEventsRef = useRef([]);
 
-  // Remember if preview already consumed per-playlist (locks replay until unlocked)
-  const previewConsumedRef = useRef({}); // { [playlistId]: true }
-  const [previewTick, setPreviewTick] = useState(0); // force audio re-key when state flips
+  // Remember if preview already consumed per-playlist
+  const previewConsumedRef = useRef({});
+  const [previewTick, setPreviewTick] = useState(0);
 
   /* ---------------- helpers ---------------- */
   const resolvePlaylistId = (featureId) => {
@@ -221,19 +224,16 @@ export default function Podcast() {
     return () => clearTimeout(t);
   }, [accessMap]);
 
-  // your preview lock (kept for count display)
   const lock = usePreviewLock({
     type: "podcast",
     id: track?.id || "none",
     previewSeconds: PREVIEW_SEC,
   });
 
-  // unlocked status for current playlist
   const plAccess = accessMap[pid];
   const unlocked = !!(plAccess?.expiry && plAccess.expiry > Date.now());
   const previewConsumed = !!previewConsumedRef.current[pid];
 
-  // PROXIED audio src for any absolute (https) URL
   const audioSrc = useMemo(() => {
     const u = String(track?.url || "");
     if (!u) return "";
@@ -243,10 +243,8 @@ export default function Podcast() {
     return absUrl(u);
   }, [track?.url]);
 
-  /* ------------------- PREVIEW ENFORCEMENT ------------------- */
   const openOverlay = () => {
     const currentPl = playlists.find((x) => x.id === pid);
-    // use microtask to ensure state flush before blur applies
     setTimeout(() => setPlaylistOverlay(currentPl || null), 0);
   };
 
@@ -258,17 +256,15 @@ export default function Podcast() {
         el && (el.currentTime = 0);
       } catch {}
       openOverlay();
-      return true; // blocked
+      return true;
     }
     return false;
   };
 
-  // time-based hard stop + immediate overlay
   useEffect(() => {
     const el = audioRef.current;
     if (!el) return;
 
-    // reset on track change
     try {
       el.currentTime = 0;
       el.pause();
@@ -278,7 +274,6 @@ export default function Podcast() {
 
     const onTimeUpdate = () => {
       if (unlocked || fired) return;
-      // hit slightly before 10s to avoid timer granularity misses
       if (el.currentTime >= PREVIEW_SEC - 0.05) {
         fired = true;
         try {
@@ -309,7 +304,7 @@ export default function Podcast() {
     };
   }, [pid, track?.id, unlocked]);
 
-  /* -------- Spotify-like premium player state -------- */
+  /* -------- player state -------- */
   const [isPlaying, setIsPlaying] = useState(false);
   const [cur, setCur] = useState(0);
   const [dur, setDur] = useState(0);
@@ -359,7 +354,6 @@ export default function Podcast() {
   const togglePlay = async () => {
     const el = audioRef.current;
     if (!el) return;
-
     if (guardAndOpen()) return;
 
     if (isPlaying) el.pause();
@@ -373,7 +367,6 @@ export default function Podcast() {
   const seekToPct = (pct) => {
     const el = audioRef.current;
     if (!el || !isFinite(dur)) return;
-
     if (guardAndOpen()) return;
 
     const t = Math.max(0, Math.min(1, pct)) * dur;
@@ -564,7 +557,6 @@ export default function Podcast() {
           playlistOverlay ? "blur-sm opacity-80 pointer-events-none" : ""
         }`}
       >
-        {/* 🎉 Congrats toast */}
         {grantToast && (
           <div className="absolute top-3 right-3 z-20 bg-green-600 text-white text-sm px-3 py-2 rounded-lg shadow">
             {grantToast}
@@ -600,7 +592,6 @@ export default function Podcast() {
 
             {/* Premium dark player */}
             <div className="rounded-2xl p-4 bg-[#121212] text-white shadow-lg">
-              {/* Hidden native audio element used by the custom controls */}
               <audio
                 key={track.id + ":" + previewTick}
                 ref={audioRef}
@@ -613,14 +604,12 @@ export default function Podcast() {
               />
 
               <div className="flex items-center gap-4">
-                {/* Cover/placeholder */}
                 <div className="w-16 h-16 rounded-md bg-gradient-to-br from-gray-600 to-gray-800 flex items-center justify-center shrink-0 overflow-hidden">
                   <span className="text-xs uppercase tracking-wider opacity-80">
                     {track?.title?.slice(0, 3) || "Pod"}
                   </span>
                 </div>
 
-                {/* Controls + progress */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-3 mb-3">
                     <button
@@ -679,7 +668,6 @@ export default function Podcast() {
                       </svg>
                     </button>
 
-                    {/* Volume */}
                     <div className="ml-2 hidden sm:flex items-center gap-2">
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
                         <path d="M5 10v4h3l4 3V7L8 10H5z" />
@@ -696,7 +684,6 @@ export default function Podcast() {
                     </div>
                   </div>
 
-                  {/* Progress */}
                   <div className="flex items-center gap-3 select-none">
                     <span className="text-xs tabular-nums text-white/70 w-10 text-right">
                       {mmss(cur)}
@@ -749,7 +736,6 @@ export default function Podcast() {
               </div>
             </div>
 
-            {/* Admin controls (for current track) */}
             <IfOwnerOnly>
               <div className="mt-3 flex gap-2">
                 <button
@@ -783,12 +769,10 @@ export default function Podcast() {
         )}
       </div>
 
-      {/* Overlay OUTSIDE the blurred panel so it stays crisp */}
       {playlistOverlay && (
         <QROverlay
           open={!!playlistOverlay}
           onClose={() => {
-            // keep previewConsumed as-is; closing overlay must not allow play
             setPlaylistOverlay(null);
           }}
           title={playlistOverlay.name}
