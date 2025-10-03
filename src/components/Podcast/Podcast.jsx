@@ -118,7 +118,11 @@ export default function Podcast() {
   const load = async () => {
     setAccessLoading(true);
     const r = await getJSON("/podcasts");
-    const pls = r.playlists || [];
+    // 🔧 normalize id so client code always has `id` (even if server sends only `_id`)
+    const pls = (r.playlists || []).map((p) => ({
+      ...p,
+      id: p.id || p._id || p.slug || p.name, // fallbacks just in case
+    }));
     setPlaylists(pls);
     if (!pid && pls[0]) setPid(pls[0].id);
 
@@ -216,7 +220,7 @@ export default function Podcast() {
     previewSeconds: 10,
   });
 
-  // enforce 10s preview
+  // enforce 10s preview + auto QR overlay
   useEffect(() => {
     const el = audioRef.current;
     if (!el) return;
@@ -262,7 +266,7 @@ export default function Podcast() {
 
   const createPlaylist = async (e) => {
     e.preventDefault();
-     await fetch(`${API_BASE}/podcasts/playlists`, {
+    await fetch(`${API_BASE}/podcasts/playlists`, {
       method: "POST",
       headers: { ...authHeaders(), "Content-Type": "application/json" },
       body: JSON.stringify({ name: newPlName || "New Playlist" }),
@@ -288,8 +292,9 @@ export default function Podcast() {
     await load();
   };
 
+  // 🔧 remove extra '/api' in both calls below
   const delItem = async (iid) => {
-    await fetch(`${API_BASE}/api/podcasts/playlists/${pid}/items/${iid}`, {
+    await fetch(`${API_BASE}/podcasts/playlists/${pid}/items/${iid}`, {
       method: "DELETE",
       headers: authHeaders(),
     });
@@ -297,7 +302,7 @@ export default function Podcast() {
   };
 
   const toggleLock = async (iid, newState) => {
-    await fetch(`${API_BASE}/api/podcasts/playlists/${pid}/items/${iid}/lock`, {
+    await fetch(`${API_BASE}/podcasts/playlists/${pid}/items/${iid}/lock`, {
       method: "PATCH",
       headers: { ...authHeaders(), "Content-Type": "application/json" },
       body: JSON.stringify({ locked: newState }),
