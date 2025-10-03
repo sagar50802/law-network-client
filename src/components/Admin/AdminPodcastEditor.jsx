@@ -34,20 +34,23 @@ export default function AdminPodcastEditor() {
   );
 
   const normalize = (r) => {
-    const arr =
-      (Array.isArray(r) && r) ||
-      (Array.isArray(r?.playlists) && r.playlists) ||
-      (Array.isArray(r?.items) && r.items) ||
-      (Array.isArray(r?.data) && r.data) ||
-      [];
+    if (Array.isArray(r)) return r;
+    if (Array.isArray(r?.playlists)) return r.playlists;
+    if (Array.isArray(r?.items)) return r.items;
+    if (Array.isArray(r?.data)) return r.data;
+    return [];
+  };
 
-    // Ensure each playlist has a stable `id` for the UI
-    return arr.map((p) => ({
-      ...p,
-      id: p.id || p._id, // prefer id, fallback to _id
-      name: p.name || p.title || "Untitled", // safety; server now sets name correctly
-      items: Array.isArray(p.items) ? p.items : [],
-    }));
+  // Extract owner key from the same place your app normally keeps it
+  const ownerQuery = () => {
+    const h = authHeaders() || {};
+    const headerKey = h["X-Owner-Key"] || h["x-owner-key"] || "";
+    const bearer =
+      typeof h.Authorization === "string" && h.Authorization.startsWith("Bearer ")
+        ? h.Authorization.slice(7)
+        : "";
+    const key = headerKey || bearer || "";
+    return key ? `?owner=${encodeURIComponent(key)}` : "";
   };
 
   /* ---------------- load ---------------- */
@@ -59,11 +62,10 @@ export default function AdminPodcastEditor() {
       log(" response:", r);
       const arr = normalize(r);
       setPlaylists(arr);
-
       // auto select same or first
       if (arr.length) {
         const keep = arr.find((p) => (p._id || p.id) === sel);
-        setSel(keep ? (keep._id || keep.id) : arr[0].id || arr[0]._id);
+        setSel(keep ? (keep._id || keep.id) : (arr[0]._id || arr[0].id));
       } else {
         setSel("");
       }
@@ -82,12 +84,13 @@ export default function AdminPodcastEditor() {
   /* ---------------- create/delete playlist ---------------- */
   async function addPlaylist() {
     const name = newName.trim();
-    if (!name) return; // UI already disables, but double-safety
+    if (!name) return;
     setBusy(true);
     try {
-      log("POST /podcasts/playlists", { name });
-      // Send JSON { name } — backend getName() accepts name/playlistName
-      await postJSON("/podcasts/playlists", { name }, { headers: authHeaders() });
+      const h = authHeaders();
+      const urlWithKey = `/podcasts/playlists${ownerQuery()}`;
+      log("POST", urlWithKey, { name });
+      await postJSON(urlWithKey, { name }, { headers: h });
       setNewName("");
       await load();
     } catch (e) {
@@ -103,10 +106,9 @@ export default function AdminPodcastEditor() {
     if (!confirm("Delete this playlist and all its podcasts?")) return;
     setBusy(true);
     try {
-      log(`DELETE /podcasts/playlists/${id}`);
-      await deleteJSON(`/podcasts/playlists/${encodeURIComponent(id)}`, {
-        headers: authHeaders(),
-      });
+      const urlWithKey = `/podcasts/playlists/${encodeURIComponent(id)}${ownerQuery()}`;
+      log("DELETE", urlWithKey);
+      await deleteJSON(urlWithKey, { headers: authHeaders() });
     } catch (e) {
       warn(" delete failed:", e);
       alert("Delete playlist failed");
@@ -120,24 +122,24 @@ export default function AdminPodcastEditor() {
   /* ---------------- upload item (audio or url) ---------------- */
   async function uploadItem(e) {
     e?.preventDefault?.();
-    const key = selected?._id || selected?.id || sel;
-    if (!key) return alert("Select a playlist first");
+    const plId = selected?._id || selected?.id || sel;
+    if (!plId) return alert("Select a playlist first");
     if (!file && !url.trim()) return alert("Choose a file or paste a direct audio URL");
 
     const fd = new FormData();
     fd.append("title", title || "Untitled");
     fd.append("artist", artist || "");
     fd.append("locked", locked ? "true" : "false");
-    if (file) fd.append("audio", file); // field name must be "audio"
+    if (file) fd.append("audio", file); // always "audio"
     if (url.trim()) fd.append("url", url.trim());
 
     setBusy(true);
     try {
-      log(`UPLOAD /podcasts/playlists/${key}/items`);
-      await upload(`/podcasts/playlists/${encodeURIComponent(key)}/items`, fd, {
+      const urlWithKey = `/podcasts/playlists/${encodeURIComponent(plId)}/items${ownerQuery()}`;
+      log("UPLOAD", urlWithKey);
+      await upload(urlWithKey, fd, {
         headers: authHeaders(),
       });
-      log(" success");
       // reset
       setTitle("");
       setArtist("");
@@ -156,15 +158,15 @@ export default function AdminPodcastEditor() {
   /* ---------------- delete individual item ---------------- */
   async function removeItem(iid) {
     if (!confirm("Delete this audio item?")) return;
-    const key = selected?._id || selected?.id || sel;
-    if (!key || !iid) return;
+    const plId = selected?._id || selected?.id || sel;
+    if (!plId || !iid) return;
     setBusy(true);
     try {
-      log(`DELETE /podcasts/playlists/${key}/items/${iid}`);
-      await deleteJSON(
-        `/podcasts/playlists/${encodeURIComponent(key)}/items/${encodeURIComponent(iid)}`,
-        { headers: authHeaders() }
-      );
+      const urlWithKey = `/podcasts/playlists/${encodeURIComponent(
+        plId
+      )}/items/${encodeURIComponent(iid)}${ownerQuery()}`;
+      log("DELETE", urlWithKey);
+      await deleteJSON(urlWithKey, { headers: authHeaders() });
     } catch (e) {
       warn(" delete item failed:", e);
     } finally {
