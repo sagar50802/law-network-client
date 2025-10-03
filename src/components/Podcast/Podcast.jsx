@@ -9,6 +9,9 @@ import AccessTimer from "../common/AccessTimer";
 import useAccessSync from "../../hooks/useAccessSync";
 import useSubmissionStream from "../../hooks/useSubmissionStream";
 
+const PREVIEW_SECONDS = 10;
+const EPS = 0.06; // ~ one timeupdate tick safety
+
 export default function Podcast() {
   const [playlists, setPlaylists] = useState([]);
   const [pid, setPid] = useState(null);
@@ -22,6 +25,7 @@ export default function Podcast() {
   const panelRef = useRef(null);
   const audioRef = useRef(null);
   const [playlistOverlay, setPlaylistOverlay] = useState(null);
+  const overlayShownRef = useRef(false); // prevents re-opening multiple times per playback
 
   const [email] = useState(() => localStorage.getItem("userEmail") || "");
 
@@ -92,6 +96,7 @@ export default function Podcast() {
     setGrantToast(message || `🎉 Congratulations ${name}! Your access has been unlocked.`);
     setTimeout(() => setGrantToast(null), 4500);
 
+    // try to resume playback if user was previewing
     if (pid && String(pid) === String(normalizedId)) {
       try {
         await audioRef.current?.play?.();
@@ -118,10 +123,7 @@ export default function Podcast() {
   const load = async () => {
     setAccessLoading(true);
     const r = await getJSON("/podcasts");
-    const pls = (r.playlists || []).map((p) => ({
-      ...p,
-      id: String(p.id || p._id), // normalize just in case
-    }));
+    const pls = r.playlists || [];
     setPlaylists(pls);
     if (!pid && pls[0]) setPid(pls[0].id);
 
@@ -132,7 +134,6 @@ export default function Podcast() {
   };
 
   useEffect(() => {
-    console.log("[Podcast page] loading playlists…");
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
@@ -212,69 +213,90 @@ export default function Podcast() {
     return () => clearTimeout(t);
   }, [accessMap]);
 
-  // 10s preview lock
+  // 10s preview lock (only used for label/remaining seconds)
   const lock = usePreviewLock({
     type: "podcast",
     id: track?.id || "none",
-    previewSeconds: 10,
+    previewSeconds: PREVIEW_SECONDS,
   });
 
-  // enforce 10s preview
+  // ---------- Preview enforcement ----------
+  const hasAccess = !!(pid && accessMap[pid]?.expiry && accessMap[pid].expiry > Date.now());
+
+  const openOverlay = () => {
+    if (overlayShownRef.current) return;
+    const currentPl = playlists.find((x) => x.id === pid);
+    overlayShownRef.current = true;
+    setPlaylistOverlay(currentPl || null);
+  };
+
+  const enforcePreviewBoundary = () => {
+    const el = audioRef.current;
+    if (!el || hasAccess) return;
+    if (el.currentTime >= PREVIEW_SECONDS - EPS) {
+      el.currentTime = PREVIEW_SECONDS; // snap exactly to boundary
+      el.pause();
+      openOverlay();
+    }
+  };
+
+  // Reset ONLY when the track actually changes
+  useEffect(() => {
+    const el = audioRef.current;
+    if (!el) return;
+    overlayShownRef.current = false;
+    try {
+      el.pause();
+      el.currentTime = 0;
+    } catch {}
+  }, [track?.id]);
+
+  // Attach listeners for boundary enforcement
   useEffect(() => {
     const el = audioRef.current;
     if (!el) return;
 
-    el.currentTime = 0;
-    el.pause();
-
-    let overlayOpenedForThisPlayback = false;
-
-    const onTimeUpdate = () => {
-      const plAccess = accessMap[pid];
-      if (plAccess?.expiry && plAccess.expiry > Date.now()) return;
-      if (!lock.unlocked && el.currentTime >= 10 && !overlayOpenedForThisPlayback) {
-        el.pause();
-        const currentPl = playlists.find((x) => x.id === pid);
-        setPlaylistOverlay(currentPl || null);
-        overlayOpenedForThisPlayback = true;
+    const onTimeUpdate = enforcePreviewBoundary;
+    const onSeeking = enforcePreviewBoundary;
+    const onRateChange = enforcePreviewBoundary;
+    const onPlay = () => {
+      // If trying to play after boundary while locked, block & open overlay
+      if (!hasAccess && el.currentTime >= PREVIEW_SECONDS - EPS) {
+        enforcePreviewBoundary();
+      } else {
+        overlayShownRef.current = false; // allow overlay once per new playback window
       }
     };
 
-    const onPlay = () => {
-      overlayOpenedForThisPlayback = false;
-    };
-
     el.addEventListener("timeupdate", onTimeUpdate);
+    el.addEventListener("seeking", onSeeking);
+    el.addEventListener("ratechange", onRateChange);
     el.addEventListener("play", onPlay);
     return () => {
       el.removeEventListener("timeupdate", onTimeUpdate);
+      el.removeEventListener("seeking", onSeeking);
+      el.removeEventListener("ratechange", onRateChange);
       el.removeEventListener("play", onPlay);
     };
-  }, [track?.id, lock.unlocked, pid, accessMap, playlists]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [pid, track?.id, hasAccess]);
 
   const pl = playlists.find((p) => p.id === pid);
 
-  /* ---------------- Admin actions ---------------- */
+  /* ---------------- Admin helpers (unchanged except base paths) ---------------- */
   const [newPlName, setNewPlName] = useState("");
-  const [form, setForm] = useState({
-    title: "",
-    artist: "",
-    audio: null,
-    locked: true,
-  });
+  const [form, setForm] = useState({ title: "", artist: "", audio: null, locked: true });
 
   const createPlaylist = async (e) => {
     e.preventDefault();
-    const res = await fetch(`${API_BASE}/podcasts/playlists`, {
+    const name = newPlName.trim();
+    if (!name) return;
+    const qs = new URLSearchParams({ name }).toString();
+    await fetch(`${API_BASE}/podcasts/playlists?${qs}`, {
       method: "POST",
       headers: { ...authHeaders(), "Content-Type": "application/json" },
-      body: JSON.stringify({ name: newPlName || "New Playlist" }),
+      body: JSON.stringify({ name, playlistName: name }),
     });
-    if (!res.ok) {
-      const txt = await res.text().catch(() => "");
-      alert(`Create playlist failed (${res.status}). ${txt}`);
-      return;
-    }
     setNewPlName("");
     await load();
   };
@@ -287,46 +309,33 @@ export default function Podcast() {
     fd.append("artist", form.artist || "");
     fd.append("locked", String(form.locked));
     fd.append("audio", form.audio);
-    const res = await fetch(`${API_BASE}/podcasts/playlists/${pid}/items`, {
+    await fetch(`${API_BASE}/podcasts/playlists/${pid}/items`, {
       method: "POST",
       headers: authHeaders(),
       body: fd,
     });
-    if (!res.ok) {
-      const txt = await res.text().catch(() => "");
-      alert(`Upload failed (${res.status}). ${txt}`);
-      return;
-    }
     setForm({ title: "", artist: "", audio: null, locked: true });
     await load();
   };
 
   const delItem = async (iid) => {
-    const res = await fetch(`${API_BASE}/podcasts/playlists/${pid}/items/${iid}`, {
+    await fetch(`${API_BASE}/podcasts/playlists/${pid}/items/${iid}`, {
       method: "DELETE",
       headers: authHeaders(),
     });
-    if (!res.ok) {
-      const txt = await res.text().catch(() => "");
-      alert(`Delete failed (${res.status}). ${txt}`);
-    }
     await load();
   };
 
   const toggleLock = async (iid, newState) => {
-    const res = await fetch(`${API_BASE}/podcasts/playlists/${pid}/items/${iid}/lock`, {
+    await fetch(`${API_BASE}/podcasts/playlists/${pid}/items/${iid}/lock`, {
       method: "PATCH",
       headers: { ...authHeaders(), "Content-Type": "application/json" },
       body: JSON.stringify({ locked: newState }),
     });
-    if (!res.ok) {
-      const txt = await res.text().catch(() => "");
-      alert(`Update lock failed (${res.status}). ${txt}`);
-    }
     await load();
   };
 
-  /* -------- Spotify-like premium player state -------- */
+  /* -------- Player state -------- */
   const [isPlaying, setIsPlaying] = useState(false);
   const [cur, setCur] = useState(0);
   const [dur, setDur] = useState(0);
@@ -338,7 +347,9 @@ export default function Podcast() {
     const el = audioRef.current;
     if (!el) return;
     const onLoaded = () => setDur(el.duration || 0);
-    const onTime = () => !seeking && setCur(el.currentTime || 0);
+    const onTime = () => {
+      if (!seeking) setCur(el.currentTime || 0);
+    };
     const onPlay = () => setIsPlaying(true);
     const onPause = () => setIsPlaying(false);
     const onVol = () => setVol(el.volume);
@@ -375,20 +386,35 @@ export default function Podcast() {
   const togglePlay = async () => {
     const el = audioRef.current;
     if (!el) return;
-    if (isPlaying) el.pause();
-    else {
-      try {
-        await el.play();
-      } catch {}
+    if (isPlaying) {
+      el.pause();
+      return;
     }
+    // Before playing, if locked and already at/over the boundary, show overlay
+    if (!hasAccess && el.currentTime >= PREVIEW_SECONDS - EPS) {
+      enforcePreviewBoundary();
+      return;
+    }
+    try {
+      await el.play();
+    } catch {
+      // ignore autoplay guard
+    }
+  };
+
+  const clampIfLocked = (t) => {
+    if (hasAccess) return t;
+    return Math.min(t, PREVIEW_SECONDS - EPS);
+    // keep just under the limit so timeupdate hit will pause at 10.0
   };
 
   const seekToPct = (pct) => {
     const el = audioRef.current;
     if (!el || !isFinite(dur)) return;
-    const t = Math.max(0, Math.min(1, pct)) * dur;
+    const t = clampIfLocked(Math.max(0, Math.min(1, pct)) * (dur || 0));
     el.currentTime = t;
     setCur(t);
+    enforcePreviewBoundary();
   };
 
   const onBarClick = (e) => {
@@ -404,7 +430,8 @@ export default function Podcast() {
       const clientX = ev.touches ? ev.touches[0].clientX : ev.clientX;
       const rect = barRef.current.getBoundingClientRect();
       const pct = (clientX - rect.left) / rect.width;
-      setCur(Math.max(0, Math.min(1, pct)) * (dur || 0));
+      const t = clampIfLocked(Math.max(0, Math.min(1, pct)) * (dur || 0));
+      setCur(t);
     };
     const up = (ev) => {
       const clientX = ev.changedTouches ? ev.changedTouches[0].clientX : ev.clientX;
@@ -426,10 +453,9 @@ export default function Podcast() {
   const skip = (sec) => {
     const el = audioRef.current;
     if (!el) return;
-    el.currentTime = Math.max(
-      0,
-      Math.min((el.currentTime || 0) + sec, dur || el.duration || 0)
-    );
+    const target = clampIfLocked((el.currentTime || 0) + sec);
+    el.currentTime = Math.max(0, Math.min(target, dur || el.duration || 0));
+    enforcePreviewBoundary();
   };
 
   const setVolume = (v) => {
@@ -586,7 +612,7 @@ export default function Podcast() {
                         <AccessTimer timeLeftMs={plAccess.expiry - Date.now()} />
                       </>
                     ) : (
-                      `Locked (${lock.countLeft}s preview)`
+                      `Locked (${Math.max(0, Math.ceil(PREVIEW_SECONDS - (cur || 0))) }s preview)`
                     )}
                     {accessLoading && (
                       <span className="animate-spin inline-block w-3 h-3 border-2 border-current border-t-transparent rounded-full"></span>
@@ -606,8 +632,6 @@ export default function Podcast() {
                 controls={false}
                 controlsList="nodownload noplaybackrate"
                 className="sr-only"
-                onPlay={() => console.log("[Podcast] playing:", track.title, absUrl(track.url))}
-                onPause={() => console.log("[Podcast] paused:", track.title)}
                 onContextMenu={(e) => e.preventDefault()}
               />
 
@@ -713,7 +737,7 @@ export default function Podcast() {
                     </span>
                   </div>
 
-                  {!accessMap[pid]?.expiry && (
+                  {!hasAccess && (
                     <div className="text-[11px] text-white/60 mt-2">
                       Preview will auto-stop at 10s. Subscribe to continue.
                     </div>
