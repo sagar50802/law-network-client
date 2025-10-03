@@ -12,7 +12,7 @@ import {
 export default function AdminPodcastEditor() {
   /* ---------------- state ---------------- */
   const [playlists, setPlaylists] = useState([]);
-  const [sel, setSel] = useState("");           // selected playlist id
+  const [sel, setSel] = useState(""); // selected playlist id
   const [newName, setNewName] = useState("");
 
   const [title, setTitle] = useState("");
@@ -24,7 +24,7 @@ export default function AdminPodcastEditor() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
-  const log  = (...a) => console.log("[AdminPodcast]", ...a);
+  const log = (...a) => console.log("[AdminPodcast]", ...a);
   const warn = (...a) => console.warn("[AdminPodcast]", ...a);
 
   /* ---------------- helpers ---------------- */
@@ -34,11 +34,20 @@ export default function AdminPodcastEditor() {
   );
 
   const normalize = (r) => {
-    if (Array.isArray(r)) return r;
-    if (Array.isArray(r?.playlists)) return r.playlists;
-    if (Array.isArray(r?.items)) return r.items;
-    if (Array.isArray(r?.data)) return r.data;
-    return [];
+    const arr =
+      (Array.isArray(r) && r) ||
+      (Array.isArray(r?.playlists) && r.playlists) ||
+      (Array.isArray(r?.items) && r.items) ||
+      (Array.isArray(r?.data) && r.data) ||
+      [];
+
+    // Ensure each playlist has a stable `id` for the UI
+    return arr.map((p) => ({
+      ...p,
+      id: p.id || p._id, // prefer id, fallback to _id
+      name: p.name || p.title || "Untitled", // safety; server now sets name correctly
+      items: Array.isArray(p.items) ? p.items : [],
+    }));
   };
 
   /* ---------------- load ---------------- */
@@ -50,10 +59,11 @@ export default function AdminPodcastEditor() {
       log(" response:", r);
       const arr = normalize(r);
       setPlaylists(arr);
+
       // auto select same or first
       if (arr.length) {
         const keep = arr.find((p) => (p._id || p.id) === sel);
-        setSel(keep ? (keep._id || keep.id) : (arr[0]._id || arr[0].id));
+        setSel(keep ? (keep._id || keep.id) : arr[0].id || arr[0]._id);
       } else {
         setSel("");
       }
@@ -64,16 +74,19 @@ export default function AdminPodcastEditor() {
       setSel("");
     }
   }
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   /* ---------------- create/delete playlist ---------------- */
   async function addPlaylist() {
     const name = newName.trim();
-    if (!name) return;
+    if (!name) return; // UI already disables, but double-safety
     setBusy(true);
     try {
       log("POST /podcasts/playlists", { name });
-      // always send JSON { name }
+      // Send JSON { name } — backend getName() accepts name/playlistName
       await postJSON("/podcasts/playlists", { name }, { headers: authHeaders() });
       setNewName("");
       await load();
@@ -91,7 +104,9 @@ export default function AdminPodcastEditor() {
     setBusy(true);
     try {
       log(`DELETE /podcasts/playlists/${id}`);
-      await deleteJSON(`/podcasts/playlists/${encodeURIComponent(id)}`, { headers: authHeaders() });
+      await deleteJSON(`/podcasts/playlists/${encodeURIComponent(id)}`, {
+        headers: authHeaders(),
+      });
     } catch (e) {
       warn(" delete failed:", e);
       alert("Delete playlist failed");
@@ -113,7 +128,7 @@ export default function AdminPodcastEditor() {
     fd.append("title", title || "Untitled");
     fd.append("artist", artist || "");
     fd.append("locked", locked ? "true" : "false");
-    if (file) fd.append("audio", file);  // always "audio"
+    if (file) fd.append("audio", file); // field name must be "audio"
     if (url.trim()) fd.append("url", url.trim());
 
     setBusy(true);
@@ -146,9 +161,10 @@ export default function AdminPodcastEditor() {
     setBusy(true);
     try {
       log(`DELETE /podcasts/playlists/${key}/items/${iid}`);
-      await deleteJSON(`/podcasts/playlists/${encodeURIComponent(key)}/items/${encodeURIComponent(iid)}`, {
-        headers: authHeaders(),
-      });
+      await deleteJSON(
+        `/podcasts/playlists/${encodeURIComponent(key)}/items/${encodeURIComponent(iid)}`,
+        { headers: authHeaders() }
+      );
     } catch (e) {
       warn(" delete item failed:", e);
     } finally {
@@ -248,9 +264,7 @@ export default function AdminPodcastEditor() {
       {selected && (
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <h4 className="font-semibold">
-              Items in “{selected.name}”
-            </h4>
+            <h4 className="font-semibold">Items in “{selected.name}”</h4>
             <button
               className="text-red-600 text-sm"
               onClick={() => deletePlaylist(selected._id || selected.id)}
