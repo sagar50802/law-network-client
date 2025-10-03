@@ -11,7 +11,7 @@ import useSubmissionStream from "../../hooks/useSubmissionStream";
 
 /**
  * Podcast page – full player with 10s preview + QR overlay gating.
- * - Auto-plays on item select (subject to preview allowance)
+ * - Autoplay 10s preview on item select (same-gesture compliance)
  * - Streams via API proxy to avoid R2 CORS issues
  * - iOS: shows "use hardware buttons" hint (JS volume not supported)
  */
@@ -215,7 +215,7 @@ export default function Podcast() {
     return () => clearTimeout(t);
   }, [accessMap]);
 
-  // 10s preview lock (used for badge text only; enforcement below)
+  // 10s preview lock (badge text only; enforcement below)
   usePreviewLock({
     type: "podcast",
     id: track?.id || "none",
@@ -247,32 +247,67 @@ export default function Podcast() {
   const unlocked = !!(plAccess?.expiry && plAccess.expiry > Date.now());
   const lockedPlayback = !unlocked;
 
-  // whenever track changes: reset preview budget and auto-load/play
-  useEffect(() => {
+  // utility
+  const mmss = (s) => {
+    if (!isFinite(s)) return "0:00";
+    const m = Math.floor(s / 60);
+    const sec = Math.floor(s % 60);
+    return `${m}:${sec.toString().padStart(2, "0")}`;
+  };
+
+  // Set audio src for a given item and try immediate play (same-gesture)
+  const setSrcAndPlayNow = (item) => {
+    const a = audioRef.current;
+    if (!a || !item?.url) return;
+
+    // reset preview budget and state
     setPreviewUsed(0);
     previewStartRef.current = null;
 
-    const a = audioRef.current;
-    if (!a) return;
+    const raw = absUrl(item.url);
     a.pause();
-    // set src via proxy (use API_BASE)
-    if (track?.url) {
-      const raw = absUrl(track.url);
-      a.src = `${API_BASE}/podcasts/stream?src=${encodeURIComponent(raw)}`;
-    } else {
-      a.removeAttribute("src");
-    }
+    a.src = `${API_BASE}/podcasts/stream?src=${encodeURIComponent(raw)}`;
     a.load();
 
-    const onCanPlay = () => {
+    // attempt to play within the same click handler (mobile autoplay compliance)
+    const tryNow = () => {
       if (!lockedPlayback || previewUsed < PREVIEW_MS) {
-        a.play().catch(() => {});
+        a.play().catch(() => {
+          // fallback: will also try when canplay fires
+        });
       }
     };
-    a.addEventListener("canplay", onCanPlay, { once: true });
-    return () => a.removeEventListener("canplay", onCanPlay);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [track?.id, pid]);
+
+    if (a.readyState >= 3) {
+      tryNow();
+    } else {
+      a.addEventListener("canplay", tryNow, { once: true });
+    }
+  };
+
+  // whenever track changes via non-click path: set src and try to autoplay
+  useEffect(() => {
+    if (!track) return;
+    const a = audioRef.current;
+    if (!a) return;
+
+    // Don't double-set if we just set it from a click
+    // Ensure src matches current track
+    const raw = track.url ? absUrl(track.url) : "";
+    const want = raw ? `${API_BASE}/podcasts/stream?src=${encodeURIComponent(raw)}` : "";
+    if (want && a.src !== want) {
+      a.pause();
+      a.src = want;
+      a.load();
+      const onCanPlay = () => {
+        if (!lockedPlayback || previewUsed < PREVIEW_MS) {
+          a.play().catch(() => {});
+        }
+      };
+      a.addEventListener("canplay", onCanPlay, { once: true });
+      return () => a.removeEventListener("canplay", onCanPlay);
+    }
+  }, [track?.id, pid]); // eslint-disable-line react-hooks/exhaustive-deps
 
   // audio element listeners
   useEffect(() => {
@@ -288,7 +323,6 @@ export default function Podcast() {
     const onLoaded = () => setDur(a.duration || 0);
     const onTime = () => !seeking && setCur(a.currentTime || 0);
     const onPlay = () => {
-      // if preview already spent and still locked → block
       if (lockedPlayback && previewUsed >= PREVIEW_MS) {
         a.pause();
         const currentPl = playlists.find((x) => x.id === pid);
@@ -307,7 +341,6 @@ export default function Podcast() {
       }
     };
     const onVol = () => {
-      // keep local state in sync if user uses native controls (desktop/Android)
       setVol(a.volume);
       localStorage.setItem("pod_vol", String(a.volume));
     };
@@ -352,14 +385,12 @@ export default function Podcast() {
           : previewUsed;
 
       if (running >= PREVIEW_MS) {
-        // freeze preview at 10s
         if (previewStartRef.current != null) {
           const delta = performance.now() - previewStartRef.current;
           previewStartRef.current = null;
           setPreviewUsed((u) => Math.min(PREVIEW_MS, u + delta));
         }
         a.pause();
-        // clamp cursor to 10s for consistent UI
         if (!Number.isNaN(a.duration)) a.currentTime = Math.min(10, a.duration);
         const currentPl = playlists.find((x) => x.id === pid);
         setPlaylistOverlay(currentPl || null);
@@ -379,20 +410,11 @@ export default function Podcast() {
     localStorage.setItem("pod_vol", String(clamped));
   };
 
-  // utils
-  const mmss = (s) => {
-    if (!isFinite(s)) return "0:00";
-    const m = Math.floor(s / 60);
-    const sec = Math.floor(s % 60);
-    return `${m}:${sec.toString().padStart(2, "0")}`;
-  };
-
   const togglePlay = async () => {
     const a = audioRef.current;
     if (!a) return;
     if (isPlaying) return a.pause();
 
-    // if locked and preview spent → show paywall
     if (lockedPlayback && previewUsed >= PREVIEW_MS) {
       const currentPl = playlists.find((x) => x.id === pid);
       setPlaylistOverlay(currentPl || null);
@@ -571,15 +593,19 @@ export default function Podcast() {
                 {pid === p.id && (
                   <div className="px-2 pb-2 space-y-1">
                     {(p.items || []).map((it) => {
+                      const isActive = track?.id === it.id;
                       const effectiveAccess =
                         pAccess?.expiry && pAccess.expiry > Date.now() ? pAccess : null;
                       return (
                         <div
                           key={it.id}
                           className={`px-2 py-2 rounded cursor-pointer hover:bg-gray-50 flex items-center justify-between ${
-                            track?.id === it.id ? "bg-gray-50" : ""
+                            isActive ? "bg-gray-50" : ""
                           }`}
-                          onClick={() => setTrack(it)}
+                          onClick={() => {
+                            setTrack(it);
+                            setSrcAndPlayNow(it); // 🔥 autoplay in same gesture
+                          }}
                         >
                           <div className="truncate">
                             <div className="text-sm font-medium truncate">{it.title}</div>
@@ -743,7 +769,7 @@ export default function Podcast() {
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
                         <path d="M5 10v4h3l4 3V7L8 10H5z" />
                       </svg>
-                      {isiOS ? (
+                      {/iPad|iPhone|iPod/i.test(navigator.userAgent) ? (
                         <span className="text-[11px] text-white/60">Use phone volume buttons</span>
                       ) : (
                         <input
