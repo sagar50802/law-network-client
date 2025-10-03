@@ -118,10 +118,9 @@ export default function Podcast() {
   const load = async () => {
     setAccessLoading(true);
     const r = await getJSON("/podcasts");
-    // 🔧 normalize id so client code always has `id` (even if server sends only `_id`)
     const pls = (r.playlists || []).map((p) => ({
       ...p,
-      id: p.id || p._id || p.slug || p.name, // fallbacks just in case
+      id: String(p.id || p._id), // normalize just in case
     }));
     setPlaylists(pls);
     if (!pid && pls[0]) setPid(pls[0].id);
@@ -220,7 +219,7 @@ export default function Podcast() {
     previewSeconds: 10,
   });
 
-  // enforce 10s preview + auto QR overlay
+  // enforce 10s preview
   useEffect(() => {
     const el = audioRef.current;
     if (!el) return;
@@ -266,11 +265,16 @@ export default function Podcast() {
 
   const createPlaylist = async (e) => {
     e.preventDefault();
-    await fetch(`${API_BASE}/podcasts/playlists`, {
+    const res = await fetch(`${API_BASE}/podcasts/playlists`, {
       method: "POST",
       headers: { ...authHeaders(), "Content-Type": "application/json" },
       body: JSON.stringify({ name: newPlName || "New Playlist" }),
     });
+    if (!res.ok) {
+      const txt = await res.text().catch(() => "");
+      alert(`Create playlist failed (${res.status}). ${txt}`);
+      return;
+    }
     setNewPlName("");
     await load();
   };
@@ -283,30 +287,42 @@ export default function Podcast() {
     fd.append("artist", form.artist || "");
     fd.append("locked", String(form.locked));
     fd.append("audio", form.audio);
-    await fetch(`${API_BASE}/podcasts/playlists/${pid}/items`, {
+    const res = await fetch(`${API_BASE}/podcasts/playlists/${pid}/items`, {
       method: "POST",
       headers: authHeaders(),
       body: fd,
     });
+    if (!res.ok) {
+      const txt = await res.text().catch(() => "");
+      alert(`Upload failed (${res.status}). ${txt}`);
+      return;
+    }
     setForm({ title: "", artist: "", audio: null, locked: true });
     await load();
   };
 
-  // 🔧 remove extra '/api' in both calls below
   const delItem = async (iid) => {
-    await fetch(`${API_BASE}/podcasts/playlists/${pid}/items/${iid}`, {
+    const res = await fetch(`${API_BASE}/podcasts/playlists/${pid}/items/${iid}`, {
       method: "DELETE",
       headers: authHeaders(),
     });
+    if (!res.ok) {
+      const txt = await res.text().catch(() => "");
+      alert(`Delete failed (${res.status}). ${txt}`);
+    }
     await load();
   };
 
   const toggleLock = async (iid, newState) => {
-    await fetch(`${API_BASE}/podcasts/playlists/${pid}/items/${iid}/lock`, {
+    const res = await fetch(`${API_BASE}/podcasts/playlists/${pid}/items/${iid}/lock`, {
       method: "PATCH",
       headers: { ...authHeaders(), "Content-Type": "application/json" },
       body: JSON.stringify({ locked: newState }),
     });
+    if (!res.ok) {
+      const txt = await res.text().catch(() => "");
+      alert(`Update lock failed (${res.status}). ${txt}`);
+    }
     await load();
   };
 
