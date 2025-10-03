@@ -50,6 +50,7 @@ export default function AdminPodcastEditor() {
       log(" response:", r);
       const arr = normalize(r);
       setPlaylists(arr);
+      // auto select same or first
       if (arr.length) {
         const keep = arr.find((p) => (p._id || p.id) === sel);
         setSel(keep ? (keep._id || keep.id) : (arr[0]._id || arr[0].id));
@@ -72,6 +73,7 @@ export default function AdminPodcastEditor() {
     setBusy(true);
     try {
       log("POST /podcasts/playlists", { name });
+      // always send JSON { name }
       await postJSON("/podcasts/playlists", { name }, { headers: authHeaders() });
       setNewName("");
       await load();
