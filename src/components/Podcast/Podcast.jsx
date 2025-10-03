@@ -625,17 +625,16 @@ export default function Podcast() {
             </div>
 
             {/* Hidden native audio (events + CORS + remount on track change) */}
-            <audio
-              key={track?.id}                      // force proper lifecycle on track change
-              ref={audioRef}
-              src={absUrl(track.url)}
-              preload="metadata"
-              crossOrigin="anonymous"
-              controls={false}
-              controlsList="nodownload noplaybackrate"
-              className="sr-only"
-              onContextMenu={(e) => e.preventDefault()}
-            />
+             <audio
+  key={track?.id}
+  ref={audioRef}
+  src={absUrl(track.url)}
+  preload="metadata"
+  controls={false}
+  controlsList="nodownload noplaybackrate"
+  className="sr-only"
+  onContextMenu={(e) => e.preventDefault()}
+/>
 
             {/* Premium dark player */}
             <div className="rounded-2xl p-4 bg-[#121212] text-white shadow-lg">
