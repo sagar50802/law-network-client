@@ -12,7 +12,7 @@ import useSubmissionStream from "../../hooks/useSubmissionStream";
 /**
  * Podcast page – full player with 10s preview + QR overlay gating.
  * - Auto-plays on item select (subject to preview allowance)
- * - Uses API proxy stream to avoid R2 CORS issues
+ * - Streams via API proxy to avoid R2 CORS issues
  * - iOS: shows "use hardware buttons" hint (JS volume not supported)
  */
 
@@ -216,7 +216,7 @@ export default function Podcast() {
   }, [accessMap]);
 
   // 10s preview lock (used for badge text only; enforcement below)
-  const lock = usePreviewLock({
+  usePreviewLock({
     type: "podcast",
     id: track?.id || "none",
     previewSeconds: 10,
@@ -255,10 +255,10 @@ export default function Podcast() {
     const a = audioRef.current;
     if (!a) return;
     a.pause();
-    // set src via proxy
+    // set src via proxy (use API_BASE)
     if (track?.url) {
       const raw = absUrl(track.url);
-      a.src = `/api/podcasts/stream?src=${encodeURIComponent(raw)}`;
+      a.src = `${API_BASE}/podcasts/stream?src=${encodeURIComponent(raw)}`;
     } else {
       a.removeAttribute("src");
     }
@@ -307,7 +307,7 @@ export default function Podcast() {
       }
     };
     const onVol = () => {
-      // keep local state in sync if user uses native controls (desktop)
+      // keep local state in sync if user uses native controls (desktop/Android)
       setVol(a.volume);
       localStorage.setItem("pod_vol", String(a.volume));
     };
@@ -376,6 +376,7 @@ export default function Podcast() {
     const clamped = Math.max(0, Math.min(1, v));
     setVol(clamped);
     if (a && !isiOS) a.volume = clamped;
+    localStorage.setItem("pod_vol", String(clamped));
   };
 
   // utils
@@ -504,7 +505,7 @@ export default function Podcast() {
   };
 
   const delItem = async (iid) => {
-    await fetch(`${API_BASE}/api/podcasts/playlists/${pid}/items/${iid}`, {
+    await fetch(`${API_BASE}/podcasts/playlists/${pid}/items/${iid}`, {
       method: "DELETE",
       headers: authHeaders(),
     });
@@ -512,7 +513,7 @@ export default function Podcast() {
   };
 
   const toggleLock = async (iid, newState) => {
-    await fetch(`${API_BASE}/api/podcasts/playlists/${pid}/items/${iid}/lock`, {
+    await fetch(`${API_BASE}/podcasts/playlists/${pid}/items/${iid}/lock`, {
       method: "PATCH",
       headers: { ...authHeaders(), "Content-Type": "application/json" },
       body: JSON.stringify({ locked: newState }),
@@ -737,17 +738,13 @@ export default function Podcast() {
                       </svg>
                     </button>
 
-                    {/* Volume */}
-                    <div className="ml-2 hidden sm:flex items-center gap-2">
+                    {/* Volume: iOS shows hint; Android/desktop slider is visible on phones too */}
+                    <div className="ml-1 flex items-center gap-2">
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
                         <path d="M5 10v4h3l4 3V7L8 10H5z" />
                       </svg>
-
-                      {/* iOS: show hint; else slider */}
                       {isiOS ? (
-                        <span className="text-[11px] text-white/60">
-                          Use phone volume buttons
-                        </span>
+                        <span className="text-[11px] text-white/60">Use phone volume buttons</span>
                       ) : (
                         <input
                           type="range"
@@ -756,7 +753,7 @@ export default function Podcast() {
                           step={0.01}
                           value={vol}
                           onChange={(e) => setVolume(parseFloat(e.target.value))}
-                          className="w-28 accent-[#1DB954]"
+                          className="w-24 sm:w-28 accent-[#1DB954]"
                           aria-label="Volume"
                         />
                       )}
