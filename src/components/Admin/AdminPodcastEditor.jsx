@@ -82,24 +82,24 @@ export default function AdminPodcastEditor() {
   }, []);
 
   /* ---------------- create/delete playlist ---------------- */
-  async function addPlaylist() {
-    const name = newName.trim();
-    if (!name) return;
-    setBusy(true);
-    try {
-      const h = authHeaders();
-      const urlWithKey = `/podcasts/playlists${ownerQuery()}`;
-      log("POST", urlWithKey, { name });
-      await postJSON(urlWithKey, { name }, { headers: h });
-      setNewName("");
-      await load();
-    } catch (e) {
-      warn(" create failed:", e);
-      alert("Create playlist failed");
-    } finally {
-      setBusy(false);
-    }
+   async function addPlaylist() {
+  const name = newName.trim();
+  if (!name) return;
+  setBusy(true);
+  try {
+    // send the name in both JSON and query (covers every browser/codec path)
+    const qs = new URLSearchParams({ name }).toString();
+    await postJSON(`/podcasts/playlists?${qs}`, { name, playlistName: name }, { headers: authHeaders() });
+    setNewName("");
+    await load();
+  } catch (e) {
+    warn(" create failed:", e);
+    alert("Create playlist failed");
+  } finally {
+    setBusy(false);
   }
+}
+
 
   async function deletePlaylist(id) {
     if (!id) return;
