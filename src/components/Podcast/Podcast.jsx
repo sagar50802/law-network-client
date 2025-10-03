@@ -16,6 +16,7 @@ export default function Podcast() {
   const [pid, setPid] = useState(null);
   const [track, setTrack] = useState(null);
 
+  // Access + UI
   const [accessMap, setAccessMap] = useState({});
   const [accessLoading, setAccessLoading] = useState(false);
   const [grantToast, setGrantToast] = useState(null);
@@ -26,17 +27,20 @@ export default function Podcast() {
 
   const [email] = useState(() => localStorage.getItem("userEmail") || "");
 
-  // ✅ MISSING BEFORE — added now:
-  const [newPlName, setNewPlName] = useState(""); // <— admin “New playlist name” input
-
   // live events
   useSubmissionStream(email);
 
   const pendingEventsRef = useRef([]);
 
-  // Remember if preview already consumed per-playlist
+  // admin input (was missing when you saw the newPlName error)
+  const [newPlName, setNewPlName] = useState("");
+
+  // remember “preview already used” per playlist
   const previewConsumedRef = useRef({});
   const [previewTick, setPreviewTick] = useState(0);
+
+  // show a friendly error if the audio fails to load
+  const [audioError, setAudioError] = useState("");
 
   /* ---------------- helpers ---------------- */
   const resolvePlaylistId = (featureId) => {
@@ -224,6 +228,7 @@ export default function Podcast() {
     return () => clearTimeout(t);
   }, [accessMap]);
 
+  // 10s preview lock
   const lock = usePreviewLock({
     type: "podcast",
     id: track?.id || "none",
@@ -234,12 +239,15 @@ export default function Podcast() {
   const unlocked = !!(plAccess?.expiry && plAccess.expiry > Date.now());
   const previewConsumed = !!previewConsumedRef.current[pid];
 
+  // ✅ FIX: stream through API (adds the missing /api)
   const audioSrc = useMemo(() => {
     const u = String(track?.url || "");
     if (!u) return "";
     if (/^https?:\/\//i.test(u)) {
-      return absUrl(`/podcasts/stream?u=${encodeURIComponent(u)}`);
+      // proxy any absolute URL through your server to avoid R2 CORS
+      return absUrl(`/api/podcasts/stream?u=${encodeURIComponent(u)}`);
     }
+    // keep local/relative urls as-is (e.g. /uploads/...)
     return absUrl(u);
   }, [track?.url]);
 
@@ -261,6 +269,7 @@ export default function Podcast() {
     return false;
   };
 
+  // enforce 10s preview
   useEffect(() => {
     const el = audioRef.current;
     if (!el) return;
@@ -356,11 +365,15 @@ export default function Podcast() {
     if (!el) return;
     if (guardAndOpen()) return;
 
+    setAudioError("");
     if (isPlaying) el.pause();
     else {
       try {
         await el.play();
-      } catch {}
+      } catch (err) {
+        setAudioError("Audio failed to play. Please try again.");
+        console.warn(err);
+      }
     }
   };
 
@@ -368,7 +381,6 @@ export default function Podcast() {
     const el = audioRef.current;
     if (!el || !isFinite(dur)) return;
     if (guardAndOpen()) return;
-
     const t = Math.max(0, Math.min(1, pct)) * dur;
     el.currentTime = t;
     setCur(t);
@@ -485,7 +497,10 @@ export default function Podcast() {
                           className={`px-2 py-2 rounded cursor-pointer hover:bg-gray-50 flex items-center justify-between ${
                             track?.id === it.id ? "bg-gray-50" : ""
                           }`}
-                          onClick={() => setTrack(it)}
+                          onClick={() => {
+                            setAudioError("");
+                            setTrack(it);
+                          }}
                         >
                           <div className="truncate">
                             <div className="text-sm font-medium truncate">{it.title}</div>
@@ -557,6 +572,7 @@ export default function Podcast() {
           playlistOverlay ? "blur-sm opacity-80 pointer-events-none" : ""
         }`}
       >
+        {/* 🎉 Congrats toast */}
         {grantToast && (
           <div className="absolute top-3 right-3 z-20 bg-green-600 text-white text-sm px-3 py-2 rounded-lg shadow">
             {grantToast}
@@ -592,6 +608,7 @@ export default function Podcast() {
 
             {/* Premium dark player */}
             <div className="rounded-2xl p-4 bg-[#121212] text-white shadow-lg">
+              {/* Hidden native audio element used by the custom controls */}
               <audio
                 key={track.id + ":" + previewTick}
                 ref={audioRef}
@@ -601,15 +618,20 @@ export default function Podcast() {
                 controlsList="nodownload noplaybackrate"
                 className="sr-only"
                 onContextMenu={(e) => e.preventDefault()}
+                onError={() =>
+                  setAudioError("Audio failed to load. Check the file URL or try again.")
+                }
               />
 
               <div className="flex items-center gap-4">
+                {/* Cover/placeholder */}
                 <div className="w-16 h-16 rounded-md bg-gradient-to-br from-gray-600 to-gray-800 flex items-center justify-center shrink-0 overflow-hidden">
                   <span className="text-xs uppercase tracking-wider opacity-80">
                     {track?.title?.slice(0, 3) || "Pod"}
                   </span>
                 </div>
 
+                {/* Controls + progress */}
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-3 mb-3">
                     <button
@@ -668,6 +690,7 @@ export default function Podcast() {
                       </svg>
                     </button>
 
+                    {/* Volume */}
                     <div className="ml-2 hidden sm:flex items-center gap-2">
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="currentColor">
                         <path d="M5 10v4h3l4 3V7L8 10H5z" />
@@ -684,6 +707,7 @@ export default function Podcast() {
                     </div>
                   </div>
 
+                  {/* Progress */}
                   <div className="flex items-center gap-3 select-none">
                     <span className="text-xs tabular-nums text-white/70 w-10 text-right">
                       {mmss(cur)}
@@ -732,10 +756,14 @@ export default function Podcast() {
                       Preview used. Tap <span className="underline">Unlock</span> to continue listening.
                     </div>
                   )}
+                  {audioError && (
+                    <div className="text-[11px] text-red-300 mt-2">{audioError}</div>
+                  )}
                 </div>
               </div>
             </div>
 
+            {/* Admin controls (for current track) */}
             <IfOwnerOnly>
               <div className="mt-3 flex gap-2">
                 <button
@@ -769,12 +797,11 @@ export default function Podcast() {
         )}
       </div>
 
+      {/* Overlay */}
       {playlistOverlay && (
         <QROverlay
           open={!!playlistOverlay}
-          onClose={() => {
-            setPlaylistOverlay(null);
-          }}
+          onClose={() => setPlaylistOverlay(null)}
           title={playlistOverlay.name}
           subjectLabel="Podcast"
           inline
