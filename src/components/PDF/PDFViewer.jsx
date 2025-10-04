@@ -1,7 +1,7 @@
-// src/components/PDF/PDFViewer.jsx
+// client/src/components/PDF/PDFViewer.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
-import { API_BASE, getJSON, authHeaders } from "../../utils/api";
+import { API_BASE, getJSON, authHeaders, absUrl } from "../../utils/api";
 import usePreviewLock from "../../hooks/usePreviewLock";
 import IfOwnerOnly from "../common/IfOwnerOnly";
 import QROverlay from "../common/QROverlay";
@@ -10,6 +10,7 @@ import AccessTimer from "../common/AccessTimer";
 import useAccessSync from "../../hooks/useAccessSync";
 import useSubmissionStream from "../../hooks/useSubmissionStream";
 
+// use CDN worker (vite/SSR safe)
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.js`;
 
 export default function PDFViewer() {
@@ -31,15 +32,12 @@ export default function PDFViewer() {
   useSubmissionStream(email);
   const pendingEventsRef = useRef([]);
 
-  // --- helpers ---
   const resolveSubjectId = (featureId) => {
     if (!featureId) return null;
     const fid = String(featureId).trim().toLowerCase();
     const byId = subjects.find((s) => String(s.id).toLowerCase() === fid);
     if (byId) return byId.id;
-    const byName = subjects.find(
-      (s) => String(s.name || s.title || "").toLowerCase() === fid
-    );
+    const byName = subjects.find((s) => String(s.name || s.title || "").toLowerCase() === fid);
     if (byName) return byName.id;
     const bySlug = subjects.find((s) => String(s.slug || "").toLowerCase() === fid);
     if (bySlug) return bySlug.id;
@@ -60,29 +58,29 @@ export default function PDFViewer() {
     const normalizedId = resolveSubjectId(featureId);
     if (!normalizedId) {
       pendingEventsRef.current.push({ type: "grant", featureId, expiry, message });
-    } else {
-      setAccessMap((prev) => ({ ...prev, [normalizedId]: { expiry, source: "event" } }));
-      setSubjectOverlay(null);
-      setForceBlur(false);
-      const savedName = localStorage.getItem("userName");
-      const name = savedName || (email ? email.split("@")[0] : "User") || "User";
-      setGrantToast(message || `🎉 Congratulations ${name}! Your access has been unlocked.`);
-      setTimeout(() => setGrantToast(null), 4500);
-      const fresh = await loadAccess("pdf", normalizedId, email);
-      setAccessMap((prev) => ({ ...prev, [normalizedId]: fresh }));
+      return;
     }
+    setAccessMap((prev) => ({ ...prev, [normalizedId]: { expiry, source: "event" } }));
+    setSubjectOverlay(null);
+    setForceBlur(false);
+    const savedName = localStorage.getItem("userName");
+    const name = savedName || (email ? email.split("@")[0] : "User") || "User";
+    setGrantToast(message || `🎉 Congratulations ${name}! Your access has been unlocked.`);
+    setTimeout(() => setGrantToast(null), 4500);
+    const fresh = await loadAccess("pdf", normalizedId, email);
+    setAccessMap((prev) => ({ ...prev, [normalizedId]: fresh }));
   };
 
   const applyRevoke = ({ featureId }) => {
     const normalizedId = resolveSubjectId(featureId);
     if (!normalizedId) {
       pendingEventsRef.current.push({ type: "revoke", featureId });
-    } else {
-      setAccessMap((prev) => ({ ...prev, [normalizedId]: null }));
-      const target = subjects.find((s) => String(s.id) === String(normalizedId));
-      if (target) setSubjectOverlay(target);
-      setForceBlur(true);
+      return;
     }
+    setAccessMap((prev) => ({ ...prev, [normalizedId]: null }));
+    const target = subjects.find((s) => String(s.id) === String(normalizedId));
+    if (target) setSubjectOverlay(target);
+    setForceBlur(true);
   };
 
   const load = async () => {
@@ -106,7 +104,7 @@ export default function PDFViewer() {
       if (ev.type === "grant") applyGrant(ev);
       if (ev.type === "revoke") applyRevoke(ev);
     }
-  }, [subjects.length]);
+  }, [subjects.length]); // eslint-disable-line
 
   useEffect(() => {
     if (!sid) return;
@@ -176,7 +174,7 @@ export default function PDFViewer() {
     const onFocus = () => refreshAllAccess();
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
-  }, [subjects, email]);
+  }, [subjects, email]); // eslint-disable-line
 
   useEffect(() => {
     const doRefresh = () => refreshAllAccess();
@@ -196,15 +194,9 @@ export default function PDFViewer() {
     return () => clearTimeout(t);
   }, [accessMap]);
 
-  // Turn chapter.url into a server-absolute URL, then always proxy through /pdfs/stream
-  const toServerAbs = (u) => {
-    if (!u) return "";
-    if (/^https?:\/\//i.test(u)) return u; // already absolute (R2, etc)
-    return `${API_BASE}${u.startsWith("/") ? "" : "/"}${u}`; // make /uploads/... point to API host
-  };
-  const fileUrl = chapter?.url ? toServerAbs(chapter.url) : "";
-  const safeSrc = fileUrl
-    ? `${API_BASE}/pdfs/stream?src=${encodeURIComponent(fileUrl)}`
+  // ALWAYS go through proxy so we never hit CORB/403 HTML
+  const safeSrc = chapter?.url
+    ? `${API_BASE}/pdfs/stream?src=${encodeURIComponent(absUrl(chapter.url))}`
     : "";
 
   const s = subjects.find((x) => x.id === sid);
@@ -316,21 +308,16 @@ export default function PDFViewer() {
               })()}
             </div>
 
-            <Toolbar
-              page={page}
-              numPages={numPages}
-              scale={scale}
-              setPage={setPage}
-              setScale={setScale}
-            />
+            <Toolbar page={page} numPages={numPages} scale={scale} setPage={setPage} setScale={setScale} />
 
             <div
-              className={`bg-white shadow-lg p-3 max-h={[70, "vh"].join("")} overflow-auto rounded-xl ${unlocked ? "" : "select-none"}`}
+              className={`bg-white shadow-lg p-3 max-h-[70vh] overflow-auto rounded-xl ${unlocked ? "" : "select-none"}`}
               onContextMenu={(e) => e.preventDefault()}
             >
               <Document
                 file={safeSrc}
                 onLoadSuccess={({ numPages }) => { setNumPages(numPages || 1); setPage(1); }}
+                onLoadError={(err) => console.error("PDF load error:", err)}
                 renderMode="canvas"
                 loading={<div className="p-6 text-gray-500">Loading PDF…</div>}
               >
@@ -343,7 +330,6 @@ export default function PDFViewer() {
               </Document>
             </div>
 
-            {/* Admin actions for current chapter */}
             <IfOwnerOnly>
               <AdminChapterActions sid={sid} chapter={chapter} reload={load} />
             </IfOwnerOnly>
@@ -353,7 +339,7 @@ export default function PDFViewer() {
         )}
       </div>
 
-      {/* Overlay */}
+      {/* Overlay (outside panel) */}
       {subjectOverlay && (
         <QROverlay
           open
@@ -370,7 +356,7 @@ export default function PDFViewer() {
   );
 }
 
-/* ---- small helpers in this file ---- */
+/* ---- small helpers ---- */
 
 function AdminCreateSubject() {
   const [name, setName] = useState("");
@@ -386,12 +372,7 @@ function AdminCreateSubject() {
   };
   return (
     <form onSubmit={submit} className="grid grid-cols-[1fr_auto] gap-2">
-      <input
-        className="border rounded p-2"
-        placeholder="New subject name"
-        value={name}
-        onChange={(e) => setName(e.target.value)}
-      />
+      <input className="border rounded p-2" placeholder="New subject name" value={name} onChange={(e) => setName(e.target.value)} />
       <button className="bg-black text-white px-3 rounded">Add</button>
     </form>
   );
