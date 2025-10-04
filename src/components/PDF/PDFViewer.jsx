@@ -1,4 +1,3 @@
-// src/components/PDF/PDFViewer.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
 import { API_BASE, getJSON, authHeaders, absUrl } from "../../utils/api";
@@ -25,6 +24,8 @@ export default function PDFViewer() {
   const [grantToast, setGrantToast] = useState(null);
   const [subjectOverlay, setSubjectOverlay] = useState(null);
   const [forceBlur, setForceBlur] = useState(false);
+
+  const [pdfErr, setPdfErr] = useState(""); // ⬅️ show real PDF load errors
 
   const panelRef = useRef(null);
   const [email] = useState(() => localStorage.getItem("userEmail") || "");
@@ -86,6 +87,7 @@ export default function PDFViewer() {
 
   const load = async () => {
     setAccessLoading(true);
+    setPdfErr("");
     const r = await getJSON("/pdfs");
     const subs = r.subjects || [];
     setSubjects(subs);
@@ -195,12 +197,11 @@ export default function PDFViewer() {
     return () => clearTimeout(t);
   }, [accessMap]);
 
-  // Compute a CORS/ORB-safe file URL
-  const fileUrl = chapter?.url ? absUrl(chapter.url) : "";
-  const shouldProxy = /^https?:\/\//i.test(fileUrl) && !fileUrl.startsWith(API_BASE);
-  const safeSrc = shouldProxy
-    ? `${API_BASE}/pdfs/stream?src=${encodeURIComponent(fileUrl)}`
-    : fileUrl;
+  // ALWAYS go through the proxy to avoid CORS/ORB/port-origin issues
+  const rawUrl = chapter?.url ? absUrl(chapter.url) : "";
+  const safeSrc = rawUrl
+    ? `${API_BASE}/pdfs/stream?src=${encodeURIComponent(rawUrl)}`
+    : "";
 
   const s = subjects.find((x) => x.id === sid);
   const unlocked = accessMap[sid]?.expiry && accessMap[sid].expiry > Date.now();
@@ -243,7 +244,7 @@ export default function PDFViewer() {
                       <div
                         key={ch.id}
                         className={`px-2 py-2 rounded cursor-pointer hover:bg-gray-50 flex items-center justify-between ${chapter?.id === ch.id ? "bg-gray-50" : ""}`}
-                        onClick={() => { setChapter(ch); setPage(1); setScale(1); }}
+                        onClick={() => { setChapter(ch); setPage(1); setScale(1); setPdfErr(""); }}
                       >
                         <div className="truncate">
                           <div className="text-sm font-medium truncate">{ch.title}</div>
@@ -324,8 +325,11 @@ export default function PDFViewer() {
               onContextMenu={(e) => e.preventDefault()}
             >
               <Document
+                key={safeSrc} // force reload if source changes
                 file={safeSrc}
-                onLoadSuccess={({ numPages }) => { setNumPages(numPages || 1); setPage(1); }}
+                onLoadSuccess={({ numPages }) => { setPdfErr(""); setNumPages(numPages || 1); setPage(1); }}
+                onLoadError={(e) => { console.error("PDF load error:", e); setPdfErr(String(e?.message || "Failed to load PDF")); }}
+                onSourceError={(e) => { console.error("PDF source error:", e); setPdfErr(String(e?.message || "Invalid PDF source")); }}
                 renderMode="canvas"
                 loading={<div className="p-6 text-gray-500">Loading PDF…</div>}
               >
@@ -336,6 +340,12 @@ export default function PDFViewer() {
                   renderTextLayer={false}
                 />
               </Document>
+
+              {pdfErr && (
+                <div className="mt-3 text-xs text-red-600 break-all">
+                  {pdfErr}
+                </div>
+              )}
             </div>
 
             {/* Admin actions for current chapter */}
