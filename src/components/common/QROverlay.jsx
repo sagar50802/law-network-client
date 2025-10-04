@@ -1,57 +1,32 @@
-// client/src/components/common/QROverlay.jsx
-import { useEffect, useMemo, useState } from "react";
-import { absUrl } from "../../utils/api";
+import { useEffect, useState } from "react";
+import { API_BASE } from "../../utils/api";
 import { savePending, loadPending } from "../../utils/pending";
 import useApprovalWatcher from "../../hooks/useApprovalWatcher";
 import PendingBadge from "../common/PendingBadge";
 import UnlockWait from "../common/UnlockWait";
 import AccessTimer from "../common/AccessTimer";
-import { saveAccess } from "../../utils/access";
-
-const bust = (u) => (u ? `${u}${u.includes("?") ? "&" : "?"}t=${Date.now()}` : u);
-
-function buildUpiUrl({ upiId, amount, label = "Law Network", note = "Subscription" }) {
-  if (!upiId) return "";
-  const q = new URLSearchParams({ pa: upiId, pn: label, tn: note, cu: "INR" });
-  if (amount) q.set("am", String(amount));
-  return `upi://pay?${q.toString()}`;
-}
-
-// fire-and-forget navigation (no popups)
-function nav(url) {
-  if (!url) return;
-  try {
-    // direct navigation from the tap gesture – highest success rate
-    window.location.assign(url);
-  } catch {}
-}
+import { saveAccess } from "../../utils/access";   // ✅
 
 export default function QROverlay({ open, onClose, title, feature, featureId }) {
-  const [cfg, setCfg] = useState({ url: "", currency: "₹", plans: {}, upi: "" });
+  const [cfg, setCfg] = useState({ url: "", currency: "₹", plans: {} });
   const [selectedPlan, setSelectedPlan] = useState(null);
   const [form, setForm] = useState({ name: "", phone: "", email: "", file: null });
   const [pending, setPending] = useState({});
   const [unlocking, setUnlocking] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  // ----- fetch QR config -----
+  // fetch QR config
   async function fetchConfig() {
     try {
-      const r = await fetch(absUrl("/api/qr/current") + `?ts=${Date.now()}`).then((x) => x.json());
-      if (r?.success) {
-        const upi =
-          r.upi || r.upiId || r.vpa || (r.meta && (r.meta.upi || r.meta.vpa)) || "";
-        setCfg({ ...r, upi });
-      }
-    } catch (e) {
-      console.error("QR config fetch failed:", e);
+      const r = await fetch(`${API_BASE}/api/qr/current?ts=${Date.now()}`).then(res => res.json());
+      if (r?.success) setCfg(r);
+    } catch (err) {
+      console.error("Failed to fetch QR config:", err);
     }
   }
-  useEffect(() => {
-    if (open) fetchConfig();
-  }, [open]);
+  useEffect(() => { if (open) fetchConfig(); }, [open]);
 
-  // ----- restore pending -----
+  // restore pending
   useEffect(() => {
     if (form.email) {
       const saved = loadPending(feature, featureId, form.email);
@@ -59,86 +34,38 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
     }
   }, [form.email, feature, featureId]);
 
-  // ----- live approval -----
-  const { status, approved, expiry, message } = useApprovalWatcher(pending, {
-    feature,
-    featureId,
-    email: form.email,
-  });
+  // watcher → if admin approves
+  const { status, approved, expiry, message } = useApprovalWatcher(
+    pending,
+    { feature, featureId, email: form.email }
+  );
 
+  // close overlay immediately on any 'accessGranted' broadcast
   useEffect(() => {
     const onGranted = () => onClose?.();
     window.addEventListener("accessGranted", onGranted);
     return () => window.removeEventListener("accessGranted", onGranted);
   }, [onClose]);
 
+  // ✅ When approved: show 15s unlock wait → persist access → close → silent refresh → one-time page reload
   useEffect(() => {
     if (status === "approved" && approved) {
       setUnlocking(true);
       const t = setTimeout(() => {
         saveAccess(feature, featureId, form.email, expiry, message);
         setUnlocking(false);
-        onClose?.();
+        if (typeof onClose === "function") onClose();
+
         window.dispatchEvent(new Event("focus"));
         window.dispatchEvent(new CustomEvent("softRefresh", { detail: { feature, featureId } }));
+
         setTimeout(() => window.location.reload(), 150);
       }, 15000);
       return () => clearTimeout(t);
     }
   }, [status, approved, expiry, message, feature, featureId, form.email, onClose]);
 
-  // ----- QR image with safe fallbacks -----
-  const [qrSrc, setQrSrc] = useState("");
-  const [triedAlt, setTriedAlt] = useState(false);
-
-  useEffect(() => {
-    if (!cfg?.url) return setQrSrc("");
-    setQrSrc(bust(absUrl(cfg.url)));
-    setTriedAlt(false);
-  }, [cfg.url]);
-
-  const onQrError = () => {
-    if (!triedAlt && cfg.url?.startsWith("/api/")) {
-      setTriedAlt(true);
-      setQrSrc(bust(absUrl(cfg.url.replace(/^\/api/, ""))));
-      return;
-    }
-    setQrSrc(bust(absUrl("/uploads/qr/current.jpg")));
-  };
-
-  // ----- amount from selected plan -----
-  const amount = useMemo(() => {
-    const key = selectedPlan;
-    if (!key) return undefined;
-    const v = cfg?.plans?.[key]?.price;
-    return v == null ? undefined : Number(v) || undefined;
-  }, [selectedPlan, cfg]);
-
-  // ----- tap handler: synchronous deep-link + Android intents -----
-  function onTapQr() {
-    setPending((s) => ({ ...s, step1: true, step2: true }));
-
-    const upiId = cfg.upi;
-    if (!upiId) return; // nothing to open
-
-    const isAndroid = /Android/i.test(navigator.userAgent);
-    const note = title || "Subscription";
-
-    const upiUrl = buildUpiUrl({ upiId, amount, label: "Law Network", note });
-    nav(upiUrl); // immediate
-
-    // Android intent fallbacks (GPay → PhonePe → Paytm)
-    if (isAndroid) {
-      const qp = `pa=${encodeURIComponent(upiId)}${
-        amount ? `&am=${amount}` : ""
-      }&pn=Law%20Network&cu=INR&tn=${encodeURIComponent(note)}`;
-      setTimeout(() => nav(`intent://pay?${qp}#Intent;scheme=upi;package=com.google.android.apps.nbu.paisa.user;end;`), 300);
-      setTimeout(() => nav(`intent://pay?${qp}#Intent;scheme=upi;package=com.phonepe.app;end;`), 700);
-      setTimeout(() => nav(`intent://pay?${qp}#Intent;scheme=upi;package=net.one97.paytm;end;`), 1100);
-    }
-  }
-
-  // ----- submit -----
+  // submit form
   async function handleSubmit(e) {
     e.preventDefault();
     if (!selectedPlan) return alert("Select a plan");
@@ -158,13 +85,11 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
       fd.append("type", feature);
       fd.append("id", featureId);
 
-      const r = await fetch(absUrl("/api/submissions"), { method: "POST", body: fd }).then((x) =>
-        x.json()
-      );
+      const r = await fetch(`${API_BASE}/api/submissions`, { method: "POST", body: fd }).then(res => res.json());
       if (r?.success) {
         const record = {
           id: r.id,
-          shortId: String(r.id || "").slice(-6),
+          shortId: r.id.slice(-6),
           expiry: r.expiry,
           planKey: selectedPlan,
           name: form.name,
@@ -188,28 +113,34 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
 
   if (!open) return null;
 
-  let progressClass = "step-graph-progress";
-  if (pending?.step3) progressClass += " step-3";
-  else if (pending?.step2) progressClass += " step-2";
-  else if (pending?.step1) progressClass += " step-1";
+  // ✅ Existing 3-step progress (scan/fill/upload) stays intact.
+  // We’re just adding a separate “Step 1: Choose Plan” row above it.
+  let progressClass = "";
+  if (pending?.step3) progressClass = "step-graph-progress step-3";
+  else if (pending?.step2) progressClass = "step-graph-progress step-2";
+  else if (pending?.step1) progressClass = "step-graph-progress step-1";
+  else progressClass = "step-graph-progress";
 
   return (
     <div className="fixed inset-y-0 right-0 bg-white shadow-2xl w-full max-w-md z-50 overflow-y-auto">
       <div className="p-5 relative">
+        {/* Close button */}
         <button onClick={onClose} className="absolute right-3 top-3 text-red-600 font-bold text-lg">✕</button>
 
+        {/* Title */}
         <h3 className="font-semibold text-lg mb-3 animate-pulse text-pink-500">
           {feature} – {title}
         </h3>
 
-        <div className="step-graph mb-4 text-xs md:text-sm font-semibold">
-          <div className={progressClass}></div>
-          <div className={`step-node ${pending?.step1 ? "active" : ""}`}>1</div>
-          <div className={`step-node ${pending?.step2 ? "active" : ""}`}>2</div>
-          <div className={`step-node ${pending?.step3 ? "active" : ""}`}>3</div>
+        {/* ✅ New: Step 1 (Choose Plan) headline */}
+        <div className="mb-2 text-xs md:text-sm font-semibold">
+          <span className={selectedPlan ? "text-green-600" : "step-1-blink"}>
+            Step 1: Choose Plan {selectedPlan && <span className="tick-animate">✅</span>}
+          </span>
         </div>
 
-        <div className="flex gap-2 mb-3">
+        {/* Plans FIRST now */}
+        <div className="flex gap-2 mb-4">
           {["weekly", "monthly", "yearly"].map((p) => (
             <button
               key={p}
@@ -223,32 +154,59 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
           ))}
         </div>
 
-        {/* QR box */}
-        <div className="mb-2">
-          <div className={`relative w-full h-56 border rounded-xl bg-gray-50 overflow-hidden ${pending?.step2 ? "" : "qr-glow"}`}>
-            {qrSrc ? (
-              <>
-                <img
-                  src={qrSrc}
-                  onError={onQrError}
-                  alt="QR code"
-                  className="w-full h-full object-contain select-none cursor-pointer"
-                  crossOrigin="anonymous"
-                  referrerPolicy="no-referrer"
-                  onClick={onTapQr}
-                />
-                <div className="pointer-events-none absolute inset-0"><div className="scanline" /></div>
-              </>
-            ) : (
-              <div className="w-full h-full grid place-items-center text-gray-400 text-sm">
-                QR image unavailable
-              </div>
-            )}
-          </div>
-          <p className="step-2-blink text-xs mt-1">कृपया QR Code पर टैप करें — आपका UPI ऐप खुलेगा</p>
+        {/* ✅ 3-node progress graph now represents steps 2/3/4 */}
+        <div className="step-graph mb-4 text-xs md:text-sm font-semibold">
+          <div className={progressClass}></div>
+          <div className={`step-node ${pending?.step1 ? "active" : ""}`}>2</div>
+          <div className={`step-node ${pending?.step2 ? "active" : ""}`}>3</div>
+          <div className={`step-node ${pending?.step3 ? "active" : ""}`}>4</div>
         </div>
 
-        {/* Pending / Approved / Form (unchanged) */}
+        {/* ✅ Step Labels (renumbered) */}
+        <div className="flex justify-between mb-4 text-xs md:text-sm font-semibold">
+          <div className={pending?.step1 ? "text-green-600" : "step-2-blink"}>
+            Step 2: Scan QR {pending?.step1 && <span className="tick-animate">✅</span>}
+          </div>
+          <div className={pending?.step2 ? "text-green-600" : "step-3-blink"}>
+            Step 3: Fill Info {pending?.step2 && <span className="tick-animate">✅</span>}
+          </div>
+          <div className={pending?.step3 ? "text-green-600" : "step-4-blink"}>
+            Step 4: Upload Screenshot {pending?.step3 && <span className="tick-animate">✅</span>}
+          </div>
+        </div>
+
+        {/* QR Image (unchanged) */}
+        {cfg.url ? (
+          <div className="mb-4 text-center">
+            <img
+              src={`${API_BASE}${cfg.url}?t=${Date.now()}`}
+              alt="QR code"
+              className={`w-full h-56 object-contain border rounded-xl bg-gray-50 ${pending?.step1 ? "" : "cursor-pointer qr-glow"}`}
+              onClick={() => {
+                // Step 2 (scan) → mark complete + redirect (logic unchanged)
+                setPending((s) => ({ ...s, step1: true }));
+                setTimeout(() => { window.location.href = "upi://pay"; }, 900);
+              }}
+            />
+            {!pending?.step1 && (
+              <p className="step-2-blink text-xs mt-1">
+                कृपया QR Code पर टैप करें और स्कैन करें (Tap QR to Scan & Pay)
+              </p>
+            )}
+            {pending?.step1 && (
+              <p className="step-2-blink text-xs mt-1">
+                कृपया payment के बाद स्क्रीन शॉट लेना ना भूले  
+                <br />(Please don't forget to take screenshot after payment done)
+              </p>
+            )}
+          </div>
+        ) : (
+          <div className="w-full h-56 flex items-center justify-center border rounded-xl text-gray-400">
+            No QR uploaded yet
+          </div>
+        )}
+
+        {/* Pending OR Form */}
         {pending?.id ? (
           unlocking ? (
             <>
@@ -287,7 +245,7 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
               onChange={(e) => {
                 const val = e.target.value;
                 setForm((s) => ({ ...s, name: val }));
-                if (val && form.phone && form.email) setPending((s) => ({ ...s, step3: true }));
+                if (val && form.phone && form.email) setPending((s) => ({ ...s, step2: true }));
               }}
             />
             <input
@@ -297,7 +255,7 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
               onChange={(e) => {
                 const val = e.target.value;
                 setForm((s) => ({ ...s, phone: val }));
-                if (val && form.name && form.email) setPending((s) => ({ ...s, step3: true }));
+                if (val && form.name && form.email) setPending((s) => ({ ...s, step2: true }));
               }}
             />
             <input
@@ -307,23 +265,29 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
               onChange={(e) => {
                 const val = e.target.value;
                 setForm((s) => ({ ...s, email: val }));
-                if (val && form.name && form.phone) setPending((s) => ({ ...s, step3: true }));
+                if (val && form.name && form.phone) setPending((s) => ({ ...s, step2: true }));
               }}
             />
 
-            <p className="text-sm">👉 Step 4: Upload your payment screenshot</p>
+            {/* Screenshot block */}
+            <p className="step-4-blink text-sm">👉 Step 4: Upload your payment screenshot</p>
             <div className="border rounded-xl p-3 text-sm bg-pink-50 relative">
               <label className="flex items-center justify-between text-pink-600 font-semibold mb-2">
                 <span>Upload Payment Screenshot</span>
-                <span className="flex items-center gap-3 text-green-600 animate-bounce select-none">
-                  <svg className="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M12 4v12" /><path d="M8 12l4 4 4-4" />
+                <span
+                  className="flex items-center gap-3 text-green-600 animate-bounce select-none
+                             drop-shadow-[0_0_8px_rgba(34,197,94,0.45)]"
+                >
+                  <svg className="w-8 h-8 md:w-9 md:h-9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                    <path d="M12 4v12" />
+                    <path d="M8 12l4 4 4-4" />
                   </svg>
-                  <span className="text-green-700 font-extrabold text-base uppercase tracking-wide">
+                  <span className="text-green-700 font-extrabold text-base md:text-lg uppercase tracking-wide">
                     Browse HERE TO UPLOAD PAYMENT SCREENSHOT
                   </span>
                 </span>
               </label>
+
               <input
                 type="file"
                 accept="image/*"
@@ -339,25 +303,17 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
               <div className="text-sm p-2 border rounded bg-yellow-50">
                 Selected Plan:{" "}
                 <b>
-                  {cfg.plans[selectedPlan]?.label} – {cfg.currency}{cfg.plans[selectedPlan]?.price}
+                  {cfg.plans[selectedPlan]?.label} – {cfg.currency}
+                  {cfg.plans[selectedPlan]?.price}
                 </b>
               </div>
             )}
-
             <button type="submit" disabled={submitting} className="bg-blue-600 text-white px-4 py-2 rounded">
               {submitting ? "Submitting…" : "Submit"}
             </button>
           </form>
         )}
       </div>
-
-      {/* scanline helper if not already in global css */}
-      <style>{`
-        .scanline { position:absolute; left:0; right:0; top:10%; height:4px; border-radius:999px;
-          background: rgba(16,185,129,0.85); box-shadow:0 0 14px rgba(16,185,129,0.65);
-          animation: scan 2.4s linear infinite; }
-        @keyframes scan { 0%{top:10%;opacity:.9} 50%{top:90%;opacity:.85} 100%{top:10%;opacity:.9} }
-      `}</style>
     </div>
   );
 }
