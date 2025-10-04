@@ -1,4 +1,4 @@
-// client/src/components/QROverlay/QROverlay.jsx
+// client/src/components/paywall/QROverlay.jsx
 import { useEffect, useState } from "react";
 import { API_BASE } from "../../utils/api";
 import { savePending, loadPending } from "../../utils/pending";
@@ -8,28 +8,63 @@ import UnlockWait from "../common/UnlockWait";
 import AccessTimer from "../common/AccessTimer";
 import { saveAccess } from "../../utils/access";
 
+/**
+ * Small helper: resolve absolute/relative URLs and add a cache-busting param.
+ */
+function resolveUrl(url) {
+  if (!url) return "";
+  const base = String(url).startsWith("http") ? url : `${API_BASE}${url}`;
+  const sep = base.includes("?") ? "&" : "?";
+  return `${base}${sep}t=${Date.now()}`;
+}
+
+/**
+ * Try to open a UPI **scanner** (no amount) to avoid app-side "technical glitch".
+ * We attempt a few popular packages; if unsupported, nothing breaks — user can still
+ * scan the on-screen QR code manually.
+ */
+function openUPIScanner() {
+  // Most apps will accept 'upi://pay' without params and show a picker.
+  const tryLinks = [
+    "upi://pay",
+    // Google Pay (Tez)
+    "intent://upi_scan#Intent;scheme=upi;package=com.google.android.apps.nbu.paisa.user;end;",
+    "intent://scan/#Intent;scheme=upi;package=com.google.android.apps.nbu.paisa.user;end;",
+    // PhonePe
+    "intent://scan/#Intent;scheme=upi;package=com.phonepe.app;end;",
+    // Paytm
+    "intent://scan/#Intent;scheme=upi;package=net.one97.paytm;end;",
+    // BHIM
+    "intent://scan/#Intent;scheme=upi;package=in.org.npci.upiapp;end;",
+  ];
+
+  // Fire sequentially with tiny delays. Browsers will ignore unsupported intents.
+  let i = 0;
+  const tick = () => {
+    if (i >= tryLinks.length) return;
+    try {
+      window.location.href = tryLinks[i++];
+      setTimeout(tick, 400);
+    } catch {
+      setTimeout(tick, 400);
+    }
+  };
+  tick();
+}
+
 export default function QROverlay({ open, onClose, title, feature, featureId }) {
-  const [cfg, setCfg] = useState({ url: "", currency: "₹", plans: {}, upi: {} });
+  const [cfg, setCfg] = useState({ url: "", currency: "₹", plans: {} });
   const [selectedPlan, setSelectedPlan] = useState(null);
   const [form, setForm] = useState({ name: "", phone: "", email: "", file: null });
   const [pending, setPending] = useState({});
   const [unlocking, setUnlocking] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  /* -------------------- fetch QR + Plan config -------------------- */
+  /* -------------------- Load QR Config -------------------- */
   async function fetchConfig() {
     try {
-      const r = await fetch(`${API_BASE}/api/qr/current?ts=${Date.now()}`).then((res) =>
-        res.json()
-      );
-      if (r?.success) {
-        setCfg({
-          url: r.url || "",
-          currency: r.currency || "₹",
-          plans: r.plans || {},
-          upi: r.upi || {},
-        });
-      }
+      const r = await fetch(`${API_BASE}/api/qr/current?ts=${Date.now()}`).then((res) => res.json());
+      if (r?.success) setCfg(r);
     } catch (err) {
       console.error("Failed to fetch QR config:", err);
     }
@@ -38,7 +73,7 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
     if (open) fetchConfig();
   }, [open]);
 
-  /* -------------------- restore pending by email ------------------- */
+  /* -------------------- Restore Pending ------------------- */
   useEffect(() => {
     if (form.email) {
       const saved = loadPending(feature, featureId, form.email);
@@ -46,78 +81,44 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
     }
   }, [form.email, feature, featureId]);
 
-  /* ----- watch admin approval (SSE / polling handled in hook) ------ */
+  /* ------- Watch server approval → 15s unlock wait -------- */
   const { status, approved, expiry, message } = useApprovalWatcher(pending, {
     feature,
     featureId,
     email: form.email,
   });
 
-  /* ---- close overlay immediately on any 'accessGranted' broadcast -- */
+  // Close overlay immediately on any 'accessGranted' broadcast
   useEffect(() => {
     const onGranted = () => onClose?.();
     window.addEventListener("accessGranted", onGranted);
     return () => window.removeEventListener("accessGranted", onGranted);
   }, [onClose]);
 
-  /* ------------- after approval: 15s “unlocking” countdown --------- */
+  // When approved: show 15s unlock wait → persist access → close → soft refresh → one-time reload
   useEffect(() => {
     if (status === "approved" && approved) {
       setUnlocking(true);
       const t = setTimeout(() => {
-        // persist access & gently refresh UI
         saveAccess(feature, featureId, form.email, expiry, message);
         setUnlocking(false);
         if (typeof onClose === "function") onClose();
 
-        // nudge all widgets
         window.dispatchEvent(new Event("focus"));
-        window.dispatchEvent(
-          new CustomEvent("softRefresh", { detail: { feature, featureId } })
-        );
+        window.dispatchEvent(new CustomEvent("softRefresh", { detail: { feature, featureId } }));
 
-        // one-time reload (keeps the green timers in player / lists consistent)
         setTimeout(() => window.location.reload(), 150);
       }, 15000);
       return () => clearTimeout(t);
     }
   }, [status, approved, expiry, message, feature, featureId, form.email, onClose]);
 
-  /* ------------------------- UPI intent helper ---------------------- */
-  function openUPI(amount, planLabel) {
-    const am = Number(amount || 0).toFixed(2);
-
-    // If a proper UPI VPA is configured, construct a standards-compliant intent
-    if (cfg?.upi?.pa) {
-      const tr = `LN${Date.now()}`;
-      const params = new URLSearchParams({
-        pa: cfg.upi.pa, // payee VPA (required)
-        pn: cfg.upi.pn || "Law Network",
-        am, // amount
-        cu: "INR",
-        tn: `${planLabel || "Plan"} – ${feature}: ${title}`.slice(0, 80),
-        tr,
-        tid: tr,
-      });
-      if (cfg.upi.mc) params.set("mc", String(cfg.upi.mc));
-      if (cfg.upi.refUrl) params.set("url", String(cfg.upi.refUrl));
-
-      const href = `upi://pay?${params.toString()}`;
-      window.location.href = href;
-      return;
-    }
-
-    // Fallback (no VPA): still mark progress & open generic UPI chooser.
-    setPending((s) => ({ ...s, step2: true }));
-    setTimeout(() => (window.location.href = "upi://pay"), 250);
-  }
-
-  /* --------------------------- submit form -------------------------- */
+  /* -------------------- Submit Form ----------------------- */
   async function handleSubmit(e) {
     e.preventDefault();
-    if (!selectedPlan) return alert("Select a plan");
-    if (!form.file) return alert("Upload screenshot");
-    if (!form.email) return alert("Enter your email");
+    if (!selectedPlan) return alert("Please choose a plan first.");
+    if (!form.file) return alert("Please upload the payment screenshot.");
+    if (!form.email) return alert("Please enter your Gmail.");
 
     setSubmitting(true);
     try {
@@ -126,17 +127,13 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
       fd.append("phone", form.phone);
       fd.append("email", form.email);
       fd.append("planKey", selectedPlan);
-      fd.append("planLabel", cfg.plans[selectedPlan]?.label);
-      fd.append("planPrice", cfg.plans[selectedPlan]?.price);
+      fd.append("planLabel", cfg.plans?.[selectedPlan]?.label);
+      fd.append("planPrice", cfg.plans?.[selectedPlan]?.price);
       fd.append("screenshot", form.file);
       fd.append("type", feature);
       fd.append("id", featureId);
 
-      const r = await fetch(`${API_BASE}/api/submissions`, {
-        method: "POST",
-        body: fd,
-      }).then((res) => res.json());
-
+      const r = await fetch(`${API_BASE}/api/submissions`, { method: "POST", body: fd }).then((res) => res.json());
       if (r?.success) {
         const record = {
           id: r.id,
@@ -145,7 +142,8 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
           planKey: selectedPlan,
           name: form.name,
           email: form.email,
-          step1: pending.step1,
+          // step tracking
+          step1: !!selectedPlan,
           step2: pending.step2,
           step3: pending.step3,
         };
@@ -153,7 +151,7 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
         savePending(feature, featureId, form.email, record);
         localStorage.setItem("userEmail", form.email);
       } else {
-        alert("Failed to submit request");
+        alert("Failed to submit request.");
       }
     } catch (err) {
       alert("Error: " + err.message);
@@ -164,27 +162,17 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
 
   if (!open) return null;
 
-  /* --------- progress bar uses existing step1/2/3 semantics ---------
-     We keep your visual/logic intact:
-       - Step 1 (graph): Scan QR      → pending.step1
-       - Step 2 (graph): Fill Info    → pending.step2
-       - Step 3 (graph): Upload Shot  → pending.step3
-     “Choose Plan” stays above the graph (no change to nodes).
-  ------------------------------------------------------------------- */
-  let progressClass = "";
-  if (pending?.step3) progressClass = "step-graph-progress step-3";
+  /* -------- Progress Graph: 1) Plan 2) Scan 3) Info ------- */
+  let progressClass = "step-graph-progress";
+  if (form.name && form.phone && form.email) progressClass = "step-graph-progress step-3";
   else if (pending?.step2) progressClass = "step-graph-progress step-2";
-  else if (pending?.step1) progressClass = "step-graph-progress step-1";
-  else progressClass = "step-graph-progress";
+  else if (selectedPlan) progressClass = "step-graph-progress step-1";
 
   return (
     <div className="fixed inset-y-0 right-0 bg-white shadow-2xl w-full max-w-md z-50 overflow-y-auto">
       <div className="p-5 relative">
-        {/* Close button */}
-        <button
-          onClick={onClose}
-          className="absolute right-3 top-3 text-red-600 font-bold text-lg"
-        >
+        {/* Close */}
+        <button onClick={onClose} className="absolute right-3 top-3 text-red-600 font-bold text-lg">
           ✕
         </button>
 
@@ -193,80 +181,74 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
           {feature} – {title}
         </h3>
 
-        {/* Step 1: Choose Plan (placed before graph, per your UI) */}
-        <div className="mb-2 text-xs font-semibold">
-          <span>Step 1: Choose Plan</span>
+        {/* Progress bar with 3 nodes */}
+        <div className="step-graph mb-4 text-xs md:text-sm font-semibold">
+          <div className={progressClass}></div>
+          <div className={`step-node ${selectedPlan ? "active" : ""}`}>1</div>
+          <div className={`step-node ${pending?.step2 ? "active" : ""}`}>2</div>
+          <div className={`step-node ${form.name && form.phone && form.email ? "active" : ""}`}>3</div>
         </div>
+
+        {/* Step labels (Step 4 label shown below with the uploader) */}
+        <div className="flex justify-between mb-4 text-[11px] md:text-sm font-semibold">
+          <div className={selectedPlan ? "text-green-600" : "step-1-blink"}>Step 1: Choose Plan</div>
+          <div className={pending?.step2 ? "text-green-600" : "step-2-blink"}>
+            Step 2: Scan QR {pending?.step2 && <span className="tick-animate">✅</span>}
+          </div>
+          <div className={form.name && form.phone && form.email ? "text-green-600" : "step-3-blink"}>
+            Step 3: Fill Info {form.name && form.phone && form.email && <span className="tick-animate">✅</span>}
+          </div>
+        </div>
+
+        {/* Plans */}
         <div className="flex gap-2 mb-4">
           {["weekly", "monthly", "yearly"].map((p) => (
             <button
               key={p}
               onClick={() => setSelectedPlan(p)}
               className={`px-3 py-1 rounded-full border text-sm ${
-                selectedPlan === p
-                  ? "bg-yellow-300 animate-pulse"
-                  : "bg-gray-100 hover:bg-gray-200"
+                selectedPlan === p ? "bg-yellow-300 animate-pulse" : "bg-gray-100 hover:bg-gray-200"
               }`}
             >
-              {cfg.plans[p]?.label} – {cfg.currency}
-              {cfg.plans[p]?.price}
+              {cfg.plans?.[p]?.label} – {cfg.currency}
+              {cfg.plans?.[p]?.price}
             </button>
           ))}
         </div>
 
-        {/* Progress Graph (kept exactly as before) */}
-        <div className="step-graph mb-4 text-xs md:text-sm font-semibold">
-          <div className={progressClass}></div>
-          <div className={`step-node ${pending?.step1 ? "active" : ""}`}>2</div>
-          <div className={`step-node ${pending?.step2 ? "active" : ""}`}>3</div>
-          <div className={`step-node ${pending?.step3 ? "active" : ""}`}>4</div>
-        </div>
-
-        {/* Step labels (unchanged texts except order shown) */}
-        <div className="flex justify-between mb-4 text-xs md:text-sm font-semibold">
-          <div className={pending?.step1 ? "text-green-600" : "step-1-blink"}>
-            Step 2: Scan QR {pending?.step1 && <span className="tick-animate">✅</span>}
-          </div>
-          <div className={pending?.step2 ? "text-green-600" : "step-2-blink"}>
-            Step 3: Fill Info {pending?.step2 && <span className="tick-animate">✅</span>}
-          </div>
-          <div className={pending?.step3 ? "text-green-600" : "step-3-blink"}>
-            Step 4: Upload Screenshot{" "}
-            {pending?.step3 && <span className="tick-animate">✅</span>}
-          </div>
-        </div>
-
-        {/* QR Image (tap to open UPI intent with amount if plan is chosen) */}
+        {/* QR Image (tap → open UPI scanner; we DO NOT prefill amount to avoid glitches) */}
         {cfg.url ? (
           <div className="mb-4 text-center">
             <img
-              src={`${API_BASE}${cfg.url}?t=${Date.now()}`}
+              src={resolveUrl(cfg.url)}
+              crossOrigin="anonymous"
               alt="QR code"
               className={`w-full h-56 object-contain border rounded-xl bg-gray-50 ${
-                pending?.step1 ? "" : "cursor-pointer qr-glow"
+                pending?.step2 ? "" : "cursor-pointer qr-glow"
               }`}
+              onError={(e) => {
+                e.currentTarget.style.display = "none";
+                console.warn("QR image failed to load:", cfg.url);
+              }}
               onClick={() => {
                 if (!selectedPlan) {
-                  alert("Please choose a plan first");
+                  alert("Please choose a plan first.");
                   return;
                 }
-                // Mark Step 2 in your original graph model
-                setPending((s) => ({ ...s, step1: true }));
-                const price = cfg.plans?.[selectedPlan]?.price;
-                const label = cfg.plans?.[selectedPlan]?.label;
-                if (price) setTimeout(() => openUPI(price, label), 500);
-                else setTimeout(() => (window.location.href = "upi://pay"), 500);
+                setPending((s) => ({ ...s, step2: true }));
+                // Open scanner for smooth, manual QR scanning
+                setTimeout(() => openUPIScanner(), 500);
               }}
             />
-            {!pending?.step1 && (
+            {!pending?.step2 && (
               <p className="step-1-blink text-xs mt-1">
                 कृपया QR Code पर टैप करें और स्कैन करें (Tap QR to Scan & Pay)
               </p>
             )}
-            {pending?.step1 && (
+            {pending?.step2 && (
               <p className="step-1-blink text-xs mt-1">
                 कृपया payment के बाद स्क्रीन शॉट लेना ना भूले
-                <br /> (Please don't forget to take screenshot after payment done)
+                <br />(Please don't forget to take screenshot after payment done)
               </p>
             )}
           </div>
@@ -276,7 +258,7 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
           </div>
         )}
 
-        {/* Pending or Form */}
+        {/* Pending flow OR Form */}
         {pending?.id ? (
           unlocking ? (
             <>
@@ -291,9 +273,7 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
               {message ? (
                 <p className="text-sm mb-2 whitespace-pre-line">{message}</p>
               ) : (
-                <p className="text-sm mb-2">
-                  Hi {pending.name}, your subscription has been approved.
-                </p>
+                <p className="text-sm mb-2">Hi {pending.name || "User"}, your subscription has been approved.</p>
               )}
               {expiry && (
                 <div className="animate-blink">
@@ -304,16 +284,12 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
           ) : (
             <PendingBadge
               shortId={pending.shortId}
-              deadline={
-                pending.expiry
-                  ? new Date(pending.expiry).toLocaleString()
-                  : "Waiting for approval"
-              }
+              deadline={pending.expiry ? new Date(pending.expiry).toLocaleString() : "Waiting for approval"}
             />
           )
         ) : (
           <form onSubmit={handleSubmit} className="grid gap-3">
-            <p className="step-2-blink text-sm">👉 Please fill your info details</p>
+            <p className="step-3-blink text-sm">👉 Please fill your info details</p>
             <input
               placeholder="Your Name"
               className="border rounded p-2"
@@ -321,9 +297,6 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
               onChange={(e) => {
                 const val = e.target.value;
                 setForm((s) => ({ ...s, name: val }));
-                if (val && form.phone && form.email) {
-                  setPending((s) => ({ ...s, step2: true }));
-                }
               }}
             />
             <input
@@ -333,9 +306,6 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
               onChange={(e) => {
                 const val = e.target.value;
                 setForm((s) => ({ ...s, phone: val }));
-                if (val && form.name && form.email) {
-                  setPending((s) => ({ ...s, step2: true }));
-                }
               }}
             />
             <input
@@ -345,18 +315,23 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
               onChange={(e) => {
                 const val = e.target.value;
                 setForm((s) => ({ ...s, email: val }));
-                if (val && form.name && form.phone) {
-                  setPending((s) => ({ ...s, step2: true }));
+              }}
+              onBlur={() => {
+                if (form.name && form.phone && form.email) {
+                  setPending((s) => ({ ...s, step3: true }));
                 }
               }}
             />
 
-            {/* Screenshot block */}
-            <p className="step-3-blink text-sm">👉 Step 4: Upload your payment screenshot</p>
+            {/* Step 4: Screenshot uploader */}
+            <p className="text-sm">👉 <b>Step 4:</b> Upload your payment screenshot</p>
             <div className="border rounded-xl p-3 text-sm bg-pink-50 relative">
               <label className="flex items-center justify-between text-pink-600 font-semibold mb-2">
                 <span>Upload Payment Screenshot</span>
-                <span className="flex items-center gap-3 text-green-600 animate-bounce select-none drop-shadow-[0_0_8px_rgba(34,197,94,0.45)]">
+                <span
+                  className="flex items-center gap-3 text-green-600 animate-bounce select-none
+                             drop-shadow-[0_0_8px_rgba(34,197,94,0.45)]"
+                >
                   <svg
                     className="w-8 h-8 md:w-9 md:h-9"
                     viewBox="0 0 24 24"
@@ -388,18 +363,15 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
 
             {selectedPlan && (
               <div className="text-sm p-2 border rounded bg-yellow-50">
-                Selected Plan:{" "}
+                Selected Plan:&nbsp;
                 <b>
-                  {cfg.plans[selectedPlan]?.label} – {cfg.currency}
-                  {cfg.plans[selectedPlan]?.price}
+                  {cfg.plans?.[selectedPlan]?.label} – {cfg.currency}
+                  {cfg.plans?.[selectedPlan]?.price}
                 </b>
               </div>
             )}
-            <button
-              type="submit"
-              disabled={submitting}
-              className="bg-blue-600 text-white px-4 py-2 rounded"
-            >
+
+            <button type="submit" disabled={submitting} className="bg-blue-600 text-white px-4 py-2 rounded">
               {submitting ? "Submitting…" : "Submit"}
             </button>
           </form>
