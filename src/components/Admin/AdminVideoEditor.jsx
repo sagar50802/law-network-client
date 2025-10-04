@@ -1,3 +1,4 @@
+// client/src/components/Admin/AdminVideoGallery.jsx
 import { useEffect, useMemo, useState } from "react";
 import {
   getJSON,
@@ -8,9 +9,10 @@ import {
   absUrl,
 } from "../../utils/api";
 
-export default function AdminVideoEditor() {
+export default function AdminVideoGallery() {
+  /* ---------------- state ---------------- */
   const [playlists, setPlaylists] = useState([]);
-  const [sel, setSel] = useState("");
+  const [sel, setSel] = useState(""); // selected playlist id
   const [newName, setNewName] = useState("");
 
   const [title, setTitle] = useState("");
@@ -22,6 +24,10 @@ export default function AdminVideoEditor() {
   const [busy, setBusy] = useState(false);
   const [error, setError] = useState("");
 
+  const log = (...a) => console.log("[AdminVideo]", ...a);
+  const warn = (...a) => console.warn("[AdminVideo]", ...a);
+
+  /* ---------------- helpers ---------------- */
   const selected = useMemo(
     () => playlists.find((p) => (p._id || p.id) === sel),
     [playlists, sel]
@@ -35,10 +41,25 @@ export default function AdminVideoEditor() {
     return [];
   };
 
+  // Reuse the same admin key strategy as podcasts
+  const ownerQuery = () => {
+    const h = authHeaders() || {};
+    const headerKey = h["X-Owner-Key"] || h["x-owner-key"] || "";
+    const bearer =
+      typeof h.Authorization === "string" && h.Authorization.startsWith("Bearer ")
+        ? h.Authorization.slice(7)
+        : "";
+    const key = headerKey || bearer || "";
+    return key ? `?owner=${encodeURIComponent(key)}` : "";
+  };
+
+  /* ---------------- load ---------------- */
   async function load() {
     try {
       setError("");
+      log("GET /videos");
       const r = await getJSON("/videos", { headers: authHeaders() });
+      log(" response:", r);
       const arr = normalize(r);
       setPlaylists(arr);
       if (arr.length) {
@@ -48,23 +69,28 @@ export default function AdminVideoEditor() {
         setSel("");
       }
     } catch (e) {
+      warn(" load failed:", e);
       setError("Failed to load video playlists");
       setPlaylists([]);
       setSel("");
     }
   }
-  useEffect(() => { load(); }, []);
+  useEffect(() => { load(); /* eslint-disable-next-line */}, []);
 
+  /* ---------------- create/delete playlist ---------------- */
   async function addPlaylist() {
     const name = newName.trim();
     if (!name) return;
     setBusy(true);
     try {
-      await postJSON("/videos/playlists", { name }, { headers: authHeaders() });
+      // send name in both places (body + query) like your podcast editor
+      const qs = new URLSearchParams({ name }).toString();
+      await postJSON(`/videos/playlists?${qs}`, { name, playlistName: name }, { headers: authHeaders() });
       setNewName("");
       await load();
-    } catch {
-      alert("Create playlist failed");
+    } catch (e) {
+      warn(" create failed:", e);
+      alert("Create video playlist failed");
     } finally {
       setBusy(false);
     }
@@ -72,11 +98,14 @@ export default function AdminVideoEditor() {
 
   async function deletePlaylist(id) {
     if (!id) return;
-    if (!confirm("Delete this playlist and all its videos?")) return;
+    if (!confirm("Delete this video playlist and all its items?")) return;
     setBusy(true);
     try {
-      await deleteJSON(`/videos/playlists/${encodeURIComponent(id)}`, { headers: authHeaders() });
-    } catch {
+      const urlWithKey = `/videos/playlists/${encodeURIComponent(id)}${ownerQuery()}`;
+      log("DELETE", urlWithKey);
+      await deleteJSON(urlWithKey, { headers: authHeaders() });
+    } catch (e) {
+      warn(" delete failed:", e);
       alert("Delete playlist failed");
     } finally {
       setBusy(false);
@@ -85,57 +114,86 @@ export default function AdminVideoEditor() {
     }
   }
 
+  /* ---------------- upload item (video file or URL) ---------------- */
   async function uploadItem(e) {
     e?.preventDefault?.();
-    const key = selected?._id || selected?.id || sel;
-    if (!key) return alert("Select a playlist first");
-    if (!file && !url.trim()) return alert("Choose a video file or paste a direct video URL");
+    const plId = selected?._id || selected?.id || sel;
+    if (!plId) return alert("Select a playlist first");
+    if (!file && !url.trim()) return alert("Choose a file or paste a direct video URL");
 
     const fd = new FormData();
     fd.append("title", title || "Untitled");
     fd.append("artist", artist || "");
     fd.append("locked", locked ? "true" : "false");
-    if (file) fd.append("video", file);  // field name "video"
+    if (file) fd.append("video", file); // NOTE: field name must be "video"
     if (url.trim()) fd.append("url", url.trim());
 
     setBusy(true);
     try {
-      await upload(`/videos/playlists/${encodeURIComponent(key)}/items`, fd, {
-        headers: authHeaders(),
-      });
+      const urlWithKey = `/videos/playlists/${encodeURIComponent(plId)}/items${ownerQuery()}`;
+      log("UPLOAD", urlWithKey);
+      await upload(urlWithKey, fd, { headers: authHeaders() });
       setTitle("");
       setArtist("");
       setFile(null);
       setUrl("");
       setLocked(true);
       await load();
-    } catch {
+    } catch (err) {
+      warn(" upload failed:", err);
       alert("Upload failed. Check server logs for details.");
     } finally {
       setBusy(false);
     }
   }
 
+  /* ---------------- delete/toggle item ---------------- */
   async function removeItem(iid) {
     if (!confirm("Delete this video item?")) return;
-    const key = selected?._id || selected?.id || sel;
-    if (!key || !iid) return;
+    const plId = selected?._id || selected?.id || sel;
+    if (!plId || !iid) return;
     setBusy(true);
     try {
-      await deleteJSON(`/videos/playlists/${encodeURIComponent(key)}/items/${encodeURIComponent(iid)}`, {
-        headers: authHeaders(),
-      });
-    } catch {}
-    setBusy(false);
-    await load();
+      const urlWithKey = `/videos/playlists/${encodeURIComponent(plId)}/items/${encodeURIComponent(iid)}${ownerQuery()}`;
+      log("DELETE", urlWithKey);
+      await deleteJSON(urlWithKey, { headers: authHeaders() });
+    } catch (e) {
+      warn(" delete item failed:", e);
+    } finally {
+      setBusy(false);
+      await load();
+    }
   }
 
+  async function toggleLock(iid, newState) {
+    const plId = selected?._id || selected?.id || sel;
+    if (!plId || !iid) return;
+    setBusy(true);
+    try {
+      const qs = new URLSearchParams({ locked: String(!!newState) }).toString();
+      const urlWithKey = `/videos/playlists/${encodeURIComponent(plId)}/items/${encodeURIComponent(iid)}/lock${ownerQuery()}&${qs}`;
+      log("PATCH", urlWithKey);
+      await fetch(urlWithKey, {
+        method: "PATCH",
+        headers: { ...authHeaders(), "Content-Type": "application/json" },
+        body: JSON.stringify({ locked: !!newState }),
+      });
+    } catch (e) {
+      warn(" toggle lock failed:", e);
+    } finally {
+      setBusy(false);
+      await load();
+    }
+  }
+
+  /* ---------------- view ---------------- */
   return (
     <div className="space-y-4">
+      {/* Create playlist */}
       <div className="flex gap-2 items-center">
         <input
           className="border p-2 rounded flex-1"
-          placeholder="New playlist name"
+          placeholder="New video playlist name"
           value={newName}
           onChange={(e) => setNewName(e.target.value)}
           disabled={busy}
@@ -149,6 +207,7 @@ export default function AdminVideoEditor() {
         </button>
       </div>
 
+      {/* Select playlist */}
       <select
         className="border p-2 rounded w-full"
         value={sel}
@@ -166,6 +225,7 @@ export default function AdminVideoEditor() {
         })}
       </select>
 
+      {/* Upload form */}
       <form onSubmit={uploadItem} className="grid gap-2">
         <input
           className="border p-2 rounded"
@@ -203,8 +263,9 @@ export default function AdminVideoEditor() {
             onChange={(e) => setLocked(e.target.checked)}
             disabled={busy}
           />
-          Locked (requires access)
         </label>
+        <span className="text-sm text-gray-600 -mt-2">Locked (requires access)</span>
+
         <button
           className="bg-blue-600 text-white px-3 py-2 rounded w-fit disabled:opacity-60"
           disabled={busy || !sel || (!file && !url.trim())}
@@ -213,12 +274,11 @@ export default function AdminVideoEditor() {
         </button>
       </form>
 
+      {/* Items list */}
       {selected && (
         <div className="space-y-2">
           <div className="flex items-center justify-between">
-            <h4 className="font-semibold">
-              Items in “{selected.name}”
-            </h4>
+            <h4 className="font-semibold">Items in “{selected.name}”</h4>
             <button
               className="text-red-600 text-sm"
               onClick={() => deletePlaylist(selected._id || selected.id)}
@@ -234,6 +294,13 @@ export default function AdminVideoEditor() {
                 <div className="font-medium">{it.title}</div>
                 <div className="text-xs text-gray-500 break-all">{absUrl(it.url)}</div>
                 <div className="flex gap-2 mt-2">
+                  <button
+                    className="px-2 py-1 border rounded text-xs"
+                    onClick={() => toggleLock(it._id || it.id, !it.locked)}
+                    disabled={busy}
+                  >
+                    {it.locked ? "Unlock" : "Lock"}
+                  </button>
                   <button
                     className="px-2 py-1 border rounded text-xs text-red-600"
                     onClick={() => removeItem(it._id || it.id)}
