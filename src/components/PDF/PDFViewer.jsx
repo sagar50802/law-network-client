@@ -10,6 +10,9 @@ import AccessTimer from "../common/AccessTimer";
 import useAccessSync from "../../hooks/useAccessSync";
 import useSubmissionStream from "../../hooks/useSubmissionStream";
 
+// ---- set preview length here ----
+const PREVIEW_SECONDS = 3;
+
 // use CDN worker (vite/SSR safe)
 pdfjs.GlobalWorkerOptions.workerSrc = `//unpkg.com/pdfjs-dist@${pdfjs.version}/build/pdf.worker.min.js`;
 
@@ -28,6 +31,7 @@ export default function PDFViewer() {
   const [forceBlur, setForceBlur] = useState(false);
 
   const panelRef = useRef(null);
+  const overlayGateRef = useRef(false); // ensure overlay opens once per chapter
   const [email] = useState(() => localStorage.getItem("userEmail") || "");
   useSubmissionStream(email);
   const pendingEventsRef = useRef([]);
@@ -114,6 +118,7 @@ export default function PDFViewer() {
       setPage(1);
       setScale(1);
       setSubjectOverlay(null);
+      overlayGateRef.current = false; // reset gate on chapter change
     } else {
       setChapter(null);
     }
@@ -124,24 +129,30 @@ export default function PDFViewer() {
     if (a?.expiry && a.expiry > Date.now()) setForceBlur(false);
   }, [accessMap, sid]);
 
-  // 2s preview
+  // ----- precise preview window -----
   const lock = usePreviewLock({
     type: "notebook",
     id: chapter?.id || "none",
-    previewSeconds: 2,
+    previewSeconds: PREVIEW_SECONDS,
   });
 
+  // Auto-open overlay after PREVIEW_SECONDS for locked subjects
   useEffect(() => {
     if (!chapter) return;
     const currentAccess = accessMap[sid];
-    if (currentAccess?.expiry && currentAccess.expiry > Date.now()) return;
-    if (lock.unlocked) return;
+    if (currentAccess?.expiry && currentAccess.expiry > Date.now()) return; // already unlocked
+    if (overlayGateRef.current) return; // already opened for this chapter
+
     const t = setTimeout(() => {
       const subj = subjects.find((x) => x.id === sid);
-      if (subj) setSubjectOverlay(subj);
-    }, 2000);
+      if (subj) {
+        setSubjectOverlay(subj);
+        overlayGateRef.current = true;
+      }
+    }, PREVIEW_SECONDS * 1000);
+
     return () => clearTimeout(t);
-  }, [chapter?.id, sid, subjects, lock.unlocked, accessMap]);
+  }, [chapter?.id, sid, subjects, accessMap]);
 
   const refreshAllAccess = async () => {
     if (subjects.length === 0) return;
@@ -227,7 +238,7 @@ export default function PDFViewer() {
                   ) : (
                     <button
                       className="flex items-center gap-1 text-xs bg-red-500 text-white px-2 py-1 rounded"
-                      onClick={() => { setSubjectOverlay(sub); setForceBlur(false); }}
+                      onClick={() => { setSubjectOverlay(sub); setForceBlur(false); overlayGateRef.current = true; }}
                     >
                       Unlock
                     </button>
@@ -240,7 +251,7 @@ export default function PDFViewer() {
                       <div
                         key={ch.id}
                         className={`px-2 py-2 rounded cursor-pointer hover:bg-gray-50 flex items-center justify-between ${chapter?.id === ch.id ? "bg-gray-50" : ""}`}
-                        onClick={() => { setChapter(ch); setPage(1); setScale(1); }}
+                        onClick={() => { setChapter(ch); setPage(1); setScale(1); overlayGateRef.current = false; }}
                       >
                         <div className="truncate">
                           <div className="text-sm font-medium truncate">{ch.title}</div>
@@ -299,7 +310,8 @@ export default function PDFViewer() {
                   }`}>
                     {subjAccess?.expiry && subjAccess.expiry > Date.now()
                       ? <>✅ Unlocked <AccessTimer timeLeftMs={subjAccess.expiry - Date.now()} /></>
-                      : `Locked (${Math.max(0, 2 - Math.floor((lock.spentMs || 0) / 1000))}s preview)`}
+                      : `Locked (${PREVIEW_SECONDS}s preview)`
+                    }
                     {accessLoading && (
                       <span className="ml-1 align-middle animate-spin inline-block w-3 h-3 border-2 border-current border-t-transparent rounded-full"></span>
                     )}
