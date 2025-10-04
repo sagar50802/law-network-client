@@ -8,6 +8,19 @@ import {
   authHeaders,
 } from "../../utils/api";
 
+// Safely append ?owner=... or &owner=... based on whether the URL already has a query string
+function addOwner(url) {
+  const h = authHeaders() || {};
+  const headerKey = h["X-Owner-Key"] || h["x-owner-key"] || "";
+  const bearer =
+    typeof h.Authorization === "string" && h.Authorization.startsWith("Bearer ")
+      ? h.Authorization.slice(7)
+      : "";
+  const key = headerKey || bearer || "";
+  if (!key) return url;
+  return url + (url.includes("?") ? `&owner=${encodeURIComponent(key)}` : `?owner=${encodeURIComponent(key)}`);
+}
+
 export default function AdminPDFEditor() {
   const [subjects, setSubjects] = useState([]);
   const [sel, setSel] = useState(""); // selected subject id
@@ -33,18 +46,6 @@ export default function AdminPDFEditor() {
     return [];
   };
 
-  // Reuse the “owner key in query” trick so admin actions always pass
-  const ownerQuery = () => {
-    const h = authHeaders() || {};
-    const headerKey = h["X-Owner-Key"] || h["x-owner-key"] || "";
-    const bearer =
-      typeof h.Authorization === "string" && h.Authorization.startsWith("Bearer ")
-        ? h.Authorization.slice(7)
-        : "";
-    const key = headerKey || bearer || "";
-    return key ? `?owner=${encodeURIComponent(key)}` : "";
-  };
-
   async function load() {
     try {
       setError("");
@@ -59,7 +60,10 @@ export default function AdminPDFEditor() {
       setSel("");
     }
   }
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, []);
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, []);
 
   const selected = useMemo(
     () => subjects.find((s) => (s._id || s.id) === sel),
@@ -73,7 +77,11 @@ export default function AdminPDFEditor() {
     setBusy(true);
     try {
       const qs = new URLSearchParams({ name }).toString();
-      await postJSON(`/pdfs/subjects?${qs}`, { name }, { headers: authHeaders() });
+      await postJSON(
+        addOwner(`/pdfs/subjects?${qs}`),
+        { name, subjectName: name },
+        { headers: { ...authHeaders(), "Content-Type": "application/json" } }
+      );
       setNewName("");
       await load();
     } catch (e) {
@@ -90,7 +98,7 @@ export default function AdminPDFEditor() {
     if (!confirm("Delete subject and all chapters?")) return;
     setBusy(true);
     try {
-      await deleteJSON(`/pdfs/subjects/${encodeURIComponent(id)}${ownerQuery()}`, {
+      await deleteJSON(addOwner(`/pdfs/subjects/${encodeURIComponent(id)}`), {
         headers: authHeaders(),
       });
       if (sel === id) setSel("");
@@ -108,7 +116,8 @@ export default function AdminPDFEditor() {
     e?.preventDefault?.();
     const sid = selected?._id || selected?.id || sel;
     if (!sid) return alert("Select a subject first");
-    if (!file && !url.trim()) return alert("Choose a PDF file or paste a direct PDF URL");
+    if (!file && !url.trim())
+      return alert("Choose a PDF file or paste a direct PDF URL");
 
     const fd = new FormData();
     fd.append("title", title || "Untitled");
@@ -118,9 +127,11 @@ export default function AdminPDFEditor() {
 
     setBusy(true);
     try {
-      await upload(`/pdfs/subjects/${encodeURIComponent(sid)}/chapters${ownerQuery()}`, fd, {
-        headers: authHeaders(),
-      });
+      await upload(
+        addOwner(`/pdfs/subjects/${encodeURIComponent(sid)}/chapters`),
+        fd,
+        { headers: authHeaders() }
+      );
       // reset
       setTitle("");
       setUrl("");
@@ -144,7 +155,11 @@ export default function AdminPDFEditor() {
     setBusy(true);
     try {
       await deleteJSON(
-        `/pdfs/subjects/${encodeURIComponent(sid)}/chapters/${encodeURIComponent(cid)}${ownerQuery()}`,
+        addOwner(
+          `/pdfs/subjects/${encodeURIComponent(sid)}/chapters/${encodeURIComponent(
+            cid
+          )}`
+        ),
         { headers: authHeaders() }
       );
     } catch (e) {
@@ -270,7 +285,9 @@ export default function AdminPDFEditor() {
         </div>
       ))}
 
-      {error && <div className="text-sm whitespace-pre-wrap text-red-600">{error}</div>}
+      {error && (
+        <div className="text-sm whitespace-pre-wrap text-red-600">{error}</div>
+      )}
     </div>
   );
 }
