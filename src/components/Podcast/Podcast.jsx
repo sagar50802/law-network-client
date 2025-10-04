@@ -24,6 +24,12 @@ export default function Podcast() {
   const audioRef = useRef(null);
   const overlayGuardRef = useRef(false);
 
+  // NEW: track if preview was already consumed for this track (for instant re-block)
+  const previewSpentRef = useRef(false);
+
+  // NEW: robust autoplay after user clicks a list item
+  const shouldAutoPlayNextRef = useRef(false);
+
   const [cur, setCur] = useState(0);
   const [dur, setDur] = useState(0);
 
@@ -51,11 +57,24 @@ export default function Podcast() {
   /* reset on track change */
   useEffect(() => {
     overlayGuardRef.current = false;
+    previewSpentRef.current = false; // NEW: fresh preview per item
     setCur(0);
     setDur(0);
-    if (audioRef.current) {
-      audioRef.current.pause();
-      audioRef.current.currentTime = 0;
+    const el = audioRef.current;
+    if (el) {
+      el.pause();
+      el.currentTime = 0;
+      // If user clicked the item, try autoplay when ready
+      const tryAutoPlay = async () => {
+        if (!shouldAutoPlayNextRef.current) return;
+        try { await el.play(); } catch {}
+        shouldAutoPlayNextRef.current = false;
+      };
+      const onCanPlay = () => tryAutoPlay();
+      el.addEventListener("canplay", onCanPlay, { once: true });
+      // In case it's already ready (cache)
+      if (el.readyState >= 3) tryAutoPlay();
+      return () => el.removeEventListener("canplay", onCanPlay);
     }
   }, [track?.id, pid]);
 
@@ -74,6 +93,7 @@ export default function Podcast() {
       setAccessMap((p) => ({ ...p, [featureId]: { expiry: detail.expiry } }));
       setPlaylistOverlay(null);
       overlayGuardRef.current = false;
+      previewSpentRef.current = false; // NEW: allow full playback now
       const el = audioRef.current;
       if (el) { try { await el.play(); } catch {} }
       return;
@@ -141,7 +161,11 @@ export default function Podcast() {
                       <div
                         key={it.id}
                         className={`px-2 py-2 rounded cursor-pointer hover:bg-gray-50 flex items-center justify-between ${track?.id === it.id ? "bg-gray-50" : ""}`}
-                        onClick={() => setTrack(it)}
+                        onClick={() => {
+                          setTrack(it);
+                          // NEW: mark that we want to auto-play when the audio becomes ready
+                          shouldAutoPlayNextRef.current = true;
+                        }}
                       >
                         <div className="truncate">
                           <div className="text-sm font-medium truncate">{it.title}</div>
@@ -202,12 +226,26 @@ export default function Podcast() {
               style={{ width: "100%" }}
               onContextMenu={(e) => e.preventDefault()}
               onLoadedMetadata={(e) => setDur(e.currentTarget.duration || 0)}
+              onPlay={(e) => {
+                // NEW: if preview already spent and still locked → instantly re-open overlay and block
+                if (!unlocked && previewSpentRef.current) {
+                  const el = e.currentTarget;
+                  el.pause();
+                  if (!overlayGuardRef.current) {
+                    const currentPl = playlists.find((x) => x.id === pid);
+                    if (currentPl) setPlaylistOverlay(currentPl);
+                    overlayGuardRef.current = true;
+                  }
+                }
+              }}
               onTimeUpdate={(e) => {
                 const el = e.currentTarget;
                 setCur(el.currentTime);
                 if (!unlocked && el.currentTime >= PREVIEW_SECONDS) {
+                  // hit the wall
                   el.pause();
-                  el.currentTime = PREVIEW_SECONDS - 0.1; // back off a bit
+                  previewSpentRef.current = true; // NEW: mark spent
+                  el.currentTime = PREVIEW_SECONDS - 0.1; // back off a bit for UI
                   if (!overlayGuardRef.current) {
                     const currentPl = playlists.find((x) => x.id === pid);
                     if (currentPl) setPlaylistOverlay(currentPl);
@@ -219,6 +257,7 @@ export default function Podcast() {
                 const el = e.currentTarget;
                 if (!unlocked && el.currentTime > PREVIEW_SECONDS) {
                   el.currentTime = PREVIEW_SECONDS - 0.1;
+                  previewSpentRef.current = true; // NEW: mark spent if they tried to skip past
                   if (!overlayGuardRef.current) {
                     const currentPl = playlists.find((x) => x.id === pid);
                     if (currentPl) setPlaylistOverlay(currentPl);
@@ -242,14 +281,15 @@ export default function Podcast() {
         <QROverlay
           open
           onClose={() => {
-            // pause + rewind a bit so it doesn’t instantly trigger again
+            // pause + rewind a bit; keep "spent" so pressing play re-opens immediately until unlocked
             const el = audioRef.current;
             if (el) {
               el.pause();
-              el.currentTime = Math.min(PREVIEW_SECONDS - 0.2, el.currentTime);
+              el.currentTime = Math.min(PREVIEW_SECONDS - 0.2, el.currentTime || 0);
             }
             setPlaylistOverlay(null);
-            overlayGuardRef.current = false;
+            overlayGuardRef.current = false; // allow it to show again next attempt
+            // NOTE: previewSpentRef remains true until track changes or access is granted
           }}
           title={playlistOverlay.name}
           subjectLabel="Podcast"
