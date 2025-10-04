@@ -1,5 +1,11 @@
 import { useEffect, useState } from "react";
-import { API_BASE, getJSON, deleteJSON, authHeaders, absUrl } from "../../utils/api";
+import {
+  API_BASE,
+  getJSON,
+  deleteJSON,
+  authHeaders,
+  absUrl,
+} from "../../utils/api";
 
 /* ---- headers for multipart ---- */
 function safeAuthHeaders() {
@@ -13,41 +19,48 @@ function safeAuthHeaders() {
 }
 
 /* ---- API ---- */
-async function uploadSlide({ title, intro, file, links = {}, waqrFile }) {
+async function uploadSlide({ title, intro, file, links }) {
   const fd = new FormData();
   fd.append("title", title || "Untitled");
   if (intro != null) fd.append("intro", intro);
+  if (links?.whatsapp)  fd.append("whatsapp", links.whatsapp);
+  if (links?.telegram)  fd.append("telegram", links.telegram);
+  if (links?.instagram) fd.append("instagram", links.instagram);
+  if (links?.email)     fd.append("email", links.email);
+  if (links?.website)   fd.append("website", links.website);
   if (file) fd.append("image", file);
-
-  // links
-  Object.entries(links).forEach(([k, v]) => fd.append(k, v || ""));
-  // optional QR (private)
-  if (waqrFile) fd.append("waqr", waqrFile);
-
   const res = await fetch(`${API_BASE}/consultancy`, {
     method: "POST",
     headers: safeAuthHeaders(),
     body: fd,
   });
-  if (!res.ok) throw new Error(`POST /consultancy ${res.status}`);
+  if (!res.ok) {
+    const msg = await res.text().catch(() => "");
+    throw new Error(`POST /consultancy ${res.status}: ${msg}`);
+  }
   return res.json();
 }
 
-async function patchSlide(id, patch = {}) {
+async function patchSlide(id, patch) {
   const fd = new FormData();
   if (patch.title != null) fd.append("title", patch.title);
   if (patch.intro != null) fd.append("intro", patch.intro);
   if (patch.file) fd.append("image", patch.file);
-  if (patch.waqrFile) fd.append("waqr", patch.waqrFile);
-  if (patch.links) {
-    Object.entries(patch.links).forEach(([k, v]) => fd.append(k, v ?? ""));
-  }
+  if (patch.whatsapp != null)  fd.append("whatsapp", patch.whatsapp);
+  if (patch.telegram != null)  fd.append("telegram", patch.telegram);
+  if (patch.instagram != null) fd.append("instagram", patch.instagram);
+  if (patch.email != null)     fd.append("email", patch.email);
+  if (patch.website != null)   fd.append("website", patch.website);
+
   const res = await fetch(`${API_BASE}/consultancy/${id}`, {
     method: "PATCH",
     headers: safeAuthHeaders(),
     body: fd,
   });
-  if (!res.ok) throw new Error(`PATCH /consultancy/${id} ${res.status}`);
+  if (!res.ok) {
+    const msg = await res.text().catch(() => "");
+    throw new Error(`PATCH /consultancy/${id} ${res.status}: ${msg}`);
+  }
   return res.json();
 }
 
@@ -59,17 +72,14 @@ export default function AdminConsultancyEditor() {
   const [title, setTitle] = useState("");
   const [intro, setIntro] = useState("");
   const [file, setFile] = useState(null);
-  const [waqrFile, setWaqrFile] = useState(null);
-  const [links, setLinks] = useState({
-    whatsapp: "",
-    telegram: "",
-    instagram: "",
-    email: "",
-    website: "",
-  });
+  const [whatsapp, setWhatsapp] = useState("");
+  const [telegram, setTelegram] = useState("");
+  const [instagram, setInstagram] = useState("");
+  const [email, setEmail] = useState("");
+  const [website, setWebsite] = useState("");
 
   async function load() {
-    const r = await getJSON("/consultancy");
+    const r = await getJSON("/api/consultancy");
     setSlides(r?.items || r?.slides || []);
   }
   useEffect(() => { load(); }, []);
@@ -84,11 +94,10 @@ export default function AdminConsultancyEditor() {
         title: title.trim(),
         intro: intro.trim(),
         file,
-        links,
-        waqrFile,
+        links: { whatsapp, telegram, instagram, email, website },
       });
-      setTitle(""); setIntro(""); setFile(null); setWaqrFile(null);
-      setLinks({ whatsapp:"", telegram:"", instagram:"", email:"", website:"" });
+      setTitle(""); setIntro(""); setFile(null);
+      setWhatsapp(""); setTelegram(""); setInstagram(""); setEmail(""); setWebsite("");
       await load();
     } catch (err) {
       console.error(err);
@@ -98,12 +107,22 @@ export default function AdminConsultancyEditor() {
     }
   }
 
-  async function saveLinks(s, nextLinks) {
+  async function replaceImage(s, newFile) {
+    if (!newFile) return;
     setBusy(true);
-    try { await patchSlide(s.id || s._id, { links: nextLinks }); await load(); }
-    catch (err) { console.error(err); alert("Failed to update links"); }
+    try { await patchSlide(s.id || s._id, { file: newFile }); await load(); }
+    catch (err) { console.error(err); alert("Failed to replace image"); }
     finally { setBusy(false); }
   }
+
+  async function remove(id) {
+    if (!confirm("Delete this slide?")) return;
+    setBusy(true);
+    try { await deleteJSON(`/api/consultancy/${id}`); await load(); }
+    catch (err) { console.error(err); alert("Failed to delete"); }
+    finally { setBusy(false); }
+  }
+
   async function saveTitle(s, newTitle) {
     setBusy(true);
     try { await patchSlide(s.id || s._id, { title: newTitle }); await load(); }
@@ -116,25 +135,10 @@ export default function AdminConsultancyEditor() {
     catch (err) { console.error(err); alert("Failed to update intro"); }
     finally { setBusy(false); }
   }
-  async function replaceImage(s, newFile) {
-    if (!newFile) return;
+  async function saveLinks(s, links) {
     setBusy(true);
-    try { await patchSlide(s.id || s._id, { file: newFile }); await load(); }
-    catch (err) { console.error(err); alert("Failed to replace image"); }
-    finally { setBusy(false); }
-  }
-  async function replaceQr(s, newFile) {
-    if (!newFile) return;
-    setBusy(true);
-    try { await patchSlide(s.id || s._id, { waqrFile: newFile }); await load(); }
-    catch (err) { console.error(err); alert("Failed to replace WhatsApp QR"); }
-    finally { setBusy(false); }
-  }
-  async function remove(id) {
-    if (!confirm("Delete this slide?")) return;
-    setBusy(true);
-    try { await deleteJSON(`/consultancy/${id}`); await load(); }
-    catch (err) { console.error(err); alert("Failed to delete"); }
+    try { await patchSlide(s.id || s._id, links); await load(); }
+    catch (err) { console.error(err); alert("Failed to update links"); }
     finally { setBusy(false); }
   }
 
@@ -148,31 +152,35 @@ export default function AdminConsultancyEditor() {
       {/* Create new */}
       <form onSubmit={create} className="grid gap-3 border rounded-2xl p-4 bg-white max-w-xl">
         <div className="font-medium">Add new slide</div>
-
-        <input className="border rounded p-2" placeholder="Title (required)"
-          value={title} onChange={(e) => setTitle(e.target.value)} />
-        <textarea value={intro} onChange={(e) => setIntro(e.target.value)}
+        <input
+          className="border rounded p-2"
+          placeholder="Title (required)"
+          value={title}
+          onChange={(e) => setTitle(e.target.value)}
+        />
+        <textarea
+          value={intro}
+          onChange={(e) => setIntro(e.target.value)}
           placeholder="Short intro to show over the image"
-          className="border rounded p-2 min-h-[80px]" />
+          className="border rounded p-2 min-h-[80px]"
+        />
 
-        <input type="file" accept="image/*"
-          onChange={(e) => setFile(e.target.files?.[0] || null)} />
-
-        {/* Links */}
+        {/* Optional contact deep links */}
         <div className="grid grid-cols-1 gap-2">
-          <input className="border rounded p-2" placeholder="WhatsApp deep link (https://wa.me/...)" value={links.whatsapp} onChange={(e) => setLinks(v => ({ ...v, whatsapp: e.target.value }))} />
-          <input className="border rounded p-2" placeholder="Telegram link (https://t.me/username)" value={links.telegram} onChange={(e) => setLinks(v => ({ ...v, telegram: e.target.value }))} />
-          <input className="border rounded p-2" placeholder="Instagram link (https://instagram.com/handle)" value={links.instagram} onChange={(e) => setLinks(v => ({ ...v, instagram: e.target.value }))} />
-          <input className="border rounded p-2" placeholder="Email link (mailto:hello@example.com)" value={links.email} onChange={(e) => setLinks(v => ({ ...v, email: e.target.value }))} />
-          <input className="border rounded p-2" placeholder="Website (https://example.com)" value={links.website} onChange={(e) => setLinks(v => ({ ...v, website: e.target.value }))} />
+          <input className="border rounded p-2" placeholder="WhatsApp deep link (e.g., https://wa.me/9198…)"
+                 value={whatsapp} onChange={(e)=>setWhatsapp(e.target.value)} />
+          <input className="border rounded p-2" placeholder="Telegram (https://t.me/username)"
+                 value={telegram} onChange={(e)=>setTelegram(e.target.value)} />
+          <input className="border rounded p-2" placeholder="Instagram (https://instagram.com/…)"
+                 value={instagram} onChange={(e)=>setInstagram(e.target.value)} />
+          <input className="border rounded p-2" placeholder="Email (mailto:someone@example.com)"
+                 value={email} onChange={(e)=>setEmail(e.target.value)} />
+          <input className="border rounded p-2" placeholder="Website (https://…)"
+                 value={website} onChange={(e)=>setWebsite(e.target.value)} />
         </div>
 
-        {/* Optional QR (private, not rendered to users) */}
-        <label className="text-xs text-gray-600">WhatsApp QR (private, optional)</label>
-        <input type="file" accept="image/*" onChange={(e) => setWaqrFile(e.target.files?.[0] || null)} />
-
-        <button className="bg-black text-white px-4 py-2 rounded w-fit disabled:opacity-50"
-          disabled={busy || !file || !title.trim()}>
+        <input type="file" accept="image/*" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+        <button className="bg-black text-white px-4 py-2 rounded w-fit disabled:opacity-50" disabled={busy || !file || !title.trim()}>
           {busy ? "Saving…" : "Create Slide"}
         </button>
       </form>
@@ -184,31 +192,15 @@ export default function AdminConsultancyEditor() {
             <div className="space-y-2">
               <div className="text-sm text-gray-500">#{idx + 1}</div>
               <img
-                src={s.image ? absUrl(s.image) : ""}
+                src={s.image ? absUrl(s.image) : absUrl(s.imageUrl || "")}
                 alt=""
                 className="w-full max-h-56 object-contain rounded-lg bg-gray-50"
                 loading="lazy"
               />
               <label className="text-sm inline-flex items-center gap-2">
                 <span className="px-2 py-1 border rounded">Replace image</span>
-                <input type="file" accept="image/*" className="hidden"
-                  onChange={(e) => replaceImage(s, e.target.files?.[0] || null)} />
+                <input type="file" accept="image/*" className="hidden" onChange={(e) => replaceImage(s, e.target.files?.[0] || null)} />
               </label>
-
-              {/* Private QR upload (not shown to users) */}
-              <div className="text-xs text-gray-600 mt-2">WhatsApp QR (private)</div>
-              <div className="flex items-center gap-2">
-                <label className="text-sm inline-flex items-center gap-2">
-                  <span className="px-2 py-1 border rounded">Replace QR</span>
-                  <input type="file" accept="image/*" className="hidden"
-                    onChange={(e) => replaceQr(s, e.target.files?.[0] || null)} />
-                </label>
-                {s.whatsappQr ? (
-                  <a className="text-xs underline text-gray-500" href={absUrl(s.whatsappQr)} target="_blank" rel="noreferrer">
-                    View stored QR
-                  </a>
-                ) : <span className="text-xs text-gray-400">No QR stored</span>}
-              </div>
             </div>
 
             <div className="grid content-start gap-2">
@@ -218,24 +210,17 @@ export default function AdminConsultancyEditor() {
               <label className="text-sm text-gray-600 mt-2">Intro text</label>
               <AutoGrowTextarea defaultValue={s.intro || ""} onSave={(text) => saveIntro(s, text)} />
 
-              {/* Links editor */}
-              <div className="mt-3 grid gap-2">
-                <label className="text-sm text-gray-600">Contact links</label>
-                <LinksEditor
-                  defaultLinks={{
-                    whatsapp: s.whatsapp || "",
-                    telegram: s.telegram || "",
-                    instagram: s.instagram || "",
-                    email: s.email || "",
-                    website: s.website || "",
-                  }}
-                  onSave={(next) => saveLinks(s, next)}
-                />
+              {/* Link fields */}
+              <div className="mt-2 grid gap-2">
+                <TextRow label="WhatsApp link"  slide={s} field="whatsapp"  onSave={(v)=>saveLinks(s,{whatsapp:v})} />
+                <TextRow label="Telegram link"  slide={s} field="telegram"  onSave={(v)=>saveLinks(s,{telegram:v})} />
+                <TextRow label="Instagram link" slide={s} field="instagram" onSave={(v)=>saveLinks(s,{instagram:v})} />
+                <TextRow label="Email (mailto:…)" slide={s} field="email"     onSave={(v)=>saveLinks(s,{email:v})} />
+                <TextRow label="Website link"   slide={s} field="website"   onSave={(v)=>saveLinks(s,{website:v})} />
               </div>
 
-              <div className="mt-2">
-                <button className="px-3 py-1.5 rounded border text-red-600"
-                  onClick={() => remove(s.id || s._id)} disabled={busy}>
+              <div className="mt-3">
+                <button className="px-3 py-1.5 rounded border text-red-600" onClick={() => remove(s.id || s._id)} disabled={busy}>
                   Delete
                 </button>
               </div>
@@ -252,38 +237,23 @@ export default function AdminConsultancyEditor() {
   );
 }
 
-function LinksEditor({ defaultLinks, onSave }) {
-  const [val, setVal] = useState(defaultLinks || {});
-  const [saving, setSaving] = useState(false);
-  useEffect(() => setVal(defaultLinks || {}), [defaultLinks]);
-
-  const set = (k) => (e) => setVal((v) => ({ ...v, [k]: e.target.value }));
-
-  async function save() {
-    if (saving) return;
-    setSaving(true);
-    try { await onSave(val); } finally { setSaving(false); }
-  }
-
+function TextRow({ label, slide, field, onSave }) {
+  const [val, setVal] = useState(slide?.[field] || "");
+  useEffect(() => setVal(slide?.[field] || ""), [slide, field]);
   return (
-    <div className="grid gap-2">
-      <input className="border rounded p-2" placeholder="WhatsApp deep link"
-        value={val.whatsapp || ""} onChange={set("whatsapp")} />
-      <input className="border rounded p-2" placeholder="Telegram link"
-        value={val.telegram || ""} onChange={set("telegram")} />
-      <input className="border rounded p-2" placeholder="Instagram link"
-        value={val.instagram || ""} onChange={set("instagram")} />
-      <input className="border rounded p-2" placeholder="Email (mailto:...)"
-        value={val.email || ""} onChange={set("email")} />
-      <input className="border rounded p-2" placeholder="Website"
-        value={val.website || ""} onChange={set("website")} />
-      <div className="flex gap-2">
-        <button onClick={save}
-          className="px-3 py-1.5 rounded border bg-green-50 text-green-700 disabled:opacity-50"
-          disabled={saving}>
-          {saving ? "Saving…" : "Save Links"}
-        </button>
-      </div>
+    <div className="flex gap-2">
+      <input
+        className="border rounded p-2 flex-1"
+        placeholder={label}
+        value={val}
+        onChange={(e) => setVal(e.target.value)}
+      />
+      <button
+        className="px-3 py-1.5 rounded border bg-green-50 text-green-700"
+        onClick={() => onSave(val)}
+      >
+        Save
+      </button>
     </div>
   );
 }
@@ -299,8 +269,7 @@ function AutoGrowTextarea({ defaultValue, onSave }) {
   }
   return (
     <div className="grid gap-2">
-      <textarea value={val} onChange={(e) => setVal(e.target.value)}
-        className="border rounded p-2 min-h-[120px]" placeholder="Write a short, friendly intro…" />
+      <textarea value={val} onChange={(e) => setVal(e.target.value)} className="border rounded p-2 min-h-[120px]" placeholder="Write a short, friendly intro…" />
       <div className="flex gap-2">
         <button onClick={save} className="px-3 py-1.5 rounded border bg-green-50 text-green-700 disabled:opacity-50" disabled={saving}>
           {saving ? "Saving…" : "Save Intro"}
@@ -323,8 +292,7 @@ function AutoGrowInput({ defaultValue, onSave }) {
   }
   return (
     <div className="flex gap-2">
-      <input value={val} onChange={(e) => setVal(e.target.value)}
-        className="border rounded p-2 flex-1" placeholder="Title" />
+      <input value={val} onChange={(e) => setVal(e.target.value)} className="border rounded p-2 flex-1" placeholder="Title" />
       <button onClick={save} className="px-3 py-1.5 rounded border bg-green-50 text-green-700 disabled:opacity-50" disabled={saving}>
         {saving ? "Saving…" : "Save"}
       </button>
