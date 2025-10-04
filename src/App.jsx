@@ -1,4 +1,6 @@
-import { BrowserRouter as Router, Routes, Route } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, useLocation } from "react-router-dom";
+import { useEffect } from "react";
+
 import Navbar from "./components/layout/Navbar";
 import AdminRoute from "./components/common/AdminRoute.jsx";
 
@@ -41,6 +43,24 @@ function NotFound() {
   );
 }
 
+/** Scroll to #hash after route changes (tries a few times to wait for render) */
+function ScrollToHash() {
+  const { hash, pathname } = useLocation();
+  useEffect(() => {
+    if (!hash) return;
+    const id = hash.replace(/^#/, "");
+    const tryScroll = () => {
+      const el = document.getElementById(id);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    };
+    const t0 = setTimeout(tryScroll, 0);
+    const t1 = setTimeout(tryScroll, 120);
+    const t2 = setTimeout(tryScroll, 350);
+    return () => { clearTimeout(t0); clearTimeout(t1); clearTimeout(t2); };
+  }, [hash, pathname]);
+  return null;
+}
+
 export default function App() {
   return (
     <Router>
@@ -49,6 +69,9 @@ export default function App() {
         <nav className="bg-white/70 backdrop-blur-md shadow-md sticky top-0 z-50">
           <Navbar />
         </nav>
+
+        {/* 🔎 hash scroller (handles /#consultancy) */}
+        <ScrollToHash />
 
         {/* Page transition wrapper */}
         <div className="animate-fadeIn">
