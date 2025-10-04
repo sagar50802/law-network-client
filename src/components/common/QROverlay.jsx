@@ -113,7 +113,8 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
 
   if (!open) return null;
 
-  // ✅ progress step calculation
+  // ✅ Existing 3-step progress (scan/fill/upload) stays intact.
+  // We’re just adding a separate “Step 1: Choose Plan” row above it.
   let progressClass = "";
   if (pending?.step3) progressClass = "step-graph-progress step-3";
   else if (pending?.step2) progressClass = "step-graph-progress step-2";
@@ -124,40 +125,57 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
     <div className="fixed inset-y-0 right-0 bg-white shadow-2xl w-full max-w-md z-50 overflow-y-auto">
       <div className="p-5 relative">
         {/* Close button */}
-        <button
-          onClick={onClose}
-          className="absolute right-3 top-3 text-red-600 font-bold text-lg"
-        >
-          ✕
-        </button>
+        <button onClick={onClose} className="absolute right-3 top-3 text-red-600 font-bold text-lg">✕</button>
 
         {/* Title */}
         <h3 className="font-semibold text-lg mb-3 animate-pulse text-pink-500">
           {feature} – {title}
         </h3>
 
-        {/* ✅ Progress Graph with bar */}
+        {/* ✅ New: Step 1 (Choose Plan) headline */}
+        <div className="mb-2 text-xs md:text-sm font-semibold">
+          <span className={selectedPlan ? "text-green-600" : "step-1-blink"}>
+            Step 1: Choose Plan {selectedPlan && <span className="tick-animate">✅</span>}
+          </span>
+        </div>
+
+        {/* Plans FIRST now */}
+        <div className="flex gap-2 mb-4">
+          {["weekly", "monthly", "yearly"].map((p) => (
+            <button
+              key={p}
+              onClick={() => setSelectedPlan(p)}
+              className={`px-3 py-1 rounded-full border text-sm ${
+                selectedPlan === p ? "bg-yellow-300 animate-pulse" : "bg-gray-100 hover:bg-gray-200"
+              }`}
+            >
+              {cfg.plans[p]?.label} – {cfg.currency}{cfg.plans[p]?.price}
+            </button>
+          ))}
+        </div>
+
+        {/* ✅ 3-node progress graph now represents steps 2/3/4 */}
         <div className="step-graph mb-4 text-xs md:text-sm font-semibold">
           <div className={progressClass}></div>
-          <div className={`step-node ${pending?.step1 ? "active" : ""}`}>1</div>
-          <div className={`step-node ${pending?.step2 ? "active" : ""}`}>2</div>
-          <div className={`step-node ${pending?.step3 ? "active" : ""}`}>3</div>
+          <div className={`step-node ${pending?.step1 ? "active" : ""}`}>2</div>
+          <div className={`step-node ${pending?.step2 ? "active" : ""}`}>3</div>
+          <div className={`step-node ${pending?.step3 ? "active" : ""}`}>4</div>
         </div>
 
-        {/* ✅ Step Labels */}
+        {/* ✅ Step Labels (renumbered) */}
         <div className="flex justify-between mb-4 text-xs md:text-sm font-semibold">
-          <div className={pending?.step1 ? "text-green-600" : "step-1-blink"}>
-            Step 1: Scan QR {pending?.step1 && <span className="tick-animate">✅</span>}
+          <div className={pending?.step1 ? "text-green-600" : "step-2-blink"}>
+            Step 2: Scan QR {pending?.step1 && <span className="tick-animate">✅</span>}
           </div>
-          <div className={pending?.step2 ? "text-green-600" : "step-2-blink"}>
-            Step 2: Fill Info {pending?.step2 && <span className="tick-animate">✅</span>}
+          <div className={pending?.step2 ? "text-green-600" : "step-3-blink"}>
+            Step 3: Fill Info {pending?.step2 && <span className="tick-animate">✅</span>}
           </div>
-          <div className={pending?.step3 ? "text-green-600" : "step-3-blink"}>
-            Step 3: Upload Screenshot {pending?.step3 && <span className="tick-animate">✅</span>}
+          <div className={pending?.step3 ? "text-green-600" : "step-4-blink"}>
+            Step 4: Upload Screenshot {pending?.step3 && <span className="tick-animate">✅</span>}
           </div>
         </div>
 
-        {/* QR Image */}
+        {/* QR Image (unchanged) */}
         {cfg.url ? (
           <div className="mb-4 text-center">
             <img
@@ -165,20 +183,18 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
               alt="QR code"
               className={`w-full h-56 object-contain border rounded-xl bg-gray-50 ${pending?.step1 ? "" : "cursor-pointer qr-glow"}`}
               onClick={() => {
-                // Step 1 → mark complete + redirect
+                // Step 2 (scan) → mark complete + redirect (logic unchanged)
                 setPending((s) => ({ ...s, step1: true }));
-                setTimeout(() => {
-                  window.location.href = "upi://pay";
-                }, 900); // 0.9s delay
+                setTimeout(() => { window.location.href = "upi://pay"; }, 900);
               }}
             />
             {!pending?.step1 && (
-              <p className="step-1-blink text-xs mt-1">
+              <p className="step-2-blink text-xs mt-1">
                 कृपया QR Code पर टैप करें और स्कैन करें (Tap QR to Scan & Pay)
               </p>
             )}
             {pending?.step1 && (
-              <p className="step-1-blink text-xs mt-1">
+              <p className="step-2-blink text-xs mt-1">
                 कृपया payment के बाद स्क्रीन शॉट लेना ना भूले  
                 <br />(Please don't forget to take screenshot after payment done)
               </p>
@@ -189,23 +205,6 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
             No QR uploaded yet
           </div>
         )}
-
-        {/* Plans */}
-        <div className="flex gap-2 mb-4">
-          {["weekly", "monthly", "yearly"].map((p) => (
-            <button
-              key={p}
-              onClick={() => setSelectedPlan(p)}
-              className={`px-3 py-1 rounded-full border text-sm ${
-                selectedPlan === p
-                  ? "bg-yellow-300 animate-pulse"
-                  : "bg-gray-100 hover:bg-gray-200"
-              }`}
-            >
-              {cfg.plans[p]?.label} – {cfg.currency}{cfg.plans[p]?.price}
-            </button>
-          ))}
-        </div>
 
         {/* Pending OR Form */}
         {pending?.id ? (
@@ -222,9 +221,7 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
               {message ? (
                 <p className="text-sm mb-2 whitespace-pre-line">{message}</p>
               ) : (
-                <p className="text-sm mb-2">
-                  Hi {pending.name}, your subscription has been approved.
-                </p>
+                <p className="text-sm mb-2">Hi {pending.name}, your subscription has been approved.</p>
               )}
               {expiry && (
                 <div className="animate-blink">
@@ -240,7 +237,7 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
           )
         ) : (
           <form onSubmit={handleSubmit} className="grid gap-3">
-            <p className="step-2-blink text-sm">👉 Please fill your info details</p>
+            <p className="step-3-blink text-sm">👉 Please fill your info details</p>
             <input
               placeholder="Your Name"
               className="border rounded p-2"
@@ -248,9 +245,7 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
               onChange={(e) => {
                 const val = e.target.value;
                 setForm((s) => ({ ...s, name: val }));
-                if (val && form.phone && form.email) {
-                  setPending((s) => ({ ...s, step2: true }));
-                }
+                if (val && form.phone && form.email) setPending((s) => ({ ...s, step2: true }));
               }}
             />
             <input
@@ -260,9 +255,7 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
               onChange={(e) => {
                 const val = e.target.value;
                 setForm((s) => ({ ...s, phone: val }));
-                if (val && form.name && form.email) {
-                  setPending((s) => ({ ...s, step2: true }));
-                }
+                if (val && form.name && form.email) setPending((s) => ({ ...s, step2: true }));
               }}
             />
             <input
@@ -272,14 +265,12 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
               onChange={(e) => {
                 const val = e.target.value;
                 setForm((s) => ({ ...s, email: val }));
-                if (val && form.name && form.phone) {
-                  setPending((s) => ({ ...s, step2: true }));
-                }
+                if (val && form.name && form.phone) setPending((s) => ({ ...s, step2: true }));
               }}
             />
 
             {/* Screenshot block */}
-            <p className="step-3-blink text-sm">👉 Step 3: Upload your payment screenshot</p>
+            <p className="step-4-blink text-sm">👉 Step 4: Upload your payment screenshot</p>
             <div className="border rounded-xl p-3 text-sm bg-pink-50 relative">
               <label className="flex items-center justify-between text-pink-600 font-semibold mb-2">
                 <span>Upload Payment Screenshot</span>
@@ -287,15 +278,7 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
                   className="flex items-center gap-3 text-green-600 animate-bounce select-none
                              drop-shadow-[0_0_8px_rgba(34,197,94,0.45)]"
                 >
-                  <svg
-                    className="w-8 h-8 md:w-9 md:h-9"
-                    viewBox="0 0 24 24"
-                    fill="none"
-                    stroke="currentColor"
-                    strokeWidth="2.5"
-                    strokeLinecap="round"
-                    strokeLinejoin="round"
-                  >
+                  <svg className="w-8 h-8 md:w-9 md:h-9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
                     <path d="M12 4v12" />
                     <path d="M8 12l4 4 4-4" />
                   </svg>
@@ -325,11 +308,7 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
                 </b>
               </div>
             )}
-            <button
-              type="submit"
-              disabled={submitting}
-              className="bg-blue-600 text-white px-4 py-2 rounded"
-            >
+            <button type="submit" disabled={submitting} className="bg-blue-600 text-white px-4 py-2 rounded">
               {submitting ? "Submitting…" : "Submit"}
             </button>
           </form>
