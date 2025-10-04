@@ -1,4 +1,3 @@
-// client/src/components/ConsultancySection.jsx
 import { useEffect, useRef, useState } from "react";
 import {
   API_BASE,            // kept (even if unused sometimes)
@@ -183,7 +182,8 @@ export default function ConsultancySection({ autoScroll = true }) {
   }
 
   return (
-    <section className="mt-0">
+    /* ✅ just this id makes the navbar jump work */
+    <section id="consultancy" className="mt-0">
       <div className="flex items-center justify-between mb-2">
         <h2 className="text-2xl font-semibold">Consultancy</h2>
         <IfOwnerOnly>
