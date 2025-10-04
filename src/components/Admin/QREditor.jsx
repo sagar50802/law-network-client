@@ -29,6 +29,7 @@ export default function QREditor() {
           monthlyPrice: r.qr.plans.monthly.price,
           yearlyLabel: r.qr.plans.yearly.label,
           yearlyPrice: r.qr.plans.yearly.price,
+          upi: r.qr.upi || "",            // ✅ NEW
           image: null,
         });
       }
@@ -58,6 +59,7 @@ export default function QREditor() {
       fd.append("monthlyPrice", form.monthlyPrice);
       fd.append("yearlyLabel", form.yearlyLabel);
       fd.append("yearlyPrice", form.yearlyPrice);
+      fd.append("upi", form.upi || "");   // ✅ NEW
 
       await upload("/api/qr", fd, { headers: authHeaders() });
       setForm({ ...form, image: null });
@@ -137,6 +139,11 @@ export default function QREditor() {
                   {cfg.plans.yearly?.label} – {cfg.currency}{cfg.plans.yearly?.price}
                 </li>
               </ul>
+              {cfg.upi ? (
+                <p className="mt-2 text-gray-600">
+                  <span className="font-medium">Current UPI:</span> {cfg.upi}
+                </p>
+              ) : null}
             </div>
           </div>
 
@@ -192,6 +199,15 @@ export default function QREditor() {
               value={form.yearlyPrice}
               placeholder="Yearly Price"
               onChange={(e) => setForm((s) => ({ ...s, yearlyPrice: e.target.value }))}
+            />
+
+            {/* ✅ NEW: UPI field */}
+            <label>UPI ID / VPA</label>
+            <input
+              className="border rounded p-2"
+              value={form.upi || ""}
+              placeholder="e.g. yourname@bank"
+              onChange={(e) => setForm((s) => ({ ...s, upi: e.target.value }))}
             />
 
             <label>QR Image</label>
