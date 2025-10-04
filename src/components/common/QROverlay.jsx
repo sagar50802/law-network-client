@@ -8,7 +8,7 @@ import UnlockWait from "../common/UnlockWait";
 import AccessTimer from "../common/AccessTimer";
 import { saveAccess } from "../../utils/access";
 
-// Strip trailing /api so we can safely serve /uploads/* assets
+// Ensure we can load /uploads/* assets (strip trailing /api)
 const API_ORIGIN = API_BASE.replace(/\/api\/?$/, "");
 
 export default function QROverlay({ open, onClose, title, feature, featureId }) {
@@ -20,12 +20,11 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
   const [submitting, setSubmitting] = useState(false);
   const [imgError, setImgError] = useState(false);
 
-  // Build absolute QR URL once cfg.url arrives
   const qrSrc = cfg?.url ? `${API_ORIGIN}${cfg.url}?t=${Date.now()}` : "";
 
   async function fetchConfig() {
     try {
-      // Public endpoint returning { success, url, currency, plans, upi? }
+      // Should return { success, url, currency, plans, upi? } — upi can be `upi`, `upiId` or `vpa`
       const r = await fetch(`${API_BASE}/api/qr/current?ts=${Date.now()}`).then((res) => res.json());
       if (r?.success) {
         setCfg(r);
@@ -39,7 +38,7 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
     if (open) fetchConfig();
   }, [open]);
 
-  // Restore any pending flow for this feature/email
+  // Restore pending flow
   useEffect(() => {
     if (form.email) {
       const saved = loadPending(feature, featureId, form.email);
@@ -47,28 +46,28 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
     }
   }, [form.email, feature, featureId]);
 
-  // Watcher → admin approves
+  // Watch server approval
   const { status, approved, expiry, message } = useApprovalWatcher(pending, {
     feature,
     featureId,
     email: form.email,
   });
 
-  // Close on any accessGranted broadcast (keeps your instant UX)
+  // Close on broadcast
   useEffect(() => {
     const onGranted = () => onClose?.();
     window.addEventListener("accessGranted", onGranted);
     return () => window.removeEventListener("accessGranted", onGranted);
   }, [onClose]);
 
-  // When approved: show 15s wait → persist → close → soft refresh → 1-time hard reload
+  // 15s wait → persist → refresh
   useEffect(() => {
     if (status === "approved" && approved) {
       setUnlocking(true);
       const t = setTimeout(() => {
         saveAccess(feature, featureId, form.email, expiry, message);
         setUnlocking(false);
-        if (typeof onClose === "function") onClose();
+        onClose?.();
         window.dispatchEvent(new Event("focus"));
         window.dispatchEvent(new CustomEvent("softRefresh", { detail: { feature, featureId } }));
         setTimeout(() => window.location.reload(), 150);
@@ -77,7 +76,7 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
     }
   }, [status, approved, expiry, message, feature, featureId, form.email, onClose]);
 
-  // Submit form (unchanged logic)
+  // Submit (unchanged)
   async function handleSubmit(e) {
     e.preventDefault();
     if (!selectedPlan) return alert("Select a plan");
@@ -125,33 +124,51 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
     }
   }
 
-  // Step bar class (kept as-is)
+  // Step bar class
   let progressClass = "";
   if (pending?.step3) progressClass = "step-graph-progress step-3";
   else if (pending?.step2) progressClass = "step-graph-progress step-2";
   else if (pending?.step1) progressClass = "step-graph-progress step-1";
   else progressClass = "step-graph-progress";
 
-  // Tap-QR → open UPI if possible (amount prefilled), else open image for manual scan
+  // Tap QR → UPI first, fallback to image only if needed
   function handleTapQR() {
-    setPending((s) => ({ ...s, step1: true }));
+    // must choose plan for amount
+    if (!selectedPlan) {
+      alert("Please choose a plan first");
+      return;
+    }
 
-    const upi =
-      cfg.upi || cfg.upiId || cfg.vpa || ""; // server can expose any of these
+    // mark steps 1+2 (choose plan + scan)
+    setPending((s) => ({ ...s, step1: true, step2: true }));
+
+    const upi = cfg.upi || cfg.upiId || cfg.vpa || "";
     const amount = cfg?.plans?.[selectedPlan]?.price;
     const label = cfg?.plans?.[selectedPlan]?.label || selectedPlan || "";
 
+    // If we have UPI + amount → try deep link
     if (upi && amount) {
       const tn = `Law Network – ${label}`;
       const deep = `upi://pay?pa=${encodeURIComponent(upi)}&am=${encodeURIComponent(
         amount
       )}&cu=INR&tn=${encodeURIComponent(tn)}`;
-      // Try deep link → if the platform blocks it, nothing breaks; user can still scan manually.
+
+      // Try UPI; if app doesn't open (blocked / desktop), fallback to manual scan
+      const beforeVisible = document.visibilityState;
       window.location.href = deep;
-    } else if (qrSrc) {
-      // Fallback: open the QR image in a new tab for manual scan
-      window.open(qrSrc, "_blank", "noopener,noreferrer");
+
+      // Fallback if the page stays visible after a moment
+      setTimeout(() => {
+        const stillHere = document.visibilityState === "visible";
+        if (stillHere && qrSrc) {
+          window.open(qrSrc, "_blank", "noopener,noreferrer");
+        }
+      }, 1200);
+      return;
     }
+
+    // Otherwise: no UPI configured → manual scan
+    if (qrSrc) window.open(qrSrc, "_blank", "noopener,noreferrer");
   }
 
   if (!open) return null;
@@ -177,7 +194,7 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
           <div className={`step-node ${pending?.step3 ? "active" : ""}`}>3</div>
         </div>
 
-        {/* Step labels (kept) */}
+        {/* Labels (kept to your copy) */}
         <div className="flex justify-between mb-4 text-xs md:text-sm font-semibold">
           <div className={pending?.step1 ? "text-green-600" : ""}>Step 1: Choose Plan</div>
           <div className={pending?.step2 ? "text-green-600" : ""}>Step 2: Scan QR</div>
@@ -202,36 +219,27 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
 
         {/* QR block */}
         <div className="mb-3">
-          <div
-            className="w-full h-56 border rounded-xl bg-gray-50 flex items-center justify-center overflow-hidden"
-            style={{ position: "relative" }}
-          >
+          <div className="w-full h-56 border rounded-xl bg-gray-50 flex items-center justify-center overflow-hidden">
             {cfg.url && !imgError ? (
-              // Tap QR → UPI deep link with amount OR open image
               <img
                 src={qrSrc}
                 alt="QR code"
                 className={`w-full h-full object-contain ${selectedPlan ? "cursor-pointer" : ""}`}
                 crossOrigin="anonymous"
                 onError={() => setImgError(true)}
-                onClick={() => {
-                  // Mark "Scan" step when user taps QR
-                  setPending((s) => ({ ...s, step1: true, step2: true }));
-                  handleTapQR();
-                }}
+                onClick={handleTapQR}
                 title={selectedPlan ? "Tap to pay" : "Select a plan first"}
               />
             ) : (
               <div className="text-gray-400 text-sm">QR image unavailable</div>
             )}
           </div>
-
           <p className="text-center text-xs mt-1">
             कृपया QR Code पर टैप करें और स्कैन करें (Tap QR to Scan &amp; Pay)
           </p>
         </div>
 
-        {/* Form OR Pending */}
+        {/* Pending OR Form */}
         {pending?.id ? (
           unlocking ? (
             <>
