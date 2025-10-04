@@ -11,6 +11,7 @@ import { saveAccess } from "../../utils/access";
 const bust = (u) => (u ? `${u}${u.includes("?") ? "&" : "?"}t=${Date.now()}` : u);
 
 function buildUpiUrl({ upiId, amount, label = "Law Network", note = "Subscription" }) {
+  // open selector even if upiId missing
   if (!upiId) return "upi://pay";
   const q = new URLSearchParams({ pa: upiId, pn: label, tn: note, cu: "INR" });
   if (amount) q.set("am", String(amount));
@@ -25,33 +26,33 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
   const [unlocking, setUnlocking] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  // Load QR + optional UPI id from server
-  async function fetchConfig() {
-    try {
-      const r = await fetch(`${API_BASE}/api/qr/current?ts=${Date.now()}`).then((res) =>
-        res.json()
-      );
-      if (r?.success) {
-        const upi = r.upi || r.upiId || r.vpa || (r.meta && (r.meta.upi || r.meta.vpa)) || "";
-        setCfg({ ...r, upi });
-      }
-    } catch (err) {
-      console.error("Failed to fetch QR config:", err);
-    }
-  }
+  // ---- Load QR & optional UPI ID ----
   useEffect(() => {
-    if (open) fetchConfig();
+    if (!open) return;
+    (async () => {
+      try {
+        const r = await fetch(`${API_BASE}/api/qr/current?ts=${Date.now()}`).then((res) =>
+          res.json()
+        );
+        if (r?.success) {
+          const upi =
+            r.upi || r.upiId || r.vpa || (r.meta && (r.meta.upi || r.meta.vpa)) || "";
+          setCfg({ ...r, upi });
+        }
+      } catch (e) {
+        console.error("QR fetch failed", e);
+      }
+    })();
   }, [open]);
 
-  // Restore any pending submission (by email)
+  // ---- Restore pending (by email) ----
   useEffect(() => {
-    if (form.email) {
-      const saved = loadPending(feature, featureId, form.email);
-      if (saved) setPending(saved);
-    }
+    if (!form.email) return;
+    const saved = loadPending(feature, featureId, form.email);
+    if (saved) setPending(saved);
   }, [form.email, feature, featureId]);
 
-  // Live watcher for admin approval
+  // ---- Live approval watcher ----
   const { status, approved, expiry, message } = useApprovalWatcher(pending, {
     feature,
     featureId,
@@ -65,43 +66,57 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
     return () => window.removeEventListener("accessGranted", onGranted);
   }, [onClose]);
 
-  // After approval: show 15s wait → persist → close → soft refresh → reload once
+  // After approval → 15s wait → persist → close → soft refresh → reload once
   useEffect(() => {
-    if (status === "approved" && approved) {
-      setUnlocking(true);
-      const t = setTimeout(() => {
-        saveAccess(feature, featureId, form.email, expiry, message);
-        setUnlocking(false);
-        onClose?.();
-        window.dispatchEvent(new Event("focus"));
-        window.dispatchEvent(new CustomEvent("softRefresh", { detail: { feature, featureId } }));
-        setTimeout(() => window.location.reload(), 150);
-      }, 15000);
-      return () => clearTimeout(t);
-    }
+    if (status !== "approved" || !approved) return;
+    setUnlocking(true);
+    const t = setTimeout(() => {
+      saveAccess(feature, featureId, form.email, expiry, message);
+      setUnlocking(false);
+      onClose?.();
+      window.dispatchEvent(new Event("focus"));
+      window.dispatchEvent(new CustomEvent("softRefresh", { detail: { feature, featureId } }));
+      setTimeout(() => window.location.reload(), 150);
+    }, 15000);
+    return () => clearTimeout(t);
   }, [status, approved, expiry, message, feature, featureId, form.email, onClose]);
 
-  // ---------- QR src with safe fallbacks ----------
+  // ---- QR src with resilient fallbacks ----
   const [qrSrc, setQrSrc] = useState("");
-  const [triedAlt, setTriedAlt] = useState(false);
+  const [fallbackIndex, setFallbackIndex] = useState(0);
 
-  useEffect(() => {
-    if (!cfg?.url) return setQrSrc("");
-    setQrSrc(bust(`${API_BASE}${cfg.url}`));
-    setTriedAlt(false);
+  const sources = useMemo(() => {
+    const u = cfg.url || "";
+    const list = [];
+    if (u) {
+      // 1) as returned
+      list.push(bust(`${API_BASE}${u}`));
+      // 2) strip /api
+      if (u.startsWith("/api/")) list.push(bust(`${API_BASE}${u.replace(/^\/api/, "")}`));
+    }
+    // 3) conventional public path
+    list.push(bust(`${API_BASE}/uploads/qr/current.jpg`));
+    // 4) api prefixed public path (just in case)
+    list.push(bust(`${API_BASE}/api/uploads/qr/current.jpg`));
+    return list;
   }, [cfg.url]);
 
+  useEffect(() => {
+    setFallbackIndex(0);
+    setQrSrc(sources[0] || "");
+  }, [sources]);
+
   const onQrError = () => {
-    // try non-/api path once, then fall back to conventional public path
-    if (!triedAlt && cfg.url?.startsWith("/api/")) {
-      setTriedAlt(true);
-      setQrSrc(bust(`${API_BASE}${cfg.url.replace(/^\/api/, "")}`));
-      return;
+    const next = fallbackIndex + 1;
+    if (next < sources.length) {
+      setFallbackIndex(next);
+      setQrSrc(sources[next]);
+    } else {
+      setQrSrc("");
     }
-    setQrSrc(bust(`${API_BASE}/uploads/qr/current.jpg`));
   };
 
-  // ---------- Steps: 1=choose plan, 2=scan (tap), 3=fill info ----------
+  // ---- Steps & amount ----
   const amount = useMemo(() => {
     const key = selectedPlan;
     if (!key) return undefined;
@@ -109,15 +124,18 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
     return v == null ? undefined : Number(v) || undefined;
   }, [selectedPlan, cfg]);
 
-  // Open UPI after ~0.8–0.9s (your preferred behavior) + Android intent fallbacks
-  function handleQrTap() {
-    // Step 2 complete
+  // ---- Tap to pay (box or image) ----
+  function handleQrTap(e) {
+    e?.preventDefault?.();
+    e?.stopPropagation?.();
+
+    // mark Step 2 complete
     setPending((s) => ({ ...s, step2: true }));
 
     const upiId = cfg.upi;
     const upiUrl = buildUpiUrl({
       upiId,
-      amount, // ok if undefined – most apps still open
+      amount,
       label: "Law Network",
       note: title || "Subscription",
     });
@@ -127,13 +145,14 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
       amount ? `&am=${amount}` : ""
     }&pn=Law%20Network&cu=INR&tn=${encodeURIComponent(title || "Subscription")}`;
 
-    // fire after 0.9s (keeps your previous “feels like scanning” behavior)
+    // fire after ~0.9s (your preferred behavior)
     setTimeout(() => {
       try {
         window.location.href = upiUrl;
       } catch {}
+
       if (isAndroid && upiId) {
-        // try popular apps as fallbacks
+        // Cascade common packages
         setTimeout(
           () =>
             (window.location.href = `intent://pay?${qp}#Intent;scheme=upi;package=com.google.android.apps.nbu.paisa.user;end;`),
@@ -153,7 +172,7 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
     }, 900);
   }
 
-  // Submit form
+  // ---- Submit form ----
   async function handleSubmit(e) {
     e.preventDefault();
     if (!selectedPlan) return alert("Select a plan");
@@ -173,10 +192,9 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
       fd.append("type", feature);
       fd.append("id", featureId);
 
-      const r = await fetch(`${API_BASE}/api/submissions`, {
-        method: "POST",
-        body: fd,
-      }).then((res) => res.json());
+      const r = await fetch(`${API_BASE}/api/submissions`, { method: "POST", body: fd }).then((res) =>
+        res.json()
+      );
 
       if (r?.success) {
         const record = {
@@ -205,7 +223,7 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
 
   if (!open) return null;
 
-  // Progress bar state
+  // progress bar class
   let progressClass = "step-graph-progress";
   if (pending?.step3) progressClass += " step-3";
   else if (pending?.step2) progressClass += " step-2";
@@ -232,7 +250,7 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
           <div className={`step-node ${pending?.step3 ? "active" : ""}`}>3</div>
         </div>
 
-        {/* Step labels (1: Choose plan, 2: Scan QR, 3: Fill info) */}
+        {/* Step labels */}
         <div className="flex justify-between mb-3 text-xs md:text-sm font-semibold">
           <div className={pending?.step1 ? "text-green-600" : ""}>Step 1: Choose Plan</div>
           <div className={pending?.step2 ? "text-green-600" : "step-2-blink"}>Step 2: Scan QR</div>
@@ -246,7 +264,6 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
               key={p}
               onClick={() => {
                 setSelectedPlan(p);
-                // Step 1 complete as soon as a plan is chosen
                 setPending((s) => ({ ...s, step1: true }));
               }}
               className={`px-3 py-1 rounded-full border text-sm ${
@@ -259,21 +276,27 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
           ))}
         </div>
 
-        {/* QR Image */}
+        {/* QR Box (clickable even if image fails) */}
         <div className="mb-4 text-center">
-          <div className={`relative w-full h-56 border rounded-xl bg-gray-50 overflow-hidden ${pending?.step2 ? "" : "qr-glow"}`}>
+          <div
+            className={`relative w-full h-56 border rounded-xl bg-gray-50 overflow-hidden ${
+              pending?.step2 ? "" : "qr-glow"
+            } cursor-pointer`}
+            onClick={handleQrTap}
+            role="button"
+            aria-label="Tap to pay with UPI"
+          >
             {qrSrc ? (
               <>
                 <img
                   src={qrSrc}
                   onError={onQrError}
                   alt="QR code"
-                  className="w-full h-full object-contain select-none cursor-pointer"
+                  className="w-full h-full object-contain select-none pointer-events-none"
                   crossOrigin="anonymous"
                   referrerPolicy="no-referrer"
-                  onClick={handleQrTap}
+                  draggable={false}
                 />
-                {/* green scan line */}
                 <div className="pointer-events-none absolute inset-0">
                   <div className="scanline" />
                 </div>
@@ -284,7 +307,6 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
               </div>
             )}
           </div>
-
           <p className="step-2-blink text-xs mt-1">
             कृपया QR Code पर टैप करें — आपका UPI ऐप खुलेगा (Tap QR to open UPI)
           </p>
@@ -355,7 +377,7 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
               }}
             />
 
-            {/* Screenshot block */}
+            {/* Screenshot */}
             <p className="text-sm">👉 Step 4: Upload your payment screenshot</p>
             <div className="border rounded-xl p-3 text-sm bg-pink-50 relative">
               <label className="flex items-center justify-between text-pink-600 font-semibold mb-2">
@@ -398,7 +420,7 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
         )}
       </div>
 
-      {/* scan line (kept local; remove if you already have it globally) */}
+      {/* scan line (local styles) */}
       <style>{`
         .scanline {
           position:absolute; left:0; right:0; top:10%; height:4px; border-radius:999px;
