@@ -1,6 +1,7 @@
+// src/components/PDF/PDFViewer.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { Document, Page, pdfjs } from "react-pdf";
-import { API_BASE, getJSON, authHeaders, absUrl } from "../../utils/api";
+import { API_BASE, getJSON, authHeaders } from "../../utils/api";
 import usePreviewLock from "../../hooks/usePreviewLock";
 import IfOwnerOnly from "../common/IfOwnerOnly";
 import QROverlay from "../common/QROverlay";
@@ -25,13 +26,12 @@ export default function PDFViewer() {
   const [subjectOverlay, setSubjectOverlay] = useState(null);
   const [forceBlur, setForceBlur] = useState(false);
 
-  const [pdfErr, setPdfErr] = useState(""); // ⬅️ show real PDF load errors
-
   const panelRef = useRef(null);
   const [email] = useState(() => localStorage.getItem("userEmail") || "");
   useSubmissionStream(email);
   const pendingEventsRef = useRef([]);
 
+  // --- helpers ---
   const resolveSubjectId = (featureId) => {
     if (!featureId) return null;
     const fid = String(featureId).trim().toLowerCase();
@@ -87,7 +87,6 @@ export default function PDFViewer() {
 
   const load = async () => {
     setAccessLoading(true);
-    setPdfErr("");
     const r = await getJSON("/pdfs");
     const subs = r.subjects || [];
     setSubjects(subs);
@@ -107,7 +106,7 @@ export default function PDFViewer() {
       if (ev.type === "grant") applyGrant(ev);
       if (ev.type === "revoke") applyRevoke(ev);
     }
-  }, [subjects.length]); // eslint-disable-line
+  }, [subjects.length]);
 
   useEffect(() => {
     if (!sid) return;
@@ -177,7 +176,7 @@ export default function PDFViewer() {
     const onFocus = () => refreshAllAccess();
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
-  }, [subjects, email]); // eslint-disable-line
+  }, [subjects, email]);
 
   useEffect(() => {
     const doRefresh = () => refreshAllAccess();
@@ -197,10 +196,15 @@ export default function PDFViewer() {
     return () => clearTimeout(t);
   }, [accessMap]);
 
-  // ALWAYS go through the proxy to avoid CORS/ORB/port-origin issues
-  const rawUrl = chapter?.url ? absUrl(chapter.url) : "";
-  const safeSrc = rawUrl
-    ? `${API_BASE}/pdfs/stream?src=${encodeURIComponent(rawUrl)}`
+  // Turn chapter.url into a server-absolute URL, then always proxy through /pdfs/stream
+  const toServerAbs = (u) => {
+    if (!u) return "";
+    if (/^https?:\/\//i.test(u)) return u; // already absolute (R2, etc)
+    return `${API_BASE}${u.startsWith("/") ? "" : "/"}${u}`; // make /uploads/... point to API host
+  };
+  const fileUrl = chapter?.url ? toServerAbs(chapter.url) : "";
+  const safeSrc = fileUrl
+    ? `${API_BASE}/pdfs/stream?src=${encodeURIComponent(fileUrl)}`
     : "";
 
   const s = subjects.find((x) => x.id === sid);
@@ -244,7 +248,7 @@ export default function PDFViewer() {
                       <div
                         key={ch.id}
                         className={`px-2 py-2 rounded cursor-pointer hover:bg-gray-50 flex items-center justify-between ${chapter?.id === ch.id ? "bg-gray-50" : ""}`}
-                        onClick={() => { setChapter(ch); setPage(1); setScale(1); setPdfErr(""); }}
+                        onClick={() => { setChapter(ch); setPage(1); setScale(1); }}
                       >
                         <div className="truncate">
                           <div className="text-sm font-medium truncate">{ch.title}</div>
@@ -276,7 +280,7 @@ export default function PDFViewer() {
         </IfOwnerOnly>
       </aside>
 
-      {/* Viewer (blurred while overlay active or forceBlur) */}
+      {/* Viewer */}
       <div
         ref={panelRef}
         className={`md:col-span-2 border rounded-2xl bg-white p-5 relative ${
@@ -321,15 +325,12 @@ export default function PDFViewer() {
             />
 
             <div
-              className={`bg-white shadow-lg p-3 max-h-[70vh] overflow-auto rounded-xl ${unlocked ? "" : "select-none"}`}
+              className={`bg-white shadow-lg p-3 max-h={[70, "vh"].join("")} overflow-auto rounded-xl ${unlocked ? "" : "select-none"}`}
               onContextMenu={(e) => e.preventDefault()}
             >
               <Document
-                key={safeSrc} // force reload if source changes
                 file={safeSrc}
-                onLoadSuccess={({ numPages }) => { setPdfErr(""); setNumPages(numPages || 1); setPage(1); }}
-                onLoadError={(e) => { console.error("PDF load error:", e); setPdfErr(String(e?.message || "Failed to load PDF")); }}
-                onSourceError={(e) => { console.error("PDF source error:", e); setPdfErr(String(e?.message || "Invalid PDF source")); }}
+                onLoadSuccess={({ numPages }) => { setNumPages(numPages || 1); setPage(1); }}
                 renderMode="canvas"
                 loading={<div className="p-6 text-gray-500">Loading PDF…</div>}
               >
@@ -340,12 +341,6 @@ export default function PDFViewer() {
                   renderTextLayer={false}
                 />
               </Document>
-
-              {pdfErr && (
-                <div className="mt-3 text-xs text-red-600 break-all">
-                  {pdfErr}
-                </div>
-              )}
             </div>
 
             {/* Admin actions for current chapter */}
@@ -358,7 +353,7 @@ export default function PDFViewer() {
         )}
       </div>
 
-      {/* Overlay (outside panel) */}
+      {/* Overlay */}
       {subjectOverlay && (
         <QROverlay
           open
@@ -375,7 +370,7 @@ export default function PDFViewer() {
   );
 }
 
-/* ---- tiny in-file helpers ---- */
+/* ---- small helpers in this file ---- */
 
 function AdminCreateSubject() {
   const [name, setName] = useState("");
