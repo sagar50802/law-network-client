@@ -1,6 +1,6 @@
 // client/src/components/common/QROverlay.jsx
-import { useEffect, useState, useMemo } from "react";
-import { absUrl } from "../../utils/api";                     // ✅ robust server URL builder
+import { useEffect, useMemo, useState } from "react";
+import { absUrl } from "../../utils/api";
 import { savePending, loadPending } from "../../utils/pending";
 import useApprovalWatcher from "../../hooks/useApprovalWatcher";
 import PendingBadge from "../common/PendingBadge";
@@ -8,63 +8,40 @@ import UnlockWait from "../common/UnlockWait";
 import AccessTimer from "../common/AccessTimer";
 import { saveAccess } from "../../utils/access";
 
-// Small helper: safely add a cache-buster
 const bust = (u) => (u ? `${u}${u.includes("?") ? "&" : "?"}t=${Date.now()}` : u);
 
-// Build UPI deep link (amount optional)
 function buildUpiUrl({ upiId, amount, label = "Law Network", note = "Subscription" }) {
   if (!upiId) return "";
-  const q = new URLSearchParams({
-    pa: upiId,            // VPA
-    pn: label,            // payee name
-    tn: note,             // note
-    cu: "INR",
-  });
+  const q = new URLSearchParams({ pa: upiId, pn: label, tn: note, cu: "INR" });
   if (amount) q.set("am", String(amount));
   return `upi://pay?${q.toString()}`;
 }
 
-// Try opening a URL without changing your page (mobile friendly)
-function tryOpen(url, delay = 0) {
+// fire-and-forget navigation (no popups)
+function nav(url) {
   if (!url) return;
-  setTimeout(() => {
-    const a = document.createElement("a");
-    a.href = url;
-    a.rel = "noopener noreferrer";
-    a.style.display = "none";
-    document.body.appendChild(a);
-    a.click();
-    setTimeout(() => a.remove(), 120);
-  }, delay);
+  try {
+    // direct navigation from the tap gesture – highest success rate
+    window.location.assign(url);
+  } catch {}
 }
 
 export default function QROverlay({ open, onClose, title, feature, featureId }) {
-  const [cfg, setCfg] = useState({
-    url: "",               // /uploads/qr/xxxx.jpg
-    currency: "₹",
-    plans: {},             // { weekly:{label,price}, monthly:{...}, yearly:{...} }
-    upi: "",               // server may send as upi / upiId / vpa (we normalize below)
-  });
-
+  const [cfg, setCfg] = useState({ url: "", currency: "₹", plans: {}, upi: "" });
   const [selectedPlan, setSelectedPlan] = useState(null);
   const [form, setForm] = useState({ name: "", phone: "", email: "", file: null });
   const [pending, setPending] = useState({});
   const [unlocking, setUnlocking] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  // ---------- Fetch QR config ----------
+  // ----- fetch QR config -----
   async function fetchConfig() {
     try {
-      const res = await fetch(absUrl("/api/qr/current") + `?ts=${Date.now()}`);
-      const data = await res.json();
-      if (data?.success) {
+      const r = await fetch(absUrl("/api/qr/current") + `?ts=${Date.now()}`).then((x) => x.json());
+      if (r?.success) {
         const upi =
-          data.upi ||
-          data.upiId ||
-          data.vpa ||
-          (data.meta && (data.meta.upi || data.meta.vpa)) ||
-          "";
-        setCfg({ ...data, upi });
+          r.upi || r.upiId || r.vpa || (r.meta && (r.meta.upi || r.meta.vpa)) || "";
+        setCfg({ ...r, upi });
       }
     } catch (e) {
       console.error("QR config fetch failed:", e);
@@ -74,7 +51,7 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
     if (open) fetchConfig();
   }, [open]);
 
-  // ---------- Restore pending ----------
+  // ----- restore pending -----
   useEffect(() => {
     if (form.email) {
       const saved = loadPending(feature, featureId, form.email);
@@ -82,21 +59,19 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
     }
   }, [form.email, feature, featureId]);
 
-  // ---------- Live approval watcher ----------
+  // ----- live approval -----
   const { status, approved, expiry, message } = useApprovalWatcher(pending, {
     feature,
     featureId,
     email: form.email,
   });
 
-  // Close overlay when any "accessGranted" broadcast arrives
   useEffect(() => {
     const onGranted = () => onClose?.();
     window.addEventListener("accessGranted", onGranted);
     return () => window.removeEventListener("accessGranted", onGranted);
   }, [onClose]);
 
-  // When approved → 15s unlocking → persist access → soft refresh
   useEffect(() => {
     if (status === "approved" && approved) {
       setUnlocking(true);
@@ -112,32 +87,26 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
     }
   }, [status, approved, expiry, message, feature, featureId, form.email, onClose]);
 
-  // ---------- Robust QR image URL (with fallbacks) ----------
+  // ----- QR image with safe fallbacks -----
   const [qrSrc, setQrSrc] = useState("");
   const [triedAlt, setTriedAlt] = useState(false);
 
   useEffect(() => {
-    if (!cfg?.url) {
-      setQrSrc("");
-      return;
-    }
-    // Use absUrl so "/uploads/*" works whether server is proxied or not
+    if (!cfg?.url) return setQrSrc("");
     setQrSrc(bust(absUrl(cfg.url)));
     setTriedAlt(false);
   }, [cfg.url]);
 
   const onQrError = () => {
-    // First fallback: strip accidental /api prefix
     if (!triedAlt && cfg.url?.startsWith("/api/")) {
       setTriedAlt(true);
       setQrSrc(bust(absUrl(cfg.url.replace(/^\/api/, ""))));
       return;
     }
-    // Final fallback: conventional path
     setQrSrc(bust(absUrl("/uploads/qr/current.jpg")));
   };
 
-  // ---------- UPI deep-link on tap ----------
+  // ----- amount from selected plan -----
   const amount = useMemo(() => {
     const key = selectedPlan;
     if (!key) return undefined;
@@ -145,25 +114,31 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
     return v == null ? undefined : Number(v) || undefined;
   }, [selectedPlan, cfg]);
 
+  // ----- tap handler: synchronous deep-link + Android intents -----
   function onTapQr() {
-    // Step 1 marker
-    setPending((s) => ({ ...s, step1: true }));
+    setPending((s) => ({ ...s, step1: true, step2: true }));
 
-    // Deep-link cascade (no image popup)
     const upiId = cfg.upi;
-    const upiUrl = buildUpiUrl({ upiId, amount, label: "Law Network", note: title || "Subscription" });
-    // Standard UPI
-    tryOpen(upiUrl, 0);
-    // Gentle follow-ups for popular apps (Android)
-    if (upiId) {
-      const qp = `pa=${encodeURIComponent(upiId)}${amount ? `&am=${amount}` : ""}&pn=Law%20Network&cu=INR&tn=${encodeURIComponent(title || "Subscription")}`;
-      tryOpen(`intent://pay?${qp}#Intent;scheme=upi;package=com.google.android.apps.nbu.paisa.user;end;`, 300);
-      tryOpen(`intent://pay?${qp}#Intent;scheme=upi;package=com.phonepe.app;end;`, 600);
-      tryOpen(`intent://pay?${qp}#Intent;scheme=upi;package=net.one97.paytm;end;`, 900);
+    if (!upiId) return; // nothing to open
+
+    const isAndroid = /Android/i.test(navigator.userAgent);
+    const note = title || "Subscription";
+
+    const upiUrl = buildUpiUrl({ upiId, amount, label: "Law Network", note });
+    nav(upiUrl); // immediate
+
+    // Android intent fallbacks (GPay → PhonePe → Paytm)
+    if (isAndroid) {
+      const qp = `pa=${encodeURIComponent(upiId)}${
+        amount ? `&am=${amount}` : ""
+      }&pn=Law%20Network&cu=INR&tn=${encodeURIComponent(note)}`;
+      setTimeout(() => nav(`intent://pay?${qp}#Intent;scheme=upi;package=com.google.android.apps.nbu.paisa.user;end;`), 300);
+      setTimeout(() => nav(`intent://pay?${qp}#Intent;scheme=upi;package=com.phonepe.app;end;`), 700);
+      setTimeout(() => nav(`intent://pay?${qp}#Intent;scheme=upi;package=net.one97.paytm;end;`), 1100);
     }
   }
 
-  // ---------- Submit ----------
+  // ----- submit -----
   async function handleSubmit(e) {
     e.preventDefault();
     if (!selectedPlan) return alert("Select a plan");
@@ -213,7 +188,6 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
 
   if (!open) return null;
 
-  // Progress graph classes (unchanged look; smoother step movement)
   let progressClass = "step-graph-progress";
   if (pending?.step3) progressClass += " step-3";
   else if (pending?.step2) progressClass += " step-2";
@@ -222,17 +196,12 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
   return (
     <div className="fixed inset-y-0 right-0 bg-white shadow-2xl w-full max-w-md z-50 overflow-y-auto">
       <div className="p-5 relative">
-        {/* Close */}
-        <button onClick={onClose} className="absolute right-3 top-3 text-red-600 font-bold text-lg">
-          ✕
-        </button>
+        <button onClick={onClose} className="absolute right-3 top-3 text-red-600 font-bold text-lg">✕</button>
 
-        {/* Title */}
         <h3 className="font-semibold text-lg mb-3 animate-pulse text-pink-500">
           {feature} – {title}
         </h3>
 
-        {/* Progress bar */}
         <div className="step-graph mb-4 text-xs md:text-sm font-semibold">
           <div className={progressClass}></div>
           <div className={`step-node ${pending?.step1 ? "active" : ""}`}>1</div>
@@ -240,14 +209,6 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
           <div className={`step-node ${pending?.step3 ? "active" : ""}`}>3</div>
         </div>
 
-        {/* Step labels */}
-        <div className="flex justify-between mb-4 text-xs md:text-sm font-semibold">
-          <div className={pending?.step1 ? "text-green-600" : "step-1-blink"}>Step 1: Choose Plan</div>
-          <div className={pending?.step2 ? "text-green-600" : "step-2-blink"}>Step 2: Scan QR</div>
-          <div className={pending?.step3 ? "text-green-600" : "step-3-blink"}>Step 3: Fill Info</div>
-        </div>
-
-        {/* Plans */}
         <div className="flex gap-2 mb-3">
           {["weekly", "monthly", "yearly"].map((p) => (
             <button
@@ -257,38 +218,26 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
                 selectedPlan === p ? "bg-yellow-300 animate-pulse" : "bg-gray-100 hover:bg-gray-200"
               }`}
             >
-              {cfg.plans[p]?.label} – {cfg.currency}
-              {cfg.plans[p]?.price}
+              {cfg.plans[p]?.label} – {cfg.currency}{cfg.plans[p]?.price}
             </button>
           ))}
         </div>
 
         {/* QR box */}
         <div className="mb-2">
-          <div
-            className={`relative w-full h-56 border rounded-xl bg-gray-50 overflow-hidden ${
-              pending?.step2 ? "" : "qr-glow"
-            }`}
-          >
+          <div className={`relative w-full h-56 border rounded-xl bg-gray-50 overflow-hidden ${pending?.step2 ? "" : "qr-glow"}`}>
             {qrSrc ? (
               <>
                 <img
                   src={qrSrc}
                   onError={onQrError}
                   alt="QR code"
-                  className="w-full h-full object-contain select-none"
+                  className="w-full h-full object-contain select-none cursor-pointer"
                   crossOrigin="anonymous"
                   referrerPolicy="no-referrer"
-                  onClick={() => {
-                    // Step 2 mark + deep link (no image popup)
-                    setPending((s) => ({ ...s, step2: true }));
-                    onTapQr();
-                  }}
+                  onClick={onTapQr}
                 />
-                {/* scanning line */}
-                <div className="pointer-events-none absolute inset-0">
-                  <div className="scanline" />
-                </div>
+                <div className="pointer-events-none absolute inset-0"><div className="scanline" /></div>
               </>
             ) : (
               <div className="w-full h-full grid place-items-center text-gray-400 text-sm">
@@ -296,12 +245,10 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
               </div>
             )}
           </div>
-          <p className="step-2-blink text-xs mt-1">
-            कृपया QR Code पर टैप करें — आपका UPI ऐप खुलेगा (tap to open UPI app)
-          </p>
+          <p className="step-2-blink text-xs mt-1">कृपया QR Code पर टैप करें — आपका UPI ऐप खुलेगा</p>
         </div>
 
-        {/* Pending / Approved / Form */}
+        {/* Pending / Approved / Form (unchanged) */}
         {pending?.id ? (
           unlocking ? (
             <>
@@ -327,9 +274,7 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
           ) : (
             <PendingBadge
               shortId={pending.shortId}
-              deadline={
-                pending.expiry ? new Date(pending.expiry).toLocaleString() : "Waiting for approval"
-              }
+              deadline={pending.expiry ? new Date(pending.expiry).toLocaleString() : "Waiting for approval"}
             />
           )
         ) : (
@@ -366,15 +311,13 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
               }}
             />
 
-            {/* Screenshot */}
             <p className="text-sm">👉 Step 4: Upload your payment screenshot</p>
             <div className="border rounded-xl p-3 text-sm bg-pink-50 relative">
               <label className="flex items-center justify-between text-pink-600 font-semibold mb-2">
                 <span>Upload Payment Screenshot</span>
                 <span className="flex items-center gap-3 text-green-600 animate-bounce select-none">
                   <svg className="w-8 h-8" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
-                    <path d="M12 4v12" />
-                    <path d="M8 12l4 4 4-4" />
+                    <path d="M12 4v12" /><path d="M8 12l4 4 4-4" />
                   </svg>
                   <span className="text-green-700 font-extrabold text-base uppercase tracking-wide">
                     Browse HERE TO UPLOAD PAYMENT SCREENSHOT
@@ -396,8 +339,7 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
               <div className="text-sm p-2 border rounded bg-yellow-50">
                 Selected Plan:{" "}
                 <b>
-                  {cfg.plans[selectedPlan]?.label} – {cfg.currency}
-                  {cfg.plans[selectedPlan]?.price}
+                  {cfg.plans[selectedPlan]?.label} – {cfg.currency}{cfg.plans[selectedPlan]?.price}
                 </b>
               </div>
             )}
@@ -409,23 +351,12 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
         )}
       </div>
 
-      {/* tiny styles for scan line if you don't already have them */}
+      {/* scanline helper if not already in global css */}
       <style>{`
-        .scanline {
-          position: absolute;
-          left: 0; right: 0;
-          top: 10%;
-          height: 4px;
-          border-radius: 999px;
-          background: rgba(16,185,129,0.85);
-          box-shadow: 0 0 14px rgba(16,185,129,0.65);
-          animation: scan 2.4s linear infinite;
-        }
-        @keyframes scan {
-          0% { top: 10%; opacity: .9; }
-          50% { top: 90%; opacity: .85; }
-          100% { top: 10%; opacity: .9; }
-        }
+        .scanline { position:absolute; left:0; right:0; top:10%; height:4px; border-radius:999px;
+          background: rgba(16,185,129,0.85); box-shadow:0 0 14px rgba(16,185,129,0.65);
+          animation: scan 2.4s linear infinite; }
+        @keyframes scan { 0%{top:10%;opacity:.9} 50%{top:90%;opacity:.85} 100%{top:10%;opacity:.9} }
       `}</style>
     </div>
   );
