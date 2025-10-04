@@ -1,3 +1,4 @@
+// client/src/components/common/QROverlay.jsx
 import { useEffect, useState } from "react";
 import { API_BASE } from "../../utils/api";
 import { savePending, loadPending } from "../../utils/pending";
@@ -5,7 +6,7 @@ import useApprovalWatcher from "../../hooks/useApprovalWatcher";
 import PendingBadge from "../common/PendingBadge";
 import UnlockWait from "../common/UnlockWait";
 import AccessTimer from "../common/AccessTimer";
-import { saveAccess } from "../../utils/access";   // ✅
+import { saveAccess } from "../../utils/access"; // ✅
 
 export default function QROverlay({ open, onClose, title, feature, featureId }) {
   const [cfg, setCfg] = useState({ url: "", currency: "₹", plans: {} });
@@ -18,13 +19,17 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
   // fetch QR config
   async function fetchConfig() {
     try {
-      const r = await fetch(`${API_BASE}/api/qr/current?ts=${Date.now()}`).then(res => res.json());
+      const r = await fetch(`${API_BASE}/api/qr/current?ts=${Date.now()}`).then((res) =>
+        res.json()
+      );
       if (r?.success) setCfg(r);
     } catch (err) {
       console.error("Failed to fetch QR config:", err);
     }
   }
-  useEffect(() => { if (open) fetchConfig(); }, [open]);
+  useEffect(() => {
+    if (open) fetchConfig();
+  }, [open]);
 
   // restore pending
   useEffect(() => {
@@ -35,10 +40,11 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
   }, [form.email, feature, featureId]);
 
   // watcher → if admin approves
-  const { status, approved, expiry, message } = useApprovalWatcher(
-    pending,
-    { feature, featureId, email: form.email }
-  );
+  const { status, approved, expiry, message } = useApprovalWatcher(pending, {
+    feature,
+    featureId,
+    email: form.email,
+  });
 
   // close overlay immediately on any 'accessGranted' broadcast
   useEffect(() => {
@@ -65,6 +71,29 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
     }
   }, [status, approved, expiry, message, feature, featureId, form.email, onClose]);
 
+  // ✅ UPI deeplink with prefilled amount (based on selected plan)
+  function openUPILinkWithAmount() {
+    try {
+      const planKey = selectedPlan;
+      const price = Number(cfg?.plans?.[planKey]?.price || 0);
+      const pa = (cfg?.vpa || "").trim(); // your UPI ID (e.g., yourname@okicici)
+      const pn = (cfg?.payeeName || "Law Network").trim();
+      const tn = `${cfg?.plans?.[planKey]?.label || "Plan"} – ${title}`;
+
+      if (pa && price > 0) {
+        const upi = `upi://pay?pa=${encodeURIComponent(pa)}&pn=${encodeURIComponent(
+          pn
+        )}&am=${price}&cu=INR&tn=${encodeURIComponent(tn)}`;
+        window.location.href = upi;
+      } else {
+        // Safe fallback (previous behavior)
+        window.location.href = "upi://pay";
+      }
+    } catch {
+      window.location.href = "upi://pay";
+    }
+  }
+
   // submit form
   async function handleSubmit(e) {
     e.preventDefault();
@@ -85,7 +114,11 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
       fd.append("type", feature);
       fd.append("id", featureId);
 
-      const r = await fetch(`${API_BASE}/api/submissions`, { method: "POST", body: fd }).then(res => res.json());
+      const r = await fetch(`${API_BASE}/api/submissions`, {
+        method: "POST",
+        body: fd,
+      }).then((res) => res.json());
+
       if (r?.success) {
         const record = {
           id: r.id,
@@ -97,6 +130,7 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
           step1: pending.step1,
           step2: pending.step2,
           step3: pending.step3,
+          step4: pending.step4,
         };
         setPending(record);
         savePending(feature, featureId, form.email, record);
@@ -113,8 +147,7 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
 
   if (!open) return null;
 
-  // ✅ Existing 3-step progress (scan/fill/upload) stays intact.
-  // We’re just adding a separate “Step 1: Choose Plan” row above it.
+  // ✅ progress step calculation (1: plan, 2: scan, 3: fill info) — upload screenshot is shown in labels
   let progressClass = "";
   if (pending?.step3) progressClass = "step-graph-progress step-3";
   else if (pending?.step2) progressClass = "step-graph-progress step-2";
@@ -125,77 +158,86 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
     <div className="fixed inset-y-0 right-0 bg-white shadow-2xl w-full max-w-md z-50 overflow-y-auto">
       <div className="p-5 relative">
         {/* Close button */}
-        <button onClick={onClose} className="absolute right-3 top-3 text-red-600 font-bold text-lg">✕</button>
+        <button onClick={onClose} className="absolute right-3 top-3 text-red-600 font-bold text-lg">
+          ✕
+        </button>
 
         {/* Title */}
         <h3 className="font-semibold text-lg mb-3 animate-pulse text-pink-500">
           {feature} – {title}
         </h3>
 
-        {/* ✅ New: Step 1 (Choose Plan) headline */}
-        <div className="mb-2 text-xs md:text-sm font-semibold">
-          <span className={selectedPlan ? "text-green-600" : "step-1-blink"}>
-            Step 1: Choose Plan {selectedPlan && <span className="tick-animate">✅</span>}
-          </span>
-        </div>
-
-        {/* Plans FIRST now */}
-        <div className="flex gap-2 mb-4">
-          {["weekly", "monthly", "yearly"].map((p) => (
-            <button
-              key={p}
-              onClick={() => setSelectedPlan(p)}
-              className={`px-3 py-1 rounded-full border text-sm ${
-                selectedPlan === p ? "bg-yellow-300 animate-pulse" : "bg-gray-100 hover:bg-gray-200"
-              }`}
-            >
-              {cfg.plans[p]?.label} – {cfg.currency}{cfg.plans[p]?.price}
-            </button>
-          ))}
-        </div>
-
-        {/* ✅ 3-node progress graph now represents steps 2/3/4 */}
+        {/* ✅ Progress Graph with bar */}
         <div className="step-graph mb-4 text-xs md:text-sm font-semibold">
           <div className={progressClass}></div>
-          <div className={`step-node ${pending?.step1 ? "active" : ""}`}>2</div>
-          <div className={`step-node ${pending?.step2 ? "active" : ""}`}>3</div>
-          <div className={`step-node ${pending?.step3 ? "active" : ""}`}>4</div>
+          <div className={`step-node ${pending?.step1 ? "active" : ""}`}>1</div>
+          <div className={`step-node ${pending?.step2 ? "active" : ""}`}>2</div>
+          <div className={`step-node ${pending?.step3 ? "active" : ""}`}>3</div>
         </div>
 
-        {/* ✅ Step Labels (renumbered) */}
-        <div className="flex justify-between mb-4 text-xs md:text-sm font-semibold">
-          <div className={pending?.step1 ? "text-green-600" : "step-2-blink"}>
-            Step 2: Scan QR {pending?.step1 && <span className="tick-animate">✅</span>}
+        {/* ✅ Step Labels (1: Choose Plan, 2: Scan QR, 3: Fill Info, 4: Upload Screenshot) */}
+        <div className="flex justify-between mb-3 text-[11px] md:text-xs font-semibold">
+          <div className={pending?.step1 ? "text-green-600" : "step-1-blink"}>
+            Step 1: Choose Plan {pending?.step1 && <span className="tick-animate">✅</span>}
           </div>
-          <div className={pending?.step2 ? "text-green-600" : "step-3-blink"}>
-            Step 3: Fill Info {pending?.step2 && <span className="tick-animate">✅</span>}
+          <div className={pending?.step2 ? "text-green-600" : "step-2-blink"}>
+            Step 2: Scan QR {pending?.step2 && <span className="tick-animate">✅</span>}
           </div>
-          <div className={pending?.step3 ? "text-green-600" : "step-4-blink"}>
-            Step 4: Upload Screenshot {pending?.step3 && <span className="tick-animate">✅</span>}
+          <div className={pending?.step3 ? "text-green-600" : "step-3-blink"}>
+            Step 3: Fill Info {pending?.step3 && <span className="tick-animate">✅</span>}
+          </div>
+          <div className={pending?.step4 ? "text-green-600" : ""}>Step 4: Upload Screenshot</div>
+        </div>
+
+        {/* ===== Step 1: Plans ===== */}
+        <div className="mb-4">
+          <div className="mb-1 text-xs font-semibold">Step 1: Choose Plan 🟡</div>
+          <div className="flex gap-2">
+            {["weekly", "monthly", "yearly"].map((p) => (
+              <button
+                key={p}
+                onClick={() => {
+                  setSelectedPlan(p);
+                  // Mark step 1 complete when a plan is chosen
+                  setPending((s) => ({ ...s, step1: true }));
+                }}
+                className={`px-3 py-1 rounded-full border text-sm ${
+                  selectedPlan === p ? "bg-yellow-300 animate-pulse" : "bg-gray-100 hover:bg-gray-200"
+                }`}
+              >
+                {cfg.plans[p]?.label} – {cfg.currency}
+                {cfg.plans[p]?.price}
+              </button>
+            ))}
           </div>
         </div>
 
-        {/* QR Image (unchanged) */}
+        {/* ===== Step 2: QR Image ===== */}
         {cfg.url ? (
           <div className="mb-4 text-center">
+            <div className="text-xs font-semibold mb-1">Step 2: Scan QR 🟢</div>
             <img
               src={`${API_BASE}${cfg.url}?t=${Date.now()}`}
               alt="QR code"
-              className={`w-full h-56 object-contain border rounded-xl bg-gray-50 ${pending?.step1 ? "" : "cursor-pointer qr-glow"}`}
+              className={`w-full h-56 object-contain border rounded-xl bg-gray-50 ${
+                pending?.step2 ? "" : "cursor-pointer qr-glow"
+              }`}
               onClick={() => {
-                // Step 2 (scan) → mark complete + redirect (logic unchanged)
-                setPending((s) => ({ ...s, step1: true }));
-                setTimeout(() => { window.location.href = "upi://pay"; }, 900);
+                // Step 2 → mark complete + redirect to UPI with amount
+                setPending((s) => ({ ...s, step2: true }));
+                setTimeout(() => {
+                  openUPILinkWithAmount(); // ✅ prefilled amount
+                }, 900);
               }}
             />
-            {!pending?.step1 && (
-              <p className="step-2-blink text-xs mt-1">
+            {!pending?.step2 && (
+              <p className="step-1-blink text-xs mt-1">
                 कृपया QR Code पर टैप करें और स्कैन करें (Tap QR to Scan & Pay)
               </p>
             )}
-            {pending?.step1 && (
-              <p className="step-2-blink text-xs mt-1">
-                कृपया payment के बाद स्क्रीन शॉट लेना ना भूले  
+            {pending?.step2 && (
+              <p className="step-1-blink text-xs mt-1">
+                कृपया payment के बाद स्क्रीन शॉट लेना ना भूले
                 <br />(Please don't forget to take screenshot after payment done)
               </p>
             )}
@@ -206,7 +248,7 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
           </div>
         )}
 
-        {/* Pending OR Form */}
+        {/* ===== Step 3: User Info ===== */}
         {pending?.id ? (
           unlocking ? (
             <>
@@ -232,12 +274,16 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
           ) : (
             <PendingBadge
               shortId={pending.shortId}
-              deadline={pending.expiry ? new Date(pending.expiry).toLocaleString() : "Waiting for approval"}
+              deadline={
+                pending.expiry
+                  ? new Date(pending.expiry).toLocaleString()
+                  : "Waiting for approval"
+              }
             />
           )
         ) : (
           <form onSubmit={handleSubmit} className="grid gap-3">
-            <p className="step-3-blink text-sm">👉 Please fill your info details</p>
+            <p className="step-2-blink text-sm">👉 Please fill your info details</p>
             <input
               placeholder="Your Name"
               className="border rounded p-2"
@@ -245,7 +291,9 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
               onChange={(e) => {
                 const val = e.target.value;
                 setForm((s) => ({ ...s, name: val }));
-                if (val && form.phone && form.email) setPending((s) => ({ ...s, step2: true }));
+                if (val && form.phone && form.email) {
+                  setPending((s) => ({ ...s, step3: true }));
+                }
               }}
             />
             <input
@@ -255,7 +303,9 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
               onChange={(e) => {
                 const val = e.target.value;
                 setForm((s) => ({ ...s, phone: val }));
-                if (val && form.name && form.email) setPending((s) => ({ ...s, step2: true }));
+                if (val && form.name && form.email) {
+                  setPending((s) => ({ ...s, step3: true }));
+                }
               }}
             />
             <input
@@ -265,12 +315,14 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
               onChange={(e) => {
                 const val = e.target.value;
                 setForm((s) => ({ ...s, email: val }));
-                if (val && form.name && form.phone) setPending((s) => ({ ...s, step2: true }));
+                if (val && form.name && form.phone) {
+                  setPending((s) => ({ ...s, step3: true }));
+                }
               }}
             />
 
-            {/* Screenshot block */}
-            <p className="step-4-blink text-sm">👉 Step 4: Upload your payment screenshot</p>
+            {/* ===== Step 4: Screenshot ===== */}
+            <p className="step-3-blink text-sm">👉 Step 4: Upload your payment screenshot</p>
             <div className="border rounded-xl p-3 text-sm bg-pink-50 relative">
               <label className="flex items-center justify-between text-pink-600 font-semibold mb-2">
                 <span>Upload Payment Screenshot</span>
@@ -278,7 +330,15 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
                   className="flex items-center gap-3 text-green-600 animate-bounce select-none
                              drop-shadow-[0_0_8px_rgba(34,197,94,0.45)]"
                 >
-                  <svg className="w-8 h-8 md:w-9 md:h-9" viewBox="0 0 24 24" fill="none" stroke="currentColor" strokeWidth="2.5" strokeLinecap="round" strokeLinejoin="round">
+                  <svg
+                    className="w-8 h-8 md:w-9 md:h-9"
+                    viewBox="0 0 24 24"
+                    fill="none"
+                    stroke="currentColor"
+                    strokeWidth="2.5"
+                    strokeLinecap="round"
+                    strokeLinejoin="round"
+                  >
                     <path d="M12 4v12" />
                     <path d="M8 12l4 4 4-4" />
                   </svg>
@@ -294,7 +354,7 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
                 onChange={(e) => {
                   const file = e.target.files?.[0] || null;
                   setForm((s) => ({ ...s, file }));
-                  if (file) setPending((s) => ({ ...s, step3: true }));
+                  if (file) setPending((s) => ({ ...s, step4: true }));
                 }}
               />
             </div>
