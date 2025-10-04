@@ -2,22 +2,11 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { API_BASE, getJSON, authHeaders, absUrl } from "../../utils/api";
 import IfOwnerOnly from "../common/IfOwnerOnly";
-import usePreviewLock from "../../hooks/usePreviewLock";
 import QROverlay from "../common/QROverlay";
 import { loadAccess } from "../../utils/access";
 import AccessTimer from "../common/AccessTimer";
 import useAccessSync from "../../hooks/useAccessSync";
 import useSubmissionStream from "../../hooks/useSubmissionStream";
-
-/**
- * Final podcast player:
- * - Reliable Play/Pause (UI mirrors the real <audio> state via `playing`/`pause`)
- * - Auto 10s preview per item per visit; hard-stop + QR overlay exactly at 10s
- * - After closing overlay while still locked, any play/seek instantly re-opens it
- * - Auto-play on item select (no race with `canplay`)
- * - Proxy-first streaming with automatic fallback to raw URL if proxy/head fails
- * - iOS volume hint, slider for others (persisted)
- */
 
 const PREVIEW_SECONDS = 10;
 const PREVIEW_MS = PREVIEW_SECONDS * 1000;
@@ -120,7 +109,9 @@ export default function Podcast() {
     setAccessLoading(false);
   };
 
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+  }, []);
 
   useEffect(() => {
     if (!pid) return;
@@ -137,7 +128,6 @@ export default function Podcast() {
       if (ev.type === "grant") applyGrant(ev);
       if (ev.type === "revoke") applyRevoke(ev);
     }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playlists.length]);
 
   useAccessSync(async (detail) => {
@@ -183,7 +173,9 @@ export default function Podcast() {
     setTimeout(() => setGrantToast(null), 4500);
 
     if (pid && String(pid) === String(normalizedId)) {
-      try { await audioRef.current?.play?.(); } catch {}
+      try {
+        await audioRef.current?.play?.();
+      } catch {}
     }
 
     const fresh = await loadAccess("podcast", normalizedId, email);
@@ -217,7 +209,6 @@ export default function Podcast() {
     const onFocus = () => refreshAllAccess();
     window.addEventListener("focus", onFocus);
     return () => window.removeEventListener("focus", onFocus);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [playlists, email]);
 
   useEffect(() => {
@@ -230,9 +221,6 @@ export default function Podcast() {
     const t = setTimeout(() => refreshAllAccess(), Math.max(0, nextExpiry - now + 500));
     return () => clearTimeout(t);
   }, [accessMap]);
-
-  // badge-only helper (hard enforcement done in events below)
-  usePreviewLock({ type: "podcast", id: track?.id || "none", previewSeconds: PREVIEW_SECONDS });
 
   /* ---------- build src with proxy & fallback ---------- */
   const buildUrls = (u) => {
@@ -278,12 +266,10 @@ export default function Podcast() {
       el.src = canProxy ? proxy : raw;
       el.load();
 
-      // one-time fallback on error
       const onErr = () => {
         if (el.src === proxy) {
           el.src = raw;
           el.load();
-          // if user clicked to play, try again
           if (shouldAutoPlayNextRef.current) {
             el.addEventListener("canplay", tryAutoPlayOnce, { once: true });
           }
@@ -294,16 +280,19 @@ export default function Podcast() {
 
     const tryAutoPlayOnce = async () => {
       if (!shouldAutoPlayNextRef.current) return;
-      try { await el.play(); } catch {}
+      try {
+        await el.play();
+      } catch {}
       shouldAutoPlayNextRef.current = false;
     };
 
     const onCanPlay = () => tryAutoPlayOnce();
     el.addEventListener("canplay", onCanPlay);
-    setSrc().then(() => { if (el.readyState >= 3) tryAutoPlayOnce(); });
+    setSrc().then(() => {
+      if (el.readyState >= 3) tryAutoPlayOnce();
+    });
 
     return () => el.removeEventListener("canplay", onCanPlay);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [track?.id, pid]);
 
   /* ---------- audio events: strict sync & preview enforcement ---------- */
@@ -332,7 +321,10 @@ export default function Podcast() {
       }
     };
 
-    const onLoaded = () => setDur(el.duration || 0);
+    const onLoaded = () => {
+      setDur(el.duration || 0);
+      if (!isiOS) el.volume = vol;
+    };
 
     const onTime = () => {
       if (!seeking) setCur(el.currentTime || 0);
@@ -348,7 +340,6 @@ export default function Podcast() {
       }
     };
 
-    // Use 'playing' which fires when the audio is actually rendering (not just 'play')
     const onPlaying = () => {
       if (!unlocked && previewUsed >= PREVIEW_MS) {
         el.pause();
@@ -360,16 +351,25 @@ export default function Podcast() {
       setIsPlaying(true);
     };
 
-    const onPause = () => { commitPreviewDelta(); setIsPlaying(false); };
-    const onEnded = () => { commitPreviewDelta(); setIsPlaying(false); };
-    const onVol = () => { setVol(el.volume); localStorage.setItem("pod_vol", String(el.volume)); };
+    const onPause = () => {
+      commitPreviewDelta();
+      setIsPlaying(false);
+    };
+    const onEnded = () => {
+      commitPreviewDelta();
+      setIsPlaying(false);
+    };
+    const onVol = () => {
+      setVol(el.volume);
+      localStorage.setItem("pod_vol", String(el.volume));
+    };
 
     const onSeeking = () => {
       if (!unlocked) {
         const t = Math.min(el.currentTime || 0, PREVIEW_SECONDS);
         if (Math.abs(t - (el.currentTime || 0)) > 0.001) {
           el.currentTime = t;
-          openOverlay();
+          if (t >= PREVIEW_SECONDS) openOverlay();
         }
       }
     };
@@ -385,7 +385,6 @@ export default function Podcast() {
     el.addEventListener("volumechange", onVol);
     el.addEventListener("error", onError);
 
-    // Snapshot current state
     setIsPlaying(!el.paused && !el.ended);
     if (el.readyState >= 1) {
       setDur(el.duration || 0);
@@ -424,12 +423,13 @@ export default function Podcast() {
     if (!el) return;
     if (isPlaying) return el.pause();
 
-    // if locked and preview already spent OR cursor at/over 10s → block & overlay
     if (!unlocked && (previewUsed >= PREVIEW_MS || (el.currentTime || 0) >= PREVIEW_SECONDS)) {
       openOverlay();
       return;
     }
-    try { await el.play(); } catch {}
+    try {
+      await el.play();
+    } catch {}
   };
 
   const seekWithinBounds = (t) => {
@@ -567,15 +567,22 @@ export default function Podcast() {
                     <div className="flex items-center gap-1 text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full animate-pulse">
                       <span>✅ Unlocked</span>
                       <AccessTimer timeLeftMs={pAccess.expiry - Date.now()} />
-                      {accessLoading && <span className="animate-spin inline-block w-3 h-3 border-2 border-green-700 border-t-transparent rounded-full" />}
+                      {accessLoading && (
+                        <span className="animate-spin inline-block w-3 h-3 border-2 border-green-700 border-t-transparent rounded-full" />
+                      )}
                     </div>
                   ) : (
                     <button
                       className="flex items-center gap-1 text-xs bg-red-500 text-white px-2 py-1 rounded"
-                      onClick={() => { setPlaylistOverlay(p); overlayGuardRef.current = true; }}
+                      onClick={() => {
+                        setPlaylistOverlay(p);
+                        overlayGuardRef.current = true;
+                      }}
                     >
                       <span>Preview / Unlock</span>
-                      {accessLoading && <span className="animate-spin inline-block w-3 h-3 border-2 border-white/80 border-t-transparent rounded-full" />}
+                      {accessLoading && (
+                        <span className="animate-spin inline-block w-3 h-3 border-2 border-white/80 border-t-transparent rounded-full" />
+                      )}
                     </button>
                   )}
                 </div>
@@ -587,10 +594,14 @@ export default function Podcast() {
                       return (
                         <div
                           key={it.id}
-                          className={`px-2 py-2 rounded cursor-pointer hover:bg-gray-50 flex items-center justify-between ${isActive ? "bg-gray-50" : ""}`}
+                          className={`px-2 py-2 rounded cursor-pointer hover:bg-gray-50 flex items-center justify-between ${
+                            isActive ? "bg-gray-50" : ""
+                          }`}
                           onClick={() => {
                             setTrack(it);
-                            shouldAutoPlayNextRef.current = true; // item click qualifies as user gesture
+                            const el = audioRef.current;
+                            if (el) el.pause();
+                            shouldAutoPlayNextRef.current = true;
                           }}
                         >
                           <div className="truncate">
@@ -602,18 +613,24 @@ export default function Podcast() {
                             <div className="flex items-center gap-1 text-xs bg-green-100 text-green-700 px-2 py-0.5 rounded-full animate-pulse">
                               <span>✅ Unlocked</span>
                               <AccessTimer timeLeftMs={pAccess.expiry - Date.now()} />
-                              {accessLoading && <span className="animate-spin inline-block w-3 h-3 border-2 border-green-700 border-t-transparent rounded-full" />}
+                              {accessLoading && (
+                                <span className="animate-spin inline-block w-3 h-3 border-2 border-green-700 border-t-transparent rounded-full" />
+                              )}
                             </div>
                           ) : (
                             <div className="flex items-center gap-1 text-xs bg-red-100 text-red-700 px-2 py-0.5 rounded-full">
                               <span>Locked</span>
-                              {accessLoading && <span className="animate-spin inline-block w-3 h-3 border-2 border-red-700 border-t-transparent rounded-full" />}
+                              {accessLoading && (
+                                <span className="animate-spin inline-block w-3 h-3 border-2 border-red-700 border-t-transparent rounded-full" />
+                              )}
                             </div>
                           )}
                         </div>
                       );
                     })}
-                    {(p.items || []).length === 0 && <div className="text-xs text-gray-500 px-2 pb-2">No items</div>}
+                    {(p.items || []).length === 0 && (
+                      <div className="text-xs text-gray-500 px-2 pb-2">No items</div>
+                    )}
                   </div>
                 )}
               </div>
@@ -625,7 +642,12 @@ export default function Podcast() {
         {/* Admin: create */}
         <IfOwnerOnly className="p-3 border-t">
           <form onSubmit={createPlaylist} className="grid grid-cols-[1fr_auto] gap-2">
-            <input className="border rounded p-2" placeholder="New playlist name" value={newPlName} onChange={(e) => setNewPlName(e.target.value)} />
+            <input
+              className="border rounded p-2"
+              placeholder="New playlist name"
+              value={newPlName}
+              onChange={(e) => setNewPlName(e.target.value)}
+            />
             <button className="bg-black text-white px-3 rounded">Add</button>
           </form>
         </IfOwnerOnly>
@@ -634,7 +656,9 @@ export default function Podcast() {
       {/* Player panel */}
       <div
         ref={panelRef}
-        className={`md:col-span-2 border rounded-2xl bg-white p-5 relative ${playlistOverlay ? "blur-sm opacity-80 pointer-events-none" : ""}`}
+        className={`md:col-span-2 border rounded-2xl bg-white p-5 relative ${
+          playlistOverlay ? "blur-sm opacity-80 pointer-events-none" : ""
+        }`}
       >
         {grantToast && (
           <div className="absolute top-3 right-3 z-20 bg-green-600 text-white text-sm px-3 py-2 rounded-lg shadow">
@@ -655,13 +679,21 @@ export default function Podcast() {
               {(() => {
                 const unlockedPl = !!(plAccess?.expiry && plAccess.expiry > Date.now());
                 return (
-                  <div className={`flex items-center gap-1 text-xs px-2 py-1 rounded-full ${unlockedPl ? "bg-green-100 text-green-700 animate-pulse" : "bg-red-100 text-red-700"}`}>
+                  <div
+                    className={`flex items-center gap-1 text-xs px-2 py-1 rounded-full ${
+                      unlockedPl ? "bg-green-100 text-green-700 animate-pulse" : "bg-red-100 text-red-700"
+                    }`}
+                  >
                     {unlockedPl ? (
-                      <>✅ Unlocked <AccessTimer timeLeftMs={plAccess.expiry - Date.now()} /></>
+                      <>
+                        ✅ Unlocked <AccessTimer timeLeftMs={plAccess.expiry - Date.now()} />
+                      </>
                     ) : (
                       `Locked (${Math.max(0, PREVIEW_SECONDS - Math.floor(previewUsed / 1000))}s preview)`
                     )}
-                    {accessLoading && <span className="animate-spin inline-block w-3 h-3 border-2 border-current border-t-transparent rounded-full" />}
+                    {accessLoading && (
+                      <span className="animate-spin inline-block w-3 h-3 border-2 border-current border-t-transparent rounded-full" />
+                    )}
                   </div>
                 );
               })()}
@@ -688,7 +720,11 @@ export default function Podcast() {
 
                 <div className="flex-1 min-w-0">
                   <div className="flex items-center gap-3 mb-3">
-                    <button className="p-2 rounded-full bg-white/10 hover:bg-white/20" onClick={() => skip(-15)} aria-label="Back 15 seconds">
+                    <button
+                      className="p-2 rounded-full bg-white/10 hover:bg-white/20"
+                      onClick={() => skip(-15)}
+                      aria-label="Back 15 seconds"
+                    >
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
                         <path d="M12 5v2a5 5 0 1 0 5 5h2A7 7 0 1 1 12 5Z" fill="currentColor" />
                         <path d="M11 8v8l-5-4 5-4Z" fill="currentColor" />
@@ -696,7 +732,11 @@ export default function Podcast() {
                     </button>
 
                     <button
-                      className={`p-3 rounded-full shadow ${isPlaying ? "bg-white/90 text-black ring-2 ring-[#1DB954] animate-pulse" : "bg-[#1DB954] text-black hover:brightness-95"}`}
+                      className={`p-3 rounded-full shadow ${
+                        isPlaying
+                          ? "bg-white/90 text-black ring-2 ring-[#1DB954] animate-pulse"
+                          : "bg-[#1DB954] text-black hover:brightness-95"
+                      }`}
                       onClick={togglePlay}
                       aria-label={isPlaying ? "Pause" : "Play"}
                       aria-pressed={isPlaying}
@@ -713,7 +753,11 @@ export default function Podcast() {
                       )}
                     </button>
 
-                    <button className="p-2 rounded-full bg-white/10 hover:bg-white/20" onClick={() => skip(15)} aria-label="Forward 15 seconds">
+                    <button
+                      className="p-2 rounded-full bg-white/10 hover:bg-white/20"
+                      onClick={() => skip(15)}
+                      aria-label="Forward 15 seconds"
+                    >
                       <svg width="18" height="18" viewBox="0 0 24 24" fill="none">
                         <path d="M12 5v2a5 5 0 1 1-5 5H5a7 7 0 1 0 7-7Z" fill="currentColor" />
                         <path d="M13 8v8l5-4-5-4Z" fill="currentColor" />
@@ -746,8 +790,15 @@ export default function Podcast() {
                   <div className="flex items-center gap-3 select-none">
                     <span className="text-xs tabular-nums text-white/70 w-10 text-right">{mmss(cur)}</span>
 
-                    <div ref={barRef} className="relative h-2 rounded-full bg-white/15 flex-1 cursor-pointer" onClick={onBarClick}>
-                      <div className="absolute inset-y-0 left-0 rounded-full bg-[#1DB954]" style={{ width: `${(dur ? cur / dur : 0) * 100}%` }} />
+                    <div
+                      ref={barRef}
+                      className="relative h-2 rounded-full bg-white/15 flex-1 cursor-pointer"
+                      onClick={onBarClick}
+                    >
+                      <div
+                        className="absolute inset-y-0 left-0 rounded-full bg-[#1DB954]"
+                        style={{ width: `${(dur ? cur / dur : 0) * 100}%` }}
+                      />
                       <div
                         className="absolute -top-1.5 h-5 w-5 rounded-full bg-white shadow -translate-x-1/2"
                         style={{ left: `${(dur ? cur / dur : 0) * 100}%` }}
@@ -764,7 +815,11 @@ export default function Podcast() {
                     <span className="text-xs tabular-nums text-white/70 w-10">{mmss(dur)}</span>
                   </div>
 
-                  {!unlocked && <div className="text-[11px] text-white/60 mt-2">Preview stops at {PREVIEW_SECONDS}s. Subscribe to continue.</div>}
+                  {!unlocked && (
+                    <div className="text-[11px] text-white/60 mt-2">
+                      Preview stops at {PREVIEW_SECONDS}s. Subscribe to continue.
+                    </div>
+                  )}
                 </div>
               </div>
             </div>
@@ -772,10 +827,16 @@ export default function Podcast() {
             {/* Admin controls (for current track) */}
             <IfOwnerOnly>
               <div className="mt-3 flex gap-2">
-                <button className="text-xs px-3 py-1 rounded border" onClick={() => toggleLock(track.id, !track.locked)}>
+                <button
+                  className="text-xs px-3 py-1 rounded border"
+                  onClick={() => toggleLock(track.id, !track.locked)}
+                >
                   {track.locked ? "Unlock" : "Lock"}
                 </button>
-                <button className="text-xs px-3 py-1 rounded border text-red-600" onClick={() => delItem(track.id)}>
+                <button
+                  className="text-xs px-3 py-1 rounded border text-red-600"
+                  onClick={() => delItem(track.id)}
+                >
                   Delete
                 </button>
               </div>
@@ -790,7 +851,11 @@ export default function Podcast() {
       {playlistOverlay && (
         <QROverlay
           open
-          onClose={() => { setPlaylistOverlay(null); overlayGuardRef.current = false; }}
+          onClose={() => {
+            setPlaylistOverlay(null);
+            overlayGuardRef.current = false;
+            setPreviewUsed(0);
+          }}
           title={playlistOverlay.name}
           subjectLabel="Podcast"
           inline
