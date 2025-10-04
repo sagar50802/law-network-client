@@ -9,16 +9,11 @@ import AccessTimer from "../common/AccessTimer";
 import { saveAccess } from "../../utils/access";
 
 const bust = (u) => (u ? `${u}${u.includes("?") ? "&" : "?"}t=${Date.now()}` : u);
+const toAbs = (u) => (!u ? "" : /^https?:\/\//i.test(u) ? u : `${API_BASE}${u}`);
 
 function buildUpiUrl({ upiId, amount, label = "Law Network", note = "Subscription" }) {
-  // If UPI ID missing, still open chooser; otherwise include pa/pn/cu/tn, am only when known.
   if (!upiId) return "upi://pay";
-  const qs = new URLSearchParams({
-    pa: upiId,
-    pn: label,
-    tn: note,
-    cu: "INR",
-  });
+  const qs = new URLSearchParams({ pa: upiId, pn: label, tn: note, cu: "INR" });
   if (amount) qs.set("am", String(amount));
   return `upi://pay?${qs.toString()}`;
 }
@@ -27,6 +22,7 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
   const [cfg, setCfg] = useState({ url: "", currency: "₹", plans: {}, upi: "" });
   const [qrSrc, setQrSrc] = useState("");
   const [qrError, setQrError] = useState(false);
+  const [triedDefault, setTriedDefault] = useState(false);
 
   const [selectedPlan, setSelectedPlan] = useState(null);
   const [form, setForm] = useState({ name: "", phone: "", email: "", file: null });
@@ -34,7 +30,6 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
   const [unlocking, setUnlocking] = useState(false);
   const [submitting, setSubmitting] = useState(false);
 
-  // Load QR config ONCE per open
   useEffect(() => {
     if (!open) return;
     (async () => {
@@ -42,38 +37,53 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
         const r = await fetch(`${API_BASE}/api/qr/current?ts=${Date.now()}`).then((res) => res.json());
         if (r?.success) {
           const upi = r.upi || r.upiId || r.vpa || (r.meta && (r.meta.upi || r.meta.vpa)) || "";
+          const rawUrl = r.url || "/uploads/qr/current.jpg";
+          const abs = bust(toAbs(rawUrl));
           setCfg({
-            url: r.url || "/uploads/qr/current.jpg",
+            url: rawUrl,
             currency: r.currency || "₹",
             plans: r.plans || {},
             upi,
           });
           setQrError(false);
-          setQrSrc(bust(`${API_BASE}${(r.url || "/uploads/qr/current.jpg")}`));
+          setTriedDefault(false);
+          setQrSrc(abs);
         } else {
-          setQrError(true);
+          // fall back immediately to default path
+          setCfg((c) => ({ ...c }));
+          setQrSrc(bust(toAbs("/uploads/qr/current.jpg")));
         }
       } catch {
-        setQrError(true);
+        setQrSrc(bust(toAbs("/uploads/qr/current.jpg")));
       }
     })();
   }, [open]);
 
-  // Restore pending after user types email
+  // if first src fails, try default once
+  function onQrError() {
+    if (!triedDefault) {
+      setTriedDefault(true);
+      setQrSrc(bust(toAbs("/uploads/qr/current.jpg")));
+      return;
+    }
+    setQrError(true);
+  }
+
+  // restore pending after user types email
   useEffect(() => {
     if (!form.email) return;
     const saved = loadPending(feature, featureId, form.email);
     if (saved) setPending(saved);
   }, [form.email, feature, featureId]);
 
-  // Live approval watcher
+  // live approval watcher
   const { status, approved, expiry, message } = useApprovalWatcher(pending, {
     feature,
     featureId,
     email: form.email,
   });
 
-  // Close overlay on broadcast grant
+  // close overlay on broadcast grant
   useEffect(() => {
     const onGranted = () => onClose?.();
     window.addEventListener("accessGranted", onGranted);
@@ -95,7 +105,7 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
     return () => clearTimeout(t);
   }, [status, approved, expiry, message, feature, featureId, form.email, onClose]);
 
-  // Amount from selected plan
+  // amount from plan
   const amount = useMemo(() => {
     const key = selectedPlan;
     if (!key) return undefined;
@@ -111,7 +121,7 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
     note: title || "Subscription",
   });
 
-  // Tap QR → open UPI after a short delay (no new tab ever)
+  // tap QR → open UPI (0.8s delay)
   function handleQrTap(e) {
     e?.preventDefault?.();
     e?.stopPropagation?.();
@@ -120,10 +130,9 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
       try {
         window.location.href = upiUrl;
       } catch {}
-    }, 800); // smooth 0.8s you liked
+    }, 800);
   }
 
-  // Submit form (unchanged)
   async function handleSubmit(e) {
     e.preventDefault();
     if (!selectedPlan) return alert("Select a plan");
@@ -171,7 +180,6 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
 
   if (!open) return null;
 
-  // Progress classes
   let progressClass = "step-graph-progress";
   if (pending?.step3) progressClass += " step-3";
   else if (pending?.step2) progressClass += " step-2";
@@ -193,7 +201,6 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
           <div className={`step-node ${pending?.step3 ? "active" : ""}`}>3</div>
         </div>
 
-        {/* Step labels (kept) */}
         <div className="flex justify-between mb-3 text-xs md:text-sm font-semibold">
           <div className={pending?.step1 ? "text-green-600" : ""}>Step 1: Choose Plan</div>
           <div className={pending?.step2 ? "text-green-600" : "step-2-blink"}>Step 2: Scan QR</div>
@@ -218,7 +225,7 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
           ))}
         </div>
 
-        {/* QR area (ALWAYS tries one source; never opens in a new tab) */}
+        {/* QR area */}
         <div className="mb-3 text-center">
           <div
             className={`relative w-full h-56 border rounded-xl bg-gray-50 overflow-hidden ${
@@ -233,7 +240,7 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
                 <img
                   src={qrSrc}
                   alt="QR code"
-                  onError={() => setQrError(true)}
+                  onError={onQrError}
                   className="w-full h-full object-contain select-none pointer-events-none"
                   crossOrigin="anonymous"
                   referrerPolicy="no-referrer"
@@ -252,7 +259,7 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
           </p>
         </div>
 
-        {/* Pay button (primary, simple deep link) */}
+        {/* Pay button */}
         <div className="mb-4">
           <a
             href={upiUrl}
@@ -271,7 +278,7 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
           )}
         </div>
 
-        {/* Pending/Approved/Form (kept) */}
+        {/* Pending/Approved/Form (unchanged) */}
         {pending?.id ? (
           unlocking ? (
             <>
@@ -372,7 +379,6 @@ export default function QROverlay({ open, onClose, title, feature, featureId }) 
         )}
       </div>
 
-      {/* neon scan-line */}
       <style>{`
         .scanline {
           position:absolute; left:0; right:0; top:10%; height:4px; border-radius:999px;
