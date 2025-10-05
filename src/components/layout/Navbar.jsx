@@ -66,6 +66,8 @@ export default function Navbar() {
             <>
               <span className="text-gray-300">|</span>
               <a href="/admin/dashboard" className="text-blue-600 underline">Admin</a>
+              {/* ✅ Optional owner-only quick link */}
+              <a href="/admin/prep" className="text-blue-600 underline">Prep Admin</a>
               <button
                 className="ml-2 text-xs border px-2 py-1 rounded"
                 onClick={() => { localStorage.removeItem("ownerKey"); location.reload(); }}
@@ -95,7 +97,13 @@ export default function Navbar() {
           <a href="/notebook">PDF Notebook</a>
           <a href="/plagiarism">Plagiarism</a>
           <a href="/scholar">Scholar Space</a>
-          {isOwner() && <a href="/admin/dashboard" className="underline">Admin</a>}
+          {isOwner() && (
+            <>
+              <a href="/admin/dashboard" className="underline">Admin</a>
+              {/* ✅ Optional owner-only quick link (mobile) */}
+              <a href="/admin/prep" className="underline">Prep Admin</a>
+            </>
+          )}
         </div>
       )}
 
