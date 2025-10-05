@@ -1,171 +1,134 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { useParams } from "react-router-dom";
-import { getJSON } from "../../utils/api";
-import QROverlay from "../common/QROverlay";
-import useSubmissionStream from "../../hooks/useSubmissionStream";
-import useAccessSync from "../../hooks/useAccessSync";
-import AccessTimer from "../common/AccessTimer";
+import { getJSON, postJSON, absUrl } from "../../utils/api";
 
-function TabButton({label, active, onClick}) {
-  return <button onClick={onClick} className={`px-3 py-1 rounded ${active ? "bg-black text-white" : "border"}`}>{label}</button>;
+// crude email source for now (align with your site’s pattern)
+function useEmail() {
+  return localStorage.getItem("prepEmail") || localStorage.getItem("userEmail") || "";
 }
 
 export default function PrepWizard() {
   const { examId } = useParams();
-  const email = localStorage.getItem("userEmail") || "";
-  useSubmissionStream(email);
+  const email = useEmail();
 
   const [tab, setTab] = useState("calendar"); // calendar | today | progress
-  const [overview, setOverview] = useState({ total: 0, completed: 0, access: null });
-  const [today, setToday] = useState({ dayIndex: 1, items: [], hasAccess: false });
-  const [overlayOpen, setOverlayOpen] = useState(false);
+  const [today, setToday] = useState({ day: null, modules: [] });
+  const [progress, setProgress] = useState({ completedDays: [] });
 
-  const pct = useMemo(() => overview.total ? Math.round((overview.completed/overview.total)*100) : 0, [overview]);
+  const loadToday = async () => {
+    const r = await getJSON(`/api/prep/${examId}/today?email=${encodeURIComponent(email)}`);
+    setToday({ day: r.todayDay, modules: r.modules || [] });
+  };
+  const loadProgress = async () => {
+    const r = await getJSON(`/api/prep/access/my?email=${encodeURIComponent(email)}&examId=${encodeURIComponent(examId)}`);
+    // lightweight: we’ll get progress on complete; for now just remember access for CTA
+  };
 
-  async function loadAll() {
-    const ov = await getJSON(`/api/exams/${examId}/overview?email=${encodeURIComponent(email)}`).catch(()=>({}));
-    setOverview({ total: ov?.total || 0, completed: ov?.completed || 0, access: ov?.access || null });
-    const td = await getJSON(`/api/exams/${examId}/today?email=${encodeURIComponent(email)}`).catch(()=>({}));
-    setToday({ dayIndex: td?.dayIndex || 1, items: td?.items || [], hasAccess: !!td?.hasAccess });
-  }
+  useEffect(() => { loadToday(); loadProgress(); }, [examId]);
 
-  useEffect(() => { loadAll(); /* eslint-disable-next-line */ }, [examId, email]);
-
-  // Live grant/revoke via existing SSE hook
-  useAccessSync(async (detail) => {
-    if (!detail || detail.email !== email || detail.feature !== "exam") return;
-    // Any grant/revoke → refresh exam data
-    await loadAll();
-  });
-
-  const [countdownMs, setCountdownMs] = useState(0);
-  useEffect(() => {
-    if (!overview?.access?.expiryAt) return;
-    const end = +new Date(overview.access.expiryAt);
-    const t = setInterval(() => setCountdownMs(Math.max(0, end - Date.now())), 1000);
-    return () => clearInterval(t);
-  }, [overview?.access?.expiryAt]);
+  const markComplete = async () => {
+    if (!today.day) return;
+    await postJSON(`/api/prep/${examId}/complete`, { email, dayIndex: today.day });
+    await loadToday();
+  };
 
   return (
-    <section className="max-w-6xl mx-auto px-4 py-10">
-      <div className="flex items-center justify-between mb-4">
-        <h1 className="text-2xl font-bold">{examId}</h1>
-        <div className="flex items-center gap-2">
-          {overview?.access ? (
-            <div className="text-xs bg-green-100 text-green-700 px-2 py-1 rounded-full flex items-center gap-1">
-              <span>✅ Active</span>
-              {countdownMs > 0 && <AccessTimer timeLeftMs={countdownMs} />}
-            </div>
-          ) : (
-            <button className="text-xs bg-red-500 text-white px-2 py-1 rounded" onClick={() => setOverlayOpen(true)}>
-              Start / Restart
-            </button>
-          )}
-        </div>
+    <div className="max-w-5xl mx-auto p-4">
+      <div className="flex items-center gap-3 mb-4">
+        <a href="/prep" className="text-sm text-blue-600">← Back</a>
+        <h1 className="text-2xl font-bold">{examId.replace(/_/g," ")}</h1>
       </div>
 
-      <div className="flex gap-2 mb-4">
-        <TabButton label="Calendar" active={tab==="calendar"} onClick={()=>setTab("calendar")} />
-        <TabButton label="Today’s Task" active={tab==="today"} onClick={()=>setTab("today")} />
-        <TabButton label="Progress" active={tab==="progress"} onClick={()=>setTab("progress")} />
+      <div className="flex gap-2 mb-3">
+        <TabBtn label="Calendar" sel={tab==="calendar"} onClick={()=>setTab("calendar")} />
+        <TabBtn label="Today’s Task" sel={tab==="today"} onClick={()=>setTab("today")} />
+        <TabBtn label="Progress" sel={tab==="progress"} onClick={()=>setTab("progress")} />
       </div>
 
-      {tab === "calendar" && <CalendarView examId={examId} email={email} today={today} />}
-      {tab === "today" && <TodayView examId={examId} email={email} data={today} afterAction={loadAll} />}
-      {tab === "progress" && <ProgressView total={overview.total} completed={overview.completed} pct={pct} />}
-
-      {overlayOpen && (
-        <QROverlay
-          open
-          inline
-          onClose={() => setOverlayOpen(false)}
-          title="Exam Access"
-          subjectLabel="Exam"
-          feature="exam"
-          featureId={examId}
-        />
-      )}
-    </section>
+      {tab==="calendar" && <CalendarView todayDay={today.day} onPickDay={()=>setTab("today")} />}
+      {tab==="today"    && <TodayView data={today} onComplete={markComplete} />}
+      {tab==="progress" && <ProgressView examId={examId} />}
+    </div>
   );
 }
 
-function CalendarView({ examId, email, today }) {
-  // Simple indicator
+function TabBtn({ label, sel, onClick }) {
   return (
-    <div className="border rounded-xl bg-white p-4">
-      <div className="text-sm">Current Day (cohort): <b>Day {today.dayIndex}</b></div>
+    <button onClick={onClick}
+      className={`px-3 py-1.5 rounded border ${sel ? "bg-black text-white" : "bg-white"}`}>
+      {label}
+    </button>
+  );
+}
+
+/* ---------- Calendar (simple placeholder for cohort) ---------- */
+function CalendarView({ todayDay, onPickDay }) {
+  return (
+    <div className="p-3 rounded-xl border bg-white">
+      <div className="text-sm">Current Day (cohort): <b>Day {todayDay || 1}</b></div>
       <div className="text-xs text-gray-500 mt-1">Only released & time-unlocked modules are available each day.</div>
+      <button className="mt-3 px-3 py-1 rounded border" onClick={onPickDay}>Open Today’s Task</button>
     </div>
   );
 }
 
-function TodayView({ examId, email, data, afterAction }) {
-  const items = data?.items || [];
-  async function markComplete() {
-    await fetch(`/api/exams/${encodeURIComponent(examId)}/complete-day`, {
-      method: "POST",
-      headers: { "Content-Type":"application/json" },
-      body: JSON.stringify({ email, dayIndex: data.dayIndex, done: true })
-    });
-    await afterAction?.();
-  }
-
+/* ---------- Today’s Task ---------- */
+function TodayView({ data, onComplete }) {
+  if (!data.day) return <div className="text-gray-500">No active plan or outside plan window.</div>;
+  const mods = data.modules || [];
   return (
-    <div className="space-y-3">
-      <div className="text-sm text-gray-600">Day {data.dayIndex}</div>
-      {items.map((m) => (
-        <div key={m.id} className="border rounded-xl bg-white p-3">
-          <div className="flex items-center justify-between">
-            <div className="font-semibold">{m.title}</div>
-            <div className={`text-xs px-2 py-1 rounded-full ${m.unlocked ? "bg-green-100 text-green-700" : "bg-gray-200 text-gray-700"}`}>
-              {m.unlocked ? "Unlocked" : (m.willUnlockAt ? `Will unlock at ${m.willUnlockAt}` : "Locked")}
+    <div>
+      <div className="text-sm mb-2">Day {data.day}</div>
+      {mods.length === 0 && <div className="text-gray-500">No modules for today yet.</div>}
+
+      <div className="grid gap-4">
+        {mods.map((m) => (
+          <div key={m._id} className="rounded-xl border bg-white p-3">
+            <div className="flex items-center justify-between">
+              <div className="font-semibold">{m.title}</div>
+              <div className="text-xs text-gray-500">{m.slotTime}</div>
             </div>
-          </div>
-          {m.unlocked ? (
-            <div className="mt-2 space-y-2">
-              {!!m.ocrText && (
-                <div className="p-2 bg-yellow-50 rounded border text-sm max-h-48 overflow-auto">
-                  {m.ocrText}
-                </div>
-              )}
-              <div className="flex flex-wrap gap-2">
-                {(m.files || []).map((f, i) => {
-                  if (f.type === "image") {
-                    return <img key={i} src={f.url} alt="" className="w-40 h-24 object-cover rounded border" />;
-                  }
-                  if (f.type === "audio") {
-                    return <audio key={i} controls preload="metadata" src={`/api/exams/stream?src=${encodeURIComponent(f.url)}`} className="w-full" />;
-                  }
-                  // pdf or other
-                  return (
-                    <a key={i} href={`/api/exams/stream?src=${encodeURIComponent(f.url)}`} target="_blank" rel="noreferrer" className="text-blue-600 underline text-sm">
-                      Open PDF
-                    </a>
-                  );
-                })}
+
+            {/* Images (gallery) when OCR off or even with OCR */}
+            {m.files?.filter(f=>f.type==="image").length > 0 && (
+              <div className="mt-2 grid grid-cols-2 gap-2">
+                {m.files.filter(f=>f.type==="image").map((f,idx)=>(
+                  <img key={idx} src={absUrl(f.url)} className="rounded shadow" />
+                ))}
               </div>
-            </div>
-          ) : (
-            <div className="mt-2 text-xs text-gray-500">This module will become available later today.</div>
-          )}
-        </div>
-      ))}
-      {items.length > 0 && (
-        <button onClick={markComplete} className="px-3 py-2 rounded bg-black text-white">Mark Day Complete</button>
-      )}
-      {items.length === 0 && <div className="text-gray-500">No modules for today yet.</div>}
+            )}
+
+            {/* OCR text (scrollable handwritten) */}
+            {m.flags?.extractOCR && m.ocrText && (
+              <div className="ocr-box mt-3">
+                <p className="handwritten whitespace-pre-wrap">{m.ocrText}</p>
+              </div>
+            )}
+
+            {/* Audio */}
+            {m.files?.some(f=>f.type==="audio") && (
+              <div className="mt-3">
+                {m.files.filter(f=>f.type==="audio").map((f,i)=>(
+                  <audio key={i} controls src={absUrl(f.url)} className="w-full" />
+                ))}
+              </div>
+            )}
+          </div>
+        ))}
+      </div>
+
+      <button className="mt-4 px-4 py-2 rounded bg-amber-500 text-white" onClick={onComplete}>
+        Mark Complete
+      </button>
     </div>
   );
 }
 
-function ProgressView({ total, completed, pct }) {
+/* ---------- Progress (placeholder bars) ---------- */
+function ProgressView() {
   return (
-    <div className="border rounded-xl bg-white p-4">
-      <div className="text-sm mb-2">Overall</div>
-      <div className="w-full h-2 bg-gray-200 rounded mb-2">
-        <div className="h-2 bg-blue-600 rounded" style={{ width: `${pct}%` }} />
-      </div>
-      <div className="text-sm text-gray-600">{completed} / {total} completed</div>
+    <div className="rounded-xl border bg-white p-3 text-sm text-gray-600">
+      Your progress will appear here once modules and completion data grow.
     </div>
   );
 }
