@@ -1,5 +1,5 @@
 // client/src/App.jsx
-import { BrowserRouter as Router, Routes, Route, useLocation, Link } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, useLocation } from "react-router-dom";
 import { useEffect } from "react";
 
 import Navbar from "./components/layout/Navbar";
@@ -27,8 +27,10 @@ import ScholarPage from "./pages/ScholarPage.jsx";
 // ✅ NEW: PDF Demo page (for GridFS testing)
 import PdfDemo from "./pages/PdfDemo.jsx";
 
-// ✅ Prep Wizard component (page wrapper not required)
-import PrepWizard from "./components/Prep/PrepWizard";
+// ✅ NEW: Preparation pages (user & admin)
+import PrepList from "./pages/prep/PrepList.jsx";
+import PrepWizard from "./pages/prep/PrepWizard.jsx";
+import AdminPrepPanel from "./pages/prep/AdminPrepPanel.jsx";
 
 /* -------------------- Local helpers/components -------------------- */
 
@@ -67,32 +69,6 @@ function ScrollToHash() {
   return null;
 }
 
-/** Minimal, safe list page for /prep (doesn't touch other modules) */
-function PreparationPage() {
-  const exams = [
-    { id: "UP_APO", name: "UP APO" },
-    { id: "MP_ADPO", name: "MP ADPO" },
-    { id: "BIHAR_APO", name: "Bihar APO" },
-  ];
-  return (
-    <section className="max-w-6xl mx-auto px-4 py-10">
-      <h1 className="text-2xl font-bold mb-4">Preparation</h1>
-      <div className="grid gap-3 sm:grid-cols-2 lg:grid-cols-3">
-        {exams.map((e) => (
-          <Link
-            key={e.id}
-            to={`/prep/${encodeURIComponent(e.id)}`}
-            className="border rounded-xl bg-white p-4 hover:shadow transition"
-          >
-            <div className="text-lg font-semibold">{e.name}</div>
-            <div className="text-xs text-gray-500 mt-1">Tap to resume</div>
-          </Link>
-        ))}
-      </div>
-    </section>
-  );
-}
-
 /* ------------------------------- App ------------------------------- */
 
 export default function App() {
@@ -123,9 +99,17 @@ export default function App() {
             {/* ✅ PDF Demo route */}
             <Route path="/pdfdemo" element={<PdfDemo />} />
 
-            {/* ✅ Exam Preparation routes (isolated, won’t affect others) */}
-            <Route path="/prep" element={<PreparationPage />} />
+            {/* ✅ Exam Preparation routes (isolated) */}
+            <Route path="/prep" element={<PrepList />} />
             <Route path="/prep/:examId" element={<PrepWizard />} />
+            <Route
+              path="/admin/prep"
+              element={
+                <AdminRoute>
+                  <AdminPrepPanel />
+                </AdminRoute>
+              }
+            />
 
             {/* Admin */}
             <Route path="/admin/login" element={<AdminLogin />} />
