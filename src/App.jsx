@@ -101,7 +101,8 @@ export default function App() {
             {/* ✅ PDF Demo route */}
             <Route path="/pdfdemo" element={<PdfDemo />} />
 
-            {/* ✅ Exam Preparation routes (isolated) */}
+            {/* ✅ Exam Preparation routes (isolated) */
+            }
             <Route path="/prep" element={<PrepList />} />
             <Route path="/prep/:examId" element={<PrepWizard />} />
             <Route
