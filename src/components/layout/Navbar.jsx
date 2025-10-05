@@ -1,4 +1,4 @@
-// client/src/components/layout/Navbar.jsx (or your current path)
+// client/src/components/layout/Navbar.jsx
 import { useEffect, useState } from "react";
 import isOwner from "../../utils/isOwner";
 import { getJSON } from "../../utils/api";
@@ -51,6 +51,11 @@ export default function Navbar() {
             Consultancy
           </a>
 
+          {/* ✅ New: Exam Preparation */}
+          <a href="/prep" className="hover:text-blue-600">
+            Preparation
+          </a>
+
           <a href="/podcasts" className="hover:text-blue-600">Podcasts</a>
           <a href="/videos" className="hover:text-blue-600">Video Gallery</a>
           <a href="/notebook" className="hover:text-blue-600">PDF Notebook</a>
@@ -83,6 +88,8 @@ export default function Navbar() {
           <a href="/articles">Articles</a>
           {/* Consultancy (mobile) */}
           <a href="/#consultancy" onClick={goConsultancy}>Consultancy</a>
+          {/* ✅ New: Exam Preparation (mobile) */}
+          <a href="/prep">Preparation</a>
           <a href="/podcasts">Podcasts</a>
           <a href="/videos">Video Gallery</a>
           <a href="/notebook">PDF Notebook</a>
