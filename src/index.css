@@ -14,3 +14,21 @@ html {
   -ms-user-select: none;
   user-select: none;
 }
+
+/* ───────────────── Prep Wizard additions (non-invasive) ───────────────── */
+@import url('https://fonts.googleapis.com/css2?family=Patrick+Hand&display=swap');
+
+.handwritten {
+  font-family: 'Patrick Hand', cursive;
+  line-height: 1.6;
+  font-size: 1.05rem;
+}
+
+.ocr-box {
+  max-height: 320px;
+  overflow-y: auto;
+  background: #fffbe7;
+  padding: 0.8rem;
+  border-radius: 10px;
+  border: 1px solid #f5e6a3; /* subtle edge */
+}
