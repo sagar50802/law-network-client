@@ -1,22 +1,24 @@
 // client/src/pages/prep/PrepWizard.jsx
 import { useEffect, useMemo, useState } from "react";
-import { useParams, Link } from "react-router-dom";
-import { getJSON, buildUrl } from "../../utils/api";
+import { useParams } from "react-router-dom";
+import { getJSON, postJSON, absUrl } from "../../utils/api";
 
-// absolute URL helper (works with relative API file URLs)
-function abs(u) {
-  try {
-    const base = import.meta.env.VITE_BACKEND_URL || "";
-    if (!u) return "";
-    if (/^https?:\/\//i.test(u)) return u;
-    return `${base}${u}`;
-  } catch {
-    return u;
-  }
+const BASE_START_MIN = 9 * 60; // 09:00 as the base clock
+
+function slotToClock(min) {
+  const total = BASE_START_MIN + Number(min || 0);
+  const h = Math.floor(total / 60) % 24;
+  const m = total % 60;
+  return `${String(h).padStart(2, "0")}:${String(m).padStart(2, "0")}`;
 }
 
 export default function PrepWizard() {
-  const { examId } = useParams(); // e.g. "UP_APO"
+  const { examId } = useParams();
+  const email =
+    localStorage.getItem("prepEmail") ||
+    localStorage.getItem("userEmail") ||
+    "";
+
   const [tab, setTab] = useState("calendar"); // calendar | today | progress
   const [summary, setSummary] = useState({
     todayDay: 1,
@@ -25,25 +27,21 @@ export default function PrepWizard() {
   });
 
   async function load() {
-    const email =
-      localStorage.getItem("prepEmail") ||
-      localStorage.getItem("userEmail") ||
-      "";
-    const url = buildUrl(
-      `/api/prep/user/summary?examId=${encodeURIComponent(
-        examId
-      )}&email=${encodeURIComponent(email)}`
-    );
-    const r = await getJSON(url);
+    const q = new URLSearchParams({
+      examId,
+      email,
+    }).toString();
+    const r = await getJSON(`/prep/user/summary?${q}`);
     setSummary({
-      todayDay: r.todayDay || 1,
-      planDays: r.planDays || 30,
+      todayDay: r.todayDay,
+      planDays: r.planDays,
       modules: r.modules || [],
     });
   }
 
   useEffect(() => {
     load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [examId]);
 
   const days = useMemo(
@@ -51,53 +49,68 @@ export default function PrepWizard() {
     [summary.planDays]
   );
 
+  const markComplete = async () => {
+    try {
+      await postJSON(`/prep/user/complete`, {
+        examId,
+        email,
+        dayIndex: summary.todayDay,
+      });
+      await load();
+    } catch (e) {
+      console.error(e);
+    }
+  };
+
   return (
     <div className="max-w-5xl mx-auto px-4 py-6">
       <div className="flex items-center gap-3 mb-4">
-        <Link to="/prep" className="text-sm text-blue-600">
+        <a href="/prep" className="text-sm text-blue-600">
           ← Back
-        </Link>
-        <h1 className="text-2xl font-bold">{examId}</h1>
+        </a>
+        <h1 className="text-2xl font-bold">{String(examId || "").replace(/_/g, " ")}</h1>
       </div>
 
       <div className="flex gap-2 mb-4">
-        {["calendar", "today", "progress"].map((k) => (
+        {[
+          ["calendar", "Calendar"],
+          ["today", "Today’s Task"],
+          ["progress", "Progress"],
+        ].map(([key, label]) => (
           <button
-            key={k}
-            onClick={() => setTab(k)}
+            key={key}
+            onClick={() => setTab(key)}
             className={`px-3 py-1.5 rounded border ${
-              tab === k ? "bg-black text-white" : "bg-white"
+              tab === key ? "bg-black text-white" : "bg-white"
             }`}
           >
-            {k === "calendar"
-              ? "Calendar"
-              : k === "today"
-              ? "Today’s Task"
-              : "Progress"}
+            {label}
           </button>
         ))}
       </div>
 
+      {/* -------- Calendar -------- */}
       {tab === "calendar" && (
         <div>
-          <div className="mb-3 p-3 rounded border bg-white text-sm">
+          <div className="mb-3 p-3 rounded border bg-white">
             Current Day (cohort): <b>Day {summary.todayDay}</b>
             <div className="text-xs text-gray-500">
               Only released & time-unlocked modules are available each day.
             </div>
           </div>
 
+          {/* simple grid 1..planDays */}
           <div className="grid grid-cols-7 gap-2">
             {days.map((d) => (
               <button
                 key={d}
-                onClick={() => setTab("today")}
+                onClick={() => setTab("today")} // API currently returns "today"; calendar pick UI-only
                 className={`aspect-square rounded border text-sm ${
                   d === summary.todayDay
                     ? "bg-amber-100 border-amber-300"
                     : "bg-white"
                 }`}
-                title={`Day ${d}`}
+                title={d === summary.todayDay ? "Today" : `Day ${d}`}
               >
                 {d}
               </button>
@@ -106,111 +119,148 @@ export default function PrepWizard() {
         </div>
       )}
 
+      {/* -------- Today’s Task -------- */}
       {tab === "today" && (
-        <Today modules={summary.modules} day={summary.todayDay} onRefresh={load} />
+        <div>
+          <div className="text-lg font-semibold mb-3">
+            Day {summary.todayDay}
+          </div>
+
+          {summary.modules.length === 0 && (
+            <div className="text-gray-500">No modules for today yet.</div>
+          )}
+
+          <div className="grid gap-4">
+            {summary.modules.map((m, idx) => {
+              const files = Array.isArray(m.files) ? m.files : [];
+              const pdfs = files.filter((f) => f.kind === "pdf");
+              const images = files.filter((f) => f.kind === "image");
+              const audios = files.filter((f) => f.kind === "audio");
+              const videos = files.filter((f) => f.kind === "video");
+
+              return (
+                <div key={m._id || idx} className="rounded-xl border bg-white p-4">
+                  {/* Header row: Title + Time */}
+                  <div className="flex items-center justify-between">
+                    <div className="font-semibold">{m.title || "Untitled"}</div>
+                    <div className="text-xs text-gray-500">
+                      {slotToClock(m.slotMin || 0)}
+                    </div>
+                  </div>
+
+                  {/* ---- PDF (originals) ---- */}
+                  {m.flags?.showOriginal && pdfs.length > 0 && (
+                    <div className="mt-3">
+                      <div className="text-sm font-medium mb-1">PDF</div>
+                      <ul className="list-disc ml-5 text-sm">
+                        {pdfs.map((f, i) => (
+                          <li key={i}>
+                            <a
+                              className="text-blue-600 underline"
+                              href={absUrl(f.url)}
+                              target="_blank"
+                              rel="noreferrer"
+                            >
+                              Open PDF {i + 1}
+                            </a>
+                          </li>
+                        ))}
+                      </ul>
+                    </div>
+                  )}
+
+                  {/* ---- Images (scrollable) ---- */}
+                  {images.length > 0 && (
+                    <div className="mt-3">
+                      <div className="text-sm font-medium mb-1">Images</div>
+                      <div className="overflow-x-auto whitespace-nowrap">
+                        {images.map((f, i) => (
+                          <img
+                            key={i}
+                            src={absUrl(f.url)}
+                            alt=""
+                            className="inline-block h-44 rounded mr-2 border object-contain bg-gray-50"
+                          />
+                        ))}
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ---- Text (Auto extract) ---- */}
+                  {m.flags?.extractOCR && m.ocrText && (
+                    <div className="mt-3">
+                      <div className="text-sm font-medium mb-1">Text (Auto extract)</div>
+                      <div
+                        className="rounded p-3"
+                        style={{
+                          maxHeight: 300,
+                          overflowY: "auto",
+                          background: m.flags?.background || "#fffbe7",
+                        }}
+                      >
+                        <p
+                          style={{
+                            fontFamily: "'Patrick Hand', cursive",
+                            lineHeight: 1.6,
+                            whiteSpace: "pre-wrap",
+                          }}
+                        >
+                          {m.ocrText}
+                        </p>
+                      </div>
+                    </div>
+                  )}
+
+                  {/* ---- Audio ---- */}
+                  {audios.length > 0 && (
+                    <div className="mt-3">
+                      <div className="text-sm font-medium mb-1">Audio</div>
+                      {audios.map((f, i) => (
+                        <audio key={i} controls className="w-full block mb-2">
+                          <source src={absUrl(f.url)} type={f.mime || "audio/mpeg"} />
+                        </audio>
+                      ))}
+                    </div>
+                  )}
+
+                  {/* ---- Video ---- */}
+                  {videos.length > 0 && (
+                    <div className="mt-3">
+                      <div className="text-sm font-medium mb-1">Video</div>
+                      {videos.map((f, i) => (
+                        <video
+                          key={i}
+                          controls
+                          className="w-full rounded border mb-2 bg-black"
+                        >
+                          <source src={absUrl(f.url)} type={f.mime || "video/mp4"} />
+                        </video>
+                      ))}
+                    </div>
+                  )}
+                </div>
+              );
+            })}
+          </div>
+
+          {/* Mark Complete CTA */}
+          {summary.modules.length > 0 && (
+            <button
+              onClick={markComplete}
+              className="mt-5 px-4 py-2 rounded bg-amber-500 text-white"
+            >
+              Mark Complete
+            </button>
+          )}
+        </div>
       )}
 
+      {/* -------- Progress (placeholder) -------- */}
       {tab === "progress" && (
-        <div className="p-3 rounded border bg-white">
-          {/* Placeholder – will be replaced with donut + bars */}
-          <div className="text-sm text-gray-600">
-            Completed days will appear here once you mark tasks complete.
-          </div>
+        <div className="rounded-xl border bg-white p-3 text-sm text-gray-600">
+          Your progress will appear here once completion data grows.
         </div>
       )}
     </div>
   );
-}
-
-function Today({ modules, day }) {
-  return (
-    <div>
-      <div className="text-lg font-semibold mb-2">Day {day}</div>
-      {modules.length === 0 && (
-        <div className="text-gray-500">No modules for today yet.</div>
-      )}
-
-      <div className="grid gap-3">
-        {modules.map((m, idx) => (
-          <div key={m._id || idx} className="rounded-xl border bg-white p-3">
-            <div className="flex items-center justify-between">
-              <div className="font-semibold">{m.title || "Untitled"}</div>
-              <div className="text-xs text-gray-500">
-                {minToHHMM(m.slotMin || 0)}
-              </div>
-            </div>
-
-            {/* Image gallery (when images uploaded) */}
-            {(m.files || []).filter((f) => f.kind === "image").length > 0 && (
-              <div className="mt-2 overflow-x-auto whitespace-nowrap">
-                {(m.files || [])
-                  .filter((f) => f.kind === "image")
-                  .map((f, i) => (
-                    <img
-                      key={i}
-                      src={abs(f.url)}
-                      alt=""
-                      className="inline-block h-44 rounded mr-2 border object-contain bg-gray-50"
-                    />
-                  ))}
-              </div>
-            )}
-
-            {/* Allow opening original PDF (if admin enabled showOriginal) */}
-            {(m.files || [])
-              .filter((f) => f.kind === "pdf" && m?.flags?.showOriginal)
-              .map((f, i) => (
-                <div key={i} className="mt-2">
-                  <a
-                    href={abs(f.url)}
-                    target="_blank"
-                    rel="noreferrer"
-                    className="text-blue-600 underline text-sm"
-                  >
-                    Open PDF
-                  </a>
-                </div>
-              ))}
-
-            {/* OCR text (scrollable handwritten look) */}
-            {m?.flags?.extractOCR && m?.ocrText && (
-              <div
-                className="mt-3 rounded p-3"
-                style={{
-                  maxHeight: 300,
-                  overflowY: "auto",
-                  background: "#fffbe7",
-                }}
-              >
-                <p
-                  style={{
-                    fontFamily: "'Patrick Hand', cursive",
-                    lineHeight: 1.6,
-                    whiteSpace: "pre-wrap",
-                  }}
-                >
-                  {m.ocrText}
-                </p>
-              </div>
-            )}
-
-            {/* Audio players */}
-            {(m.files || [])
-              .filter((f) => f.kind === "audio")
-              .map((f, i) => (
-                <audio key={i} controls className="mt-3 w-full">
-                  <source src={abs(f.url)} type={f.mime || "audio/mpeg"} />
-                </audio>
-              ))}
-          </div>
-        ))}
-      </div>
-    </div>
-  );
-}
-
-function minToHHMM(m) {
-  const h = String(Math.floor(m / 60)).padStart(2, "0");
-  const mm = String(m % 60).padStart(2, "0");
-  return `${h}:${mm}`;
 }
