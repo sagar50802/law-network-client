@@ -31,6 +31,8 @@ import PdfDemo from "./pages/PdfDemo.jsx";
 import PrepList from "./pages/prep/PrepList.jsx";
 import PrepWizard from "./pages/prep/PrepWizard.jsx";
 import AdminPrepPanel from "./pages/prep/AdminPrepPanel.jsx";
+// ✅ NEW: Admin overlay editor
+import PrepOverlayEditor from "./pages/prep/PrepOverlayEditor.jsx";
 
 /* -------------------- Local helpers/components -------------------- */
 
@@ -107,6 +109,15 @@ export default function App() {
               element={
                 <AdminRoute>
                   <AdminPrepPanel />
+                </AdminRoute>
+              }
+            />
+            {/* ✅ NEW: Admin overlay editor route */}
+            <Route
+              path="/admin/prep/overlay"
+              element={
+                <AdminRoute>
+                  <PrepOverlayEditor />
                 </AdminRoute>
               }
             />
