@@ -1,134 +1,216 @@
+// client/src/pages/prep/PrepWizard.jsx
 import { useEffect, useMemo, useState } from "react";
-import { useParams } from "react-router-dom";
-import { getJSON, postJSON, absUrl } from "../../utils/api";
+import { useParams, Link } from "react-router-dom";
+import { getJSON, buildUrl } from "../../utils/api";
 
-// crude email source for now (align with your site’s pattern)
-function useEmail() {
-  return localStorage.getItem("prepEmail") || localStorage.getItem("userEmail") || "";
+// absolute URL helper (works with relative API file URLs)
+function abs(u) {
+  try {
+    const base = import.meta.env.VITE_BACKEND_URL || "";
+    if (!u) return "";
+    if (/^https?:\/\//i.test(u)) return u;
+    return `${base}${u}`;
+  } catch {
+    return u;
+  }
 }
 
 export default function PrepWizard() {
-  const { examId } = useParams();
-  const email = useEmail();
-
+  const { examId } = useParams(); // e.g. "UP_APO"
   const [tab, setTab] = useState("calendar"); // calendar | today | progress
-  const [today, setToday] = useState({ day: null, modules: [] });
-  const [progress, setProgress] = useState({ completedDays: [] });
+  const [summary, setSummary] = useState({
+    todayDay: 1,
+    planDays: 30,
+    modules: [],
+  });
 
-  const loadToday = async () => {
-    const r = await getJSON(`/api/prep/${examId}/today?email=${encodeURIComponent(email)}`);
-    setToday({ day: r.todayDay, modules: r.modules || [] });
-  };
-  const loadProgress = async () => {
-    const r = await getJSON(`/api/prep/access/my?email=${encodeURIComponent(email)}&examId=${encodeURIComponent(examId)}`);
-    // lightweight: we’ll get progress on complete; for now just remember access for CTA
-  };
+  async function load() {
+    const email =
+      localStorage.getItem("prepEmail") ||
+      localStorage.getItem("userEmail") ||
+      "";
+    const url = buildUrl(
+      `/api/prep/user/summary?examId=${encodeURIComponent(
+        examId
+      )}&email=${encodeURIComponent(email)}`
+    );
+    const r = await getJSON(url);
+    setSummary({
+      todayDay: r.todayDay || 1,
+      planDays: r.planDays || 30,
+      modules: r.modules || [],
+    });
+  }
 
-  useEffect(() => { loadToday(); loadProgress(); }, [examId]);
+  useEffect(() => {
+    load();
+  }, [examId]);
 
-  const markComplete = async () => {
-    if (!today.day) return;
-    await postJSON(`/api/prep/${examId}/complete`, { email, dayIndex: today.day });
-    await loadToday();
-  };
+  const days = useMemo(
+    () => Array.from({ length: summary.planDays }, (_, i) => i + 1),
+    [summary.planDays]
+  );
 
   return (
-    <div className="max-w-5xl mx-auto p-4">
+    <div className="max-w-5xl mx-auto px-4 py-6">
       <div className="flex items-center gap-3 mb-4">
-        <a href="/prep" className="text-sm text-blue-600">← Back</a>
-        <h1 className="text-2xl font-bold">{examId.replace(/_/g," ")}</h1>
+        <Link to="/prep" className="text-sm text-blue-600">
+          ← Back
+        </Link>
+        <h1 className="text-2xl font-bold">{examId}</h1>
       </div>
 
-      <div className="flex gap-2 mb-3">
-        <TabBtn label="Calendar" sel={tab==="calendar"} onClick={()=>setTab("calendar")} />
-        <TabBtn label="Today’s Task" sel={tab==="today"} onClick={()=>setTab("today")} />
-        <TabBtn label="Progress" sel={tab==="progress"} onClick={()=>setTab("progress")} />
-      </div>
-
-      {tab==="calendar" && <CalendarView todayDay={today.day} onPickDay={()=>setTab("today")} />}
-      {tab==="today"    && <TodayView data={today} onComplete={markComplete} />}
-      {tab==="progress" && <ProgressView examId={examId} />}
-    </div>
-  );
-}
-
-function TabBtn({ label, sel, onClick }) {
-  return (
-    <button onClick={onClick}
-      className={`px-3 py-1.5 rounded border ${sel ? "bg-black text-white" : "bg-white"}`}>
-      {label}
-    </button>
-  );
-}
-
-/* ---------- Calendar (simple placeholder for cohort) ---------- */
-function CalendarView({ todayDay, onPickDay }) {
-  return (
-    <div className="p-3 rounded-xl border bg-white">
-      <div className="text-sm">Current Day (cohort): <b>Day {todayDay || 1}</b></div>
-      <div className="text-xs text-gray-500 mt-1">Only released & time-unlocked modules are available each day.</div>
-      <button className="mt-3 px-3 py-1 rounded border" onClick={onPickDay}>Open Today’s Task</button>
-    </div>
-  );
-}
-
-/* ---------- Today’s Task ---------- */
-function TodayView({ data, onComplete }) {
-  if (!data.day) return <div className="text-gray-500">No active plan or outside plan window.</div>;
-  const mods = data.modules || [];
-  return (
-    <div>
-      <div className="text-sm mb-2">Day {data.day}</div>
-      {mods.length === 0 && <div className="text-gray-500">No modules for today yet.</div>}
-
-      <div className="grid gap-4">
-        {mods.map((m) => (
-          <div key={m._id} className="rounded-xl border bg-white p-3">
-            <div className="flex items-center justify-between">
-              <div className="font-semibold">{m.title}</div>
-              <div className="text-xs text-gray-500">{m.slotTime}</div>
-            </div>
-
-            {/* Images (gallery) when OCR off or even with OCR */}
-            {m.files?.filter(f=>f.type==="image").length > 0 && (
-              <div className="mt-2 grid grid-cols-2 gap-2">
-                {m.files.filter(f=>f.type==="image").map((f,idx)=>(
-                  <img key={idx} src={absUrl(f.url)} className="rounded shadow" />
-                ))}
-              </div>
-            )}
-
-            {/* OCR text (scrollable handwritten) */}
-            {m.flags?.extractOCR && m.ocrText && (
-              <div className="ocr-box mt-3">
-                <p className="handwritten whitespace-pre-wrap">{m.ocrText}</p>
-              </div>
-            )}
-
-            {/* Audio */}
-            {m.files?.some(f=>f.type==="audio") && (
-              <div className="mt-3">
-                {m.files.filter(f=>f.type==="audio").map((f,i)=>(
-                  <audio key={i} controls src={absUrl(f.url)} className="w-full" />
-                ))}
-              </div>
-            )}
-          </div>
+      <div className="flex gap-2 mb-4">
+        {["calendar", "today", "progress"].map((k) => (
+          <button
+            key={k}
+            onClick={() => setTab(k)}
+            className={`px-3 py-1.5 rounded border ${
+              tab === k ? "bg-black text-white" : "bg-white"
+            }`}
+          >
+            {k === "calendar"
+              ? "Calendar"
+              : k === "today"
+              ? "Today’s Task"
+              : "Progress"}
+          </button>
         ))}
       </div>
 
-      <button className="mt-4 px-4 py-2 rounded bg-amber-500 text-white" onClick={onComplete}>
-        Mark Complete
-      </button>
+      {tab === "calendar" && (
+        <div>
+          <div className="mb-3 p-3 rounded border bg-white text-sm">
+            Current Day (cohort): <b>Day {summary.todayDay}</b>
+            <div className="text-xs text-gray-500">
+              Only released & time-unlocked modules are available each day.
+            </div>
+          </div>
+
+          <div className="grid grid-cols-7 gap-2">
+            {days.map((d) => (
+              <button
+                key={d}
+                onClick={() => setTab("today")}
+                className={`aspect-square rounded border text-sm ${
+                  d === summary.todayDay
+                    ? "bg-amber-100 border-amber-300"
+                    : "bg-white"
+                }`}
+                title={`Day ${d}`}
+              >
+                {d}
+              </button>
+            ))}
+          </div>
+        </div>
+      )}
+
+      {tab === "today" && (
+        <Today modules={summary.modules} day={summary.todayDay} onRefresh={load} />
+      )}
+
+      {tab === "progress" && (
+        <div className="p-3 rounded border bg-white">
+          {/* Placeholder – will be replaced with donut + bars */}
+          <div className="text-sm text-gray-600">
+            Completed days will appear here once you mark tasks complete.
+          </div>
+        </div>
+      )}
     </div>
   );
 }
 
-/* ---------- Progress (placeholder bars) ---------- */
-function ProgressView() {
+function Today({ modules, day }) {
   return (
-    <div className="rounded-xl border bg-white p-3 text-sm text-gray-600">
-      Your progress will appear here once modules and completion data grow.
+    <div>
+      <div className="text-lg font-semibold mb-2">Day {day}</div>
+      {modules.length === 0 && (
+        <div className="text-gray-500">No modules for today yet.</div>
+      )}
+
+      <div className="grid gap-3">
+        {modules.map((m, idx) => (
+          <div key={m._id || idx} className="rounded-xl border bg-white p-3">
+            <div className="flex items-center justify-between">
+              <div className="font-semibold">{m.title || "Untitled"}</div>
+              <div className="text-xs text-gray-500">
+                {minToHHMM(m.slotMin || 0)}
+              </div>
+            </div>
+
+            {/* Image gallery (when images uploaded) */}
+            {(m.files || []).filter((f) => f.kind === "image").length > 0 && (
+              <div className="mt-2 overflow-x-auto whitespace-nowrap">
+                {(m.files || [])
+                  .filter((f) => f.kind === "image")
+                  .map((f, i) => (
+                    <img
+                      key={i}
+                      src={abs(f.url)}
+                      alt=""
+                      className="inline-block h-44 rounded mr-2 border object-contain bg-gray-50"
+                    />
+                  ))}
+              </div>
+            )}
+
+            {/* Allow opening original PDF (if admin enabled showOriginal) */}
+            {(m.files || [])
+              .filter((f) => f.kind === "pdf" && m?.flags?.showOriginal)
+              .map((f, i) => (
+                <div key={i} className="mt-2">
+                  <a
+                    href={abs(f.url)}
+                    target="_blank"
+                    rel="noreferrer"
+                    className="text-blue-600 underline text-sm"
+                  >
+                    Open PDF
+                  </a>
+                </div>
+              ))}
+
+            {/* OCR text (scrollable handwritten look) */}
+            {m?.flags?.extractOCR && m?.ocrText && (
+              <div
+                className="mt-3 rounded p-3"
+                style={{
+                  maxHeight: 300,
+                  overflowY: "auto",
+                  background: "#fffbe7",
+                }}
+              >
+                <p
+                  style={{
+                    fontFamily: "'Patrick Hand', cursive",
+                    lineHeight: 1.6,
+                    whiteSpace: "pre-wrap",
+                  }}
+                >
+                  {m.ocrText}
+                </p>
+              </div>
+            )}
+
+            {/* Audio players */}
+            {(m.files || [])
+              .filter((f) => f.kind === "audio")
+              .map((f, i) => (
+                <audio key={i} controls className="mt-3 w-full">
+                  <source src={abs(f.url)} type={f.mime || "audio/mpeg"} />
+                </audio>
+              ))}
+          </div>
+        ))}
+      </div>
     </div>
   );
+}
+
+function minToHHMM(m) {
+  const h = String(Math.floor(m / 60)).padStart(2, "0");
+  const mm = String(m % 60).padStart(2, "0");
+  return `${h}:${mm}`;
 }
