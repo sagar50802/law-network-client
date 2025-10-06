@@ -131,6 +131,70 @@ function LockedPreviewCard({ m }) {
   );
 }
 
+/* --- NEW: Accordion-style module panel (minimal drop-in) --- */
+function ModulePanel({ m, index }) {
+  const files = m.files || [];
+  const images =
+    m.images && m.images.length
+      ? m.images
+      : files.filter(f => (f.kind || "").toLowerCase() === "image").map(f => f.url);
+  const audio =
+    m.audio || (files.find(f => (f.kind || "").toLowerCase() === "audio") || {}).url;
+  const video =
+    m.video || (files.find(f => (f.kind || "").toLowerCase() === "video") || {}).url;
+  const pdf =
+    m.pdf || (files.find(f => (f.kind || "").toLowerCase() === "pdf") || {}).url;
+
+  return (
+    <details className="prep-card module" open={index === 0} style={{ marginBottom: 12 }}>
+      <summary>
+        <span style={{ fontWeight: 600 }}>{m.title || "Untitled"}</span>
+        {/* little chevron */}
+        <span className="chev">›</span>
+      </summary>
+
+      <div style={{ marginTop: 12 }}>
+        {/* Image gallery/strip */}
+        <ImageScroller images={images} />
+
+        {/* Text (OCR or manual) */}
+        {m.content && (
+          <div className="ocr-box" style={{ marginTop: 12 }}>
+            {m.content}
+          </div>
+        )}
+
+        {/* Audio */}
+        {audio && (
+          <div style={{ marginTop: 12 }}>
+            <audio controls src={absUrl(audio)} style={{ width: "100%" }} />
+          </div>
+        )}
+
+        {/* Video (optional) */}
+        {video && (
+          <div style={{ marginTop: 12 }}>
+            <video
+              controls
+              src={absUrl(video)}
+              style={{ width: "100%", borderRadius: 12 }}
+            />
+          </div>
+        )}
+
+        {/* PDF link (optional) */}
+        {pdf && (
+          <div style={{ marginTop: 10 }}>
+            <a className="badge" href={absUrl(pdf)} target="_blank" rel="noreferrer">
+              Open PDF
+            </a>
+          </div>
+        )}
+      </div>
+    </details>
+  );
+}
+
 // (kept for completeness; not changed)
 function ModuleCard({ mod }) {
   const [open, setOpen] = useState(true);
@@ -391,6 +455,28 @@ export default function PrepWizard() {
       });
   }, [allModules, activeDay]);
 
+  // compute released modules and augment with `content` so ModulePanel can render text
+  const releasedModules = useMemo(() => {
+    const list = (modules || [])
+      .filter((m) => !m.releaseAt || Date.parse(m.releaseAt) <= nowUtcMs())
+      .sort((a, b) => {
+        const ta = a.releaseAt ? Date.parse(a.releaseAt) : 0;
+        const tb = b.releaseAt ? Date.parse(b.releaseAt) : 0;
+        return ta - tb;
+      })
+      .map((m) => ({
+        ...m,
+        // ensure ModulePanel sees `content`
+        content:
+          m.content ??
+          (m.ocrText && String(m.ocrText).trim()) ??
+          (m.text && String(m.text).trim()) ??
+          (m.manualText && String(m.manualText).trim()) ??
+          "",
+      }));
+    return list;
+  }, [modules]);
+
   /* ---------- Tabs ---------- */
 
   const calendarTab = (
@@ -441,78 +527,12 @@ export default function PrepWizard() {
 
       {loading ? (
         <div className="text-gray-500">Loading…</div>
-      ) : !modules.length ? (
+      ) : !releasedModules.length ? (
         <div className="text-gray-500">No modules for today yet.</div>
       ) : (
-        modules
-          .filter((m) => !m.releaseAt || Date.parse(m.releaseAt) <= nowUtcMs())
-          .sort((a, b) => {
-            const ta = a.releaseAt ? Date.parse(a.releaseAt) : 0;
-            const tb = b.releaseAt ? Date.parse(b.releaseAt) : 0;
-            return ta - tb;
-          })
-          .map((m) => {
-            // minimal: presentational wrapper + scroller
-            const imageUrls =
-              m.images ||
-              (m.files || [])
-                .filter((f) => (f.kind || "").toLowerCase() === "image")
-                .map((f) => absUrl(f.url));
-
-            const content =
-              m.content ??
-              (m.ocrText && String(m.ocrText).trim()) ??
-              (m.text && String(m.text).trim()) ??
-              (m.manualText && String(m.manualText).trim()) ??
-              null;
-
-            const audioUrl =
-              m.audio ||
-              (m.files || []).find((f) => (f.kind || "").toLowerCase() === "audio")?.url;
-
-            const pdfUrl =
-              m.pdf ||
-              (m.files || []).find((f) => (f.kind || "").toLowerCase() === "pdf")?.url;
-
-            return (
-              <Card key={m._id} title={m.title || "Untitled"} footer={null}>
-                {/* IMAGES */}
-                <ImageScroller images={imageUrls} />
-
-                {/* OCR / Manual Text */}
-                {content && (
-                  <div className="ocr-box" style={{ marginTop: 12 }}>
-                    {content}
-                  </div>
-                )}
-
-                {/* AUDIO */}
-                {(audioUrl || (m.files || []).some((f) => (f.kind || "").toLowerCase() === "audio")) && (
-                  <div style={{ marginTop: 10 }}>
-                    <audio
-                      controls
-                      src={audioUrl ? absUrl(audioUrl) : undefined}
-                      style={{ width: "100%" }}
-                    />
-                  </div>
-                )}
-
-                {/* (Optional) PDF link */}
-                {(pdfUrl || (m.files || []).some((f) => (f.kind || "").toLowerCase() === "pdf")) && (
-                  <div style={{ marginTop: 10 }}>
-                    <a
-                      className="badge"
-                      href={pdfUrl ? absUrl(pdfUrl) : undefined}
-                      target="_blank"
-                      rel="noreferrer"
-                    >
-                      Open PDF
-                    </a>
-                  </div>
-                )}
-              </Card>
-            );
-          })
+        releasedModules.map((m, i) => (
+          <ModulePanel key={m._id || i} m={m} index={i} />
+        ))
       )}
 
       <div className="mt-4">
