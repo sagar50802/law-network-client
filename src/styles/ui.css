@@ -74,3 +74,74 @@ body{ background:var(--bg); }
 .module summary::-webkit-details-marker{ display:none; }
 .module .chev{ transition: transform .12s ease; }
 .module[open] .chev{ transform: rotate(90deg); }
+
+/* ========================================================================== */
+/* =============================  APPENDED  ================================= */
+/* ========================================================================== */
+
+/* ---------- Prep: layout spacing ---------- */
+.prep-wrap{
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 20px 16px 80px;
+}
+
+/* ---------- Modern tabs ---------- */
+.tabbar{
+  display:flex; gap:8px; align-items:center;
+  background:#fff; padding:8px; border-radius:12px;
+  border:1px solid rgba(0,0,0,.06);
+  box-shadow: 0 4px 14px rgba(0,0,0,.04);
+  position:sticky; top:8px; z-index:5;
+}
+.tab{
+  padding:8px 14px; border-radius:10px; font-weight:600;
+  background:#f8fafc; color:#334155; text-decoration:none;
+  border:1px solid #e5e7eb;
+  transition:all .15s ease;
+}
+.tab:hover{ transform: translateY(-1px); }
+.tab.active{
+  background:#111827; color:#fff; border-color:#111827;
+}
+
+/* ---------- Cohort mini-calendar ---------- */
+.daygrid{
+  display:grid; grid-template-columns: repeat(7, 1fr);
+  gap:10px; margin-top:12px;
+}
+.daycell{
+  position:relative;
+  display:flex; align-items:center; justify-content:center;
+  height:58px; border-radius:14px; font-weight:700;
+  background:#fff; border:1px solid #e5e7eb; color:#111827;
+  transition:all .15s ease; user-select:none;
+}
+.daycell.available:hover{ transform:translateY(-1px); box-shadow:0 6px 16px rgba(0,0,0,.08); }
+.daycell.today{ outline:2px solid #f59e0b; box-shadow:0 0 0 4px rgba(245,158,11,.12) inset; }
+.daycell.completed{ background:#eafff2; border-color:#bef8d0; color:#15803d; }
+.daycell.locked{ background:#f8fafc; color:#94a3b8; border-style:dashed; }
+.daycell .badge{
+  position:absolute; right:8px; top:6px; font-size:11px;
+  opacity:.75;
+}
+
+/* ---------- Module cards still look nice ---------- */
+.prep-card{
+  background:#fff; border:1px solid #e5e7eb; border-radius:14px;
+  padding:10px 12px; margin-bottom:12px;
+  box-shadow:0 2px 10px rgba(0,0,0,.04);
+}
+
+/* ---------- Accordion chevron for modules ---------- */
+.module summary{ display:flex; align-items:center; justify-content:space-between; cursor:pointer; list-style:none; user-select:none; }
+.module summary::-webkit-details-marker{ display:none; }
+.module .chev{ transition: transform .12s ease; }
+.module[open] .chev{ transform: rotate(90deg); }
+
+/* ---------- Scrollable OCR box ---------- */
+.ocr-box{
+  max-height: 300px; overflow-y: auto;
+  background: #fffbe7; padding: 12px; border-radius: 10px;
+  line-height: 1.55;
+}
