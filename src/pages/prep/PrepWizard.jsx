@@ -36,11 +36,15 @@ export default function PrepWizard() {
     // ✅ Use API-prefixed endpoint and capture upcoming list
     const r = await getJSON(`/api/prep/user/summary?${q}`).catch(() => ({}));
 
+    // Support multiple backend keys for compatibility
+    const upcoming =
+      r?.upcomingToday || r?.comingLater || r?.upcoming || [];
+
     setSummary({
       todayDay: r?.todayDay ?? 1,
       planDays: r?.planDays ?? 30,
       modules: r?.modules || [],
-      upcoming: r?.upcoming || [],
+      upcoming,
     });
   }
 
@@ -165,8 +169,7 @@ export default function PrepWizard() {
           <div className="grid gap-4">
             {summary.modules.map((m, idx) => {
               const files = Array.isArray(m.files) ? m.files : [];
-              const byType = (t) =>
-                files.filter((f) => (f.kind || f.type) === t);
+              const byType = (t) => files.filter((f) => (f.kind || f.type) === t);
 
               const pdfs = byType("pdf");
               const images = byType("image");
@@ -221,30 +224,10 @@ export default function PrepWizard() {
                     </div>
                   )}
 
-                  {/* ---- Text (Auto extract) ---- */}
-                  {m.flags?.extractOCR && m.ocrText && (
-                    <div className="mt-3">
-                      <div className="text-sm font-medium mb-1">
-                        Text (Auto extract)
-                      </div>
-                      <div
-                        className="rounded p-3"
-                        style={{
-                          maxHeight: 300,
-                          overflowY: "auto",
-                          background: m.flags?.background || "#fffbe7",
-                        }}
-                      >
-                        <p
-                          style={{
-                            fontFamily: "'Patrick Hand', cursive",
-                            lineHeight: 1.6,
-                            whiteSpace: "pre-wrap",
-                          }}
-                        >
-                          {m.ocrText}
-                        </p>
-                      </div>
+                  {/* ---- Text (OCR or admin-pasted) ---- */}
+                  {m.ocrText && m.ocrText.trim() && (
+                    <div className="bg-yellow-50 rounded p-3 mt-3 max-h-72 overflow-y-auto text-[15px] leading-relaxed">
+                      <pre className="whitespace-pre-wrap">{m.ocrText}</pre>
                     </div>
                   )}
 
@@ -254,10 +237,7 @@ export default function PrepWizard() {
                       <div className="text-sm font-medium mb-1">Audio</div>
                       {audios.map((f, i) => (
                         <audio key={i} controls className="w-full block mb-2">
-                          <source
-                            src={absUrl(f.url)}
-                            type={f.mime || "audio/mpeg"}
-                          />
+                          <source src={absUrl(f.url)} type={f.mime || "audio/mpeg"} />
                         </audio>
                       ))}
                     </div>
@@ -268,15 +248,8 @@ export default function PrepWizard() {
                     <div className="mt-3">
                       <div className="text-sm font-medium mb-1">Video</div>
                       {videos.map((f, i) => (
-                        <video
-                          key={i}
-                          controls
-                          className="w-full rounded border mb-2 bg-black"
-                        >
-                          <source
-                            src={absUrl(f.url)}
-                            type={f.mime || "video/mp4"}
-                          />
+                        <video key={i} controls className="w-full rounded border mb-2 bg-black">
+                          <source src={absUrl(f.url)} type={f.mime || "video/mp4"} />
                         </video>
                       ))}
                     </div>
@@ -290,7 +263,9 @@ export default function PrepWizard() {
           {summary.modules.length > 0 && (
             <button
               onClick={markComplete}
-              className="mt-5 px-4 py-2 rounded bg-amber-500 text-white"
+              disabled={!email}
+              title={!email ? "Login to track progress" : ""}
+              className="mt-5 px-4 py-2 rounded bg-amber-500 text-white disabled:opacity-50"
             >
               Mark Complete
             </button>
