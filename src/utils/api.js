@@ -30,13 +30,16 @@ function buildUrl(url = "") {
   return API_BASE + u;
 }
 
-/** Absolute URL for server-served paths */
+/**
+ * Absolute URL for server-served paths
+ * (This is the "tiny helper" you asked for; it already existed, kept as-is.)
+ */
 export function absUrl(p) {
   if (!p) return "";
   if (/^https?:\/\//i.test(p)) return p;
   // Legacy static uploads
   if (p.startsWith("/uploads/")) return API_ORIGIN + p;
-  // GridFS and other API paths
+  // GridFS and other API paths (/api/files/..., etc.)
   return buildUrl(p);
 }
 
@@ -120,4 +123,5 @@ export async function upload(url, formData, init = {}) {
   return res.json();
 }
 
+// Expose these so other modules (and components) can reuse the resolved base/origin
 export { API_BASE, API_ORIGIN, buildUrl };
