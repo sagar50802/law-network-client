@@ -54,14 +54,14 @@ function useCountdownToMidnight() {
 function DayNav({ planDays, currentDay, activeDay, onPick }) {
   const total = Math.max(planDays || 1, currentDay || 1);
   return (
-    <div className="flex gap-2 flex-wrap mb-3 day-chips">
+    <div className="flex gap-2 flex-wrap mb-3">
       {Array.from({ length: total }, (_, i) => i + 1).map((d) => (
         <button
           key={d}
           onClick={() => onPick(d)}
           className={[
-            "px-3 py-1 rounded-full border text-sm day-chip",
-            d === activeDay ? "bg-black text-white border-black day-chip--active" : "bg-white",
+            "px-3 py-1 rounded-full border text-sm",
+            d === activeDay ? "bg-black text-white border-black" : "bg-white",
             d === currentDay ? "ring-2 ring-amber-400" : "",
           ].join(" ")}
           title={d === currentDay ? "Current day" : `Go to Day ${d}`}
@@ -131,6 +131,7 @@ function LockedPreviewCard({ m }) {
   );
 }
 
+// (kept for completeness; not changed)
 function ModuleCard({ mod }) {
   const [open, setOpen] = useState(true);
 
@@ -152,72 +153,82 @@ function ModuleCard({ mod }) {
     (mod.ocrText && String(mod.ocrText).trim()) ||
     "";
 
-  const imageUrls = (mod.images && mod.images.length ? mod.images : images.map((im) => im.url)).map(
-    (u) => absUrl(u)
-  );
-
   return (
-    <Card title={mod.title || "Untitled"} footer={mod.releaseAt ? fmtTime(mod.releaseAt) : null}>
-      {/* keep your show/hide toggle (no logic change) */}
-      <div className="flex justify-end">
-        <button onClick={() => setOpen((o) => !o)} className="px-2 py-0.5 rounded border text-xs">
-          {open ? "Hide" : "Show"}
-        </button>
+    <div className="rounded-lg border bg-white mb-4 overflow-hidden">
+      {/* Header */}
+      <div className="flex items-center justify-between px-3 py-2 bg-gray-50 border-b">
+        <div className="font-medium">{mod.title || "Untitled"}</div>
+        <div className="flex items-center gap-2 text-xs text-gray-600">
+          {mod.releaseAt && <span>{fmtTime(mod.releaseAt)}</span>}
+          <button onClick={() => setOpen((o) => !o)} className="px-2 py-0.5 rounded border">
+            {open ? "Hide" : "Show"}
+          </button>
+        </div>
       </div>
 
       {!open ? null : (
-        <div className="grid gap-3">
-          {/* IMAGES */}
-          {showImages && imageUrls.length > 0 && (
-            <ImageScroller images={imageUrls} />
-          )}
+        <div className="p-3 grid gap-3">
+          {/* Images gallery */}
+          {showImages ? (
+            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
+              {images.map((im, i) => (
+                <img
+                  key={i}
+                  loading="lazy"
+                  src={absUrl(im.url)}
+                  alt={`img-${i}`}
+                  className="w-full rounded shadow"
+                />
+              ))}
+            </div>
+          ) : null}
 
-          {/* OCR / Manual Text */}
-          {textBlock && (
-            <div className="ocr-box rounded border bg-yellow-50 p-3" style={{ marginTop: 12, maxHeight: 360, overflowY: "auto" }}>
+          {/* Text area (manual / OCR) */}
+          {textBlock ? (
+            <div className="rounded border bg-yellow-50 p-3" style={{ maxHeight: 360, overflowY: "auto" }}>
               <pre className="whitespace-pre-wrap font-[ui-sans-serif] leading-6 text-[0.95rem]">
                 {textBlock}
               </pre>
             </div>
-          )}
+          ) : null}
 
-          {/* AUDIO */}
-          {showAudio && (
-            <div style={{ marginTop: 10 }} className="grid gap-2">
-              {audios.map((a, i) => (
-                <audio key={i} controls preload="none" src={absUrl(a.url)} style={{ width: "100%" }} />
-              ))}
-            </div>
-          )}
-
-          {/* VIDEO */}
-          {showVideo && (
+          {/* PDF(s) */}
+          {showPDF ? (
             <div className="grid gap-2">
-              {videos.map((v, i) => (
-                <video key={i} controls preload="metadata" src={absUrl(v.url)} className="w-full rounded" />
-              ))}
-            </div>
-          )}
-
-          {/* (Optional) PDF link(s) */}
-          {showPDF && (
-            <div style={{ marginTop: 10 }}>
               {pdfs.map((p, i) => (
                 <a
                   key={i}
-                  className="badge text-blue-600 underline text-sm"
                   href={absUrl(p.url)}
                   target="_blank"
                   rel="noreferrer"
+                  className="text-sm underline text-blue-600"
                 >
                   Open PDF {i + 1}
                 </a>
               ))}
             </div>
-          )}
+          ) : null}
+
+          {/* Audio */}
+          {showAudio ? (
+            <div className="grid gap-2">
+              {audios.map((a, i) => (
+                <audio key={i} controls preload="none" src={absUrl(a.url)} className="w-full" />
+              ))}
+            </div>
+          ) : null}
+
+          {/* Video */}
+          {showVideo ? (
+            <div className="grid gap-2">
+              {videos.map((v, i) => (
+                <video key={i} controls preload="metadata" src={absUrl(v.url)} className="w-full rounded" />
+              ))}
+            </div>
+          ) : null}
         </div>
       )}
-    </Card>
+    </div>
   );
 }
 
@@ -325,7 +336,7 @@ export default function PrepWizard() {
 
       setAllModules(Array.isArray(t.items) ? t.items : []);
 
-      // mirror “context” into UI chips
+      // NEW: mirror “context” into UI chips
       setCurrentDay(td);
       setActiveDay(td);
     } catch (e) {
@@ -440,7 +451,68 @@ export default function PrepWizard() {
             const tb = b.releaseAt ? Date.parse(b.releaseAt) : 0;
             return ta - tb;
           })
-          .map((m) => <ModuleCard key={m._id} mod={m} />)
+          .map((m) => {
+            // minimal: presentational wrapper + scroller
+            const imageUrls =
+              m.images ||
+              (m.files || [])
+                .filter((f) => (f.kind || "").toLowerCase() === "image")
+                .map((f) => absUrl(f.url));
+
+            const content =
+              m.content ??
+              (m.ocrText && String(m.ocrText).trim()) ??
+              (m.text && String(m.text).trim()) ??
+              (m.manualText && String(m.manualText).trim()) ??
+              null;
+
+            const audioUrl =
+              m.audio ||
+              (m.files || []).find((f) => (f.kind || "").toLowerCase() === "audio")?.url;
+
+            const pdfUrl =
+              m.pdf ||
+              (m.files || []).find((f) => (f.kind || "").toLowerCase() === "pdf")?.url;
+
+            return (
+              <Card key={m._id} title={m.title || "Untitled"} footer={null}>
+                {/* IMAGES */}
+                <ImageScroller images={imageUrls} />
+
+                {/* OCR / Manual Text */}
+                {content && (
+                  <div className="ocr-box" style={{ marginTop: 12 }}>
+                    {content}
+                  </div>
+                )}
+
+                {/* AUDIO */}
+                {(audioUrl || (m.files || []).some((f) => (f.kind || "").toLowerCase() === "audio")) && (
+                  <div style={{ marginTop: 10 }}>
+                    <audio
+                      controls
+                      src={audioUrl ? absUrl(audioUrl) : undefined}
+                      style={{ width: "100%" }}
+                    />
+                  </div>
+                )}
+
+                {/* (Optional) PDF link */}
+                {(pdfUrl || (m.files || []).some((f) => (f.kind || "").toLowerCase() === "pdf")) && (
+                  <div style={{ marginTop: 10 }}>
+                    <a
+                      className="badge"
+                      href={pdfUrl ? absUrl(pdfUrl) : undefined}
+                      target="_blank"
+                      rel="noreferrer"
+                    >
+                      Open PDF
+                    </a>
+                  </div>
+                )}
+              </Card>
+            );
+          })
       )}
 
       <div className="mt-4">
