@@ -1,5 +1,5 @@
 // client/src/pages/prep/AdminPrepPanel.jsx
-import { useEffect, useState } from "react";
+import { useEffect, useRef, useState } from "react";
 import { getJSON, postJSON, upload } from "../../utils/api";
 
 export default function AdminPrepPanel() {
@@ -12,9 +12,10 @@ export default function AdminPrepPanel() {
       const r = await getJSON("/api/prep/exams");
       const list = r.exams || [];
       setExams(list);
-      // keep previous selection if still present, else pick first
-      if (!selExam && list.length) setSelExam(list[0].examId);
-      if (selExam && !list.find(e => e.examId === selExam) && list.length) {
+      // keep existing selection if still valid; else pick first
+      if (!list.length) {
+        setSelExam("");
+      } else if (!selExam || !list.find(e => e.examId === selExam)) {
         setSelExam(list[0].examId);
       }
     } catch (e) {
@@ -25,23 +26,21 @@ export default function AdminPrepPanel() {
 
   async function createExam(e) {
     e.preventDefault();
-    if (!makeExam.examId || !makeExam.name) return alert("examId and name required");
+    const examId = makeExam.examId.trim();
+    const name = makeExam.name.trim();
+    if (!examId || !name) return alert("examId and name required");
     try {
-      await postJSON("/api/prep/exams", {
-        examId: makeExam.examId.trim(),
-        name: makeExam.name.trim(),
-        scheduleMode: "cohort",
-      });
+      await postJSON("/api/prep/exams", { examId, name, scheduleMode: "cohort" });
       setMakeExam({ examId: "", name: "" });
       await loadExams();
-      setSelExam(makeExam.examId.trim());
+      setSelExam(examId);
     } catch (err) {
       console.error(err);
       alert("Create exam failed (check owner key/login).");
     }
   }
 
-  useEffect(() => { loadExams(); }, []);
+  useEffect(() => { loadExams(); }, []); // mount
 
   return (
     <div className="max-w-6xl mx-auto p-4">
@@ -104,15 +103,17 @@ export default function AdminPrepPanel() {
   );
 }
 
-/* ---------- Module editor (uses your upload() helper) ---------- */
+/* ---------------- Module editor ---------------- */
 function ExamEditor({ examId }) {
   const [modules, setModules] = useState([]);
   const [busy, setBusy] = useState(false);
+  const formRef = useRef(null);
 
   async function load() {
     try {
       const r = await getJSON(`/api/prep/templates?examId=${encodeURIComponent(examId)}`);
-      setModules(r.items || []);
+      const items = (r.items || []).sort((a,b)=> a.dayIndex - b.dayIndex || a.slotMin - b.slotMin);
+      setModules(items);
     } catch (e) {
       console.error(e);
       alert("Failed to load modules");
@@ -120,14 +121,27 @@ function ExamEditor({ examId }) {
   }
   useEffect(()=>{ load(); }, [examId]);
 
-  async function onSubmit(e) {
+  function truth(v){ return v ? "true" : "false"; }
+
+  async function onSave(e) {
     e.preventDefault();
-    const fd = new FormData(e.target);
-    fd.set("examId", examId); // ensure examId goes with the upload
+    const f = formRef.current;
+    const fd = new FormData(f);
+
+    // ensure examId present
+    fd.set("examId", examId);
+
+    // normalize checkboxes (browser sends "on"/missing)
+    const isChecked = (name) => !!f?.elements?.[name]?.checked;
+    fd.set("extractOCR", truth(isChecked("extractOCR")));
+    fd.set("showOriginal", truth(isChecked("showOriginal")));
+    fd.set("allowDownload", truth(isChecked("allowDownload")));
+    fd.set("highlight", truth(isChecked("highlight")));
+
     setBusy(true);
     try {
-      await upload("/api/prep/templates", fd); // <- uses your api.js upload()
-      e.target.reset();
+      await upload("/api/prep/templates", fd); // uses your api.js upload()
+      f.reset();
       await load();
       alert("Module saved");
     } catch (err) {
@@ -140,9 +154,14 @@ function ExamEditor({ examId }) {
 
   return (
     <>
-      <h2 className="text-xl font-semibold mb-3">Templates — {examId}</h2>
+      <h2 className="text-xl font-semibold mb-3">Templates — {examId.replace(/_/g, " ").toLowerCase()}</h2>
 
-      <form onSubmit={onSubmit} className="rounded-xl border bg-white p-4 mb-6 grid gap-3">
+      <form
+        ref={formRef}
+        onSubmit={onSave}
+        encType="multipart/form-data"
+        className="rounded-xl border bg-white p-4 mb-6 grid gap-3"
+      >
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <div>
             <label className="block text-sm mb-1">Day Index</label>
@@ -178,10 +197,18 @@ function ExamEditor({ examId }) {
         </div>
 
         <div className="grid md:grid-cols-5 gap-3">
-          <label className="flex items-center gap-2"><input type="checkbox" name="extractOCR" value="true" /> Extract OCR</label>
-          <label className="flex items-center gap-2"><input type="checkbox" name="showOriginal" value="true" /> Show Original</label>
-          <label className="flex items-center gap-2"><input type="checkbox" name="allowDownload" value="true" /> Allow Download</label>
-          <label className="flex items-center gap-2"><input type="checkbox" name="highlight" value="true" /> Highlight</label>
+          <label className="flex items-center gap-2">
+            <input type="checkbox" name="extractOCR" /> Extract OCR
+          </label>
+          <label className="flex items-center gap-2">
+            <input type="checkbox" name="showOriginal" /> Show Original
+          </label>
+          <label className="flex items-center gap-2">
+            <input type="checkbox" name="allowDownload" /> Allow Download
+          </label>
+          <label className="flex items-center gap-2">
+            <input type="checkbox" name="highlight" /> Highlight
+          </label>
           <input className="w-full border rounded px-3 py-2" name="background" placeholder="background (e.g. #fffbe7)" />
         </div>
 
