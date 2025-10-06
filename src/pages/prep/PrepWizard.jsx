@@ -1,157 +1,207 @@
-// client/src/pages/prep/PrepExam.jsx  (or PrepWizard.jsx)
 import { useEffect, useMemo, useState } from "react";
+import { useParams, Link } from "react-router-dom";
 import { getJSON } from "../../utils/api";
-import { absUrl } from "../../utils/api";
 
-export default function PrepExam({ examId: propExamId }) {
-  // if you already read examId from router, keep that – this prop is just for clarity
-  const examId = propExamId || decodeURIComponent(location.pathname.split("/prep/")[1] || "");
-  const [data, setData] = useState({ todayDay: 1, planDays: 1, modules: [] });
+/** IMPORTANT: we only need the API origin (without trailing /api) to absolutize /api/files URLs */
+const API_BASE = import.meta.env.VITE_API_URL || "/api";
+const API_ORIGIN = API_BASE.replace(/\/api\/?$/, "");
+const absUrl = (u) => (!u ? "" : /^https?:/i.test(u) ? u : API_ORIGIN + u);
+
+export default function PrepWizard() {
+  const params = useParams();
+  const examSlug = decodeURIComponent(params.examId || params.slug || "");
+  const [summary, setSummary] = useState({ todayDay: 1, planDays: 1, modules: [] });
+  const [loading, setLoading] = useState(true);
 
   async function load() {
-    const r = await getJSON(`/api/prep/user/summary?examId=${encodeURIComponent(examId)}`);
-    setData(r || { todayDay: 1, planDays: 1, modules: [] });
+    setLoading(true);
+    try {
+      // NOTE: email is optional; public view works without it
+      const r = await getJSON(`/api/prep/user/summary?examId=${encodeURIComponent(examSlug)}`);
+      setSummary(r);
+    } finally {
+      setLoading(false);
+    }
   }
-  useEffect(() => { load(); }, [examId]);
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [examSlug]);
 
-  const now = Date.now();
-  const modules = (data.modules || []).slice().sort((a,b) => (a.slotMin||0) - (b.slotMin||0));
-
-  const unlocked = modules.filter(m => m.status === "released" && (!m.releaseAt || Date.parse(m.releaseAt) <= now));
-  const later    = modules.filter(m => m.releaseAt && Date.parse(m.releaseAt) > now);
+  const { released, later } = useMemo(() => {
+    const now = Date.now();
+    const items = (summary.modules || []).slice().sort(sortByTimeThenTitle);
+    const rel = [];
+    const lat = [];
+    for (const m of items) {
+      const t = m.releaseAt ? Date.parse(m.releaseAt) : 0;
+      // treat status:released OR past releaseAt as available
+      if (m.status === "released" || !t || t <= now) rel.push(m);
+      else lat.push(m);
+    }
+    return { released: rel, later: lat };
+  }, [summary]);
 
   return (
-    <div className="max-w-3xl mx-auto p-4">
-      <div className="text-lg font-semibold mb-1">{examId.replace(/_/g," ").toLowerCase()}</div>
-      <div className="text-sm text-gray-500 mb-4">Day {data.todayDay}</div>
+    <div className="max-w-4xl mx-auto p-4">
+      <div className="flex items-center gap-2 text-sm text-gray-500 mb-2">
+        <Link to="/prep" className="text-blue-600 hover:underline">← Back</Link>
+        <span className="mx-1">/</span>
+        <span className="uppercase tracking-wide">{examSlug}</span>
+      </div>
 
-      {!!later.length && (
-        <div className="text-sm text-gray-600 mb-4">
+      <h1 className="text-xl font-semibold">{examSlug.replace(/_/g," ")}</h1>
+      <p className="text-sm text-gray-500 -mt-1 mb-4">Day {summary.todayDay}</p>
+
+      {/* Mini day tiles (visual polish) */}
+      <DayTiles current={summary.todayDay} total={summary.planDays} />
+
+      {later.length > 0 && (
+        <div className="my-4 p-3 rounded-lg bg-amber-50 border border-amber-100 text-sm">
           <div className="font-medium mb-1">Coming later today:</div>
-          <ul className="list-disc pl-5">
-            {later.map(m => (
+          <ul className="list-disc ml-5 space-y-0.5">
+            {later.map((m) => (
               <li key={m._id}>
-                {m.title || "Untitled"} — {fmtTime(m)}
+                <span className="font-semibold">{m.title || "Untitled"}</span>
+                {" — "}
+                <TimeBadge module={m} />
               </li>
             ))}
           </ul>
         </div>
       )}
 
-      {!unlocked.length && <div className="text-gray-500">No modules for today yet.</div>}
+      {loading && <div className="text-gray-500">Loading…</div>}
 
-      <div className="space-y-4">
-        {unlocked.map(m => <ModuleCard key={m._id} m={m} />)}
+      {released.map((m) => (
+        <ModuleCard key={m._id} module={m} />
+      ))}
+
+      {!loading && released.length === 0 && (
+        <div className="text-gray-500">No modules for today yet.</div>
+      )}
+    </div>
+  );
+}
+
+/* ---------- UI bits ---------- */
+
+function sortByTimeThenTitle(a, b) {
+  const ta = a.releaseAt ? Date.parse(a.releaseAt) : 0;
+  const tb = b.releaseAt ? Date.parse(b.releaseAt) : 0;
+  if (ta !== tb) return ta - tb;
+  const sa = (a.title || "").toLowerCase();
+  const sb = (b.title || "").toLowerCase();
+  return sa.localeCompare(sb);
+}
+
+function TimeBadge({ module: m }) {
+  if (m.releaseAt) {
+    const d = new Date(m.releaseAt);
+    return <span className="inline-flex items-center gap-1 text-xs text-gray-500">{d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" })}</span>;
+  }
+  return <span className="inline-flex items-center gap-1 text-xs text-gray-500">{(m.slotMin || 0).toString().padStart(2,"0")} min</span>;
+}
+
+function DayTiles({ current = 1, total = 30 }) {
+  const days = Array.from({ length: total || 1 }, (_, i) => i + 1);
+  return (
+    <div className="mb-4">
+      <div className="text-sm text-gray-500 mb-1">Calendar</div>
+      <div className="flex flex-wrap gap-2">
+        {days.map((d) => (
+          <div
+            key={d}
+            className={`w-10 h-10 rounded-lg grid place-items-center border text-sm transition
+              ${d === current ? "bg-amber-100 border-amber-300 ring-2 ring-amber-400 animate-pulse" : "bg-white border-gray-200"}`}
+            title={`Day ${d}`}
+          >
+            {d}
+          </div>
+        ))}
       </div>
     </div>
   );
 }
 
-function fmtTime(m) {
-  // Prefer server releaseAt if present; else interpret slotMin as minutes from 9:00 AM local
-  if (m.releaseAt) {
-    const d = new Date(m.releaseAt);
-    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-  }
-  const baseH = 9;
-  const mins = Number(m.slotMin || 0);
-  const h = baseH + Math.floor(mins/60);
-  const mm = mins % 60;
-  const d = new Date(); d.setHours(h, mm, 0, 0);
-  return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
-}
+function ModuleCard({ module: m }) {
+  const [open, setOpen] = useState(true); // open by default; collapse to save space
 
-function ModuleCard({ m }) {
-  const [open, setOpen] = useState(true);
+  const files = m.files || [];
+  const images = files.filter((f) => f.kind === "image");
+  const pdf = files.find((f) => f.kind === "pdf");
+  const audio = files.find((f) => f.kind === "audio");
+  const video = files.find((f) => f.kind === "video");
 
-  const media = useMemo(() => {
-    const files = m.files || [];
-    const pick  = (k) => files.filter(f => f.kind === k);
-    return {
-      images: pick("image"),
-      pdfs:   pick("pdf"),
-      audio:  pick("audio")[0] || null,
-      video:  pick("video")[0] || null,
-    };
-  }, [m.files]);
+  // Prefer manual text, else OCR text
+  const text = (m.content && m.content.trim()) || (m.ocrText && m.ocrText.trim()) || "";
 
-  // Manual text first, then OCR, then description fallback
-  const text =
-    m.textManual || m.manualText || m.text || m.description || m.ocrText || "";
+  const canShowOriginal = !!m.flags?.showOriginal; // admin toggle
+  const hasMedia = (canShowOriginal && (images.length || pdf || video)) || audio;
 
   return (
-    <div className="rounded-xl border bg-white">
-      <button
-        type="button"
-        onClick={() => setOpen(o => !o)}
-        className="w-full flex items-center justify-between px-4 py-3 text-left"
-      >
-        <div className="font-semibold">{m.title || "Untitled"}</div>
-        <div className="flex items-center gap-3 text-sm text-gray-500">
-          <span>{fmtTime(m)}</span>
-          <span className={`transition-transform ${open ? "rotate-90" : ""}`}>›</span>
+    <div className="rounded-xl border border-gray-200 bg-white overflow-hidden mb-4">
+      <div className="flex items-center justify-between px-4 py-2 border-b bg-gray-50">
+        <div className="font-medium">{m.title || "Untitled"}</div>
+        <div className="flex items-center gap-3">
+          <span className="text-xs text-gray-500">
+            <TimeBadge module={m} />
+          </span>
+          <button
+            onClick={() => setOpen((o) => !o)}
+            className="text-xs text-gray-600 border rounded px-2 py-0.5 hover:bg-gray-100"
+          >
+            {open ? "Hide" : "Show"}
+          </button>
         </div>
-      </button>
+      </div>
 
       {open && (
-        <div className="px-4 pb-4 space-y-4">
-          {/* Images – horizontal scroll */}
-          {!!media.images.length && (
-            <div className="flex gap-3 overflow-x-auto snap-x">
-              {media.images.map((img, i) => (
+        <div className="p-4 space-y-3">
+          {/* IMAGES (horizontal gallery) */}
+          {canShowOriginal && images.length > 0 && (
+            <div className="overflow-x-auto whitespace-nowrap no-scrollbar -mx-1">
+              {images.map((f, i) => (
                 <img
                   key={i}
-                  src={absUrl(img.url || img)}
-                  className="min-w-[240px] max-h-64 object-contain rounded shadow snap-start"
-                  alt=""
+                  src={absUrl(f.url)}
+                  className="inline-block m-1 h-44 rounded-lg shadow border"
+                  alt={`image-${i + 1}`}
                   loading="lazy"
                 />
               ))}
             </div>
           )}
 
-          {/* Manual/Extracted text – scrollable box */}
-          {!!text && (
-            <div
-              className="rounded-lg border bg-amber-50 p-3"
-              style={{ maxHeight: 320, overflowY: "auto", whiteSpace: "pre-wrap" }}
-            >
-              {text}
+          {/* PDF link (respect showOriginal) */}
+          {canShowOriginal && pdf && (
+            <div>
+              <a
+                href={absUrl(pdf.url)}
+                target="_blank"
+                rel="noreferrer"
+                className="text-blue-600 text-sm underline"
+              >
+                Open PDF
+              </a>
             </div>
           )}
 
-          {/* PDF link(s) – respect showOriginal/allowDownload */}
-          {!!media.pdfs.length && m.flags?.showOriginal && (
-            <div className="flex flex-wrap gap-2">
-              {media.pdfs.map((p, i) => (
-                <a
-                  key={i}
-                  href={absUrl(p.url || p)}
-                  target="_blank"
-                  rel="noreferrer"
-                  download={m.flags?.allowDownload || undefined}
-                  className="px-3 py-1.5 rounded border hover:bg-gray-50 text-sm"
-                >
-                  Open PDF {media.pdfs.length > 1 ? `#${i+1}` : ""}
-                </a>
-              ))}
+          {/* VIDEO */}
+          {canShowOriginal && video && (
+            <video src={absUrl(video.url)} controls className="w-full rounded-lg border" />
+          )}
+
+          {/* TEXT (manual or OCR) */}
+          {text && (
+            <div className="bg-amber-50 rounded-lg border border-amber-100 p-3 max-h-64 overflow-y-auto leading-relaxed">
+              <pre className="whitespace-pre-wrap font-[ui-monospace] text-[13px]">{text}</pre>
             </div>
           )}
 
-          {/* Audio */}
-          {media.audio && (
+          {/* AUDIO (independent of showOriginal – always safe to play) */}
+          {audio && (
             <audio controls className="w-full">
-              <source src={absUrl(media.audio.url)} type={media.audio.mime || "audio/mpeg"} />
+              <source src={absUrl(audio.url)} type={audio.mime || "audio/mpeg"} />
+              Your browser does not support the audio element.
             </audio>
-          )}
-
-          {/* Video */}
-          {media.video && (
-            <video
-              controls
-              className="w-full rounded-lg"
-              src={absUrl(media.video.url)}
-            />
           )}
         </div>
       )}
