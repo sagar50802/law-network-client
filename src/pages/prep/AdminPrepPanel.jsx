@@ -124,11 +124,11 @@ function ExamEditor({ examId }) {
     fd.set("highlight", bool(f.elements.highlight.checked));
     // NOTE: ocrAtRelease is sent automatically by browser only if checked
 
-    // ✅ Normalize releaseAt (local -> ISO UTC) so the server gets the exact instant
+    // normalize releaseAt (local -> ISO UTC)
     const ra = fd.get("releaseAt");
     if (ra) {
-      const d = new Date(String(ra)); // e.g. "2025-10-06T15:44"
-      if (!isNaN(d)) fd.set("releaseAt", d.toISOString()); // -> "2025-10-06T10:14:00.000Z"
+      const d = new Date(String(ra)); // "YYYY-MM-DDTHH:mm"
+      if (!isNaN(d)) fd.set("releaseAt", d.toISOString());
     }
 
     setBusy(true);
@@ -149,6 +149,73 @@ function ExamEditor({ examId }) {
     await delJSON(`/api/prep/templates/${id}`);
     await load();
   }
+
+  // ---------- helpers for grouped list ----------
+  function groupByDay(items) {
+    const m = new Map();
+    for (const x of items) {
+      if (!m.has(x.dayIndex)) m.set(x.dayIndex, []);
+      m.get(x.dayIndex).push(x);
+    }
+    // sort each day by releaseAt (if present) else slotMin
+    for (const arr of m.values()) {
+      arr.sort((a, b) => {
+        const aa = a.releaseAt ? Date.parse(a.releaseAt) : a.slotMin || 0;
+        const bb = b.releaseAt ? Date.parse(b.releaseAt) : b.slotMin || 0;
+        return aa - bb;
+      });
+    }
+    return Array.from(m.entries()).sort((a, b) => a[0] - b[0]);
+  }
+
+  function timeBadge(m) {
+    if (m.releaseAt) {
+      const d = new Date(m.releaseAt);
+      return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+    }
+    return `${m.slotMin || 0} min`;
+  }
+
+  function DayGroup({ day, items, onDelete }) {
+    const [open, setOpen] = useState(day === 1); // open Day 1 by default
+    return (
+      <div className="border-b">
+        <button
+          onClick={() => setOpen((o) => !o)}
+          className="w-full flex items-center justify-between px-4 py-2 bg-gray-50"
+        >
+          <div className="font-medium">Day {day}</div>
+          <span className={`text-sm text-gray-500 transition-transform ${open ? "rotate-90" : ""}`}>
+            ›
+          </span>
+        </button>
+        {open && (
+          <ul className="divide-y">
+            {items.map((m) => (
+              <li key={m._id} className="px-4 py-3 flex items-center justify-between text-sm">
+                <div>
+                  <div className="font-semibold">{m.title || "Untitled"}</div>
+                  <div className="text-gray-500">
+                    {timeBadge(m)} • {m.flags?.extractOCR ? (m.flags?.ocrAtRelease ? "OCR @ release" : "OCR") : "No OCR"} •{" "}
+                    {(m.files || []).length} file(s) {m.status ? `• ${String(m.status).toUpperCase()}` : ""}
+                    {m.releaseAt ? ` • releases ${new Date(m.releaseAt).toLocaleString()}` : ""}
+                  </div>
+                </div>
+                <button
+                  onClick={() => onDelete(m._id)}
+                  className="text-red-600 border border-red-200 px-2 py-1 rounded hover:bg-red-50"
+                >
+                  Delete
+                </button>
+              </li>
+            ))}
+            {!items.length && <li className="px-4 py-3 text-gray-500">No items.</li>}
+          </ul>
+        )}
+      </div>
+    );
+  }
+  // ---------- end helpers ----------
 
   return (
     <>
@@ -189,10 +256,9 @@ function ExamEditor({ examId }) {
             <input name="images" type="file" accept="image/*" multiple />
           </div>
 
-        <div>
+          <div>
             <label className="block text-sm mb-1">PDF</label>
             <input name="pdf" type="file" accept="application/pdf" />
-            {/* ocrAtRelease next to PDF */}
             <label className="mt-1 inline-flex items-center gap-2 text-xs ml-2">
               <input type="checkbox" name="ocrAtRelease" /> Auto-OCR at release
             </label>
@@ -208,7 +274,6 @@ function ExamEditor({ examId }) {
           </div>
         </div>
 
-        {/* Existing manual text field (kept) */}
         <div>
           <label className="block text-sm mb-1">Text (manualText)</label>
           <textarea
@@ -219,7 +284,6 @@ function ExamEditor({ examId }) {
           />
         </div>
 
-        {/* NEW: Text (paste instead of OCR) — exact name `content` */}
         <div className="md:col-span-2">
           <label className="block text-sm mb-1">Text (paste instead of OCR)</label>
           <textarea
@@ -259,50 +323,17 @@ function ExamEditor({ examId }) {
         </div>
       </form>
 
+      {/* ------- Grouped & collapsible list ------- */}
       <div className="rounded-xl border bg-white">
         <div className="px-4 py-3 border-b font-medium">Existing Modules</div>
-        <div className="divide-y">
-          {modules.map((m) => (
-            <div key={m._id} className="px-4 py-3 text-sm flex items-center justify-between">
-              <div>
-                <div className="font-semibold">{m.title || "Untitled"}</div>
-                <div className="text-gray-500">
-                  Day {m.dayIndex} • {m.slotMin} min •{" "}
-                  {m.flags?.extractOCR
-                    ? m.flags?.ocrAtRelease
-                      ? "OCR @ release"
-                      : "OCR"
-                    : "No OCR"}{" "}
-                  • {(m.files || []).length} file(s)
-                  {m.releaseAt && (
-                    <>
-                      {" "}
-                      • releases {new Date(m.releaseAt).toLocaleString()}
-                    </>
-                  )}
-                  {m.status && (
-                    <>
-                      {" "}
-                      • <span className="uppercase">{m.status}</span>
-                    </>
-                  )}
-                </div>
-              </div>
-              <div className="flex gap-2">
-                <button
-                  className="px-3 py-1 rounded border text-red-600"
-                  onClick={() => onDelete(m._id)}
-                >
-                  Delete
-                </button>
-              </div>
-            </div>
-          ))}
-          {!modules.length && (
-            <div className="px-4 py-6 text-center text-gray-500">No modules yet.</div>
-          )}
-        </div>
+        {groupByDay(modules).map(([day, items]) => (
+          <DayGroup key={day} day={day} items={items} onDelete={onDelete} />
+        ))}
+        {!modules.length && (
+          <div className="px-4 py-6 text-center text-gray-500">No modules yet.</div>
+        )}
       </div>
+      {/* ----------------------------------------- */}
     </>
   );
 }
