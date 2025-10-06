@@ -65,3 +65,12 @@ body{ background:var(--bg); }
   padding:.55rem 1rem; border:1px solid #111;
 }
 .btn-primary:hover{ opacity:.9 }
+
+/* ---------- Accordion module ---------- */
+.module summary{
+  display:flex; align-items:center; justify-content:space-between;
+  cursor:pointer; list-style:none; user-select:none;
+}
+.module summary::-webkit-details-marker{ display:none; }
+.module .chev{ transition: transform .12s ease; }
+.module[open] .chev{ transform: rotate(90deg); }
