@@ -177,6 +177,12 @@ function ExamEditor({ examId }) {
           </div>
         </div>
 
+        {/* ✅ Schedule (optional) */}
+        <div>
+          <label className="block text-sm mb-1">Release at (date &amp; time)</label>
+          <input name="releaseAt" type="datetime-local" className="w-full border rounded px-3 py-2" />
+        </div>
+
         <div className="grid md:grid-cols-2 gap-3">
           <div>
             <label className="block text-sm mb-1">Images (multiple)</label>
@@ -193,6 +199,17 @@ function ExamEditor({ examId }) {
           <div>
             <label className="block text-sm mb-1">Video</label>
             <input name="video" type="file" accept="video/*" />
+          </div>
+
+          {/* ✅ Manual text (instead of OCR) */}
+          <div className="md:col-span-2">
+            <label className="block text-sm mb-1">Text (paste instead of OCR)</label>
+            <textarea
+              name="text"
+              rows="6"
+              className="w-full border rounded px-3 py-2"
+              placeholder="Paste text here…"
+            ></textarea>
           </div>
         </div>
 
