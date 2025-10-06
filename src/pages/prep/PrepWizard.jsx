@@ -479,31 +479,89 @@ export default function PrepWizard() {
 
   /* ---------- Tabs ---------- */
 
+  const cohortDay = todayDay; // alias for calendar grid snippet
+  const userStates = undefined; // optional; you can wire your completion map here
+
+  /* ========= CALENDAR TAB ========= */
   const calendarTab = (
-    <div className="max-w-3xl mx-auto">
-      <div className="mb-3 text-sm text-gray-600">
-        Current Day (cohort): <b>Day {todayDay}</b>
-        <div className="text-xs">Only released & time-unlocked modules are available each day.</div>
-      </div>
-      <div className="flex flex-wrap gap-3">
-        {Array.from({ length: planDays }, (_, i) => i + 1).map((d) => (
-          <button
-            key={d}
-            onClick={() => setActiveDay(d)}
-            title={`Day ${d}`}
-            className={`w-20 h-24 rounded-lg border flex items-center justify-center text-lg select-none ${
-              d === todayDay ? "bg-amber-100 border-amber-300" : "bg-white"
-            } ${d === activeDay ? "ring-2 ring-black" : ""}`}
-          >
-            {d}
-          </button>
-        ))}
+    <div style={{ marginTop: 16 }}>
+      <div className="text-sm text-gray-500">
+        Current Day (cohort): <b>Day {cohortDay}</b>
       </div>
 
-      {/* Show preview only for non-today days (no time display) */}
-      {activeDay !== currentDay && (
-        <PreviewPanel day={activeDay} modules={previewModulesForActiveDay} />
-      )}
+      {(() => {
+        // Prefer allModules if present; otherwise fall back to today's modules
+        const sourceMods = (allModules && allModules.length) ? allModules : modules;
+
+        // Group modules by dayIndex (released or scheduled — we only mark status for released)
+        const byDay = new Map();
+        (sourceMods || []).forEach(m => {
+          if (!byDay.has(m.dayIndex)) byDay.set(m.dayIndex, []);
+          byDay.get(m.dayIndex).push(m);
+        });
+
+        // Determine how many days to show (use max planned day or at least 21 to make grid pretty)
+        const maxPlanned = Math.max(...Array.from(byDay.keys(), d => +d || 1), 1);
+        const last = Math.max(maxPlanned, cohortDay + 6, 21);
+
+        // naive "is this module done" check (works with boolean map or {done:true} map)
+        const isDone = (m, userStatesMap) => {
+          const s = userStatesMap?.[m._id];
+          return s === true || s?.done === true;
+        };
+
+        // Build day cells
+        const cells = [];
+        for (let d = 1; d <= last; d++) {
+          const items = byDay.get(d) || [];
+          const released = items.filter(x => x.status === 'released');
+          const anyReleased = released.length > 0;
+
+          // Decide visual status
+          let cls = "daycell";
+          let badge = "";
+          if (d > cohortDay) {
+            cls += " locked";
+            badge = "🔒";
+          } else if (d === cohortDay) {
+            cls += " today";
+            // show partial/completed subtly (optional)
+            const allDone = released.length && released.every(m => isDone(m, userStates));
+            if (allDone) badge = "✅";
+            else if (released.length) badge = "●";
+          } else {
+            // Past days
+            const allDone = released.length && released.every(m => isDone(m, userStates));
+            if (allDone) { cls += " completed"; badge = "✅"; }
+            else if (anyReleased) { cls += " available"; badge = "●"; }
+            else { cls += " locked"; badge = "—"; }
+          }
+
+          const href = d <= cohortDay ? `?tab=today&d=${d}` : undefined; // keep your router behavior
+
+          cells.push(
+            href ? (
+              <a
+                key={d}
+                className={cls}
+                href={href}
+                title={`Day ${d}`}
+                onClick={(e) => { e.preventDefault(); setTab("today"); }}
+              >
+                <span>{d}</span>
+                {badge && <span className="badge">{badge}</span>}
+              </a>
+            ) : (
+              <div key={d} className={cls} title={`Day ${d}`}>
+                <span>{d}</span>
+                {badge && <span className="badge">{badge}</span>}
+              </div>
+            )
+          );
+        }
+
+        return <div className="daygrid">{cells}</div>;
+      })()}
     </div>
   );
 
@@ -562,27 +620,30 @@ export default function PrepWizard() {
   );
 
   return (
-    <div className="px-4 pb-8">
-      {/* Top nav */}
-      <div className="max-w-3xl mx-auto flex items-center gap-2 mb-3">
-        <button
-          className={`px-3 py-1 rounded border ${tab === "calendar" ? "bg-black text-white" : ""}`}
-          onClick={() => setTab("calendar")}
+    <div className="prep-wrap">
+      {/* Modern tabbar */}
+      <div className="tabbar">
+        <a
+          className={`tab ${tab === "calendar" ? "active" : ""}`}
+          href="?tab=calendar"
+          onClick={(e) => { e.preventDefault(); setTab("calendar"); }}
         >
           Calendar
-        </button>
-        <button
-          className={`px-3 py-1 rounded border ${tab === "today" ? "bg-black text-white" : ""}`}
-          onClick={() => setTab("today")}
+        </a>
+        <a
+          className={`tab ${tab === "today" ? "active" : ""}`}
+          href="?tab=today"
+          onClick={(e) => { e.preventDefault(); setTab("today"); }}
         >
           Today’s Task
-        </button>
-        <button
-          className={`px-3 py-1 rounded border ${tab === "progress" ? "bg-black text-white" : ""}`}
-          onClick={() => setTab("progress")}
+        </a>
+        <a
+          className={`tab ${tab === "progress" ? "active" : ""}`}
+          href="?tab=progress"
+          onClick={(e) => { e.preventDefault(); setTab("progress"); }}
         >
           Progress
-        </button>
+        </a>
       </div>
 
       {tab === "calendar" ? calendarTab : tab === "progress" ? progressTab : todayTab}
