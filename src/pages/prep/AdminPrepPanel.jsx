@@ -124,13 +124,11 @@ function ExamEditor({ examId }) {
     fd.set("highlight", bool(f.elements.highlight.checked));
     // NOTE: ocrAtRelease is sent automatically by browser only if checked
 
-    // ✅ convert local datetime -> UTC ISO before sending
-    const rel = f?.elements?.releaseAt?.value; // "YYYY-MM-DDTHH:mm"
-    if (rel) {
-      const d = new Date(rel);
-      if (!isNaN(d.getTime())) {
-        fd.set("releaseAt", d.toISOString());
-      }
+    // ✅ Normalize releaseAt (local -> ISO UTC) so the server gets the exact instant
+    const ra = fd.get("releaseAt");
+    if (ra) {
+      const d = new Date(String(ra)); // e.g. "2025-10-06T15:44"
+      if (!isNaN(d)) fd.set("releaseAt", d.toISOString()); // -> "2025-10-06T10:14:00.000Z"
     }
 
     setBusy(true);
@@ -191,7 +189,7 @@ function ExamEditor({ examId }) {
             <input name="images" type="file" accept="image/*" multiple />
           </div>
 
-          <div>
+        <div>
             <label className="block text-sm mb-1">PDF</label>
             <input name="pdf" type="file" accept="application/pdf" />
             {/* ocrAtRelease next to PDF */}
