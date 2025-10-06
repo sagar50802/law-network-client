@@ -124,6 +124,15 @@ function ExamEditor({ examId }) {
     fd.set("highlight", bool(f.elements.highlight.checked));
     // NOTE: ocrAtRelease is sent automatically by browser only if checked
 
+    // ✅ convert local datetime -> UTC ISO before sending
+    const rel = f?.elements?.releaseAt?.value; // "YYYY-MM-DDTHH:mm"
+    if (rel) {
+      const d = new Date(rel);
+      if (!isNaN(d.getTime())) {
+        fd.set("releaseAt", d.toISOString());
+      }
+    }
+
     setBusy(true);
     try {
       await upload("/api/prep/templates", fd);
