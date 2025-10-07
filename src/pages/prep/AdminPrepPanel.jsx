@@ -2,17 +2,28 @@
 import { useEffect, useRef, useState } from "react";
 import { getJSON, delJSON } from "../../utils/api";
 
-/** Robust multipart POST (keeps cookies, safe JSON parse) */
+/** Robust multipart POST (keeps cookies, adds admin header, safe JSON parse) */
 async function sendMultipart(url, formData) {
-  const res = await fetch(url, { method: "POST", body: formData, credentials: "include" });
-  const text = await res.text(); // tolerate text/plain from proxies
+  // DO NOT set Content-Type; the browser adds the multipart boundary
+  const ownerKey = localStorage.getItem("ownerKey") || "";
+  const headers = ownerKey ? { "X-Owner-Key": ownerKey } : {};
+
+  const res = await fetch(url, {
+    method: "POST",
+    body: formData,
+    headers,
+    credentials: "include",
+  });
+
+  // Some proxies can return HTML (login page) with 200 → parse safely
+  const text = await res.text();
   let data = null;
-  try {
-    data = JSON.parse(text);
-  } catch {
-    /* non-JSON ok */
-  }
-  return { ok: res.ok, status: res.status, statusText: res.statusText, data, text };
+  try { data = JSON.parse(text); } catch { /* non-JSON → data stays null */ }
+
+  // Log once for local debugging
+  console.log("[AdminPrepPanel] upload status:", res.status, "raw:", text?.slice(0, 120));
+
+  return { ok: res.ok, status: res.status, data, text };
 }
 
 export default function AdminPrepPanel() {
@@ -71,9 +82,7 @@ export default function AdminPrepPanel() {
               value={selExam}
               onChange={(e) => setSelExam(e.target.value)}
             >
-              <option value="" disabled>
-                — choose —
-              </option>
+              <option value="" disabled>— choose —</option>
               {exams.map((x) => (
                 <option key={x.examId} value={x.examId}>
                   {x.name} ({x.examId})
@@ -136,44 +145,44 @@ function ExamEditor({ examId }) {
     return v ? "true" : "false";
   }
 
-  // === Only-changed handler ===
   async function onSave(e) {
     e.preventDefault();
     const f = formRef.current;
     const fd = new FormData(f);
 
-    // required
+    // required fields
     fd.set("examId", examId);
 
-    // checkboxes -> "true"/"false"
+    // normalize checkboxes
     fd.set("extractOCR", bool(f.elements.extractOCR.checked));
     fd.set("showOriginal", bool(f.elements.showOriginal.checked));
     fd.set("allowDownload", bool(f.elements.allowDownload.checked));
     fd.set("highlight", bool(f.elements.highlight.checked));
-    // ocrAtRelease will be sent automatically only when checked by browser
+    // (ocrAtRelease is sent only if checked – leave as-is)
 
-    // normalize releaseAt (local -> ISO UTC)
+    // normalize releaseAt (local -> ISO)
     const ra = fd.get("releaseAt");
     if (ra) {
       const d = new Date(String(ra));
       if (!isNaN(d)) fd.set("releaseAt", d.toISOString());
     }
 
-    // quick debug
-    const countFiles = (name) => fd.getAll(name).filter((v) => v instanceof File && v.size > 0).length;
-    // eslint-disable-next-line no-console
-    console.log("[AdminPrepPanel] files in FormData:", {
+    // Debug: count attached files so you can verify selections quickly
+    const countFiles = (name) => {
+      const entries = fd.getAll(name);
+      return entries.reduce((n, v) => (v instanceof File && v.size > 0 ? n + 1 : n), 0);
+    };
+    const filesDebug = {
       images: countFiles("images"),
       pdf: countFiles("pdf"),
       audio: countFiles("audio"),
       video: countFiles("video"),
-    });
+    };
+    console.log("[AdminPrepPanel] files in FormData:", filesDebug);
 
     setBusy(true);
     try {
-      // native fetch (boundary set by browser)
       const resp = await sendMultipart("/api/prep/templates", fd);
-      // eslint-disable-next-line no-console
       console.log("▲ upload response:", resp.status, resp.data || resp.text?.slice?.(0, 200));
 
       const success =
@@ -181,7 +190,6 @@ function ExamEditor({ examId }) {
         /"success"\s*:\s*true/.test(resp.text || "");
 
       if (!resp.ok || !success) {
-        // Never show “HTTP 200” — prefer server message or body text
         const msg =
           resp.data?.error ||
           resp.data?.message ||
@@ -190,9 +198,12 @@ function ExamEditor({ examId }) {
         return;
       }
 
+      // clear the form (including file inputs)
       f.reset();
+
+      // Force refresh list (cache-buster) so the new row appears instantly
       await load(true);
-      // tiny delay in case DB/index is a tick behind
+      // Small delay helps with eventually-consistent DBs/caches
       await new Promise((r) => setTimeout(r, 120));
       await load(true);
 
@@ -211,7 +222,7 @@ function ExamEditor({ examId }) {
     await load(true);
   }
 
-  // ---------- grouped list ----------
+  // ---------- helpers for grouped list ----------
   function groupByDay(items) {
     const m = new Map();
     for (const x of items) {
@@ -238,7 +249,7 @@ function ExamEditor({ examId }) {
   }
 
   function DayGroup({ day, items, onDelete }) {
-    const [open, setOpen] = useState(day === 1);
+    const [open, setOpen] = useState(day === 1); // open Day 1 by default
     return (
       <div className="border-b">
         <button
@@ -246,7 +257,9 @@ function ExamEditor({ examId }) {
           className="w-full flex items-center justify-between px-4 py-2 bg-gray-50"
         >
           <div className="font-medium">Day {day}</div>
-          <span className={`text-sm text-gray-500 transition-transform ${open ? "rotate-90" : ""}`}>›</span>
+          <span className={`text-sm text-gray-500 transition-transform ${open ? "rotate-90" : ""}`}>
+            ›
+          </span>
         </button>
         {open && (
           <ul className="divide-y">
@@ -362,7 +375,11 @@ function ExamEditor({ examId }) {
           <label className="flex items-center gap-2">
             <input type="checkbox" name="highlight" /> Highlight
           </label>
-          <input className="w-full border rounded px-3 py-2" name="background" placeholder="background (e.g. #fffbe7)" />
+          <input
+            className="w-full border rounded px-3 py-2"
+            name="background"
+            placeholder="background (e.g. #fffbe7)"
+          />
         </div>
 
         <div className="flex gap-2">
@@ -375,13 +392,17 @@ function ExamEditor({ examId }) {
         </div>
       </form>
 
+      {/* ------- Grouped & collapsible list ------- */}
       <div className="rounded-xl border bg-white">
         <div className="px-4 py-3 border-b font-medium">Existing Modules</div>
         {groupByDay(modules).map(([day, items]) => (
           <DayGroup key={day} day={day} items={items} onDelete={onDelete} />
         ))}
-        {!modules.length && <div className="px-4 py-6 text-center text-gray-500">No modules yet.</div>}
+        {!modules.length && (
+          <div className="px-4 py-6 text-center text-gray-500">No modules yet.</div>
+        )}
       </div>
+      {/* ----------------------------------------- */}
     </>
   );
 }
