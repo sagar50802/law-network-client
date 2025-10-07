@@ -45,7 +45,7 @@ function pick(kind, m) {
       const isImg = kind === "image" && (k === "image" || mime.startsWith("image/"));
       const isAud = kind === "audio" && (k === "audio" || mime.startsWith("audio/"));
       const isVid = kind === "video" && (k === "video" || mime.startsWith("video/"));
-      const isPdf = kind === "pdf" && (k === "pdf" || mime === "application/pdf");
+      const isPdf = kind === "pdf"   && (k === "pdf"   || mime === "application/pdf");
 
       if (isImg || isAud || isVid || isPdf) {
         const raw = f.url || f.path || (f._id ? `/api/files/prep/${f._id}` : "");
@@ -178,15 +178,18 @@ function LockedPreviewCard({ m }) {
 
 /* --- Accordion-style module panel (drop-in, shows ALL attachment shapes) --- */
 function ModulePanel({ m, index }) {
-  // Images as plain URL list for ImageScroller
-  const imgUrls = pick("image", m).map((it) => absUrl(it.url || ""));
+  // IMPORTANT: pass raw strings to ImageScroller so it can apply absUrl itself
+  const imgUrls = pick("image", m)
+    .map((it) => (it.url || ""))
+    .filter(Boolean);
+
   const audioUrl = pick("audio", m)[0]?.url;
   const videoUrl = pick("video", m)[0]?.url;
-  const pdfUrl = pick("pdf", m)[0]?.url;
+  const pdfUrl   = pick("pdf",   m)[0]?.url;
 
   const audioAbs = audioUrl ? absUrl(audioUrl) : "";
   const videoAbs = videoUrl ? absUrl(videoUrl) : "";
-  const pdfAbs = pdfUrl ? absUrl(pdfUrl) : "";
+  const pdfAbs   = pdfUrl   ? absUrl(pdfUrl)   : "";
 
   return (
     <details className="prep-card module" open={index === 0} style={{ marginBottom: 12 }}>
@@ -423,7 +426,7 @@ export default function PrepWizard() {
       const [metaRes, tmplRes, todayRes] = await Promise.allSettled([
         getJSON(`/api/prep/user/summary?${qs.toString()}`),                     // todayDay / planDays
         getJSON(`/api/prep/templates?examId=${encodeURIComponent(examId)}`),    // ALL templates (has files/media)
-        getJSON(`/api/prep/user/today?examId=${encodeURIComponent(examId)}`),   // may 404 on your backend
+        getJSON(`/api/prep/user/today?examId=${encodeURIComponent(examId)}`),   // now exists (but we still treat as optional)
       ]);
 
       // meta (required)
@@ -443,7 +446,6 @@ export default function PrepWizard() {
       if (todayRes.status === "fulfilled" && Array.isArray(todayRes.value?.items)) {
         fullToday = todayRes.value.items;
       } else {
-        // Fallback: “today” = templates matching todayDay
         fullToday = all.filter(m => Number(m.dayIndex) === Number(td));
       }
 
