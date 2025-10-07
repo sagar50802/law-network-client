@@ -1,27 +1,45 @@
-// client/src/pages/prep/AdminPrepPanel.jsx
 import { useEffect, useRef, useState } from "react";
-import { getJSON, delJSON } from "../../utils/api";
+import { getJSON, delJSON, buildUrl } from "../../utils/api";
 
-/** Robust multipart POST (keeps cookies, adds admin header, safe JSON parse) */
+/** Robust multipart POST (keeps cookies, adds admin header, safe JSON parse, correct base URL) */
 async function sendMultipart(url, formData) {
   // DO NOT set Content-Type; the browser adds the multipart boundary
   const ownerKey = localStorage.getItem("ownerKey") || "";
   const headers = ownerKey ? { "X-Owner-Key": ownerKey } : {};
 
-  const res = await fetch(url, {
+  const full = buildUrl(url);
+
+  const res = await fetch(full, {
     method: "POST",
     body: formData,
     headers,
     credentials: "include",
   });
 
-  // Some proxies can return HTML (login page) with 200 → parse safely
-  const text = await res.text();
+  const ct = res.headers.get("content-type") || "";
   let data = null;
-  try { data = JSON.parse(text); } catch { /* non-JSON → data stays null */ }
+  let text = "";
+  try {
+    if (ct.includes("application/json")) {
+      data = await res.json();
+    } else {
+      text = await res.text();
+      try { data = JSON.parse(text); } catch { /* ignore non-JSON */ }
+    }
+  } catch {
+    /* leave data/text as-is */
+  }
 
-  // Log once for local debugging
-  console.log("[AdminPrepPanel] upload status:", res.status, "raw:", text?.slice(0, 120));
+  console.log(
+    "[AdminPrepPanel] upload status:",
+    res.status,
+    "type:",
+    ct,
+    "url:",
+    res.url,
+    "raw:",
+    (text || JSON.stringify(data) || "").slice(0, 160)
+  );
 
   return { ok: res.ok, status: res.status, data, text };
 }
@@ -149,36 +167,28 @@ function ExamEditor({ examId }) {
     e.preventDefault();
     const f = formRef.current;
     const fd = new FormData(f);
-
-    // required fields
     fd.set("examId", examId);
 
-    // normalize checkboxes
+    // normalize boolean flags as strings
     fd.set("extractOCR", bool(f.elements.extractOCR.checked));
     fd.set("showOriginal", bool(f.elements.showOriginal.checked));
     fd.set("allowDownload", bool(f.elements.allowDownload.checked));
     fd.set("highlight", bool(f.elements.highlight.checked));
-    // (ocrAtRelease is sent only if checked – leave as-is)
 
-    // normalize releaseAt (local -> ISO)
+    // convert releaseAt to ISO
     const ra = fd.get("releaseAt");
     if (ra) {
       const d = new Date(String(ra));
       if (!isNaN(d)) fd.set("releaseAt", d.toISOString());
     }
 
-    // Debug: count attached files so you can verify selections quickly
-    const countFiles = (name) => {
-      const entries = fd.getAll(name);
-      return entries.reduce((n, v) => (v instanceof File && v.size > 0 ? n + 1 : n), 0);
-    };
-    const filesDebug = {
+    const countFiles = (name) => fd.getAll(name).filter((v) => v instanceof File && v.size > 0).length;
+    console.log("[AdminPrepPanel] files in FormData:", {
       images: countFiles("images"),
       pdf: countFiles("pdf"),
       audio: countFiles("audio"),
       video: countFiles("video"),
-    };
-    console.log("[AdminPrepPanel] files in FormData:", filesDebug);
+    });
 
     setBusy(true);
     try {
@@ -198,12 +208,8 @@ function ExamEditor({ examId }) {
         return;
       }
 
-      // clear the form (including file inputs)
       f.reset();
-
-      // Force refresh list (cache-buster) so the new row appears instantly
       await load(true);
-      // Small delay helps with eventually-consistent DBs/caches
       await new Promise((r) => setTimeout(r, 120));
       await load(true);
 
@@ -222,7 +228,6 @@ function ExamEditor({ examId }) {
     await load(true);
   }
 
-  // ---------- helpers for grouped list ----------
   function groupByDay(items) {
     const m = new Map();
     for (const x of items) {
@@ -249,7 +254,7 @@ function ExamEditor({ examId }) {
   }
 
   function DayGroup({ day, items, onDelete }) {
-    const [open, setOpen] = useState(day === 1); // open Day 1 by default
+    const [open, setOpen] = useState(day === 1);
     return (
       <div className="border-b">
         <button
@@ -257,9 +262,7 @@ function ExamEditor({ examId }) {
           className="w-full flex items-center justify-between px-4 py-2 bg-gray-50"
         >
           <div className="font-medium">Day {day}</div>
-          <span className={`text-sm text-gray-500 transition-transform ${open ? "rotate-90" : ""}`}>
-            ›
-          </span>
+          <span className={`text-sm text-gray-500 transition-transform ${open ? "rotate-90" : ""}`}>›</span>
         </button>
         {open && (
           <ul className="divide-y">
@@ -287,7 +290,6 @@ function ExamEditor({ examId }) {
       </div>
     );
   }
-  // ---------- end helpers ----------
 
   return (
     <>
@@ -301,108 +303,117 @@ function ExamEditor({ examId }) {
         encType="multipart/form-data"
         className="rounded-xl border bg-white p-4 mb-6 grid gap-3"
       >
-        <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
+        {/* Row: day/slot/title */}
+        <div className="grid md:grid-cols-3 gap-3">
           <div>
-            <label className="block text-sm mb-1">Day Index</label>
+            <label className="block text-sm font-medium mb-1">Day Index</label>
             <input name="dayIndex" type="number" min="1" required className="w-full border rounded px-3 py-2" />
           </div>
           <div>
-            <label className="block text-sm mb-1">Slot (min)</label>
+            <label className="block text-sm font-medium mb-1">Slot (min)</label>
             <input name="slotMin" type="number" min="0" defaultValue="0" className="w-full border rounded px-3 py-2" />
           </div>
-          <div className="md:col-span-2">
-            <label className="block text-sm mb-1">Title</label>
-            <input name="title" placeholder="Constitution" className="w-full border rounded px-3 py-2" />
+          <div>
+            <label className="block text-sm font-medium mb-1">Title</label>
+            <input name="title" type="text" placeholder="Topic title" className="w-full border rounded px-3 py-2" />
           </div>
         </div>
 
-        <div className="md:col-span-2">
-          <label className="block text-sm mb-1">Release at (date &amp; time)</label>
-          <input name="releaseAt" type="datetime-local" className="w-full border rounded px-3 py-2" />
-        </div>
-
+        {/* Row: release + small manual text */}
         <div className="grid md:grid-cols-2 gap-3">
           <div>
-            <label className="block text-sm mb-1">Images (multiple)</label>
-            <input name="images" type="file" accept="image/*" multiple />
+            <label className="block text-sm font-medium mb-1">Release at (date &amp; time)</label>
+            <input name="releaseAt" type="datetime-local" className="w-full border rounded px-3 py-2" />
           </div>
           <div>
-            <label className="block text-sm mb-1">PDF</label>
-            <input name="pdf" type="file" accept="application/pdf" />
-            <label className="mt-1 inline-flex items-center gap-2 text-xs ml-2">
-              <input type="checkbox" name="ocrAtRelease" /> Auto-OCR at release
+            <label className="block text-sm font-medium mb-1">Text (manualText)</label>
+            <textarea
+              name="manualText"
+              className="w-full border rounded px-3 py-2 h-28"
+              placeholder="Short manual text override (optional)"
+            />
+          </div>
+        </div>
+
+        {/* Row: files */}
+        <div className="grid md:grid-cols-2 gap-3">
+          <div>
+            <label className="block text-sm font-medium mb-1">Images (multiple)</label>
+            <input name="images" type="file" accept="image/*" multiple className="w-full" />
+            <div className="text-xs text-gray-500 mt-1">Up to 12 images • 40 MB each</div>
+          </div>
+          <div className="grid gap-3">
+            <div>
+              <label className="block text-sm font-medium mb-1">PDF</label>
+              <input name="pdf" type="file" accept="application/pdf" className="w-full" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Audio</label>
+              <input name="audio" type="file" accept="audio/*" className="w-full" />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Video</label>
+              <input name="video" type="file" accept="video/*" className="w-full" />
+            </div>
+          </div>
+        </div>
+
+        {/* Big content textarea (legacy/optional) */}
+        <div>
+          <label className="block text-sm font-medium mb-1">Text (paste instead of OCR)</label>
+          <textarea
+            name="content"
+            className="w-full border rounded px-3 py-2 h-40"
+            placeholder="Paste full text here to skip OCR (optional)"
+          />
+        </div>
+
+        {/* Flags */}
+        <div className="grid md:grid-cols-2 gap-3 items-end">
+          <div className="flex flex-wrap gap-4">
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" name="extractOCR" /> Extract OCR
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" name="showOriginal" /> Show Original
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" name="allowDownload" /> Allow Download
+            </label>
+            <label className="flex items-center gap-2 text-sm">
+              <input type="checkbox" name="highlight" /> Highlight
             </label>
           </div>
           <div>
-            <label className="block text-sm mb-1">Audio</label>
-            <input name="audio" type="file" accept="audio/*" />
-          </div>
-          <div>
-            <label className="block text-sm mb-1">Video</label>
-            <input name="video" type="file" accept="video/*" />
+            <label className="block text-sm font-medium mb-1">background (e.g., #fff)</label>
+            <input name="background" type="text" className="w-full border rounded px-3 py-2" placeholder="#fff" />
           </div>
         </div>
 
-        <div>
-          <label className="block text-sm mb-1">Text (manualText)</label>
-          <textarea
-            name="manualText"
-            rows={6}
-            placeholder="Optional: paste text here…"
-            className="w-full border rounded px-3 py-2"
-          />
-        </div>
-
-        <div className="md:col-span-2">
-          <label className="block text-sm mb-1">Text (paste instead of OCR)</label>
-          <textarea
-            name="content"
-            placeholder="Paste text here..."
-            className="w-full border rounded px-3 py-2 h-28"
-          />
-        </div>
-
-        <div className="grid md:grid-cols-5 gap-3">
-          <label className="flex items-center gap-2">
-            <input type="checkbox" name="extractOCR" /> Extract OCR
-          </label>
-          <label className="flex items-center gap-2">
-            <input type="checkbox" name="showOriginal" /> Show Original
-          </label>
-          <label className="flex items-center gap-2">
-            <input type="checkbox" name="allowDownload" /> Allow Download
-          </label>
-          <label className="flex items-center gap-2">
-            <input type="checkbox" name="highlight" /> Highlight
-          </label>
-          <input
-            className="w-full border rounded px-3 py-2"
-            name="background"
-            placeholder="background (e.g. #fffbe7)"
-          />
-        </div>
-
-        <div className="flex gap-2">
-          <button disabled={busy} className="px-4 py-2 rounded bg-black text-white">
-            {busy ? "Saving…" : "Save Module"}
+        <div className="flex items-center gap-2 pt-2">
+          <button
+            className={`px-4 py-2 rounded ${busy ? "bg-gray-400" : "bg-black"} text-white`}
+            disabled={busy}
+          >
+            {busy ? "Saving..." : "Save Module"}
           </button>
-          <button type="button" onClick={() => load(true)} className="px-3 py-2 rounded border">
+          <button
+            type="button"
+            onClick={() => load(true)}
+            className="px-3 py-2 rounded border bg-white"
+          >
             Refresh
           </button>
         </div>
       </form>
 
-      {/* ------- Grouped & collapsible list ------- */}
       <div className="rounded-xl border bg-white">
         <div className="px-4 py-3 border-b font-medium">Existing Modules</div>
         {groupByDay(modules).map(([day, items]) => (
           <DayGroup key={day} day={day} items={items} onDelete={onDelete} />
         ))}
-        {!modules.length && (
-          <div className="px-4 py-6 text-center text-gray-500">No modules yet.</div>
-        )}
+        {!modules.length && <div className="px-4 py-6 text-center text-gray-500">No modules yet.</div>}
       </div>
-      {/* ----------------------------------------- */}
     </>
   );
 }
