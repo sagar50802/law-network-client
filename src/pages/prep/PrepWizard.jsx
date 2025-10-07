@@ -144,7 +144,6 @@ function LockedPreviewCard({ m }) {
 
       <div className="font-medium mb-2">{m.title || "Untitled"}</div>
 
-      {/* thumbnails (locked) */}
       {!!imgs.length && (
         <div className="flex gap-2 overflow-x-auto pb-2">
           {imgs.slice(0, 6).map((it, i) => {
@@ -165,10 +164,8 @@ function LockedPreviewCard({ m }) {
         </div>
       )}
 
-      {/* short text teaser (no time) */}
       {m.content && <p className="text-xs text-gray-600 italic line-clamp-3">Unlocks soon.</p>}
 
-      {/* audio/video preview (disabled look) */}
       {(hasAudio || hasVideo) && (
         <div className="mt-2 text-xs text-gray-500">Media will unlock when available.</div>
       )}
@@ -176,17 +173,16 @@ function LockedPreviewCard({ m }) {
   );
 }
 
-/* --- Accordion-style module panel (drop-in, shows ALL attachment shapes) --- */
+/* --- Accordion-style module panel (images → text → audio/video) --- */
 function ModulePanel({ m, index }) {
-  // Images as plain URL list for ImageScroller
   const imgUrls = pick("image", m).map((it) => absUrl(it.url || ""));
   const audioUrl = pick("audio", m)[0]?.url;
   const videoUrl = pick("video", m)[0]?.url;
-  const pdfUrl   = pick("pdf", m)[0]?.url;
+  const pdfUrl = pick("pdf", m)[0]?.url;
 
   const audioAbs = audioUrl ? absUrl(audioUrl) : "";
   const videoAbs = videoUrl ? absUrl(videoUrl) : "";
-  const pdfAbs   = pdfUrl   ? absUrl(pdfUrl)   : "";
+  const pdfAbs = pdfUrl ? absUrl(pdfUrl) : "";
 
   return (
     <details className="prep-card module" open={index === 0} style={{ marginBottom: 12 }}>
@@ -196,31 +192,26 @@ function ModulePanel({ m, index }) {
       </summary>
 
       <div style={{ marginTop: 12 }}>
-        {/* Image gallery/strip */}
         {!!imgUrls.length && <ImageScroller images={imgUrls} />}
 
-        {/* Text (OCR or manual) */}
         {m.content && (
           <div className="ocr-box" style={{ marginTop: 12 }}>
             {m.content}
           </div>
         )}
 
-        {/* Audio */}
         {audioAbs && (
           <div style={{ marginTop: 12 }}>
             <audio controls src={audioAbs} style={{ width: "100%" }} />
           </div>
         )}
 
-        {/* Video */}
         {videoAbs && (
           <div style={{ marginTop: 12 }}>
             <video controls src={videoAbs} style={{ width: "100%", borderRadius: 12 }} />
           </div>
         )}
 
-        {/* PDF link */}
         {pdfAbs && (
           <div style={{ marginTop: 10 }}>
             <a className="badge" href={pdfAbs} target="_blank" rel="noreferrer">
@@ -239,15 +230,15 @@ function ModuleCard({ mod }) {
 
   const files = mod.files || [];
   const images = files.filter((f) => (f.kind || "").toLowerCase() === "image");
-  const pdfs   = files.filter((f) => (f.kind || "").toLowerCase() === "pdf");
+  const pdfs = files.filter((f) => (f.kind || "").toLowerCase() === "pdf");
   const audios = files.filter((f) => (f.kind || "").toLowerCase() === "audio");
   const videos = files.filter((f) => (f.kind || "").toLowerCase() === "video");
 
   const flags = mod.flags || {};
   const showImages = images.length && (!flags.extractOCR || flags.showOriginal);
-  const showPDF    = pdfs.length && (flags.showOriginal ?? true);
-  const showAudio  = audios.length;
-  const showVideo  = videos.length;
+  const showPDF = pdfs.length && (flags.showOriginal ?? true);
+  const showAudio = audios.length;
+  const showVideo = videos.length;
 
   const textBlock =
     (mod.content && String(mod.content).trim()) ||
@@ -399,13 +390,13 @@ export default function PrepWizard() {
   const [planDays, setPlanDays] = useState(1);
   const [modules, setModules] = useState([]);
 
-  // NEW: for previewing any day
+  // for previewing any day
   const [allModules, setAllModules] = useState([]);
 
-  // NEW: everything (released + scheduled) for "today" – used by ComingLater
+  // everything (released + scheduled) for today; used by ComingLater
   const [todayPool, setTodayPool] = useState([]);
 
-  // NEW (tiny UI states)
+  // tiny UI states
   const [currentDay, setCurrentDay] = useState(1);
   const [activeDay, setActiveDay] = useState(1);
 
@@ -443,14 +434,13 @@ export default function PrepWizard() {
       if (todayRes.status === "fulfilled" && Array.isArray(todayRes.value?.items)) {
         fullToday = todayRes.value.items;
       } else {
-        // Fallback: “today” = templates matching todayDay
         fullToday = all.filter(m => Number(m.dayIndex) === Number(td));
       }
 
-      // Keep a pool of ALL items for today (released + scheduled) for “Coming later”
+      // everything for today (released + scheduled)
       setTodayPool(fullToday);
 
-      // The visible list = only released/available ones
+      // visible list = only released/available
       const now = Date.now();
       const releasedToday = fullToday
         .filter(m => !m.releaseAt || Date.parse(m.releaseAt) <= now || m.status === "released")
@@ -462,7 +452,7 @@ export default function PrepWizard() {
 
       setModules(releasedToday);
 
-      // Keep “allModules” for calendar preview
+      // keep all for calendar preview
       setAllModules(all);
 
       setCurrentDay(td);
@@ -477,9 +467,7 @@ export default function PrepWizard() {
     }
   }
 
-  useEffect(() => {
-    load();
-  }, [examId]);
+  useEffect(() => { load(); }, [examId]);
 
   // keep ?tab= in URL for consistency
   useEffect(() => {
@@ -520,7 +508,7 @@ export default function PrepWizard() {
       });
   }, [allModules, activeDay]);
 
-  // compute released modules and augment with `content` so ModulePanel can render text
+  // compute released modules and augment with `content` for ModulePanel
   const releasedModules = useMemo(() => {
     const list = (modules || [])
       .filter((m) => !m.releaseAt || Date.parse(m.releaseAt) <= nowUtcMs() || m.status === "released")
@@ -543,8 +531,8 @@ export default function PrepWizard() {
 
   /* ---------- Tabs ---------- */
 
-  const cohortDay = todayDay; // alias for calendar grid snippet
-  const userStates = undefined; // optional; you can wire your completion map here
+  const cohortDay = todayDay;
+  const userStates = undefined;
 
   /* ========= CALENDAR TAB ========= */
   const calendarTab = (
@@ -554,10 +542,8 @@ export default function PrepWizard() {
       </div>
 
       {(() => {
-        // Prefer allModules if present; otherwise fall back to today's modules
         const sourceMods = (allModules && allModules.length) ? allModules : modules;
 
-        // Group modules by dayIndex
         const byDay = new Map();
         (sourceMods || []).forEach(m => {
           const d = Number(m.dayIndex) || 1;
@@ -622,7 +608,6 @@ export default function PrepWizard() {
         return <div className="daygrid">{cells}</div>;
       })()}
 
-      {/* Optional: preview for any selected day */}
       {!!previewModulesForActiveDay.length && (
         <PreviewPanel day={activeDay} modules={previewModulesForActiveDay} />
       )}
@@ -634,7 +619,6 @@ export default function PrepWizard() {
       <div className="text-lg font-semibold mb-1">{examId}</div>
       <div className="text-sm text-gray-600 mb-3">Day {todayDay}</div>
 
-      {/* day chips */}
       <DayNav
         planDays={planDays}
         currentDay={currentDay}
@@ -645,7 +629,6 @@ export default function PrepWizard() {
         }}
       />
 
-      {/* Use the complete pool (released + scheduled) for "Coming later" */}
       <ComingLater modules={todayPool} />
 
       {loading ? (
@@ -684,7 +667,6 @@ export default function PrepWizard() {
 
   return (
     <div className="prep-wrap">
-      {/* Modern tabbar */}
       <div className="tabbar">
         <a
           className={`tab ${tab === "calendar" ? "active" : ""}`}
