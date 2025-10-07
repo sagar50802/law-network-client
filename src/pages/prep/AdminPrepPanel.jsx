@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { getJSON, postJSON, upload, delJSON } from "../../utils/api";
+import { getJSON, postJSON, delJSON } from "../../utils/api";
 
 export default function AdminPrepPanel() {
   const [exams, setExams] = useState([]);
@@ -110,28 +110,26 @@ function ExamEditor({ examId }) {
     return v ? "true" : "false";
   }
 
-  // --- UPDATED: build FormData manually and POST with fetch (no JSON headers) ---
+  // Save handler: explicit FormData + credentials + robust response parsing
   async function onSave(e) {
     e.preventDefault();
     const f = formRef.current;
-
-    // Build FormData explicitly to guarantee files are included
     const fd = new FormData();
 
-    // required/meta
+    // required fields
     fd.append("examId", examId);
     fd.append("dayIndex", f.elements.dayIndex.value);
     fd.append("slotMin", f.elements.slotMin.value || "0");
     fd.append("title", f.elements.title.value || "");
 
-    // releaseAt (local -> ISO)
+    // releaseAt -> ISO
     const ra = f.elements.releaseAt.value;
     if (ra) {
       const d = new Date(String(ra));
       if (!isNaN(d)) fd.append("releaseAt", d.toISOString());
     }
 
-    // manual text fields (optional)
+    // manual text
     if (f.elements.manualText.value) fd.append("manualText", f.elements.manualText.value);
     if (f.elements.content.value) fd.append("content", f.elements.content.value);
 
@@ -144,30 +142,51 @@ function ExamEditor({ examId }) {
     if (f.elements.ocrAtRelease?.checked) fd.append("ocrAtRelease", "true");
 
     // files
-    const imagesInput = f.elements.images;
-    if (imagesInput?.files?.length) {
-      for (const file of imagesInput.files) fd.append("images", file);
-    }
-    const pdfInput = f.elements.pdf;
-    if (pdfInput?.files?.[0]) fd.append("pdf", pdfInput.files[0]);
-    const audioInput = f.elements.audio;
-    if (audioInput?.files?.[0]) fd.append("audio", audioInput.files[0]);
-    const videoInput = f.elements.video;
-    if (videoInput?.files?.[0]) fd.append("video", videoInput.files[0]);
+    const addMany = (inputName) => {
+      const inp = f.elements[inputName];
+      if (inp?.files?.length) for (const file of inp.files) fd.append(inputName, file);
+    };
+    const addOne = (inputName) => {
+      const inp = f.elements[inputName];
+      if (inp?.files?.[0]) fd.append(inputName, inp.files[0]);
+    };
+    addMany("images");
+    addOne("pdf");
+    addOne("audio");
+    addOne("video");
 
     setBusy(true);
     try {
-      // IMPORTANT: do NOT set Content-Type — let the browser add the multipart boundary
-      const res = await fetch("/api/prep/templates", { method: "POST", body: fd });
-      const json = await res.json();
-      if (!json?.success) throw new Error(json?.error || "Save failed");
+      const res = await fetch("/api/prep/templates", {
+        method: "POST",
+        body: fd,
+        credentials: "include", // IMPORTANT: send admin cookie/session
+      });
 
-      f.reset();           // this will clear file inputs (normal behavior)
+      // robust parse
+      let data = null;
+      const ct = res.headers.get("content-type") || "";
+      if (ct.includes("application/json")) {
+        data = await res.json();
+      } else {
+        const text = await res.text();
+        try {
+          data = JSON.parse(text);
+        } catch {
+          if (!res.ok) throw new Error(text || res.statusText);
+          data = { success: true }; // minimal happy path
+        }
+      }
+      if (!res.ok || data?.success === false) {
+        throw new Error(data?.error || data?.message || `HTTP ${res.status}`);
+      }
+
+      f.reset();
       await load();
       alert("Module saved");
     } catch (err) {
       console.error(err);
-      alert("Save failed");
+      alert(`Save failed: ${err.message || err}`);
     } finally {
       setBusy(false);
     }
@@ -186,7 +205,6 @@ function ExamEditor({ examId }) {
       if (!m.has(x.dayIndex)) m.set(x.dayIndex, []);
       m.get(x.dayIndex).push(x);
     }
-    // sort each day by releaseAt (if present) else slotMin
     for (const arr of m.values()) {
       arr.sort((a, b) => {
         const aa = a.releaseAt ? Date.parse(a.releaseAt) : a.slotMin || 0;
@@ -206,7 +224,7 @@ function ExamEditor({ examId }) {
   }
 
   function DayGroup({ day, items, onDelete }) {
-    const [open, setOpen] = useState(day === 1); // open Day 1 by default
+    const [open, setOpen] = useState(day === 1);
     return (
       <div className="border-b">
         <button
