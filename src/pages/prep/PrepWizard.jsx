@@ -41,11 +41,12 @@ function fileKindOf(f) {
 
 /**
  * pick("image"|"audio"|"video"|"pdf", module) -> normalized array
- * Handles:
- *  - module.files: [{_id?, kind?, url?, path?, mime?, contentType?, name?}]
- *    (fallback to /api/files/:id if no url/path)
+ * Normalizes:
+ *  - module.files: [{kind,url,mime,name}] (preferred)
  *  - legacy module.images: [string]
  *  - single module.audio / module.video / module.pdf : string or {url}
+ *
+ * Includes robust fallback for _id-only file docs: /api/files/prep/:id
  */
 function pick(kind, m) {
   const out = [];
@@ -64,25 +65,22 @@ function pick(kind, m) {
       const isPdf = kind === "pdf" && (k === "pdf" || mime === "application/pdf");
 
       if (isImg || isAud || isVid || isPdf) {
-        const raw = f.url || f.path || (f._id ? `/api/files/${f._id}` : "");
+        // fallback for GridFS records that only have _id
+        const raw = f.url || f.path || (f._id ? `/api/files/prep/${f._id}` : "");
         if (raw) out.push({ url: raw, kind: k || kind, mime, name: f.name });
       }
     }
   }
 
   // legacy arrays/singles
-  if (kind === "image" && Array.isArray(m?.images)) {
+  if (kind === "image" && Array.isArray(m?.images))
     m.images.forEach((u) => out.push({ url: u, kind: "image" }));
-  }
-  if (kind === "audio" && m?.audio) {
+  if (kind === "audio" && m?.audio)
     out.push(typeof m.audio === "string" ? { url: m.audio, kind: "audio" } : { ...m.audio, kind: "audio" });
-  }
-  if (kind === "video" && m?.video) {
+  if (kind === "video" && m?.video)
     out.push(typeof m.video === "string" ? { url: m.video, kind: "video" } : { ...m.video, kind: "video" });
-  }
-  if (kind === "pdf" && m?.pdf) {
+  if (kind === "pdf" && m?.pdf)
     out.push(typeof m.pdf === "string" ? { url: m.pdf, kind: "pdf" } : { ...m.pdf, kind: "pdf" });
-  }
 
   // de-dupe
   const seen = new Set();
@@ -145,8 +143,7 @@ function NextDayTeaser({ day }) {
     <div className="mt-6 p-4 border rounded-xl bg-amber-50">
       <div className="font-medium mb-1">Ready for Day {day} tasks</div>
       <div className="text-sm text-gray-700">
-        Unlocks in <span className="font-mono">{left}</span>. Admin may add content before the
-        unlock time.
+        Unlocks in <span className="font-mono">{left}</span>. Admin may add content before the unlock time.
       </div>
     </div>
   );
@@ -172,7 +169,7 @@ function LockedPreviewCard({ m }) {
       {!!imgs.length && (
         <div className="flex gap-2 overflow-x-auto pb-2">
           {imgs.slice(0, 6).map((it, i) => {
-            const u = absUrl(it.url || it.path || "");
+            const u = absUrl(it.url || "");
             return (
               <div
                 key={i}
@@ -180,9 +177,7 @@ function LockedPreviewCard({ m }) {
                 title="Locked until release"
               >
                 <img src={u} alt="" className="w-full h-full object-cover opacity-60" />
-                <div className="absolute inset-0 grid place-items-center text-white/90 text-xs">
-                  🔒
-                </div>
+                <div className="absolute inset-0 grid place-items-center text-white/90 text-xs">🔒</div>
               </div>
             );
           })}
@@ -203,14 +198,10 @@ function LockedPreviewCard({ m }) {
 /* --- Accordion-style module panel (drop-in, shows ALL attachment shapes) --- */
 function ModulePanel({ m, index }) {
   // Images as plain URL list for ImageScroller
-  const imgUrls = pick("image", m).map((it) => absUrl(it.url || it.path || ""));
-  const audioUrl = pick("audio", m)[0]?.url || pick("audio", m)[0]?.path;
-  const videoUrl = pick("video", m)[0]?.url || pick("video", m)[0]?.path;
-  const pdfUrl = pick("pdf", m)[0]?.url || pick("pdf", m)[0]?.path;
-
-  const audioAbs = audioUrl ? absUrl(audioUrl) : "";
-  const videoAbs = videoUrl ? absUrl(videoUrl) : "";
-  const pdfAbs = pdfUrl ? absUrl(pdfUrl) : "";
+  const imgUrls = pick("image", m).map((it) => absUrl(it.url || ""));
+  const audioUrl = (pick("audio", m)[0]?.url) || "";
+  const videoUrl = (pick("video", m)[0]?.url) || "";
+  const pdfUrl   = (pick("pdf",   m)[0]?.url) || "";
 
   return (
     <details className="prep-card module" open={index === 0} style={{ marginBottom: 12 }}>
@@ -231,23 +222,23 @@ function ModulePanel({ m, index }) {
         )}
 
         {/* Audio */}
-        {audioAbs && (
+        {audioUrl && (
           <div style={{ marginTop: 12 }}>
-            <audio controls src={audioAbs} style={{ width: "100%" }} />
+            <audio controls src={absUrl(audioUrl)} style={{ width: "100%" }} />
           </div>
         )}
 
         {/* Video */}
-        {videoAbs && (
+        {videoUrl && (
           <div style={{ marginTop: 12 }}>
-            <video controls src={videoAbs} style={{ width: "100%", borderRadius: 12 }} />
+            <video controls src={absUrl(videoUrl)} style={{ width: "100%", borderRadius: 12 }} />
           </div>
         )}
 
         {/* PDF link */}
-        {pdfAbs && (
+        {pdfUrl && (
           <div style={{ marginTop: 10 }}>
-            <a className="badge" href={pdfAbs} target="_blank" rel="noreferrer">
+            <a className="badge" href={absUrl(pdfUrl)} target="_blank" rel="noreferrer">
               Open PDF
             </a>
           </div>
@@ -385,7 +376,7 @@ function PreviewPanel({ day, modules }) {
   const previews = useMemo(
     () =>
       modules.map((m) => {
-        const images = pick("image", m).map((it) => it.url || it.path || "");
+        const images = pick("image", m).map((it) => it.url || "");
         const hasAudio = pick("audio", m).length > 0;
         const hasVideo = pick("video", m).length > 0;
         const content =
@@ -426,17 +417,17 @@ export default function PrepWizard() {
   // NEW: for previewing any day
   const [allModules, setAllModules] = useState([]);
 
+  // NEW: everything (released + scheduled) for today; used by ComingLater
+  const [todayPool, setTodayPool] = useState([]);
+
   // NEW (tiny UI states)
   const [currentDay, setCurrentDay] = useState(1);
   const [activeDay, setActiveDay] = useState(1);
 
-  // NEW: everything (released + scheduled) for today; used by ComingLater
-  const [todayPool, setTodayPool] = useState([]);
-
   // optional email (if your site stores it for progress API)
   const email = localStorage.getItem("userEmail") || "";
 
-  // ✅ ROBUST: meta + templates only (no /user/today call, so no 404 noise)
+  // ✅ ROBUST: meta + templates (and optional today endpoint if present)
   async function load() {
     if (!examId) return;
     setLoading(true);
@@ -444,23 +435,37 @@ export default function PrepWizard() {
       const qs = new URLSearchParams({ examId });
       if (email) qs.set("email", email);
 
-      const [meta, tmpl] = await Promise.all([
+      const [metaRes, tmplRes, todayRes] = await Promise.allSettled([
         getJSON(`/api/prep/user/summary?${qs.toString()}`),                   // todayDay / planDays
         getJSON(`/api/prep/templates?examId=${encodeURIComponent(examId)}`),  // ALL templates (has files/media)
+        getJSON(`/api/prep/user/today?examId=${encodeURIComponent(examId)}`), // may 404 on your backend
       ]);
 
-      const td = meta?.todayDay || 1;
-      const pd = meta?.planDays || 1;
+      // meta (required)
+      const meta = metaRes.status === "fulfilled" ? metaRes.value : {};
+      const td = meta.todayDay || 1;
+      const pd = meta.planDays || 1;
       setTodayDay(td);
       setPlanDays(pd);
 
-      const all = Array.isArray(tmpl?.items) ? tmpl.items : [];
+      // all templates (required)
+      const all = tmplRes.status === "fulfilled" && Array.isArray(tmplRes.value?.items)
+        ? tmplRes.value.items
+        : [];
 
-      // Build “today” from templates
-      const fullToday = all.filter((m) => Number(m.dayIndex) === Number(td));
+      // try to use full today items if the endpoint exists; else compute from templates
+      let fullToday = [];
+      if (todayRes.status === "fulfilled" && Array.isArray(todayRes.value?.items)) {
+        fullToday = todayRes.value.items;
+      } else {
+        // Fallback: “today” = templates matching todayDay
+        fullToday = all.filter((m) => Number(m.dayIndex) === Number(td));
+      }
+
+      // Keep a pool of ALL items for today (released + scheduled) for “Coming later”
       setTodayPool(fullToday);
 
-      // Visible list = released/available ones
+      // The visible list = only released/available ones
       const now = Date.now();
       const releasedToday = fullToday
         .filter((m) => !m.releaseAt || Date.parse(m.releaseAt) <= now || m.status === "released")
@@ -468,7 +473,16 @@ export default function PrepWizard() {
           const ta = a.releaseAt ? Date.parse(a.releaseAt) : 0;
           const tb = b.releaseAt ? Date.parse(b.releaseAt) : 0;
           return ta - tb;
-        });
+        })
+        .map((m) => ({
+          ...m,
+          content:
+            m.content ??
+            (m.ocrText && String(m.ocrText).trim()) ??
+            (m.text && String(m.text).trim()) ??
+            (m.manualText && String(m.manualText).trim()) ??
+            "",
+        }));
 
       setModules(releasedToday);
 
@@ -530,27 +544,6 @@ export default function PrepWizard() {
       });
   }, [allModules, activeDay]);
 
-  // compute released modules and augment with `content` so ModulePanel can render text
-  const releasedModules = useMemo(() => {
-    const list = (modules || [])
-      .filter((m) => !m.releaseAt || Date.parse(m.releaseAt) <= nowUtcMs())
-      .sort((a, b) => {
-        const ta = a.releaseAt ? Date.parse(a.releaseAt) : 0;
-        const tb = b.releaseAt ? Date.parse(b.releaseAt) : 0;
-        return ta - tb;
-      })
-      .map((m) => ({
-        ...m,
-        content:
-          m.content ??
-          (m.ocrText && String(m.ocrText).trim()) ??
-          (m.text && String(m.text).trim()) ??
-          (m.manualText && String(m.manualText).trim()) ??
-          "",
-      }));
-    return list;
-  }, [modules]);
-
   /* ---------- Tabs ---------- */
 
   const cohortDay = todayDay; // alias for calendar grid snippet
@@ -567,14 +560,14 @@ export default function PrepWizard() {
         // Prefer allModules if present; otherwise fall back to today's modules
         const sourceMods = (allModules && allModules.length) ? allModules : modules;
 
-        // Group modules by dayIndex
+        // Group modules by dayIndex (released or scheduled — we only mark status for released)
         const byDay = new Map();
-        (sourceMods || []).forEach(m => {
+        (sourceMods || []).forEach((m) => {
           if (!byDay.has(m.dayIndex)) byDay.set(m.dayIndex, []);
           byDay.get(m.dayIndex).push(m);
         });
 
-        const maxPlanned = Math.max(...Array.from(byDay.keys(), d => +d || 1), 1);
+        const maxPlanned = Math.max(...Array.from(byDay.keys(), (d) => +d || 1), 1);
         const last = Math.max(maxPlanned, cohortDay + 6, 21);
 
         const isDone = (m, userStatesMap) => {
@@ -585,7 +578,7 @@ export default function PrepWizard() {
         const cells = [];
         for (let d = 1; d <= last; d++) {
           const items = byDay.get(d) || [];
-          const released = items.filter(x => x.status === 'released');
+          const released = items.filter((x) => x.status === "released");
           const anyReleased = released.length > 0;
 
           let cls = "daycell";
@@ -595,14 +588,21 @@ export default function PrepWizard() {
             badge = "🔒";
           } else if (d === cohortDay) {
             cls += " today";
-            const allDone = released.length && released.every(m => isDone(m, userStates));
+            const allDone = released.length && released.every((m) => isDone(m, userStates));
             if (allDone) badge = "✅";
             else if (released.length) badge = "●";
           } else {
-            const allDone = released.length && released.every(m => isDone(m, userStates));
-            if (allDone) { cls += " completed"; badge = "✅"; }
-            else if (anyReleased) { cls += " available"; badge = "●"; }
-            else { cls += " locked"; badge = "—"; }
+            const allDone = released.length && released.every((m) => isDone(m, userStates));
+            if (allDone) {
+              cls += " completed";
+              badge = "✅";
+            } else if (anyReleased) {
+              cls += " available";
+              badge = "●";
+            } else {
+              cls += " locked";
+              badge = "—";
+            }
           }
 
           const href = d <= cohortDay ? `?tab=today&d=${d}` : undefined;
@@ -614,19 +614,16 @@ export default function PrepWizard() {
                 className={cls}
                 href={href}
                 title={`Day ${d}`}
-                onClick={(e) => { e.preventDefault(); setActiveDay(d); setTab("today"); }}
+                onClick={(e) => {
+                  e.preventDefault();
+                  setTab("today");
+                }}
               >
                 <span>{d}</span>
                 {badge && <span className="badge">{badge}</span>}
               </a>
             ) : (
-              <div
-                key={d}
-                className={cls}
-                title={`Day ${d}`}
-                onClick={() => setActiveDay(d)}
-                style={{ cursor: "default" }}
-              >
+              <div key={d} className={cls} title={`Day ${d}`}>
                 <span>{d}</span>
                 {badge && <span className="badge">{badge}</span>}
               </div>
@@ -660,15 +657,15 @@ export default function PrepWizard() {
         }}
       />
 
-      {/* Use the full pool for later items */}
+      {/* use the full pool (released + scheduled) to compute "later today" */}
       <ComingLater modules={todayPool} />
 
       {loading ? (
         <div className="text-gray-500">Loading…</div>
-      ) : !releasedModules.length ? (
+      ) : !modules.length ? (
         <div className="text-gray-500">No modules for today yet.</div>
       ) : (
-        releasedModules.map((m, i) => <ModulePanel key={m._id || i} m={m} index={i} />)
+        modules.map((m, i) => <ModulePanel key={m._id || i} m={m} index={i} />)
       )}
 
       <div className="mt-4">
@@ -687,12 +684,11 @@ export default function PrepWizard() {
   const progressTab = (
     <div className="max-w-3xl mx-auto text-sm text-gray-600">
       <p>
-        Progress view (lightweight). Use “Mark Complete” on Today’s Task to record completion for
-        Day {todayDay}.
+        Progress view (lightweight). Use “Mark Complete” on Today’s Task to record completion for Day {todayDay}.
       </p>
       <p className="mt-2">
-        <i>Tip:</i> If you want a detailed per-topic progress bar, we can add an endpoint that
-        returns the user’s completed days/items and render it here.
+        <i>Tip:</i> If you want a detailed per-topic progress bar, we can add an endpoint that returns the user’s
+        completed days/items and render it here.
       </p>
     </div>
   );
@@ -704,21 +700,30 @@ export default function PrepWizard() {
         <a
           className={`tab ${tab === "calendar" ? "active" : ""}`}
           href="?tab=calendar"
-          onClick={(e) => { e.preventDefault(); setTab("calendar"); }}
+          onClick={(e) => {
+            e.preventDefault();
+            setTab("calendar");
+          }}
         >
           Calendar
         </a>
         <a
           className={`tab ${tab === "today" ? "active" : ""}`}
           href="?tab=today"
-          onClick={(e) => { e.preventDefault(); setTab("today"); }}
+          onClick={(e) => {
+            e.preventDefault();
+            setTab("today");
+          }}
         >
           Today’s Task
         </a>
         <a
           className={`tab ${tab === "progress" ? "active" : ""}`}
           href="?tab=progress"
-          onClick={(e) => { e.preventDefault(); setTab("progress"); }}
+          onClick={(e) => {
+            e.preventDefault();
+            setTab("progress");
+          }}
         >
           Progress
         </a>
