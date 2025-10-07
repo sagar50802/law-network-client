@@ -1,6 +1,6 @@
 // client/src/pages/prep/AdminPrepPanel.jsx
 import { useEffect, useRef, useState } from "react";
-import { getJSON, postJSON, upload, delJSON } from "../../utils/api"; // keep imports the same to avoid ripple changes
+import { getJSON, postJSON, upload, delJSON } from "../../utils/api";
 
 export default function AdminPrepPanel() {
   const [exams, setExams] = useState([]);
@@ -47,9 +47,7 @@ export default function AdminPrepPanel() {
               value={selExam}
               onChange={(e) => setSelExam(e.target.value)}
             >
-              <option value="" disabled>
-                — choose —
-              </option>
+              <option value="" disabled>— choose —</option>
               {exams.map((x) => (
                 <option key={x.examId} value={x.examId}>
                   {x.name} ({x.examId})
@@ -98,8 +96,20 @@ function ExamEditor({ examId }) {
   const [busy, setBusy] = useState(false);
   const formRef = useRef(null);
 
+  // fetch JSON with cache hard-disabled (edge/CDN safe)
+  async function fetchJsonNoCache(url) {
+    const res = await fetch(url, { cache: "no-store", headers: { Accept: "application/json" } });
+    if (!res.ok) throw new Error(`HTTP ${res.status}`);
+    try {
+      return await res.json();
+    } catch {
+      return {};
+    }
+  }
+
   async function load() {
-    const r = await getJSON(`/api/prep/templates?examId=${encodeURIComponent(examId)}`);
+    const url = `/api/prep/templates?examId=${encodeURIComponent(examId)}&_=${Date.now()}`;
+    const r = await fetchJsonNoCache(url);
     const items = (r.items || []).sort((a, b) => a.dayIndex - b.dayIndex || a.slotMin - b.slotMin);
     setModules(items);
   }
@@ -111,23 +121,26 @@ function ExamEditor({ examId }) {
     return v ? "true" : "false";
   }
 
-  // Robust uploader that tolerates 200 with empty/invalid JSON body
+  // tolerant uploader (works even if server returns 200 with empty body)
   async function safeUpload(url, fd) {
     const res = await fetch(url, { method: "POST", body: fd });
-    // HTTP errors are real errors
     if (!res.ok) {
       const t = await res.text().catch(() => "");
       throw new Error(`HTTP ${res.status}${t ? ` — ${t}` : ""}`);
     }
-    // Try to parse JSON; if it fails but status was 200, treat as success
+    const raw = await res.text().catch(() => "");
+    // try JSON first
     try {
-      const data = await res.json();
+      const data = raw ? JSON.parse(raw) : {};
       if (data && data.success === false) {
         throw new Error(data.error || "Server returned success:false");
       }
+      // eslint-disable-next-line no-console
+      console.debug("[AdminPrepPanel] upload response (json):", data);
       return data || { success: true };
     } catch {
-      // Empty / non-JSON body (Render/edge quirks) — still fine since 200 OK
+      // eslint-disable-next-line no-console
+      console.debug("[AdminPrepPanel] upload response (text):", raw || "<empty>");
       return { success: true };
     }
   }
@@ -135,15 +148,12 @@ function ExamEditor({ examId }) {
   async function onSave(e) {
     e.preventDefault();
     const f = formRef.current;
-
-    // Build FormData explicitly so Multer receives exact fields it expects.
     const fd = new FormData();
 
-    // Required fields
+    // core fields
     const dayIndex = String(f.elements.dayIndex.value || "").trim();
     const slotMin = String(f.elements.slotMin.value || "0").trim();
     const title = String(f.elements.title.value || "").trim();
-
     if (!dayIndex) return alert("dayIndex is required");
 
     fd.set("examId", examId);
@@ -151,53 +161,44 @@ function ExamEditor({ examId }) {
     fd.set("slotMin", slotMin || "0");
     if (title) fd.set("title", title);
 
-    // Date/time → ISO
+    // release time (ISO)
     const ra = String(f.elements.releaseAt.value || "").trim();
     if (ra) {
-      const d = new Date(ra); // local "YYYY-MM-DDTHH:mm"
+      const d = new Date(ra);
       if (!isNaN(d)) fd.set("releaseAt", d.toISOString());
     }
 
-    // Texts
+    // texts
     const manualText = String(f.elements.manualText?.value || "").trim();
     const content = String(f.elements.content?.value || "").trim();
     if (manualText) fd.set("manualText", manualText);
     if (content) fd.set("content", content);
 
-    // Flags
+    // flags
     fd.set("extractOCR", bool(f.elements.extractOCR?.checked));
     fd.set("showOriginal", bool(f.elements.showOriginal?.checked));
     fd.set("allowDownload", bool(f.elements.allowDownload?.checked));
     fd.set("highlight", bool(f.elements.highlight?.checked));
     const bg = String(f.elements.background?.value || "").trim();
     if (bg) fd.set("background", bg);
-
-    // ocrAtRelease checkbox (append only if checked to match server’s truthy logic)
     if (f.elements.ocrAtRelease?.checked) fd.set("ocrAtRelease", "true");
 
-    // Files — append each one under the correct name
+    // files (append exactly as Multer fields)
     const imgInput = f.elements.images;
     if (imgInput?.files?.length) {
-      for (const file of imgInput.files) {
-        if (file) fd.append("images", file, file.name);
-      }
+      for (const file of imgInput.files) fd.append("images", file, file.name);
     }
     const pdfInput = f.elements.pdf;
     if (pdfInput?.files?.[0]) fd.append("pdf", pdfInput.files[0], pdfInput.files[0].name);
-
     const audioInput = f.elements.audio;
     if (audioInput?.files?.[0]) fd.append("audio", audioInput.files[0], audioInput.files[0].name);
-
     const videoInput = f.elements.video;
     if (videoInput?.files?.[0]) fd.append("video", videoInput.files[0], videoInput.files[0].name);
 
-    // Debug (safe): log counts to help when something is off
+    // debug counts
     try {
       let imgCount = 0;
-      for (const [k, v] of fd.entries()) {
-        if (k === "images" && v instanceof File) imgCount++;
-      }
-      // eslint-disable-next-line no-console
+      for (const [k, v] of fd.entries()) if (k === "images" && v instanceof File) imgCount++;
       console.debug("[AdminPrepPanel] files about to upload:", {
         images: imgCount,
         pdf: !!pdfInput?.files?.[0],
@@ -210,10 +211,9 @@ function ExamEditor({ examId }) {
     try {
       await safeUpload("/api/prep/templates", fd);
       f.reset();
-      await load();
+      await load(); // cache-busted, no-store
       alert("Module saved");
     } catch (err) {
-      // eslint-disable-next-line no-console
       console.error(err);
       alert(`Upload failed (${String(err?.message || err)})`);
     } finally {
@@ -227,14 +227,13 @@ function ExamEditor({ examId }) {
     await load();
   }
 
-  // ---------- helpers for grouped list ----------
+  // -------- grouped list helpers --------
   function groupByDay(items) {
     const m = new Map();
     for (const x of items) {
       if (!m.has(x.dayIndex)) m.set(x.dayIndex, []);
       m.get(x.dayIndex).push(x);
     }
-    // sort each day by releaseAt (if present) else slotMin
     for (const arr of m.values()) {
       arr.sort((a, b) => {
         const aa = a.releaseAt ? Date.parse(a.releaseAt) : a.slotMin || 0;
@@ -254,7 +253,7 @@ function ExamEditor({ examId }) {
   }
 
   function DayGroup({ day, items, onDelete }) {
-    const [open, setOpen] = useState(day === 1); // open Day 1 by default
+    const [open, setOpen] = useState(day === 1);
     return (
       <div className="border-b">
         <button
@@ -262,9 +261,7 @@ function ExamEditor({ examId }) {
           className="w-full flex items-center justify-between px-4 py-2 bg-gray-50"
         >
           <div className="font-medium">Day {day}</div>
-          <span className={`text-sm text-gray-500 transition-transform ${open ? "rotate-90" : ""}`}>
-            ›
-          </span>
+          <span className={`text-sm text-gray-500 transition-transform ${open ? "rotate-90" : ""}`}>›</span>
         </button>
         {open && (
           <ul className="divide-y">
@@ -292,7 +289,7 @@ function ExamEditor({ examId }) {
       </div>
     );
   }
-  // ---------- end helpers ----------
+  // -------------------------------------
 
   return (
     <>
@@ -321,7 +318,6 @@ function ExamEditor({ examId }) {
           </div>
         </div>
 
-        {/* Release at (date & time) */}
         <div className="md:col-span-2">
           <label className="block text-sm mb-1">Release at (date &amp; time)</label>
           <input name="releaseAt" type="datetime-local" className="w-full border rounded px-3 py-2" />
@@ -383,11 +379,7 @@ function ExamEditor({ examId }) {
           <label className="flex items-center gap-2">
             <input type="checkbox" name="highlight" /> Highlight
           </label>
-          <input
-            className="w-full border rounded px-3 py-2"
-            name="background"
-            placeholder="background (e.g. #fffbe7)"
-          />
+          <input className="w-full border rounded px-3 py-2" name="background" placeholder="background (e.g. #fffbe7)" />
         </div>
 
         <div className="flex gap-2">
@@ -400,17 +392,13 @@ function ExamEditor({ examId }) {
         </div>
       </form>
 
-      {/* ------- Grouped & collapsible list ------- */}
       <div className="rounded-xl border bg-white">
         <div className="px-4 py-3 border-b font-medium">Existing Modules</div>
         {groupByDay(modules).map(([day, items]) => (
           <DayGroup key={day} day={day} items={items} onDelete={onDelete} />
         ))}
-        {!modules.length && (
-          <div className="px-4 py-6 text-center text-gray-500">No modules yet.</div>
-        )}
+        {!modules.length && <div className="px-4 py-6 text-center text-gray-500">No modules yet.</div>}
       </div>
-      {/* ----------------------------------------- */}
     </>
   );
 }
