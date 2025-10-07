@@ -1,6 +1,7 @@
 // client/src/pages/prep/PrepWizard.jsx
 import { useEffect, useMemo, useState } from "react";
 import { getJSON, postJSON, absUrl } from "../../utils/api";
+import { Card } from "../../components/ui/Card";
 import { ImageScroller } from "../../components/ui/ImageScroller";
 
 /**
@@ -68,13 +69,84 @@ function pick(kind, m) {
   });
 }
 
-/* --------------- robust text chooser (works with all shapes) --------------- */
+/* --------------- prefer a non-empty text field across all shapes --------------- */
 function textOf(m) {
-  const candidates = [m?.content, m?.ocrText, m?.text, m?.manualText, m?.description];
+  const candidates = [
+    m?.content,
+    m?.ocrText,
+    m?.text,
+    m?.manualText,
+    m?.description
+  ];
   for (const s of candidates) {
     if (typeof s === "string" && s.trim()) return s.trim();
   }
   return "";
+}
+
+/* -------------------------- colorful-notes helpers -------------------------- */
+
+// tiny stable PRNG so highlights don't “jump” on re-renders
+function seedFrom(s) {
+  let h = 2166136261 >>> 0;
+  for (let i = 0; i < s.length; i++) {
+    h ^= s.charCodeAt(i);
+    h = Math.imul(h, 16777619);
+  }
+  return h >>> 0;
+}
+function randBool(seed, i, mod) {
+  // Lehmer-ish step
+  const x = (Math.imul((seed ^ (i + 1)) + 0x9e3779b9, 0x85ebca6b) >>> 0) % mod;
+  return x === 0;
+}
+
+// mildly opinionated “important terms” — safe fallbacks if content is generic
+const IMPORTANT = new Set([
+  "overview","key","keys","important","summary","highlights","highlight",
+  "event","events","figure","figures","dates","fact","facts",
+  "ancient","medieval","modern","empire","kingdom","dynasty","civilization","constitution",
+  "right","rights","duty","duties","law","section","article","reform","economy","culture",
+  "india","indian","world","global"
+]);
+
+/**
+ * Returns React nodes with <mark> spans in three colors:
+ *  - yellow: 4-digit years and “dates”
+ *  - pink: important keywords
+ *  - green: a light sprinkle for visual cadence (stable pseudo-random)
+ */
+function highlightNotes(rawText, seedKey = "") {
+  if (!rawText) return rawText;
+
+  const seed = seedFrom(seedKey + rawText.slice(0, 64));
+  const tokens = rawText.split(/(\s+|(?=[,.;:!?()])|(?<=[,.;:!?()]))/g);
+
+  return tokens.map((t, i) => {
+    // non-words / whitespace
+    if (!t || /^\s+$/.test(t) || /^[,.;:!?()]+$/.test(t)) return t;
+
+    const w = t.replace(/[^\w'-]/g, ""); // strip punctuation ends
+    const low = w.toLowerCase();
+
+    // patterns
+    const isYear = /\b(1[5-9]\d{2}|20\d{2})\b/.test(w);
+    const isImportant = IMPORTANT.has(low);
+
+    // gentle random sprinkle (about 1 in 28 tokens)
+    const sprinkle = !isYear && !isImportant && randBool(seed, i, 28);
+
+    let cls = "";
+    if (isYear) cls = "bg-yellow-200/70";
+    else if (isImportant) cls = "bg-rose-200/70";
+    else if (sprinkle) cls = "bg-lime-200/70";
+
+    return cls ? (
+      <mark key={i} className={`px-0.5 rounded-sm ${cls}`}>{t}</mark>
+    ) : (
+      <span key={i}>{t}</span>
+    );
+  });
 }
 
 /* ---------------- helpers for midnight countdown + day chips ---------------- */
@@ -135,41 +207,6 @@ function NextDayTeaser({ day }) {
   );
 }
 
-/* -------------------------- Lightbox / media viewer -------------------------- */
-
-function MediaViewer({ src, onClose, allowDownload }) {
-  if (!src) return null;
-  return (
-    <div
-      className="fixed inset-0 z-[999] flex items-center justify-center bg-black/70 backdrop-blur-sm"
-      onClick={onClose}
-      onContextMenu={(e) => !allowDownload && e.preventDefault()}
-    >
-      <button
-        onClick={onClose}
-        className="absolute top-4 left-4 px-3 py-1 rounded-full bg-white text-black shadow"
-      >
-        Back
-      </button>
-
-      {/* Anti-save discouragers (cannot be perfect on the web) */}
-      <div className="relative max-w-[92vw] max-h-[88vh]">
-        <img
-          src={absUrl(src)}
-          alt=""
-          className="max-w-full max-h-[88vh] rounded-xl shadow-2xl select-none"
-          draggable={false}
-          onDragStart={(e) => e.preventDefault()}
-          onContextMenu={(e) => !allowDownload && e.preventDefault()}
-        />
-        {!allowDownload && (
-          <div className="absolute inset-0" aria-hidden="true" />
-        )}
-      </div>
-    </div>
-  );
-}
-
 /* ------------------------ module + later components ------------------------ */
 
 // --- Locked preview card (NO TIME SHOWN) ---
@@ -217,8 +254,9 @@ function LockedPreviewCard({ m }) {
 
 /* --- Accordion-style module panel: IMAGES → TEXT → AUDIO → VIDEO → PDF --- */
 function ModulePanel({ m, index }) {
-  const imgObjs = pick("image", m);
-  const imgUrls = imgObjs.map((it) => absUrl(it.url || ""));
+  const [expanded, setExpanded] = useState(false);
+
+  const imgUrls = pick("image", m).map((it) => absUrl(it.url || ""));
   const audioUrl = pick("audio", m)[0]?.url;
   const videoUrl = pick("video", m)[0]?.url;
   const pdfUrl   = pick("pdf",   m)[0]?.url;
@@ -227,131 +265,77 @@ function ModulePanel({ m, index }) {
   const videoAbs = videoUrl ? absUrl(videoUrl) : "";
   const pdfAbs   = pdfUrl   ? absUrl(pdfUrl)   : "";
 
-  const content = textOf(m); // ← robust text selection
-  const allowDownload = !!m?.flags?.allowDownload;
+  const content = textOf(m); // robust text selection
 
-  const [viewerSrc, setViewerSrc] = useState("");
-  const [expandedText, setExpandedText] = useState(false);
-
-  // small, non-disruptive horizontal strip that opens the lightbox
-  const ImagesStrip = ({ images }) => {
-    if (!images?.length) return null;
-    return (
-      <div className="flex gap-2 overflow-x-auto pb-2">
-        {images.map((u, i) => (
-          <button
-            key={i}
-            type="button"
-            className="shrink-0 w-36 h-24 rounded-lg overflow-hidden bg-gray-200"
-            title="Tap to view"
-            onClick={() => setViewerSrc(imgObjs[i]?.url || u)}
-            onContextMenu={(e) => { if (!allowDownload) e.preventDefault(); }}
-          >
-            <img
-              src={u}
-              alt=""
-              className="w-full h-full object-cover select-none"
-              draggable={false}
-              onDragStart={(e) => e.preventDefault()}
-            />
-          </button>
-        ))}
-      </div>
-    );
+  // “lined page” styling
+  const linedPage = {
+    // subtle notebook lines
+    backgroundImage:
+      "repeating-linear-gradient(0deg, #ffffff, #ffffff 26px, #eaf1ff 27px)",
+    backgroundSize: "100% 27px",
+    border: "2px solid rgba(76, 29, 149, 0.12)",
+    borderRadius: 14,
+    padding: 12,
+    lineHeight: 1.6,
+    whiteSpace: "pre-wrap",
+    wordBreak: "break-word",
+    maxHeight: expanded ? "none" : 280,   // <- taller by default
+    overflowY: expanded ? "visible" : "auto",
   };
 
   return (
-    <>
-      <details className="prep-card module" open={index === 0} style={{ marginBottom: 12 }}>
-        <summary>
-          <span style={{ fontWeight: 600 }}>{m.title || "Untitled"}</span>
-          <span className="chev">›</span>
-        </summary>
+    <details className="prep-card module" open={index === 0} style={{ marginBottom: 12 }}>
+      <summary>
+        <span style={{ fontWeight: 600 }}>{m.title || "Untitled"}</span>
+        <span className="chev">›</span>
+      </summary>
 
-        <div style={{ marginTop: 12 }}>
-          {/* IMAGES FIRST (clickable → fullscreen viewer) */}
-          {!!imgUrls.length && <ImagesStrip images={imgUrls} />}
+      <div style={{ marginTop: 12 }}>
+        {/* IMAGES FIRST */}
+        {!!imgUrls.length && <ImageScroller images={imgUrls} />}
 
-          {/* TEXT (scrollable, a bit taller + expandable) */}
-          {content && (
-            <div
-              className="ocr-box"
-              style={{
-                marginTop: 12,
-                maxHeight: expandedText ? 520 : 320, // a little longer than before (+ expand)
-                overflow: "auto",
-                whiteSpace: "pre-wrap",
-                wordBreak: "break-word",
-                lineHeight: 1.55,
-                background: "#fff",
-                border: "1px solid #eee",
-                borderRadius: 12,
-                padding: 12
-              }}
-            >
-              {content}
+        {/* TEXT (scrollable, colorful “notes”) */}
+        {content && (
+          <>
+            <div className="mt-3" style={linedPage}>
+              {highlightNotes(content, m._id || m.title || "")}
             </div>
-          )}
-          {content && (
-            <div className="mt-2">
+            <div className="mt-1">
               <button
                 type="button"
-                className="text-xs px-2 py-1 rounded border"
-                onClick={() => setExpandedText((v) => !v)}
+                onClick={() => setExpanded((v) => !v)}
+                className="text-xs px-2 py-1 border rounded bg-white hover:bg-gray-50"
               >
-                {expandedText ? "Collapse text" : "Expand text"}
+                {expanded ? "Collapse text" : "Expand text"}
               </button>
             </div>
-          )}
+          </>
+        )}
 
-          {/* AUDIO (hide download unless allowed) */}
-          {audioAbs && (
-            <div style={{ marginTop: 12 }}>
-              <audio
-                controls
-                src={audioAbs}
-                style={{ width: "100%" }}
-                controlsList={allowDownload ? undefined : "nodownload noplaybackrate noremoteplayback"}
-                onContextMenu={(e) => { if (!allowDownload) e.preventDefault(); }}
-              />
-            </div>
-          )}
+        {/* AUDIO */}
+        {audioAbs && (
+          <div style={{ marginTop: 12 }}>
+            <audio controls src={audioAbs} style={{ width: "100%" }} />
+          </div>
+        )}
 
-          {/* VIDEO (hide download/PiP unless allowed) */}
-          {videoAbs && (
-            <div style={{ marginTop: 12 }}>
-              <video
-                controls
-                src={videoAbs}
-                style={{ width: "100%", borderRadius: 12 }}
-                playsInline
-                disablePictureInPicture={!allowDownload}
-                controlsList={allowDownload ? undefined : "nodownload noplaybackrate noremoteplayback"}
-                onContextMenu={(e) => { if (!allowDownload) e.preventDefault(); }}
-              />
-            </div>
-          )}
+        {/* VIDEO */}
+        {videoAbs && (
+          <div style={{ marginTop: 12 }}>
+            <video controls src={videoAbs} style={{ width: "100%", borderRadius: 12 }} />
+          </div>
+        )}
 
-          {/* PDF (always opens in new tab) */}
-          {pdfAbs && (
-            <div style={{ marginTop: 10 }}>
-              <a className="badge" href={pdfAbs} target="_blank" rel="noreferrer">
-                Open PDF
-              </a>
-            </div>
-          )}
-        </div>
-      </details>
-
-      {/* Fullscreen lightbox viewer */}
-      {viewerSrc && (
-        <MediaViewer
-          src={viewerSrc}
-          allowDownload={allowDownload}
-          onClose={() => setViewerSrc("")}
-        />
-      )}
-    </>
+        {/* PDF */}
+        {pdfAbs && (
+          <div style={{ marginTop: 10 }}>
+            <a className="badge" href={pdfAbs} target="_blank" rel="noreferrer">
+              Open PDF
+            </a>
+          </div>
+        )}
+      </div>
+    </details>
   );
 }
 
@@ -443,24 +427,21 @@ export default function PrepWizard() {
       if (email) qs.set("email", email);
 
       const [metaRes, tmplRes, todayRes] = await Promise.allSettled([
-        getJSON(`/api/prep/user/summary?${qs.toString()}`),                     // todayDay / planDays
-        getJSON(`/api/prep/templates?examId=${encodeURIComponent(examId)}`),    // ALL templates (has files/media)
-        getJSON(`/api/prep/user/today?examId=${encodeURIComponent(examId)}`),   // may be absent; now exists as alias too
+        getJSON(`/api/prep/user/summary?${qs.toString()}`),
+        getJSON(`/api/prep/templates?examId=${encodeURIComponent(examId)}`),
+        getJSON(`/api/prep/user/today?examId=${encodeURIComponent(examId)}`),
       ]);
 
-      // meta (required)
       const meta = metaRes.status === "fulfilled" ? metaRes.value : {};
       const td = meta.todayDay || 1;
       const pd = meta.planDays || 1;
       setTodayDay(td);
       setPlanDays(pd);
 
-      // all templates (required)
       const all = tmplRes.status === "fulfilled" && Array.isArray(tmplRes.value?.items)
         ? tmplRes.value.items
         : [];
 
-      // try to use full today items if the endpoint exists; else compute from templates
       let fullToday = [];
       if (todayRes.status === "fulfilled" && Array.isArray(todayRes.value?.items)) {
         fullToday = todayRes.value.items;
@@ -468,10 +449,8 @@ export default function PrepWizard() {
         fullToday = all.filter(m => Number(m.dayIndex) === Number(td));
       }
 
-      // Keep a pool of ALL items for today (released + scheduled) for “Coming later”
       setTodayPool(fullToday);
 
-      // Visible list = only released/available ones
       const now = Date.now();
       const releasedToday = fullToday
         .filter(m => !m.releaseAt || Date.parse(m.releaseAt) <= now || m.status === "released")
@@ -482,8 +461,6 @@ export default function PrepWizard() {
         });
 
       setModules(releasedToday);
-
-      // Keep “allModules” for calendar preview
       setAllModules(all);
 
       setCurrentDay(td);
@@ -500,7 +477,6 @@ export default function PrepWizard() {
 
   useEffect(() => {
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [examId]);
 
   // keep ?tab= in URL for consistency
