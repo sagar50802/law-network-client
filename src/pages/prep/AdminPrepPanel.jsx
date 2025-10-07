@@ -1,3 +1,4 @@
+// client/src/pages/prep/AdminPrepPanel.jsx
 import { useEffect, useRef, useState } from "react";
 import { getJSON, delJSON, buildUrl } from "../../utils/api";
 
@@ -82,6 +83,7 @@ export default function AdminPrepPanel() {
     setSelExam(examId);
   }
 
+  // NEW: delete exam (does not disturb other logic)
   async function deleteExam() {
     if (!selExam) return alert("Select an exam to delete");
     if (!confirm("Delete this exam and ALL its modules/access/progress?")) return;
@@ -293,7 +295,7 @@ function ExamEditor({ examId }) {
                 <div>
                   <div className="font-semibold">{m.title || "Untitled"}</div>
                   <div className="text-gray-500">
-                    {timeBadge(m)} • {m.flags?.extractOCR ? "OCR" : "No OCR"} •{" "}
+                    {timeBadge(m)} • {m.flags?.extractOCR ? (m.flags?.ocrAtRelease ? "OCR @ release" : "OCR") : "No OCR"} •{" "}
                     {(m.files || []).length} file(s) {m.status ? `• ${String(m.status).toUpperCase()}` : ""}
                     {m.releaseAt ? ` • releases ${new Date(m.releaseAt).toLocaleString()}` : ""}
                   </div>
@@ -368,6 +370,7 @@ function ExamEditor({ examId }) {
             <div>
               <label className="block text-sm font-medium mb-1">PDF</label>
               <input name="pdf" type="file" accept="application/pdf" className="w-full" />
+              {/* NEW: small hint that ties to the OCR checkbox below */}
               <div className="text-xs text-gray-500 mt-1">
                 <label htmlFor="extractOCR" className="cursor-pointer">
                   <span className="underline">Auto-OCR from PDF</span> (toggle below)
