@@ -1,14 +1,13 @@
-// client/src/pages/prep/AdminPrepPanel.jsx
+ // client/src/pages/prep/AdminPrepPanel.jsx
 import { useEffect, useRef, useState } from "react";
 import { getJSON, delJSON } from "../../utils/api";
 
 /** Robust multipart POST (keeps cookies, safe JSON parse) */
 async function sendMultipart(url, formData) {
   const res = await fetch(url, { method: "POST", body: formData, credentials: "include" });
-  // Some proxies return text; parse safely
-  const text = await res.text();
+  const text = await res.text(); // some proxies strip content-type
   let data = {};
-  try { data = JSON.parse(text); } catch { /* noop */ }
+  try { data = JSON.parse(text); } catch { /* tolerate non-JSON */ }
   return { ok: res.ok, status: res.status, data, text };
 }
 
@@ -39,18 +38,16 @@ export default function AdminPrepPanel() {
     fd.set("examId", examId);
     fd.set("name", name);
     fd.set("scheduleMode", "cohort");
+
     const r = await sendMultipart("/api/prep/exams", fd);
-    if (!r.ok || !r.data?.success) {
-      return alert("Create exam failed");
-    }
+    if (!r.ok || !r.data?.success) return alert("Create exam failed");
+
     setMakeExam({ examId: "", name: "" });
     await loadExams();
     setSelExam(examId);
   }
 
-  useEffect(() => {
-    loadExams();
-  }, []);
+  useEffect(() => { loadExams(); }, []);
 
   return (
     <div className="max-w-6xl mx-auto p-4">
@@ -120,65 +117,53 @@ function ExamEditor({ examId }) {
     const items = (r.items || []).sort((a, b) => a.dayIndex - b.dayIndex || a.slotMin - b.slotMin);
     setModules(items);
   }
-  useEffect(() => {
-    load(true);
-  }, [examId]);
+  useEffect(() => { load(true); }, [examId]);
 
-  function bool(v) {
-    return v ? "true" : "false";
-  }
+  function bool(v) { return v ? "true" : "false"; }
 
   async function onSave(e) {
     e.preventDefault();
     const f = formRef.current;
     const fd = new FormData(f);
 
-    // required fields
+    // required
     fd.set("examId", examId);
 
-    // normalize checkboxes
-    fd.set("extractOCR", bool(f.elements.extractOCR.checked));
+    // checkboxes
+    fd.set("extractOCR",   bool(f.elements.extractOCR.checked));
     fd.set("showOriginal", bool(f.elements.showOriginal.checked));
-    fd.set("allowDownload", bool(f.elements.allowDownload.checked));
-    fd.set("highlight", bool(f.elements.highlight.checked));
-    // (ocrAtRelease is sent only if checked – leave as-is)
+    fd.set("allowDownload",bool(f.elements.allowDownload.checked));
+    fd.set("highlight",    bool(f.elements.highlight.checked));
+    // ocrAtRelease is naturally included only when checked
 
-    // normalize releaseAt (local -> ISO)
+    // releaseAt → ISO (UTC)
     const ra = fd.get("releaseAt");
     if (ra) {
       const d = new Date(String(ra));
       if (!isNaN(d)) fd.set("releaseAt", d.toISOString());
     }
 
-    // Debug: count attached files so you can verify selections quickly
-    const countFiles = (name) => {
-      const entries = fd.getAll(name);
-      return entries.reduce((n, v) => (v instanceof File && v.size > 0 ? n + 1 : n), 0);
-    };
-    const filesDebug = {
+    // quick local debug counts
+    const countFiles = (name) => fd.getAll(name).reduce((n, v) => (v instanceof File && v.size > 0 ? n + 1 : n), 0);
+    console.log("[AdminPrepPanel] files in FormData:", {
       images: countFiles("images"),
-      pdf: countFiles("pdf"),
-      audio: countFiles("audio"),
-      video: countFiles("video"),
-    };
-    console.log("[AdminPrepPanel] files in FormData:", filesDebug);
+      pdf:    countFiles("pdf"),
+      audio:  countFiles("audio"),
+      video:  countFiles("video"),
+    });
 
     setBusy(true);
     try {
-      // IMPORTANT: native fetch via sendMultipart; no manual headers.
       const res = await sendMultipart("/api/prep/templates", fd);
+      console.log("[AdminPrepPanel] upload response:", res.status, res.data || res.text?.slice?.(0, 200));
       if (!res.ok || !res.data?.success) {
-        console.warn("Upload response:", res.status, res.text?.slice?.(0, 300));
         alert(`Upload failed (HTTP ${res.status})`);
         return;
       }
 
-      // clear the form (including file inputs)
       f.reset();
-
-      // Force refresh list (cache-buster) so the new row appears instantly
       await load(true);
-      // Small delay helps with eventually-consistent DBs/caches
+      // tiny delay helps if DB is eventually-consistent on your host
       await new Promise((r) => setTimeout(r, 120));
       await load(true);
 
@@ -197,7 +182,7 @@ function ExamEditor({ examId }) {
     await load(true);
   }
 
-  // ---------- helpers for grouped list ----------
+  // ---- helpers for grouped list ----
   function groupByDay(items) {
     const m = new Map();
     for (const x of items) {
@@ -224,7 +209,7 @@ function ExamEditor({ examId }) {
   }
 
   function DayGroup({ day, items, onDelete }) {
-    const [open, setOpen] = useState(day === 1); // open Day 1 by default
+    const [open, setOpen] = useState(day === 1);
     return (
       <div className="border-b">
         <button
@@ -232,9 +217,7 @@ function ExamEditor({ examId }) {
           className="w-full flex items-center justify-between px-4 py-2 bg-gray-50"
         >
           <div className="font-medium">Day {day}</div>
-          <span className={`text-sm text-gray-500 transition-transform ${open ? "rotate-90" : ""}`}>
-            ›
-          </span>
+          <span className={`text-sm text-gray-500 transition-transform ${open ? "rotate-90" : ""}`}>›</span>
         </button>
         {open && (
           <ul className="divide-y">
@@ -262,7 +245,7 @@ function ExamEditor({ examId }) {
       </div>
     );
   }
-  // ---------- end helpers ----------
+  // ---- end helpers ----
 
   return (
     <>
@@ -367,7 +350,6 @@ function ExamEditor({ examId }) {
         </div>
       </form>
 
-      {/* ------- Grouped & collapsible list ------- */}
       <div className="rounded-xl border bg-white">
         <div className="px-4 py-3 border-b font-medium">Existing Modules</div>
         {groupByDay(modules).map(([day, items]) => (
@@ -377,7 +359,6 @@ function ExamEditor({ examId }) {
           <div className="px-4 py-6 text-center text-gray-500">No modules yet.</div>
         )}
       </div>
-      {/* ----------------------------------------- */}
     </>
   );
 }
