@@ -39,21 +39,34 @@ function fileKindOf(f) {
   return "";
 }
 
+// Build a usable URL for a file doc, even if only _id is present
+function urlFromFileDoc(f) {
+  if (!f) return "";
+  const raw = f.url || f.path || f.href || f.location || "";
+  if (raw) return raw;
+  // Try common bucketed and bucket-less GridFS fallbacks
+  if (f._id && f.bucket) return `/api/files/${String(f.bucket)}/${String(f._id)}`;
+  if (f._id) return `/api/files/prep/${String(f._id)}`; // default bucket guess
+  return "";
+}
+
 /**
  * pick("image"|"audio"|"video"|"pdf", module) -> normalized array
- * Normalizes:
- *  - module.files: [{kind,url,mime,name}] (preferred)
+ * Supports:
+ *  - module.files[] / module.attachments[] : { kind, url?, path?, mime?, _id?, bucket? }
  *  - legacy module.images: [string]
  *  - single module.audio / module.video / module.pdf : string or {url}
- *
- * Includes robust fallback for _id-only file docs: /api/files/prep/:id
  */
 function pick(kind, m) {
   const out = [];
 
-  // modern files[]
-  if (Array.isArray(m?.files)) {
-    for (const f of m.files) {
+  // modern files[] or attachments[]
+  const collections = [];
+  if (Array.isArray(m?.files)) collections.push(m.files);
+  if (Array.isArray(m?.attachments)) collections.push(m.attachments);
+
+  for (const list of collections) {
+    for (const f of list) {
       if (!f) continue;
       const mime = (f.mime || f.contentType || "").toLowerCase();
       const byMime = mime.split("/")[0];
@@ -65,22 +78,25 @@ function pick(kind, m) {
       const isPdf = kind === "pdf" && (k === "pdf" || mime === "application/pdf");
 
       if (isImg || isAud || isVid || isPdf) {
-        // fallback for GridFS records that only have _id
-        const raw = f.url || f.path || (f._id ? `/api/files/prep/${f._id}` : "");
-        if (raw) out.push({ url: raw, kind: k || kind, mime, name: f.name });
+        const raw = urlFromFileDoc(f);
+        if (raw) out.push({ url: raw, kind: k || kind, mime, name: f.name, bucket: f.bucket });
       }
     }
   }
 
   // legacy arrays/singles
-  if (kind === "image" && Array.isArray(m?.images))
+  if (kind === "image" && Array.isArray(m?.images)) {
     m.images.forEach((u) => out.push({ url: u, kind: "image" }));
-  if (kind === "audio" && m?.audio)
+  }
+  if (kind === "audio" && m?.audio) {
     out.push(typeof m.audio === "string" ? { url: m.audio, kind: "audio" } : { ...m.audio, kind: "audio" });
-  if (kind === "video" && m?.video)
+  }
+  if (kind === "video" && m?.video) {
     out.push(typeof m.video === "string" ? { url: m.video, kind: "video" } : { ...m.video, kind: "video" });
-  if (kind === "pdf" && m?.pdf)
+  }
+  if (kind === "pdf" && m?.pdf) {
     out.push(typeof m.pdf === "string" ? { url: m.pdf, kind: "pdf" } : { ...m.pdf, kind: "pdf" });
+  }
 
   // de-dupe
   const seen = new Set();
@@ -151,7 +167,6 @@ function NextDayTeaser({ day }) {
 
 /* ------------------------ module + later components ------------------------ */
 
-// --- Locked preview card (NO TIME SHOWN) ---
 function LockedPreviewCard({ m }) {
   const imgs = pick("image", m);
   const hasAudio = pick("audio", m).length > 0;
@@ -165,7 +180,6 @@ function LockedPreviewCard({ m }) {
 
       <div className="font-medium mb-2">{m.title || "Untitled"}</div>
 
-      {/* thumbnails (locked) */}
       {!!imgs.length && (
         <div className="flex gap-2 overflow-x-auto pb-2">
           {imgs.slice(0, 6).map((it, i) => {
@@ -184,10 +198,7 @@ function LockedPreviewCard({ m }) {
         </div>
       )}
 
-      {/* short text teaser (no time) */}
       {m.content && <p className="text-xs text-gray-600 italic line-clamp-3">Unlocks soon.</p>}
-
-      {/* audio/video preview (disabled look) */}
       {(hasAudio || hasVideo) && (
         <div className="mt-2 text-xs text-gray-500">Media will unlock when available.</div>
       )}
@@ -197,11 +208,10 @@ function LockedPreviewCard({ m }) {
 
 /* --- Accordion-style module panel (drop-in, shows ALL attachment shapes) --- */
 function ModulePanel({ m, index }) {
-  // Images as plain URL list for ImageScroller
   const imgUrls = pick("image", m).map((it) => absUrl(it.url || ""));
-  const audioUrl = (pick("audio", m)[0]?.url) || "";
-  const videoUrl = (pick("video", m)[0]?.url) || "";
-  const pdfUrl   = (pick("pdf",   m)[0]?.url) || "";
+  const audioUrl = pick("audio", m)[0]?.url || "";
+  const videoUrl = pick("video", m)[0]?.url || "";
+  const pdfUrl   = pick("pdf",   m)[0]?.url || "";
 
   return (
     <details className="prep-card module" open={index === 0} style={{ marginBottom: 12 }}>
@@ -211,31 +221,26 @@ function ModulePanel({ m, index }) {
       </summary>
 
       <div style={{ marginTop: 12 }}>
-        {/* Image gallery/strip */}
         {!!imgUrls.length && <ImageScroller images={imgUrls} />}
 
-        {/* Text (OCR or manual) */}
         {m.content && (
           <div className="ocr-box" style={{ marginTop: 12 }}>
             {m.content}
           </div>
         )}
 
-        {/* Audio */}
         {audioUrl && (
           <div style={{ marginTop: 12 }}>
             <audio controls src={absUrl(audioUrl)} style={{ width: "100%" }} />
           </div>
         )}
 
-        {/* Video */}
         {videoUrl && (
           <div style={{ marginTop: 12 }}>
             <video controls src={absUrl(videoUrl)} style={{ width: "100%", borderRadius: 12 }} />
           </div>
         )}
 
-        {/* PDF link */}
         {pdfUrl && (
           <div style={{ marginTop: 10 }}>
             <a className="badge" href={absUrl(pdfUrl)} target="_blank" rel="noreferrer">
@@ -414,20 +419,18 @@ export default function PrepWizard() {
   const [planDays, setPlanDays] = useState(1);
   const [modules, setModules] = useState([]);
 
-  // NEW: for previewing any day
+  // for previews
   const [allModules, setAllModules] = useState([]);
-
-  // NEW: everything (released + scheduled) for today; used by ComingLater
+  // pool for “coming later” (released + scheduled)
   const [todayPool, setTodayPool] = useState([]);
 
-  // NEW (tiny UI states)
+  // UI chips
   const [currentDay, setCurrentDay] = useState(1);
   const [activeDay, setActiveDay] = useState(1);
 
-  // optional email (if your site stores it for progress API)
   const email = localStorage.getItem("userEmail") || "";
 
-  // ✅ ROBUST: meta + templates (and optional today endpoint if present)
+  // ✅ ROBUST loader: meta + templates (optional /user/today if it exists)
   async function load() {
     if (!examId) return;
     setLoading(true);
@@ -436,36 +439,32 @@ export default function PrepWizard() {
       if (email) qs.set("email", email);
 
       const [metaRes, tmplRes, todayRes] = await Promise.allSettled([
-        getJSON(`/api/prep/user/summary?${qs.toString()}`),                   // todayDay / planDays
-        getJSON(`/api/prep/templates?examId=${encodeURIComponent(examId)}`),  // ALL templates (has files/media)
+        getJSON(`/api/prep/user/summary?${qs.toString()}`),                   // planDays/todayDay
+        getJSON(`/api/prep/templates?examId=${encodeURIComponent(examId)}`),  // full templates (has files/media)
         getJSON(`/api/prep/user/today?examId=${encodeURIComponent(examId)}`), // may 404 on your backend
       ]);
 
-      // meta (required)
       const meta = metaRes.status === "fulfilled" ? metaRes.value : {};
       const td = meta.todayDay || 1;
       const pd = meta.planDays || 1;
       setTodayDay(td);
       setPlanDays(pd);
 
-      // all templates (required)
       const all = tmplRes.status === "fulfilled" && Array.isArray(tmplRes.value?.items)
         ? tmplRes.value.items
         : [];
 
-      // try to use full today items if the endpoint exists; else compute from templates
       let fullToday = [];
       if (todayRes.status === "fulfilled" && Array.isArray(todayRes.value?.items)) {
         fullToday = todayRes.value.items;
       } else {
-        // Fallback: “today” = templates matching todayDay
         fullToday = all.filter((m) => Number(m.dayIndex) === Number(td));
       }
 
-      // Keep a pool of ALL items for today (released + scheduled) for “Coming later”
+      // Keep (released + scheduled) for ComingLater
       setTodayPool(fullToday);
 
-      // The visible list = only released/available ones
+      // Visible list = only released/available
       const now = Date.now();
       const releasedToday = fullToday
         .filter((m) => !m.releaseAt || Date.parse(m.releaseAt) <= now || m.status === "released")
@@ -485,8 +484,6 @@ export default function PrepWizard() {
         }));
 
       setModules(releasedToday);
-
-      // Keep “allModules” for calendar preview
       setAllModules(all);
 
       setCurrentDay(td);
@@ -505,7 +502,6 @@ export default function PrepWizard() {
     load();
   }, [examId]);
 
-  // keep ?tab= in URL for consistency
   useEffect(() => {
     const u = new URL(location.href);
     u.searchParams.set("tab", tab);
@@ -531,7 +527,6 @@ export default function PrepWizard() {
     }
   }
 
-  // modules to preview for the currently selected calendar day (no time shown)
   const previewModulesForActiveDay = useMemo(() => {
     return (allModules || [])
       .filter((m) => Number(m.dayIndex) === Number(activeDay))
@@ -544,10 +539,8 @@ export default function PrepWizard() {
       });
   }, [allModules, activeDay]);
 
-  /* ---------- Tabs ---------- */
-
-  const cohortDay = todayDay; // alias for calendar grid snippet
-  const userStates = undefined; // optional; you can wire your completion map here
+  const cohortDay = todayDay;
+  const userStates = undefined;
 
   /* ========= CALENDAR TAB ========= */
   const calendarTab = (
@@ -557,10 +550,8 @@ export default function PrepWizard() {
       </div>
 
       {(() => {
-        // Prefer allModules if present; otherwise fall back to today's modules
         const sourceMods = (allModules && allModules.length) ? allModules : modules;
 
-        // Group modules by dayIndex (released or scheduled — we only mark status for released)
         const byDay = new Map();
         (sourceMods || []).forEach((m) => {
           if (!byDay.has(m.dayIndex)) byDay.set(m.dayIndex, []);
@@ -634,7 +625,6 @@ export default function PrepWizard() {
         return <div className="daygrid">{cells}</div>;
       })()}
 
-      {/* Optional: preview for any selected day */}
       {!!previewModulesForActiveDay.length && (
         <PreviewPanel day={activeDay} modules={previewModulesForActiveDay} />
       )}
@@ -646,7 +636,6 @@ export default function PrepWizard() {
       <div className="text-lg font-semibold mb-1">{examId}</div>
       <div className="text-sm text-gray-600 mb-3">Day {todayDay}</div>
 
-      {/* day chips */}
       <DayNav
         planDays={planDays}
         currentDay={currentDay}
@@ -687,15 +676,13 @@ export default function PrepWizard() {
         Progress view (lightweight). Use “Mark Complete” on Today’s Task to record completion for Day {todayDay}.
       </p>
       <p className="mt-2">
-        <i>Tip:</i> If you want a detailed per-topic progress bar, we can add an endpoint that returns the user’s
-        completed days/items and render it here.
+        <i>Tip:</i> If you want a detailed per-topic progress bar, we can add an endpoint that returns the user’s completed days/items and render it here.
       </p>
     </div>
   );
 
   return (
     <div className="prep-wrap">
-      {/* Modern tabbar */}
       <div className="tabbar">
         <a
           className={`tab ${tab === "calendar" ? "active" : ""}`}
