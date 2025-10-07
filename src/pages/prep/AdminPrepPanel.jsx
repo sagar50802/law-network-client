@@ -1,5 +1,5 @@
 import { useEffect, useRef, useState } from "react";
-import { getJSON, postJSON, delJSON } from "../../utils/api";
+import { getJSON, postJSON, delJSON } from "../../utils/api"; // upload removed for safety
 
 export default function AdminPrepPanel() {
   const [exams, setExams] = useState([]);
@@ -31,6 +31,7 @@ export default function AdminPrepPanel() {
 
   useEffect(() => {
     loadExams();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
@@ -104,89 +105,68 @@ function ExamEditor({ examId }) {
   }
   useEffect(() => {
     load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [examId]);
 
   function bool(v) {
     return v ? "true" : "false";
   }
 
-  // Save handler: explicit FormData + credentials + robust response parsing
   async function onSave(e) {
     e.preventDefault();
     const f = formRef.current;
-    const fd = new FormData();
+    const fd = new FormData(f);
 
-    // required fields
-    fd.append("examId", examId);
-    fd.append("dayIndex", f.elements.dayIndex.value);
-    fd.append("slotMin", f.elements.slotMin.value || "0");
-    fd.append("title", f.elements.title.value || "");
+    fd.set("examId", examId);
+    // normalize checkboxes (always send explicit strings)
+    fd.set("extractOCR", bool(f.elements.extractOCR.checked));
+    fd.set("showOriginal", bool(f.elements.showOriginal.checked));
+    fd.set("allowDownload", bool(f.elements.allowDownload.checked));
+    fd.set("highlight", bool(f.elements.highlight.checked));
+    // ocrAtRelease is sent automatically by browser if checked
 
-    // releaseAt -> ISO
-    const ra = f.elements.releaseAt.value;
+    // normalize releaseAt (local -> ISO UTC)
+    const ra = fd.get("releaseAt");
     if (ra) {
-      const d = new Date(String(ra));
-      if (!isNaN(d)) fd.append("releaseAt", d.toISOString());
+      const d = new Date(String(ra)); // "YYYY-MM-DDTHH:mm"
+      if (!isNaN(d)) fd.set("releaseAt", d.toISOString());
     }
 
-    // manual text
-    if (f.elements.manualText.value) fd.append("manualText", f.elements.manualText.value);
-    if (f.elements.content.value) fd.append("content", f.elements.content.value);
-
-    // flags
-    fd.append("extractOCR", bool(f.elements.extractOCR.checked));
-    fd.append("showOriginal", bool(f.elements.showOriginal.checked));
-    fd.append("allowDownload", bool(f.elements.allowDownload.checked));
-    fd.append("highlight", bool(f.elements.highlight.checked));
-    if (f.elements.background.value) fd.append("background", f.elements.background.value);
-    if (f.elements.ocrAtRelease?.checked) fd.append("ocrAtRelease", "true");
-
-    // files
-    const addMany = (inputName) => {
-      const inp = f.elements[inputName];
-      if (inp?.files?.length) for (const file of inp.files) fd.append(inputName, file);
-    };
-    const addOne = (inputName) => {
-      const inp = f.elements[inputName];
-      if (inp?.files?.[0]) fd.append(inputName, inp.files[0]);
-    };
-    addMany("images");
-    addOne("pdf");
-    addOne("audio");
-    addOne("video");
+    // (debug-only) verify files are actually present in the FormData
+    // This helps confirm the browser is including your selections.
+    const debugEntries = [];
+    for (const [k, v] of fd.entries()) {
+      if (v instanceof File) debugEntries.push([k, `${v.name} (${v.size} bytes)`]);
+    }
+    // eslint-disable-next-line no-console
+    console.log("[AdminPrepPanel] files in FormData:", debugEntries);
 
     setBusy(true);
     try {
-      const res = await fetch("/api/prep/templates", {
-        method: "POST",
-        body: fd,
-        credentials: "include", // IMPORTANT: send admin cookie/session
-      });
-
-      // robust parse
+      // IMPORTANT: do NOT set Content-Type. Let the browser add the multipart boundary.
+      const resp = await fetch("/api/prep/templates", { method: "POST", body: fd });
       let data = null;
-      const ct = res.headers.get("content-type") || "";
-      if (ct.includes("application/json")) {
-        data = await res.json();
-      } else {
-        const text = await res.text();
-        try {
-          data = JSON.parse(text);
-        } catch {
-          if (!res.ok) throw new Error(text || res.statusText);
-          data = { success: true }; // minimal happy path
-        }
+      try {
+        data = await resp.json();
+      } catch {
+        // If server returned empty or non-JSON, make a readable error.
+        throw new Error(`Upload failed (HTTP ${resp.status})`);
       }
-      if (!res.ok || data?.success === false) {
-        throw new Error(data?.error || data?.message || `HTTP ${res.status}`);
+      if (!resp.ok || data?.success === false) {
+        throw new Error(data?.error || "Upload failed");
       }
 
+      // Clear file inputs so the browser doesn't re-send the same files on next save
       f.reset();
+      for (const input of f.querySelectorAll('input[type="file"]')) {
+        input.value = "";
+      }
+
       await load();
       alert("Module saved");
     } catch (err) {
       console.error(err);
-      alert(`Save failed: ${err.message || err}`);
+      alert(String(err?.message || "Save failed"));
     } finally {
       setBusy(false);
     }
@@ -205,6 +185,7 @@ function ExamEditor({ examId }) {
       if (!m.has(x.dayIndex)) m.set(x.dayIndex, []);
       m.get(x.dayIndex).push(x);
     }
+    // sort each day by releaseAt (if present) else slotMin
     for (const arr of m.values()) {
       arr.sort((a, b) => {
         const aa = a.releaseAt ? Date.parse(a.releaseAt) : a.slotMin || 0;
@@ -224,7 +205,7 @@ function ExamEditor({ examId }) {
   }
 
   function DayGroup({ day, items, onDelete }) {
-    const [open, setOpen] = useState(day === 1);
+    const [open, setOpen] = useState(day === 1); // open Day 1 by default
     return (
       <div className="border-b">
         <button
