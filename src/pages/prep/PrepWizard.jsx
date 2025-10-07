@@ -45,7 +45,7 @@ function pick(kind, m) {
       const isImg = kind === "image" && (k === "image" || mime.startsWith("image/"));
       const isAud = kind === "audio" && (k === "audio" || mime.startsWith("audio/"));
       const isVid = kind === "video" && (k === "video" || mime.startsWith("video/"));
-      const isPdf = kind === "pdf"   && (k === "pdf"   || mime === "application/pdf");
+      const isPdf = kind === "pdf" && (k === "pdf" || mime === "application/pdf");
 
       if (isImg || isAud || isVid || isPdf) {
         const raw = f.url || f.path || (f._id ? `/api/files/prep/${f._id}` : "");
@@ -54,7 +54,7 @@ function pick(kind, m) {
     }
   }
 
-  // legacy arrays/singles (server now mirrors to these too)
+  // legacy arrays/singles
   if (kind === "image" && Array.isArray(m?.images)) m.images.forEach((u) => out.push({ url: u, kind: "image" }));
   if (kind === "audio" && m?.audio) out.push(typeof m.audio === "string" ? { url: m.audio, kind: "audio" } : { ...m.audio, kind: "audio" });
   if (kind === "video" && m?.video) out.push(typeof m.video === "string" ? { url: m.video, kind: "video" } : { ...m.video, kind: "video" });
@@ -178,7 +178,7 @@ function LockedPreviewCard({ m }) {
 
 /* --- Accordion-style module panel (drop-in, shows ALL attachment shapes) --- */
 function ModulePanel({ m, index }) {
-  // Images first, then text, then media
+  // Images as plain URL list for ImageScroller
   const imgUrls = pick("image", m).map((it) => absUrl(it.url || ""));
   const audioUrl = pick("audio", m)[0]?.url;
   const videoUrl = pick("video", m)[0]?.url;
@@ -239,15 +239,15 @@ function ModuleCard({ mod }) {
 
   const files = mod.files || [];
   const images = files.filter((f) => (f.kind || "").toLowerCase() === "image");
-  const pdfs = files.filter((f) => (f.kind || "").toLowerCase() === "pdf");
+  const pdfs   = files.filter((f) => (f.kind || "").toLowerCase() === "pdf");
   const audios = files.filter((f) => (f.kind || "").toLowerCase() === "audio");
   const videos = files.filter((f) => (f.kind || "").toLowerCase() === "video");
 
   const flags = mod.flags || {};
   const showImages = images.length && (!flags.extractOCR || flags.showOriginal);
-  const showPDF = pdfs.length && (flags.showOriginal ?? true);
-  const showAudio = audios.length;
-  const showVideo = videos.length;
+  const showPDF    = pdfs.length && (flags.showOriginal ?? true);
+  const showAudio  = audios.length;
+  const showVideo  = videos.length;
 
   const textBlock =
     (mod.content && String(mod.content).trim()) ||
@@ -443,6 +443,7 @@ export default function PrepWizard() {
       if (todayRes.status === "fulfilled" && Array.isArray(todayRes.value?.items)) {
         fullToday = todayRes.value.items;
       } else {
+        // Fallback: “today” = templates matching todayDay
         fullToday = all.filter(m => Number(m.dayIndex) === Number(td));
       }
 
@@ -553,6 +554,7 @@ export default function PrepWizard() {
       </div>
 
       {(() => {
+        // Prefer allModules if present; otherwise fall back to today's modules
         const sourceMods = (allModules && allModules.length) ? allModules : modules;
 
         // Group modules by dayIndex
