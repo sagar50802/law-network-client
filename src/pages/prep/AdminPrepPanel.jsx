@@ -1,6 +1,37 @@
 // client/src/pages/prep/AdminPrepPanel.jsx
 import { useEffect, useRef, useState } from "react";
-import { getJSON, postJSON, upload, delJSON } from "../../utils/api";
+import { getJSON, postJSON, delJSON } from "../../utils/api";
+
+/**
+ * Local, robust multipart sender.
+ * - DOES NOT set Content-Type (lets browser set boundary)
+ * - Tries JSON > text > empty
+ */
+async function sendMultipart(url, formData) {
+  const res = await fetch(url, {
+    method: "POST",
+    body: formData,
+    credentials: "include",
+  });
+
+  // Try to parse as JSON; fall back to text; tolerate empty body.
+  let body;
+  const raw = await res.text();
+  try {
+    body = raw ? JSON.parse(raw) : {};
+  } catch {
+    body = { success: res.ok, raw };
+  }
+
+  if (!res.ok || body?.success === false) {
+    const msg =
+      body?.error ||
+      body?.message ||
+      `Upload failed (HTTP ${res.status})`;
+    throw new Error(msg);
+  }
+  return body || { success: true };
+}
 
 export default function AdminPrepPanel() {
   const [exams, setExams] = useState([]);
@@ -14,7 +45,7 @@ export default function AdminPrepPanel() {
       setExams(list);
       if (!list.length) setSelExam("");
       else if (!selExam || !list.find((e) => e.examId === selExam)) setSelExam(list[0].examId);
-    } catch (_e) {
+    } catch {
       alert("Failed to load exams");
     }
   }
@@ -96,20 +127,8 @@ function ExamEditor({ examId }) {
   const [busy, setBusy] = useState(false);
   const formRef = useRef(null);
 
-  // fetch JSON with cache hard-disabled (edge/CDN safe)
-  async function fetchJsonNoCache(url) {
-    const res = await fetch(url, { cache: "no-store", headers: { Accept: "application/json" } });
-    if (!res.ok) throw new Error(`HTTP ${res.status}`);
-    try {
-      return await res.json();
-    } catch {
-      return {};
-    }
-  }
-
   async function load() {
-    const url = `/api/prep/templates?examId=${encodeURIComponent(examId)}&_=${Date.now()}`;
-    const r = await fetchJsonNoCache(url);
+    const r = await getJSON(`/api/prep/templates?examId=${encodeURIComponent(examId)}`);
     const items = (r.items || []).sort((a, b) => a.dayIndex - b.dayIndex || a.slotMin - b.slotMin);
     setModules(items);
   }
@@ -121,101 +140,76 @@ function ExamEditor({ examId }) {
     return v ? "true" : "false";
   }
 
-  // tolerant uploader (works even if server returns 200 with empty body)
-  async function safeUpload(url, fd) {
-    const res = await fetch(url, { method: "POST", body: fd });
-    if (!res.ok) {
-      const t = await res.text().catch(() => "");
-      throw new Error(`HTTP ${res.status}${t ? ` — ${t}` : ""}`);
-    }
-    const raw = await res.text().catch(() => "");
-    // try JSON first
-    try {
-      const data = raw ? JSON.parse(raw) : {};
-      if (data && data.success === false) {
-        throw new Error(data.error || "Server returned success:false");
-      }
-      // eslint-disable-next-line no-console
-      console.debug("[AdminPrepPanel] upload response (json):", data);
-      return data || { success: true };
-    } catch {
-      // eslint-disable-next-line no-console
-      console.debug("[AdminPrepPanel] upload response (text):", raw || "<empty>");
-      return { success: true };
-    }
-  }
-
   async function onSave(e) {
     e.preventDefault();
     const f = formRef.current;
-    const fd = new FormData();
 
-    // core fields
-    const dayIndex = String(f.elements.dayIndex.value || "").trim();
-    const slotMin = String(f.elements.slotMin.value || "0").trim();
-    const title = String(f.elements.title.value || "").trim();
-    if (!dayIndex) return alert("dayIndex is required");
-
+    // Build FormData from the form
+    const fd = new FormData(f);
     fd.set("examId", examId);
-    fd.set("dayIndex", dayIndex);
-    fd.set("slotMin", slotMin || "0");
-    if (title) fd.set("title", title);
 
-    // release time (ISO)
-    const ra = String(f.elements.releaseAt.value || "").trim();
+    // normalize checkboxes (ensure string truthy flags are sent even when unchecked)
+    fd.set("extractOCR", bool(f.elements.extractOCR.checked));
+    fd.set("showOriginal", bool(f.elements.showOriginal.checked));
+    fd.set("allowDownload", bool(f.elements.allowDownload.checked));
+    fd.set("highlight", bool(f.elements.highlight.checked));
+    // note: ocrAtRelease is included automatically when checked
+
+    // normalize releaseAt (local → ISO)
+    const ra = fd.get("releaseAt");
     if (ra) {
-      const d = new Date(ra);
+      const d = new Date(String(ra));
       if (!isNaN(d)) fd.set("releaseAt", d.toISOString());
     }
 
-    // texts
-    const manualText = String(f.elements.manualText?.value || "").trim();
-    const content = String(f.elements.content?.value || "").trim();
-    if (manualText) fd.set("manualText", manualText);
-    if (content) fd.set("content", content);
-
-    // flags
-    fd.set("extractOCR", bool(f.elements.extractOCR?.checked));
-    fd.set("showOriginal", bool(f.elements.showOriginal?.checked));
-    fd.set("allowDownload", bool(f.elements.allowDownload?.checked));
-    fd.set("highlight", bool(f.elements.highlight?.checked));
-    const bg = String(f.elements.background?.value || "").trim();
-    if (bg) fd.set("background", bg);
-    if (f.elements.ocrAtRelease?.checked) fd.set("ocrAtRelease", "true");
-
-    // files (append exactly as Multer fields)
+    // IMPORTANT: make sure files are really appended as multipart
+    // (some helper libs override headers and break this)
+    // Re-append explicitly so we’re 100% sure.
     const imgInput = f.elements.images;
-    if (imgInput?.files?.length) {
-      for (const file of imgInput.files) fd.append("images", file, file.name);
-    }
     const pdfInput = f.elements.pdf;
-    if (pdfInput?.files?.[0]) fd.append("pdf", pdfInput.files[0], pdfInput.files[0].name);
     const audioInput = f.elements.audio;
-    if (audioInput?.files?.[0]) fd.append("audio", audioInput.files[0], audioInput.files[0].name);
     const videoInput = f.elements.video;
-    if (videoInput?.files?.[0]) fd.append("video", videoInput.files[0], videoInput.files[0].name);
 
-    // debug counts
+    if (imgInput?.files) {
+      // remove any auto-captured browser entries first,
+      // then append in a clean order.
+      fd.delete("images");
+      for (const file of imgInput.files) {
+        fd.append("images", file, file.name);
+      }
+    }
+    if (pdfInput?.files?.[0]) {
+      fd.set("pdf", pdfInput.files[0], pdfInput.files[0].name);
+    }
+    if (audioInput?.files?.[0]) {
+      fd.set("audio", audioInput.files[0], audioInput.files[0].name);
+    }
+    if (videoInput?.files?.[0]) {
+      fd.set("video", videoInput.files[0], videoInput.files[0].name);
+    }
+
+    // Debug: show what we’re sending
     try {
-      let imgCount = 0;
-      for (const [k, v] of fd.entries()) if (k === "images" && v instanceof File) imgCount++;
-      console.debug("[AdminPrepPanel] files about to upload:", {
-        images: imgCount,
-        pdf: !!pdfInput?.files?.[0],
-        audio: !!audioInput?.files?.[0],
-        video: !!videoInput?.files?.[0],
-      });
+      const fileCounts = {
+        images: imgInput?.files?.length || 0,
+        pdf: pdfInput?.files?.length || 0,
+        audio: audioInput?.files?.length || 0,
+        video: videoInput?.files?.length || 0,
+      };
+      // eslint-disable-next-line no-console
+      console.log("[AdminPrepPanel] files in FormData:", fileCounts);
     } catch {}
 
     setBusy(true);
     try {
-      await safeUpload("/api/prep/templates", fd);
+      await sendMultipart("/api/prep/templates", fd);
       f.reset();
-      await load(); // cache-busted, no-store
+      await load();            // refresh the list
       alert("Module saved");
     } catch (err) {
-      console.error(err);
-      alert(`Upload failed (${String(err?.message || err)})`);
+      // eslint-disable-next-line no-console
+      console.error("[AdminPrepPanel] save failed:", err);
+      alert(String(err?.message || err) || "Save failed");
     } finally {
       setBusy(false);
     }
@@ -227,7 +221,7 @@ function ExamEditor({ examId }) {
     await load();
   }
 
-  // -------- grouped list helpers --------
+  // ---------- helpers for grouped list ----------
   function groupByDay(items) {
     const m = new Map();
     for (const x of items) {
@@ -261,7 +255,9 @@ function ExamEditor({ examId }) {
           className="w-full flex items-center justify-between px-4 py-2 bg-gray-50"
         >
           <div className="font-medium">Day {day}</div>
-          <span className={`text-sm text-gray-500 transition-transform ${open ? "rotate-90" : ""}`}>›</span>
+          <span className={`text-sm text-gray-500 transition-transform ${open ? "rotate-90" : ""}`}>
+            ›
+          </span>
         </button>
         {open && (
           <ul className="divide-y">
@@ -289,7 +285,7 @@ function ExamEditor({ examId }) {
       </div>
     );
   }
-  // -------------------------------------
+  // ---------- end helpers ----------
 
   return (
     <>
@@ -306,7 +302,7 @@ function ExamEditor({ examId }) {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <div>
             <label className="block text-sm mb-1">Day Index</label>
-            <input name="dayIndex" type="number" min="1" required defaultValue="1" className="w-full border rounded px-3 py-2" />
+            <input name="dayIndex" type="number" min="1" required className="w-full border rounded px-3 py-2" />
           </div>
           <div>
             <label className="block text-sm mb-1">Slot (min)</label>
@@ -379,7 +375,11 @@ function ExamEditor({ examId }) {
           <label className="flex items-center gap-2">
             <input type="checkbox" name="highlight" /> Highlight
           </label>
-          <input className="w-full border rounded px-3 py-2" name="background" placeholder="background (e.g. #fffbe7)" />
+          <input
+            className="w-full border rounded px-3 py-2"
+            name="background"
+            placeholder="background (e.g. #fffbe7)"
+          />
         </div>
 
         <div className="flex gap-2">
@@ -397,7 +397,9 @@ function ExamEditor({ examId }) {
         {groupByDay(modules).map(([day, items]) => (
           <DayGroup key={day} day={day} items={items} onDelete={onDelete} />
         ))}
-        {!modules.length && <div className="px-4 py-6 text-center text-gray-500">No modules yet.</div>}
+        {!modules.length && (
+          <div className="px-4 py-6 text-center text-gray-500">No modules yet.</div>
+        )}
       </div>
     </>
   );
