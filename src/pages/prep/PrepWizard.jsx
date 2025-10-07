@@ -5,8 +5,7 @@ import { Card } from "../../components/ui/Card";
 import { ImageScroller } from "../../components/ui/ImageScroller";
 
 /**
- * Route shape assumed: /prep/:examId  (e.g. /prep/up%20apo)
- * We'll read :examId from location.
+ * Route shape assumed: /prep/:examId
  */
 function readExamId() {
   const parts = window.location.pathname.split("/").filter(Boolean);
@@ -173,16 +172,16 @@ function LockedPreviewCard({ m }) {
   );
 }
 
-/* --- Accordion-style module panel (images → text → audio/video) --- */
+/* --- Accordion-style module panel: IMAGES → TEXT → AUDIO → VIDEO → PDF --- */
 function ModulePanel({ m, index }) {
   const imgUrls = pick("image", m).map((it) => absUrl(it.url || ""));
   const audioUrl = pick("audio", m)[0]?.url;
   const videoUrl = pick("video", m)[0]?.url;
-  const pdfUrl = pick("pdf", m)[0]?.url;
+  const pdfUrl   = pick("pdf",   m)[0]?.url;
 
   const audioAbs = audioUrl ? absUrl(audioUrl) : "";
   const videoAbs = videoUrl ? absUrl(videoUrl) : "";
-  const pdfAbs = pdfUrl ? absUrl(pdfUrl) : "";
+  const pdfAbs   = pdfUrl   ? absUrl(pdfUrl)   : "";
 
   return (
     <details className="prep-card module" open={index === 0} style={{ marginBottom: 12 }}>
@@ -192,26 +191,31 @@ function ModulePanel({ m, index }) {
       </summary>
 
       <div style={{ marginTop: 12 }}>
+        {/* IMAGES FIRST */}
         {!!imgUrls.length && <ImageScroller images={imgUrls} />}
 
+        {/* TEXT */}
         {m.content && (
           <div className="ocr-box" style={{ marginTop: 12 }}>
             {m.content}
           </div>
         )}
 
+        {/* AUDIO */}
         {audioAbs && (
           <div style={{ marginTop: 12 }}>
             <audio controls src={audioAbs} style={{ width: "100%" }} />
           </div>
         )}
 
+        {/* VIDEO */}
         {videoAbs && (
           <div style={{ marginTop: 12 }}>
             <video controls src={videoAbs} style={{ width: "100%", borderRadius: 12 }} />
           </div>
         )}
 
+        {/* PDF */}
         {pdfAbs && (
           <div style={{ marginTop: 10 }}>
             <a className="badge" href={pdfAbs} target="_blank" rel="noreferrer">
@@ -221,101 +225,6 @@ function ModulePanel({ m, index }) {
         )}
       </div>
     </details>
-  );
-}
-
-// (kept for completeness; not used in Today list)
-function ModuleCard({ mod }) {
-  const [open, setOpen] = useState(true);
-
-  const files = mod.files || [];
-  const images = files.filter((f) => (f.kind || "").toLowerCase() === "image");
-  const pdfs = files.filter((f) => (f.kind || "").toLowerCase() === "pdf");
-  const audios = files.filter((f) => (f.kind || "").toLowerCase() === "audio");
-  const videos = files.filter((f) => (f.kind || "").toLowerCase() === "video");
-
-  const flags = mod.flags || {};
-  const showImages = images.length && (!flags.extractOCR || flags.showOriginal);
-  const showPDF = pdfs.length && (flags.showOriginal ?? true);
-  const showAudio = audios.length;
-  const showVideo = videos.length;
-
-  const textBlock =
-    (mod.content && String(mod.content).trim()) ||
-    (mod.manualText && String(mod.manualText).trim()) ||
-    (mod.ocrText && String(mod.ocrText).trim()) ||
-    "";
-
-  return (
-    <div className="rounded-lg border bg-white mb-4 overflow-hidden">
-      <div className="flex items-center justify-between px-3 py-2 bg-gray-50 border-b">
-        <div className="font-medium">{mod.title || "Untitled"}</div>
-        <div className="flex items-center gap-2 text-xs text-gray-600">
-          {mod.releaseAt && <span>{fmtTime(mod.releaseAt)}</span>}
-          <button onClick={() => setOpen((o) => !o)} className="px-2 py-0.5 rounded border">
-            {open ? "Hide" : "Show"}
-          </button>
-        </div>
-      </div>
-
-      {!open ? null : (
-        <div className="p-3 grid gap-3">
-          {showImages ? (
-            <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
-              {images.map((im, i) => (
-                <img
-                  key={i}
-                  loading="lazy"
-                  src={absUrl(im.url)}
-                  alt={`img-${i}`}
-                  className="w-full rounded shadow"
-                />
-              ))}
-            </div>
-          ) : null}
-
-          {textBlock ? (
-            <div className="rounded border bg-yellow-50 p-3" style={{ maxHeight: 360, overflowY: "auto" }}>
-              <pre className="whitespace-pre-wrap font-[ui-sans-serif] leading-6 text-[0.95rem]">
-                {textBlock}
-              </pre>
-            </div>
-          ) : null}
-
-          {showPDF ? (
-            <div className="grid gap-2">
-              {pdfs.map((p, i) => (
-                <a
-                  key={i}
-                  href={absUrl(p.url)}
-                  target="_blank"
-                  rel="noreferrer"
-                  className="text-sm underline text-blue-600"
-                >
-                  Open PDF {i + 1}
-                </a>
-              ))}
-            </div>
-          ) : null}
-
-          {showAudio ? (
-            <div className="grid gap-2">
-              {audios.map((a, i) => (
-                <audio key={i} controls preload="none" src={absUrl(a.url)} className="w-full" />
-              ))}
-            </div>
-          ) : null}
-
-          {showVideo ? (
-            <div className="grid gap-2">
-              {videos.map((v, i) => (
-                <video key={i} controls preload="metadata" src={absUrl(v.url)} className="w-full rounded" />
-              ))}
-            </div>
-          ) : null}
-        </div>
-      )}
-    </div>
   );
 }
 
@@ -393,7 +302,7 @@ export default function PrepWizard() {
   // for previewing any day
   const [allModules, setAllModules] = useState([]);
 
-  // everything (released + scheduled) for today; used by ComingLater
+  // everything (released + scheduled) for "today" – used by ComingLater
   const [todayPool, setTodayPool] = useState([]);
 
   // tiny UI states
@@ -414,7 +323,7 @@ export default function PrepWizard() {
       const [metaRes, tmplRes, todayRes] = await Promise.allSettled([
         getJSON(`/api/prep/user/summary?${qs.toString()}`),                     // todayDay / planDays
         getJSON(`/api/prep/templates?examId=${encodeURIComponent(examId)}`),    // ALL templates (has files/media)
-        getJSON(`/api/prep/user/today?examId=${encodeURIComponent(examId)}`),   // may 404 on your backend
+        getJSON(`/api/prep/user/today?examId=${encodeURIComponent(examId)}`),   // may be absent; now exists as alias too
       ]);
 
       // meta (required)
@@ -437,10 +346,10 @@ export default function PrepWizard() {
         fullToday = all.filter(m => Number(m.dayIndex) === Number(td));
       }
 
-      // everything for today (released + scheduled)
+      // Keep a pool of ALL items for today (released + scheduled) for “Coming later”
       setTodayPool(fullToday);
 
-      // visible list = only released/available
+      // Visible list = only released/available ones
       const now = Date.now();
       const releasedToday = fullToday
         .filter(m => !m.releaseAt || Date.parse(m.releaseAt) <= now || m.status === "released")
@@ -452,7 +361,7 @@ export default function PrepWizard() {
 
       setModules(releasedToday);
 
-      // keep all for calendar preview
+      // Keep “allModules” for calendar preview
       setAllModules(all);
 
       setCurrentDay(td);
@@ -467,7 +376,9 @@ export default function PrepWizard() {
     }
   }
 
-  useEffect(() => { load(); }, [examId]);
+  useEffect(() => {
+    load();
+  }, [examId]);
 
   // keep ?tab= in URL for consistency
   useEffect(() => {
@@ -508,7 +419,7 @@ export default function PrepWizard() {
       });
   }, [allModules, activeDay]);
 
-  // compute released modules and augment with `content` for ModulePanel
+  // compute released modules and augment with `content`
   const releasedModules = useMemo(() => {
     const list = (modules || [])
       .filter((m) => !m.releaseAt || Date.parse(m.releaseAt) <= nowUtcMs() || m.status === "released")
@@ -619,6 +530,7 @@ export default function PrepWizard() {
       <div className="text-lg font-semibold mb-1">{examId}</div>
       <div className="text-sm text-gray-600 mb-3">Day {todayDay}</div>
 
+      {/* day chips */}
       <DayNav
         planDays={planDays}
         currentDay={currentDay}
@@ -629,6 +541,7 @@ export default function PrepWizard() {
         }}
       />
 
+      {/* Use the complete pool (released + scheduled) for "Coming later" */}
       <ComingLater modules={todayPool} />
 
       {loading ? (
@@ -667,6 +580,7 @@ export default function PrepWizard() {
 
   return (
     <div className="prep-wrap">
+      {/* Modern tabbar */}
       <div className="tabbar">
         <a
           className={`tab ${tab === "calendar" ? "active" : ""}`}
