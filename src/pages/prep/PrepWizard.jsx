@@ -1,3 +1,4 @@
+// client/src/pages/prep/PrepWizard.jsx
 import { useEffect, useMemo, useState } from "react";
 import { getJSON, postJSON, absUrl } from "../../utils/api";
 import { Card } from "../../components/ui/Card";
@@ -147,14 +148,18 @@ function renderInline(sentence, rand) {
   });
 }
 
-// decide per-sentence style (mutually exclusive) — tuned to be subtle
+// decide per-sentence style (mutually exclusive) — tuned to be subtle but present
 function chooseSentenceStyle(sentence, rand) {
   const words = sentence.trim().split(/\s+/).filter(Boolean).length;
   const isLong = words >= 18;
 
-  if (isLong && rand() < 0.28) return "yellow";      // block highlight
-  if (rand() < 0.15)              return "underline";
-  if (rand() < 0.12)              return "bluebold";
+  // Balanced distribution: more long-sentence yellow; also blue/green blocks sprinkled
+  const r = rand();
+  if (isLong && r < 0.32) return "yellow";     // block highlight (frequent on long sentences)
+  if (r < 0.18)            return "underline"; // wavy underline
+  if (r < 0.28)            return "bluebold";  // bold blue
+  if (r < 0.40)            return "green";     // soft green block
+  if (r < 0.52)            return "blue";      // soft light-blue block
   return null;
 }
 
@@ -175,7 +180,39 @@ export function highlightNotes(raw, seedKey = "") {
           <mark
             key={si}
             style={{
-              backgroundColor: "rgba(255, 255, 150, 0.28)", // very transparent so lines show
+              backgroundColor: "rgba(255, 255, 150, 0.26)", // very transparent so lines show
+              borderRadius: 6,
+              display: "inline",
+              padding: "0 2px",
+              lineHeight: 1.6
+            }}
+          >
+            {s}
+          </mark>
+        );
+      }
+      if (style === "green") {
+        return (
+          <mark
+            key={si}
+            style={{
+              backgroundColor: "rgba(160, 255, 160, 0.22)",
+              borderRadius: 6,
+              display: "inline",
+              padding: "0 2px",
+              lineHeight: 1.6
+            }}
+          >
+            {s}
+          </mark>
+        );
+      }
+      if (style === "blue") {
+        return (
+          <mark
+            key={si}
+            style={{
+              backgroundColor: "rgba(173, 216, 255, 0.22)",
               borderRadius: 6,
               display: "inline",
               padding: "0 2px",
@@ -220,16 +257,19 @@ export function highlightNotes(raw, seedKey = "") {
   });
 }
 
-/* ----------- Realistic notebook page (white paper + red margin + blue lines) ----------- */
+/* ----------- Realistic notebook page (white paper + crisp red margin + blue rules) ----------- */
 export const linedPage = {
-  // Layer 1: bold red margin (3px) at 56px from left
-  // Layer 2: subtle white-to-offwhite vertical fade for paper feel
-  // Layer 3: blue ruled lines (fade slightly toward bottom)
+  /**
+   * Top layer: a real *line*, not a band — 2px crisp red at 56px.
+   * Next: white paper slight vertical shading for texture.
+   * Next: faint blue wash for ruled feel.
+   * Bottom: repeating blue ruled lines (27px leading) offset to sit between baselines.
+   */
   backgroundImage: `
-    linear-gradient(90deg, rgba(214, 28, 28, 0.85) 56px, rgba(214, 28, 28, 0.85) 59px, transparent 59px),
+    linear-gradient(90deg, transparent 0, transparent 56px, rgba(214,28,28,0.95) 56px, rgba(214,28,28,0.95) 58px, transparent 58px),
     linear-gradient(to bottom, rgba(255,255,255,0.98), rgba(255,255,255,0.96)),
-    linear-gradient(to bottom, rgba(0, 92, 255, 0.22), rgba(0, 92, 255, 0.12)),
-    repeating-linear-gradient(transparent, transparent 26px, rgba(0, 92, 255, 0.22) 27px, transparent 27px)
+    linear-gradient(to bottom, rgba(0, 92, 255, 0.14), rgba(0, 92, 255, 0.10)),
+    repeating-linear-gradient(transparent, transparent 26px, rgba(0, 92, 255, 0.24) 27px, transparent 27px)
   `,
   backgroundBlendMode: "normal, lighten, normal, normal",
   backgroundSize: "100% 100%, 100% 100%, 100% 100%, 100% 27px",
@@ -403,7 +443,7 @@ function ModulePanel({ m, index }) {
     setViewer({ open: true, idx: Math.max(0, idx) });
   }
 
-  // “notebook page” with stronger red margin + faded blue lines
+  // “notebook page” with handwritten font; paper always visible under highlights
   const notebookPage = {
     ...linedPage,
     maxHeight: expanded ? "none" : 320,
