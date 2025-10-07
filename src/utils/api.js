@@ -119,8 +119,22 @@ export async function upload(url, formData, init = {}) {
     ...BASE_INIT,
     ...init,
   });
-  if (!res.ok) throw new Error(`${url} ${res.status}`);
-  return res.json();
+
+  // --- Robust parser: prevents “Upload failed (HTTP 200)” ---
+  const text = await res.text();
+  let data;
+  try {
+    data = JSON.parse(text);
+  } catch {
+    data = { success: false, error: text };
+  }
+
+  if (!res.ok || !data?.success) {
+    const msg = data?.error || `Upload failed (${res.status})`;
+    throw new Error(msg);
+  }
+
+  return data;
 }
 
 // Expose these so other modules (and components) can reuse the resolved base/origin
