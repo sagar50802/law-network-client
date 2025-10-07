@@ -1,4 +1,3 @@
-// client/src/pages/prep/PrepWizard.jsx
 import { useEffect, useMemo, useState } from "react";
 import { getJSON, postJSON, absUrl } from "../../utils/api";
 import { Card } from "../../components/ui/Card";
@@ -71,83 +70,147 @@ function pick(kind, m) {
 
 /* --------------- prefer a non-empty text field across all shapes --------------- */
 function textOf(m) {
-  const candidates = [
-    m?.content,
-    m?.ocrText,
-    m?.text,
-    m?.manualText,
-    m?.description
-  ];
+  const candidates = [m?.content, m?.ocrText, m?.text, m?.manualText, m?.description];
   for (const s of candidates) {
     if (typeof s === "string" && s.trim()) return s.trim();
   }
   return "";
 }
 
-/* -------------------------- colorful-notes helpers -------------------------- */
+/* ====================== Colorful Notes (sentences + words) ====================== */
 
-// tiny stable PRNG so highlights don't “jump” on re-renders
-function seedFrom(s) {
+const IMPORTANT = [
+  /constitution/i, /fundamental rights?/i, /directive principles?/i, /preamble/i,
+  /parliament/i, /judiciary/i, /executive/i, /federal/i, /governance/i, /independence/i,
+  /reform/i, /democracy/i, /election/i, /econom(y|ic)/i, /industrial/i, /revolution/i,
+  /agricultur(e|al)/i, /rights?/i, /dut(y|ies)/i, /education/i, /health/i
+];
+
+// deterministic 32-bit hash
+function seedFrom(str = "") {
   let h = 2166136261 >>> 0;
-  for (let i = 0; i < s.length; i++) {
-    h ^= s.charCodeAt(i);
+  for (let i = 0; i < str.length; i++) {
+    h ^= str.charCodeAt(i);
     h = Math.imul(h, 16777619);
   }
   return h >>> 0;
 }
-function randBool(seed, i, mod) {
-  // Lehmer-ish step
-  const x = (Math.imul((seed ^ (i + 1)) + 0x9e3779b9, 0x85ebca6b) >>> 0) % mod;
-  return x === 0;
+
+// mulberry32 PRNG
+function rng(seed) {
+  let t = seed >>> 0;
+  return function rand() {
+    t += 0x6D2B79F5;
+    let x = Math.imul(t ^ (t >>> 15), 1 | t);
+    x ^= x + Math.imul(x ^ (x >>> 7), 61 | x);
+    return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
+  };
 }
 
-// mildly opinionated “important terms” — safe fallbacks if content is generic
-const IMPORTANT = new Set([
-  "overview","key","keys","important","summary","highlights","highlight",
-  "event","events","figure","figures","dates","fact","facts",
-  "ancient","medieval","modern","empire","kingdom","dynasty","civilization","constitution",
-  "right","rights","duty","duties","law","section","article","reform","economy","culture",
-  "india","indian","world","global"
-]);
+// naive sentence split that keeps end punctuation
+function splitSentences(text) {
+  const m = text.match(/[^.!?]+[.!?]*/g);
+  return m || [text];
+}
 
-/**
- * Returns React nodes with <mark> spans in three colors:
- *  - yellow: 4-digit years and “dates”
- *  - pink: important keywords
- *  - green: a light sprinkle for visual cadence (stable pseudo-random)
- */
-function highlightNotes(rawText, seedKey = "") {
-  if (!rawText) return rawText;
+const YEAR_RE = /\b(1[5-9]\d{2}|20\d{2}|2100)\b/;
 
-  const seed = seedFrom(seedKey + rawText.slice(0, 64));
-  const tokens = rawText.split(/(\s+|(?=[,.;:!?()])|(?<=[,.;:!?()]))/g);
+// inline (word-level) highlighting — used when sentence isn't block styled
+function renderInline(sentence, rand) {
+  const parts = sentence.split(/(\b[\p{L}\p{N}']+\b)/u); // keep punctuation and spaces
+  return parts.map((tok, i) => {
+    if (!/\b[\p{L}\p{N}']+\b/u.test(tok)) return <span key={i}>{tok}</span>;
 
-  return tokens.map((t, i) => {
-    // non-words / whitespace
-    if (!t || /^\s+$/.test(t) || /^[,.;:!?()]+$/.test(t)) return t;
+    // IMPORTANT → pink
+    if (IMPORTANT.some((re) => re.test(tok))) {
+      return <mark key={i} className="px-0.5 rounded bg-rose-200/70">{tok}</mark>;
+    }
 
-    const w = t.replace(/[^\w'-]/g, ""); // strip punctuation ends
-    const low = w.toLowerCase();
+    // Years → yellow
+    if (YEAR_RE.test(tok)) {
+      return <mark key={i} className="px-0.5 rounded bg-yellow-200/70">{tok}</mark>;
+    }
 
-    // patterns
-    const isYear = /\b(1[5-9]\d{2}|20\d{2})\b/.test(w);
-    const isImportant = IMPORTANT.has(low);
+    // sprinkle a few green notes (very low probability)
+    if (rand() < 0.06) {
+      return <mark key={i} className="px-0.5 rounded bg-lime-200/70">{tok}</mark>;
+    }
 
-    // gentle random sprinkle (about 1 in 28 tokens)
-    const sprinkle = !isYear && !isImportant && randBool(seed, i, 28);
+    return <span key={i}>{tok}</span>;
+  });
+}
 
-    let cls = "";
-    if (isYear) cls = "bg-yellow-200/70";
-    else if (isImportant) cls = "bg-rose-200/70";
-    else if (sprinkle) cls = "bg-lime-200/70";
+// decide per-sentence style (mutually exclusive)
+function chooseSentenceStyle(sentence, rand) {
+  const words = sentence.trim().split(/\s+/).filter(Boolean).length;
+  const isLong = words >= 18;
 
-    return cls ? (
-      <mark key={i} className={`px-0.5 rounded-sm ${cls}`}>{t}</mark>
-    ) : (
-      <span key={i}>{t}</span>
+  if (isLong && rand() < 0.38) return "yellow"; // block highlight
+  if (rand() < 0.18) return "underline";
+  if (rand() < 0.14) return "bluebold";
+  return null;
+}
+
+// main renderer: paragraphs → sentences → styled spans
+export function highlightNotes(raw, seedKey = "") {
+  if (!raw) return null;
+  const paras = String(raw).trim().split(/\n{2,}/);
+  const baseSeed = seedFrom(seedKey + "|" + raw.length);
+  const rand = rng(baseSeed);
+
+  return paras.map((para, pi) => {
+    const sentences = splitSentences(para);
+    const nodes = sentences.map((s, si) => {
+      const style = chooseSentenceStyle(s, rand);
+
+      if (style === "yellow") {
+        return (
+          <mark
+            key={si}
+            className="block bg-yellow-100/70 rounded-lg px-2 py-1 leading-relaxed"
+          >
+            {s}
+          </mark>
+        );
+      }
+      if (style === "underline") {
+        return (
+          <span
+            key={si}
+            className="underline decoration-amber-500/90 decoration-2 underline-offset-4"
+          >
+            {renderInline(s, rand)}
+          </span>
+        );
+      }
+      if (style === "bluebold") {
+        return (
+          <span key={si} className="font-semibold text-blue-700/90">
+            {renderInline(s, rand)}
+          </span>
+        );
+      }
+      return <span key={si}>{renderInline(s, rand)}</span>;
+    });
+
+    return (
+      <div key={pi} className="mb-2 last:mb-0">
+        {nodes}
+      </div>
     );
   });
 }
+
+// lined-page background (same as before)
+export const linedPage = {
+  backgroundImage:
+    "linear-gradient(#EDF2FF 28px, transparent 0), linear-gradient(90deg, #EEF2F7 1px, transparent 1px)",
+  backgroundSize: "100% 28px, 40px 100%",
+  backgroundPosition: "0 14px, 0 0",
+  border: "1px solid #E5EAF3",
+  borderRadius: 12,
+  padding: 12
+};
 
 /* ---------------- helpers for midnight countdown + day chips ---------------- */
 
@@ -200,8 +263,7 @@ function NextDayTeaser({ day }) {
     <div className="mt-6 p-4 border rounded-xl bg-amber-50">
       <div className="font-medium mb-1">Ready for Day {day} tasks</div>
       <div className="text-sm text-gray-700">
-        Unlocks in <span className="font-mono">{left}</span>. Admin may add content before the
-        unlock time.
+        Unlocks in <span className="font-mono">{left}</span>. Admin may add content before the unlock time.
       </div>
     </div>
   );
@@ -209,7 +271,6 @@ function NextDayTeaser({ day }) {
 
 /* ------------------------ module + later components ------------------------ */
 
-// --- Locked preview card (NO TIME SHOWN) ---
 function LockedPreviewCard({ m }) {
   const imgs = pick("image", m);
   const hasAudio = pick("audio", m).length > 0;
@@ -220,68 +281,41 @@ function LockedPreviewCard({ m }) {
       <div className="absolute right-2 top-2 text-[10px] px-1.5 py-0.5 rounded bg-gray-200 text-gray-700">
         Preview
       </div>
-
       <div className="font-medium mb-2">{m.title || "Untitled"}</div>
-
       {!!imgs.length && (
         <div className="flex gap-2 overflow-x-auto pb-2">
           {imgs.slice(0, 6).map((it, i) => {
             const u = absUrl(it.url || "");
             return (
-              <div
-                key={i}
-                className="relative w-24 h-16 shrink-0 rounded overflow-hidden bg-gray-200"
-                title="Locked until release"
-              >
+              <div key={i} className="relative w-24 h-16 shrink-0 rounded overflow-hidden bg-gray-200" title="Locked until release">
                 <img src={u} alt="" className="w-full h-full object-cover opacity-60" />
-                <div className="absolute inset-0 grid place-items-center text-white/90 text-xs">
-                  🔒
-                </div>
+                <div className="absolute inset-0 grid place-items-center text-white/90 text-xs">🔒</div>
               </div>
             );
           })}
         </div>
       )}
-
       {textOf(m) && <p className="text-xs text-gray-600 italic line-clamp-3">Unlocks soon.</p>}
-
-      {(hasAudio || hasVideo) && (
-        <div className="mt-2 text-xs text-gray-500">Media will unlock when available.</div>
-      )}
+      {(hasAudio || hasVideo) && <div className="mt-2 text-xs text-gray-500">Media will unlock when available.</div>}
     </div>
   );
 }
 
-/* --- Accordion-style module panel: IMAGES → TEXT → AUDIO → VIDEO → PDF --- */
+/* --- Accordion-style module panel --- */
 function ModulePanel({ m, index }) {
   const [expanded, setExpanded] = useState(false);
 
   const imgUrls = pick("image", m).map((it) => absUrl(it.url || ""));
   const audioUrl = pick("audio", m)[0]?.url;
   const videoUrl = pick("video", m)[0]?.url;
-  const pdfUrl   = pick("pdf",   m)[0]?.url;
+  const pdfUrl = pick("pdf", m)[0]?.url;
 
   const audioAbs = audioUrl ? absUrl(audioUrl) : "";
   const videoAbs = videoUrl ? absUrl(videoUrl) : "";
-  const pdfAbs   = pdfUrl   ? absUrl(pdfUrl)   : "";
+  const pdfAbs = pdfUrl ? absUrl(pdfUrl) : "";
 
-  const content = textOf(m); // robust text selection
-
-  // “lined page” styling
-  const linedPage = {
-    // subtle notebook lines
-    backgroundImage:
-      "repeating-linear-gradient(0deg, #ffffff, #ffffff 26px, #eaf1ff 27px)",
-    backgroundSize: "100% 27px",
-    border: "2px solid rgba(76, 29, 149, 0.12)",
-    borderRadius: 14,
-    padding: 12,
-    lineHeight: 1.6,
-    whiteSpace: "pre-wrap",
-    wordBreak: "break-word",
-    maxHeight: expanded ? "none" : 280,   // <- taller by default
-    overflowY: expanded ? "visible" : "auto",
-  };
+  const content = textOf(m);
+  const doHighlight = m?.flags?.highlight !== false;
 
   return (
     <details className="prep-card module" open={index === 0} style={{ marginBottom: 12 }}>
@@ -289,16 +323,12 @@ function ModulePanel({ m, index }) {
         <span style={{ fontWeight: 600 }}>{m.title || "Untitled"}</span>
         <span className="chev">›</span>
       </summary>
-
       <div style={{ marginTop: 12 }}>
-        {/* IMAGES FIRST */}
         {!!imgUrls.length && <ImageScroller images={imgUrls} />}
-
-        {/* TEXT (scrollable, colorful “notes”) */}
         {content && (
           <>
-            <div className="mt-3" style={linedPage}>
-              {highlightNotes(content, m._id || m.title || "")}
+            <div className="mt-3 ocr-box" style={{ ...linedPage, maxHeight: expanded ? "none" : 320, overflow: "auto" }}>
+              {doHighlight ? highlightNotes(content, m._id || m.title || "") : content}
             </div>
             <div className="mt-1">
               <button
@@ -311,44 +341,22 @@ function ModulePanel({ m, index }) {
             </div>
           </>
         )}
-
-        {/* AUDIO */}
-        {audioAbs && (
-          <div style={{ marginTop: 12 }}>
-            <audio controls src={audioAbs} style={{ width: "100%" }} />
-          </div>
-        )}
-
-        {/* VIDEO */}
-        {videoAbs && (
-          <div style={{ marginTop: 12 }}>
-            <video controls src={videoAbs} style={{ width: "100%", borderRadius: 12 }} />
-          </div>
-        )}
-
-        {/* PDF */}
-        {pdfAbs && (
-          <div style={{ marginTop: 10 }}>
-            <a className="badge" href={pdfAbs} target="_blank" rel="noreferrer">
-              Open PDF
-            </a>
-          </div>
-        )}
+        {audioAbs && <div style={{ marginTop: 12 }}><audio controls src={audioAbs} style={{ width: "100%" }} /></div>}
+        {videoAbs && <div style={{ marginTop: 12 }}><video controls src={videoAbs} style={{ width: "100%", borderRadius: 12 }} /></div>}
+        {pdfAbs && <div style={{ marginTop: 10 }}><a className="badge" href={pdfAbs} target="_blank" rel="noreferrer">Open PDF</a></div>}
       </div>
     </details>
   );
 }
 
+/* --------------------------- Coming Later --------------------------- */
 function ComingLater({ modules }) {
   const later = useMemo(() => {
     const now = nowUtcMs();
-    return (modules || [])
-      .filter((m) => m.releaseAt && Date.parse(m.releaseAt) > now)
+    return (modules || []).filter((m) => m.releaseAt && Date.parse(m.releaseAt) > now)
       .sort((a, b) => Date.parse(a.releaseAt) - Date.parse(b.releaseAt));
   }, [modules]);
-
   if (!later.length) return null;
-
   return (
     <div className="text-sm text-gray-600 mb-3">
       <div className="font-medium mb-1">Coming later today:</div>
@@ -364,11 +372,9 @@ function ComingLater({ modules }) {
   );
 }
 
-/* --------------------------- preview panel (no time) --------------------------- */
-
+/* --------------------------- Preview Panel --------------------------- */
 function PreviewPanel({ day, modules }) {
   if (!modules?.length) return null;
-
   const previews = useMemo(
     () =>
       modules.map((m) => {
@@ -380,7 +386,6 @@ function PreviewPanel({ day, modules }) {
       }),
     [modules]
   );
-
   return (
     <div className="mt-6">
       <div className="mb-2 text-sm font-semibold">Preview — Day {day}</div>
@@ -394,38 +399,26 @@ function PreviewPanel({ day, modules }) {
 }
 
 /* ---------------------------------- page ---------------------------------- */
-
 export default function PrepWizard() {
   const examId = readExamId();
   const [tab, setTab] = useState(() => new URLSearchParams(location.search).get("tab") || "today");
   const [loading, setLoading] = useState(false);
 
-  // existing
   const [todayDay, setTodayDay] = useState(1);
   const [planDays, setPlanDays] = useState(1);
   const [modules, setModules] = useState([]);
-
-  // for previewing any day
   const [allModules, setAllModules] = useState([]);
-
-  // everything (released + scheduled) for "today" – used by ComingLater
   const [todayPool, setTodayPool] = useState([]);
-
-  // tiny UI states
   const [currentDay, setCurrentDay] = useState(1);
   const [activeDay, setActiveDay] = useState(1);
-
-  // optional email (if your site stores it for progress API)
   const email = localStorage.getItem("userEmail") || "";
 
-  // ✅ ROBUST: meta + templates (and optional today endpoint if present)
   async function load() {
     if (!examId) return;
     setLoading(true);
     try {
       const qs = new URLSearchParams({ examId });
       if (email) qs.set("email", email);
-
       const [metaRes, tmplRes, todayRes] = await Promise.allSettled([
         getJSON(`/api/prep/user/summary?${qs.toString()}`),
         getJSON(`/api/prep/templates?examId=${encodeURIComponent(examId)}`),
@@ -450,19 +443,11 @@ export default function PrepWizard() {
       }
 
       setTodayPool(fullToday);
-
       const now = Date.now();
-      const releasedToday = fullToday
-        .filter(m => !m.releaseAt || Date.parse(m.releaseAt) <= now || m.status === "released")
-        .sort((a, b) => {
-          const ta = a.releaseAt ? Date.parse(a.releaseAt) : 0;
-          const tb = b.releaseAt ? Date.parse(b.releaseAt) : 0;
-          return ta - tb;
-        });
-
+      const releasedToday = fullToday.filter(m => !m.releaseAt || Date.parse(m.releaseAt) <= now || m.status === "released")
+        .sort((a, b) => (a.releaseAt ? Date.parse(a.releaseAt) : 0) - (b.releaseAt ? Date.parse(b.releaseAt) : 0));
       setModules(releasedToday);
       setAllModules(all);
-
       setCurrentDay(td);
       setActiveDay(td);
     } catch (e) {
@@ -475,16 +460,16 @@ export default function PrepWizard() {
     }
   }
 
-  useEffect(() => {
-    load();
-  }, [examId]);
-
-  // keep ?tab= in URL for consistency
+  useEffect(() => { load(); }, [examId]);
   useEffect(() => {
     const u = new URL(location.href);
     u.searchParams.set("tab", tab);
     history.replaceState(null, "", u.toString());
   }, [tab]);
+  useEffect(() => {
+    const t = setInterval(() => load(), 60000);
+    return () => clearInterval(t);
+  }, [examId]);
 
   async function markComplete() {
     try {
@@ -492,11 +477,7 @@ export default function PrepWizard() {
         alert("Progress marking needs an email in localStorage as 'userEmail'. Skipping call.");
         return;
       }
-      await postJSON("/api/prep/user/complete", {
-        examId,
-        email,
-        dayIndex: todayDay,
-      });
+      await postJSON("/api/prep/user/complete", { examId, email, dayIndex: todayDay });
       alert("Marked complete!");
       await load();
     } catch (e) {
@@ -505,114 +486,24 @@ export default function PrepWizard() {
     }
   }
 
-  // modules to preview for the currently selected calendar day (no time shown)
   const previewModulesForActiveDay = useMemo(() => {
     return (allModules || [])
       .filter((m) => Number(m.dayIndex) === Number(activeDay))
-      .sort((a, b) => {
-        const sa = Number(a.slotMin || 0) - Number(b.slotMin || 0);
-        if (sa !== 0) return sa;
-        const ra = a.releaseAt ? Date.parse(a.releaseAt) : 0;
-        const rb = b.releaseAt ? Date.parse(b.releaseAt) : 0;
-        return ra - rb;
-      });
+      .sort((a, b) => Number(a.slotMin || 0) - Number(b.slotMin || 0));
   }, [allModules, activeDay]);
 
-  // compute released modules and augment with robust `content`
   const releasedModules = useMemo(() => {
-    const list = (modules || [])
+    return (modules || [])
       .filter((m) => !m.releaseAt || Date.parse(m.releaseAt) <= nowUtcMs() || m.status === "released")
-      .sort((a, b) => {
-        const ta = a.releaseAt ? Date.parse(a.releaseAt) : 0;
-        const tb = b.releaseAt ? Date.parse(b.releaseAt) : 0;
-        return ta - tb;
-      })
-      .map((m) => ({
-        ...m,
-        content: textOf(m),
-      }));
-    return list;
+      .sort((a, b) => (a.releaseAt ? Date.parse(a.releaseAt) : 0) - (b.releaseAt ? Date.parse(b.releaseAt) : 0))
+      .map((m) => ({ ...m, content: textOf(m) }));
   }, [modules]);
 
-  /* ---------- Tabs ---------- */
-
   const cohortDay = todayDay;
-  const userStates = undefined;
 
-  /* ========= CALENDAR TAB ========= */
   const calendarTab = (
     <div style={{ marginTop: 16 }}>
-      <div className="text-sm text-gray-500">
-        Current Day (cohort): <b>Day {cohortDay}</b>
-      </div>
-
-      {(() => {
-        const sourceMods = (allModules && allModules.length) ? allModules : modules;
-
-        const byDay = new Map();
-        (sourceMods || []).forEach(m => {
-          const d = Number(m.dayIndex) || 1;
-          if (!byDay.has(d)) byDay.set(d, []);
-          byDay.get(d).push(m);
-        });
-
-        const maxPlanned = Math.max(...Array.from(byDay.keys(), d => +d || 1), 1);
-        const last = Math.max(maxPlanned, cohortDay + 6, 21);
-
-        const isDone = (m, userStatesMap) => {
-          const s = userStatesMap?.[m._id];
-          return s === true || s?.done === true;
-        };
-
-        const cells = [];
-        for (let d = 1; d <= last; d++) {
-          const items = byDay.get(d) || [];
-          const released = items.filter(x => x.status === 'released' || !x.releaseAt || Date.parse(x.releaseAt) <= Date.now());
-          const anyReleased = released.length > 0;
-
-          let cls = "daycell";
-          let badge = "";
-          if (d > cohortDay) {
-            cls += " locked";
-            badge = "🔒";
-          } else if (d === cohortDay) {
-            cls += " today";
-            const allDone = released.length && released.every(m => isDone(m, userStates));
-            if (allDone) badge = "✅";
-            else if (released.length) badge = "●";
-          } else {
-            const allDone = released.length && released.every(m => isDone(m, userStates));
-            if (allDone) { cls += " completed"; badge = "✅"; }
-            else if (anyReleased) { cls += " available"; badge = "●"; }
-            else { cls += " locked"; badge = "—"; }
-          }
-
-          const href = d <= cohortDay ? `?tab=today&d=${d}` : undefined;
-
-          cells.push(
-            href ? (
-              <a
-                key={d}
-                className={cls}
-                href={href}
-                title={`Day ${d}`}
-                onClick={(e) => { e.preventDefault(); setTab("today"); }}
-              >
-                <span>{d}</span>
-                {badge && <span className="badge">{badge}</span>}
-              </a>
-            ) : (
-              <div key={d} className={cls} title={`Day ${d}`}>
-                <span>{d}</span>
-                {badge && <span className="badge">{badge}</span>}
-              </div>
-            )
-          );
-        }
-
-        return <div className="daygrid">{cells}</div>;
-      })()}
-
+      <div className="text-sm text-gray-500">Current Day (cohort): <b>Day {cohortDay}</b></div>
       {!!previewModulesForActiveDay.length && (
         <PreviewPanel day={activeDay} modules={previewModulesForActiveDay} />
       )}
@@ -623,82 +514,39 @@ export default function PrepWizard() {
     <div className="max-w-3xl mx-auto">
       <div className="text-lg font-semibold mb-1">{examId}</div>
       <div className="text-sm text-gray-600 mb-3">Day {todayDay}</div>
-
-      {/* day chips */}
-      <DayNav
-        planDays={planDays}
-        currentDay={currentDay}
-        activeDay={activeDay}
-        onPick={(d) => {
-          setActiveDay(d);
-          if (d !== currentDay) setTab("calendar");
-        }}
-      />
-
-      {/* Use the complete pool (released + scheduled) for "Coming later" */}
+      <DayNav planDays={planDays} currentDay={currentDay} activeDay={activeDay} onPick={(d) => {
+        setActiveDay(d);
+        if (d !== currentDay) setTab("calendar");
+      }} />
       <ComingLater modules={todayPool} />
-
-      {loading ? (
-        <div className="text-gray-500">Loading…</div>
-      ) : !releasedModules.length ? (
-        <div className="text-gray-500">No modules for today yet.</div>
-      ) : (
-        releasedModules.map((m, i) => <ModulePanel key={m._id || i} m={m} index={i} />)
-      )}
-
+      {loading ? <div className="text-gray-500">Loading…</div> :
+        !releasedModules.length ? <div className="text-gray-500">No modules for today yet.</div> :
+          releasedModules.map((m, i) => <ModulePanel key={m._id || i} m={m} index={i} />)}
       <div className="mt-4">
-        <button onClick={markComplete} className="px-4 py-2 rounded bg-amber-600 text-white">
-          Mark Complete
-        </button>
-        <div className="text-xs text-gray-500 mt-2">
-          Plan days: {planDays} • Day {todayDay}
-        </div>
+        <button onClick={markComplete} className="px-4 py-2 rounded bg-amber-600 text-white">Mark Complete</button>
+        <div className="text-xs text-gray-500 mt-2">Plan days: {planDays} • Day {todayDay}</div>
       </div>
-
       {currentDay < planDays && <NextDayTeaser day={currentDay + 1} />}
     </div>
   );
 
   const progressTab = (
     <div className="max-w-3xl mx-auto text-sm text-gray-600">
-      <p>
-        Progress view (lightweight). Use “Mark Complete” on Today’s Task to record completion for
-        Day {todayDay}.
-      </p>
-      <p className="mt-2">
-        <i>Tip:</i> If you want a detailed per-topic progress bar, we can add an endpoint that
-        returns the user’s completed days/items and render it here.
-      </p>
+      <p>Progress view (lightweight). Use “Mark Complete” on Today’s Task to record completion for Day {todayDay}.</p>
+      <p className="mt-2"><i>Tip:</i> If you want a detailed per-topic progress bar, we can add an endpoint that returns the user’s completed days/items and render it here.</p>
     </div>
   );
 
   return (
     <div className="prep-wrap">
-      {/* Modern tabbar */}
       <div className="tabbar">
-        <a
-          className={`tab ${tab === "calendar" ? "active" : ""}`}
-          href="?tab=calendar"
-          onClick={(e) => { e.preventDefault(); setTab("calendar"); }}
-        >
-          Calendar
-        </a>
-        <a
-          className={`tab ${tab === "today" ? "active" : ""}`}
-          href="?tab=today"
-          onClick={(e) => { e.preventDefault(); setTab("today"); }}
-        >
-          Today’s Task
-        </a>
-        <a
-          className={`tab ${tab === "progress" ? "active" : ""}`}
-          href="?tab=progress"
-          onClick={(e) => { e.preventDefault(); setTab("progress"); }}
-        >
-          Progress
-        </a>
+        <a className={`tab ${tab === "calendar" ? "active" : ""}`} href="?tab=calendar"
+          onClick={(e) => { e.preventDefault(); setTab("calendar"); }}>Calendar</a>
+        <a className={`tab ${tab === "today" ? "active" : ""}`} href="?tab=today"
+          onClick={(e) => { e.preventDefault(); setTab("today"); }}>Today’s Task</a>
+        <a className={`tab ${tab === "progress" ? "active" : ""}`} href="?tab=progress"
+          onClick={(e) => { e.preventDefault(); setTab("progress"); }}>Progress</a>
       </div>
-
       {tab === "calendar" ? calendarTab : tab === "progress" ? progressTab : todayTab}
     </div>
   );
