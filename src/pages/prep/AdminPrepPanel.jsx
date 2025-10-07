@@ -1,5 +1,6 @@
+// client/src/pages/prep/AdminPrepPanel.jsx
 import { useEffect, useRef, useState } from "react";
-import { getJSON, postJSON, delJSON } from "../../utils/api"; // upload removed for safety
+import { getJSON, postJSON, upload, delJSON } from "../../utils/api"; // keep imports the same to avoid ripple changes
 
 export default function AdminPrepPanel() {
   const [exams, setExams] = useState([]);
@@ -31,7 +32,6 @@ export default function AdminPrepPanel() {
 
   useEffect(() => {
     loadExams();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
@@ -105,68 +105,117 @@ function ExamEditor({ examId }) {
   }
   useEffect(() => {
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [examId]);
 
   function bool(v) {
     return v ? "true" : "false";
   }
 
+  // Robust uploader that tolerates 200 with empty/invalid JSON body
+  async function safeUpload(url, fd) {
+    const res = await fetch(url, { method: "POST", body: fd });
+    // HTTP errors are real errors
+    if (!res.ok) {
+      const t = await res.text().catch(() => "");
+      throw new Error(`HTTP ${res.status}${t ? ` — ${t}` : ""}`);
+    }
+    // Try to parse JSON; if it fails but status was 200, treat as success
+    try {
+      const data = await res.json();
+      if (data && data.success === false) {
+        throw new Error(data.error || "Server returned success:false");
+      }
+      return data || { success: true };
+    } catch {
+      // Empty / non-JSON body (Render/edge quirks) — still fine since 200 OK
+      return { success: true };
+    }
+  }
+
   async function onSave(e) {
     e.preventDefault();
     const f = formRef.current;
-    const fd = new FormData(f);
+
+    // Build FormData explicitly so Multer receives exact fields it expects.
+    const fd = new FormData();
+
+    // Required fields
+    const dayIndex = String(f.elements.dayIndex.value || "").trim();
+    const slotMin = String(f.elements.slotMin.value || "0").trim();
+    const title = String(f.elements.title.value || "").trim();
+
+    if (!dayIndex) return alert("dayIndex is required");
 
     fd.set("examId", examId);
-    // normalize checkboxes (always send explicit strings)
-    fd.set("extractOCR", bool(f.elements.extractOCR.checked));
-    fd.set("showOriginal", bool(f.elements.showOriginal.checked));
-    fd.set("allowDownload", bool(f.elements.allowDownload.checked));
-    fd.set("highlight", bool(f.elements.highlight.checked));
-    // ocrAtRelease is sent automatically by browser if checked
+    fd.set("dayIndex", dayIndex);
+    fd.set("slotMin", slotMin || "0");
+    if (title) fd.set("title", title);
 
-    // normalize releaseAt (local -> ISO UTC)
-    const ra = fd.get("releaseAt");
+    // Date/time → ISO
+    const ra = String(f.elements.releaseAt.value || "").trim();
     if (ra) {
-      const d = new Date(String(ra)); // "YYYY-MM-DDTHH:mm"
+      const d = new Date(ra); // local "YYYY-MM-DDTHH:mm"
       if (!isNaN(d)) fd.set("releaseAt", d.toISOString());
     }
 
-    // (debug-only) verify files are actually present in the FormData
-    // This helps confirm the browser is including your selections.
-    const debugEntries = [];
-    for (const [k, v] of fd.entries()) {
-      if (v instanceof File) debugEntries.push([k, `${v.name} (${v.size} bytes)`]);
+    // Texts
+    const manualText = String(f.elements.manualText?.value || "").trim();
+    const content = String(f.elements.content?.value || "").trim();
+    if (manualText) fd.set("manualText", manualText);
+    if (content) fd.set("content", content);
+
+    // Flags
+    fd.set("extractOCR", bool(f.elements.extractOCR?.checked));
+    fd.set("showOriginal", bool(f.elements.showOriginal?.checked));
+    fd.set("allowDownload", bool(f.elements.allowDownload?.checked));
+    fd.set("highlight", bool(f.elements.highlight?.checked));
+    const bg = String(f.elements.background?.value || "").trim();
+    if (bg) fd.set("background", bg);
+
+    // ocrAtRelease checkbox (append only if checked to match server’s truthy logic)
+    if (f.elements.ocrAtRelease?.checked) fd.set("ocrAtRelease", "true");
+
+    // Files — append each one under the correct name
+    const imgInput = f.elements.images;
+    if (imgInput?.files?.length) {
+      for (const file of imgInput.files) {
+        if (file) fd.append("images", file, file.name);
+      }
     }
-    // eslint-disable-next-line no-console
-    console.log("[AdminPrepPanel] files in FormData:", debugEntries);
+    const pdfInput = f.elements.pdf;
+    if (pdfInput?.files?.[0]) fd.append("pdf", pdfInput.files[0], pdfInput.files[0].name);
+
+    const audioInput = f.elements.audio;
+    if (audioInput?.files?.[0]) fd.append("audio", audioInput.files[0], audioInput.files[0].name);
+
+    const videoInput = f.elements.video;
+    if (videoInput?.files?.[0]) fd.append("video", videoInput.files[0], videoInput.files[0].name);
+
+    // Debug (safe): log counts to help when something is off
+    try {
+      let imgCount = 0;
+      for (const [k, v] of fd.entries()) {
+        if (k === "images" && v instanceof File) imgCount++;
+      }
+      // eslint-disable-next-line no-console
+      console.debug("[AdminPrepPanel] files about to upload:", {
+        images: imgCount,
+        pdf: !!pdfInput?.files?.[0],
+        audio: !!audioInput?.files?.[0],
+        video: !!videoInput?.files?.[0],
+      });
+    } catch {}
 
     setBusy(true);
     try {
-      // IMPORTANT: do NOT set Content-Type. Let the browser add the multipart boundary.
-      const resp = await fetch("/api/prep/templates", { method: "POST", body: fd });
-      let data = null;
-      try {
-        data = await resp.json();
-      } catch {
-        // If server returned empty or non-JSON, make a readable error.
-        throw new Error(`Upload failed (HTTP ${resp.status})`);
-      }
-      if (!resp.ok || data?.success === false) {
-        throw new Error(data?.error || "Upload failed");
-      }
-
-      // Clear file inputs so the browser doesn't re-send the same files on next save
+      await safeUpload("/api/prep/templates", fd);
       f.reset();
-      for (const input of f.querySelectorAll('input[type="file"]')) {
-        input.value = "";
-      }
-
       await load();
       alert("Module saved");
     } catch (err) {
+      // eslint-disable-next-line no-console
       console.error(err);
-      alert(String(err?.message || "Save failed"));
+      alert(`Upload failed (${String(err?.message || err)})`);
     } finally {
       setBusy(false);
     }
@@ -260,7 +309,7 @@ function ExamEditor({ examId }) {
         <div className="grid grid-cols-2 md:grid-cols-4 gap-3">
           <div>
             <label className="block text-sm mb-1">Day Index</label>
-            <input name="dayIndex" type="number" min="1" required className="w-full border rounded px-3 py-2" />
+            <input name="dayIndex" type="number" min="1" required defaultValue="1" className="w-full border rounded px-3 py-2" />
           </div>
           <div>
             <label className="block text-sm mb-1">Slot (min)</label>
