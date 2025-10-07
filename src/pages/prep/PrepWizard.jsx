@@ -41,8 +41,9 @@ function fileKindOf(f) {
 
 /**
  * pick("image"|"audio"|"video"|"pdf", module) -> normalized array
- * Normalizes:
- *  - module.files: [{kind,url,mime,name}] (preferred)
+ * Handles:
+ *  - module.files: [{_id?, kind?, url?, path?, mime?, contentType?, name?}]
+ *    (fallback to /api/files/:id if no url/path)
  *  - legacy module.images: [string]
  *  - single module.audio / module.video / module.pdf : string or {url}
  */
@@ -53,15 +54,18 @@ function pick(kind, m) {
   if (Array.isArray(m?.files)) {
     for (const f of m.files) {
       if (!f) continue;
-      const k = fileKindOf(f);
       const mime = (f.mime || f.contentType || "").toLowerCase();
-      if (
-        (kind === "image" && (k === "image" || mime.startsWith("image/"))) ||
-        (kind === "audio" && (k === "audio" || mime.startsWith("audio/"))) ||
-        (kind === "video" && (k === "video" || mime.startsWith("video/"))) ||
-        (kind === "pdf" && (k === "pdf" || mime === "application/pdf"))
-      ) {
-        out.push({ url: f.url || f.path, kind: k || kind, mime: mime || undefined, name: f.name });
+      const byMime = mime.split("/")[0];
+      const k = (f.kind || byMime || "").toLowerCase();
+
+      const isImg = kind === "image" && (k === "image" || mime.startsWith("image/"));
+      const isAud = kind === "audio" && (k === "audio" || mime.startsWith("audio/"));
+      const isVid = kind === "video" && (k === "video" || mime.startsWith("video/"));
+      const isPdf = kind === "pdf" && (k === "pdf" || mime === "application/pdf");
+
+      if (isImg || isAud || isVid || isPdf) {
+        const raw = f.url || f.path || (f._id ? `/api/files/${f._id}` : "");
+        if (raw) out.push({ url: raw, kind: k || kind, mime, name: f.name });
       }
     }
   }
@@ -80,10 +84,10 @@ function pick(kind, m) {
     out.push(typeof m.pdf === "string" ? { url: m.pdf, kind: "pdf" } : { ...m.pdf, kind: "pdf" });
   }
 
-  // de-dupe by url
+  // de-dupe
   const seen = new Set();
   return out.filter((x) => {
-    const key = x.url || x.path || "";
+    const key = x.url || "";
     if (!key || seen.has(key)) return false;
     seen.add(key);
     return true;
@@ -429,6 +433,7 @@ export default function PrepWizard() {
   // optional email (if your site stores it for progress API)
   const email = localStorage.getItem("userEmail") || "";
 
+  // ✅ UPDATED: fetch meta + full today items + templates
   async function load() {
     if (!examId) return;
     setLoading(true);
@@ -436,22 +441,27 @@ export default function PrepWizard() {
       const qs = new URLSearchParams({ examId });
       if (email) qs.set("email", email);
 
-      // fetch "today summary" and "all templates" for previews
-      const [r, t] = await Promise.all([
-        getJSON(`/api/prep/user/summary?${qs.toString()}`),
-        getJSON(`/api/prep/templates?examId=${encodeURIComponent(examId)}`),
+      // meta (planDays/todayDay) + full "today" items + all templates (for previews)
+      const [meta, today, t] = await Promise.all([
+        getJSON(`/api/prep/user/summary?${qs.toString()}`),                       // has todayDay / planDays
+        getJSON(`/api/prep/user/today?examId=${encodeURIComponent(examId)}`),     // full items WITH files
+        getJSON(`/api/prep/templates?examId=${encodeURIComponent(examId)}`),      // previews
       ]);
 
-      const td = r.todayDay || 1;
-      const pd = r.planDays || 1;
+      const td = meta.todayDay || 1;
+      const pd = meta.planDays || 1;
 
       setTodayDay(td);
       setPlanDays(pd);
-      setModules(Array.isArray(r.modules) ? r.modules : []);
+
+      // Prefer the full items from /user/today; fall back to summary if needed
+      const fullToday = Array.isArray(today.items)
+        ? today.items
+        : (Array.isArray(meta.modules) ? meta.modules : []);
+      setModules(fullToday);
 
       setAllModules(Array.isArray(t.items) ? t.items : []);
 
-      // mirror “context” into UI chips
       setCurrentDay(td);
       setActiveDay(td);
     } catch (e) {
