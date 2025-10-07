@@ -1,36 +1,15 @@
 // client/src/pages/prep/AdminPrepPanel.jsx
 import { useEffect, useRef, useState } from "react";
-import { getJSON, postJSON, delJSON } from "../../utils/api";
+import { getJSON, delJSON } from "../../utils/api";
 
-/**
- * Local, robust multipart sender.
- * - DOES NOT set Content-Type (lets browser set boundary)
- * - Tries JSON > text > empty
- */
+/** Robust multipart POST (keeps cookies, safe JSON parse) */
 async function sendMultipart(url, formData) {
-  const res = await fetch(url, {
-    method: "POST",
-    body: formData,
-    credentials: "include",
-  });
-
-  // Try to parse as JSON; fall back to text; tolerate empty body.
-  let body;
-  const raw = await res.text();
-  try {
-    body = raw ? JSON.parse(raw) : {};
-  } catch {
-    body = { success: res.ok, raw };
-  }
-
-  if (!res.ok || body?.success === false) {
-    const msg =
-      body?.error ||
-      body?.message ||
-      `Upload failed (HTTP ${res.status})`;
-    throw new Error(msg);
-  }
-  return body || { success: true };
+  const res = await fetch(url, { method: "POST", body: formData, credentials: "include" });
+  // Some proxies return text; parse safely
+  const text = await res.text();
+  let data = {};
+  try { data = JSON.parse(text); } catch { /* noop */ }
+  return { ok: res.ok, status: res.status, data, text };
 }
 
 export default function AdminPrepPanel() {
@@ -40,7 +19,7 @@ export default function AdminPrepPanel() {
 
   async function loadExams() {
     try {
-      const r = await getJSON("/api/prep/exams");
+      const r = await getJSON("/api/prep/exams?_=" + Date.now());
       const list = r.exams || [];
       setExams(list);
       if (!list.length) setSelExam("");
@@ -55,7 +34,15 @@ export default function AdminPrepPanel() {
     const examId = makeExam.examId.trim();
     const name = makeExam.name.trim();
     if (!examId || !name) return alert("examId and name required");
-    await postJSON("/api/prep/exams", { examId, name, scheduleMode: "cohort" });
+
+    const fd = new FormData();
+    fd.set("examId", examId);
+    fd.set("name", name);
+    fd.set("scheduleMode", "cohort");
+    const r = await sendMultipart("/api/prep/exams", fd);
+    if (!r.ok || !r.data?.success) {
+      return alert("Create exam failed");
+    }
     setMakeExam({ examId: "", name: "" });
     await loadExams();
     setSelExam(examId);
@@ -127,13 +114,14 @@ function ExamEditor({ examId }) {
   const [busy, setBusy] = useState(false);
   const formRef = useRef(null);
 
-  async function load() {
-    const r = await getJSON(`/api/prep/templates?examId=${encodeURIComponent(examId)}`);
+  async function load(force = false) {
+    const ts = force ? `&_=${Date.now()}` : "";
+    const r = await getJSON(`/api/prep/templates?examId=${encodeURIComponent(examId)}${ts}`);
     const items = (r.items || []).sort((a, b) => a.dayIndex - b.dayIndex || a.slotMin - b.slotMin);
     setModules(items);
   }
   useEffect(() => {
-    load();
+    load(true);
   }, [examId]);
 
   function bool(v) {
@@ -143,73 +131,60 @@ function ExamEditor({ examId }) {
   async function onSave(e) {
     e.preventDefault();
     const f = formRef.current;
-
-    // Build FormData from the form
     const fd = new FormData(f);
+
+    // required fields
     fd.set("examId", examId);
 
-    // normalize checkboxes (ensure string truthy flags are sent even when unchecked)
+    // normalize checkboxes
     fd.set("extractOCR", bool(f.elements.extractOCR.checked));
     fd.set("showOriginal", bool(f.elements.showOriginal.checked));
     fd.set("allowDownload", bool(f.elements.allowDownload.checked));
     fd.set("highlight", bool(f.elements.highlight.checked));
-    // note: ocrAtRelease is included automatically when checked
+    // (ocrAtRelease is sent only if checked – leave as-is)
 
-    // normalize releaseAt (local → ISO)
+    // normalize releaseAt (local -> ISO)
     const ra = fd.get("releaseAt");
     if (ra) {
       const d = new Date(String(ra));
       if (!isNaN(d)) fd.set("releaseAt", d.toISOString());
     }
 
-    // IMPORTANT: make sure files are really appended as multipart
-    // (some helper libs override headers and break this)
-    // Re-append explicitly so we’re 100% sure.
-    const imgInput = f.elements.images;
-    const pdfInput = f.elements.pdf;
-    const audioInput = f.elements.audio;
-    const videoInput = f.elements.video;
-
-    if (imgInput?.files) {
-      // remove any auto-captured browser entries first,
-      // then append in a clean order.
-      fd.delete("images");
-      for (const file of imgInput.files) {
-        fd.append("images", file, file.name);
-      }
-    }
-    if (pdfInput?.files?.[0]) {
-      fd.set("pdf", pdfInput.files[0], pdfInput.files[0].name);
-    }
-    if (audioInput?.files?.[0]) {
-      fd.set("audio", audioInput.files[0], audioInput.files[0].name);
-    }
-    if (videoInput?.files?.[0]) {
-      fd.set("video", videoInput.files[0], videoInput.files[0].name);
-    }
-
-    // Debug: show what we’re sending
-    try {
-      const fileCounts = {
-        images: imgInput?.files?.length || 0,
-        pdf: pdfInput?.files?.length || 0,
-        audio: audioInput?.files?.length || 0,
-        video: videoInput?.files?.length || 0,
-      };
-      // eslint-disable-next-line no-console
-      console.log("[AdminPrepPanel] files in FormData:", fileCounts);
-    } catch {}
+    // Debug: count attached files so you can verify selections quickly
+    const countFiles = (name) => {
+      const entries = fd.getAll(name);
+      return entries.reduce((n, v) => (v instanceof File && v.size > 0 ? n + 1 : n), 0);
+    };
+    const filesDebug = {
+      images: countFiles("images"),
+      pdf: countFiles("pdf"),
+      audio: countFiles("audio"),
+      video: countFiles("video"),
+    };
+    console.log("[AdminPrepPanel] files in FormData:", filesDebug);
 
     setBusy(true);
     try {
-      await sendMultipart("/api/prep/templates", fd);
+      const res = await sendMultipart("/api/prep/templates", fd);
+      if (!res.ok || !res.data?.success) {
+        console.warn("Upload response:", res.status, res.text?.slice?.(0, 300));
+        alert(`Upload failed (HTTP ${res.status})`);
+        return;
+      }
+
+      // clear the form (including file inputs)
       f.reset();
-      await load();            // refresh the list
+
+      // Force refresh list (cache-buster) so the new row appears instantly
+      await load(true);
+      // Small delay helps with eventually-consistent DBs/caches
+      await new Promise((r) => setTimeout(r, 120));
+      await load(true);
+
       alert("Module saved");
     } catch (err) {
-      // eslint-disable-next-line no-console
-      console.error("[AdminPrepPanel] save failed:", err);
-      alert(String(err?.message || err) || "Save failed");
+      console.error(err);
+      alert("Save failed");
     } finally {
       setBusy(false);
     }
@@ -218,20 +193,21 @@ function ExamEditor({ examId }) {
   async function onDelete(id) {
     if (!confirm("Delete this module?")) return;
     await delJSON(`/api/prep/templates/${id}`);
-    await load();
+    await load(true);
   }
 
   // ---------- helpers for grouped list ----------
   function groupByDay(items) {
     const m = new Map();
     for (const x of items) {
-      if (!m.has(x.dayIndex)) m.set(x.dayIndex, []);
-      m.get(x.dayIndex).push(x);
+      const d = Number(x.dayIndex) || 0;
+      if (!m.has(d)) m.set(d, []);
+      m.get(d).push(x);
     }
     for (const arr of m.values()) {
       arr.sort((a, b) => {
-        const aa = a.releaseAt ? Date.parse(a.releaseAt) : a.slotMin || 0;
-        const bb = b.releaseAt ? Date.parse(b.releaseAt) : b.slotMin || 0;
+        const aa = a.releaseAt ? Date.parse(a.releaseAt) : Number(a.slotMin || 0);
+        const bb = b.releaseAt ? Date.parse(b.releaseAt) : Number(b.slotMin || 0);
         return aa - bb;
       });
     }
@@ -247,7 +223,7 @@ function ExamEditor({ examId }) {
   }
 
   function DayGroup({ day, items, onDelete }) {
-    const [open, setOpen] = useState(day === 1);
+    const [open, setOpen] = useState(day === 1); // open Day 1 by default
     return (
       <div className="border-b">
         <button
@@ -324,7 +300,6 @@ function ExamEditor({ examId }) {
             <label className="block text-sm mb-1">Images (multiple)</label>
             <input name="images" type="file" accept="image/*" multiple />
           </div>
-
           <div>
             <label className="block text-sm mb-1">PDF</label>
             <input name="pdf" type="file" accept="application/pdf" />
@@ -332,7 +307,6 @@ function ExamEditor({ examId }) {
               <input type="checkbox" name="ocrAtRelease" /> Auto-OCR at release
             </label>
           </div>
-
           <div>
             <label className="block text-sm mb-1">Audio</label>
             <input name="audio" type="file" accept="audio/*" />
@@ -386,12 +360,13 @@ function ExamEditor({ examId }) {
           <button disabled={busy} className="px-4 py-2 rounded bg-black text-white">
             {busy ? "Saving…" : "Save Module"}
           </button>
-          <button type="button" onClick={load} className="px-3 py-2 rounded border">
+          <button type="button" onClick={() => load(true)} className="px-3 py-2 rounded border">
             Refresh
           </button>
         </div>
       </form>
 
+      {/* ------- Grouped & collapsible list ------- */}
       <div className="rounded-xl border bg-white">
         <div className="px-4 py-3 border-b font-medium">Existing Modules</div>
         {groupByDay(modules).map(([day, items]) => (
@@ -401,6 +376,7 @@ function ExamEditor({ examId }) {
           <div className="px-4 py-6 text-center text-gray-500">No modules yet.</div>
         )}
       </div>
+      {/* ----------------------------------------- */}
     </>
   );
 }
