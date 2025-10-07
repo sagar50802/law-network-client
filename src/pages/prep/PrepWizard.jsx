@@ -1,7 +1,6 @@
 // client/src/pages/prep/PrepWizard.jsx
 import { useEffect, useMemo, useState } from "react";
 import { getJSON, postJSON, absUrl } from "../../utils/api";
-import { Card } from "../../components/ui/Card";
 import { ImageScroller } from "../../components/ui/ImageScroller";
 
 /**
@@ -69,15 +68,9 @@ function pick(kind, m) {
   });
 }
 
-/* --------------- prefer a non-empty text field across all shapes --------------- */
+/* --------------- robust text chooser (works with all shapes) --------------- */
 function textOf(m) {
-  const candidates = [
-    m?.content,       // computed on client
-    m?.ocrText,       // OCR text
-    m?.text,          // server keeps manualText here
-    m?.manualText,    // legacy name
-    m?.description    // optional
-  ];
+  const candidates = [m?.content, m?.ocrText, m?.text, m?.manualText, m?.description];
   for (const s of candidates) {
     if (typeof s === "string" && s.trim()) return s.trim();
   }
@@ -116,8 +109,8 @@ function DayNav({ planDays, currentDay, activeDay, onPick }) {
           key={d}
           onClick={() => onPick(d)}
           className={[
-            "px-3 py-1 rounded-full border text-sm transition",
-            d === activeDay ? "bg-black text-white border-black" : "bg-white hover:bg-gray-50",
+            "px-3 py-1 rounded-full border text-sm",
+            d === activeDay ? "bg-black text-white border-black" : "bg-white",
             d === currentDay ? "ring-2 ring-amber-400" : "",
           ].join(" ")}
           title={d === currentDay ? "Current day" : `Go to Day ${d}`}
@@ -142,6 +135,41 @@ function NextDayTeaser({ day }) {
   );
 }
 
+/* -------------------------- Lightbox / media viewer -------------------------- */
+
+function MediaViewer({ src, onClose, allowDownload }) {
+  if (!src) return null;
+  return (
+    <div
+      className="fixed inset-0 z-[999] flex items-center justify-center bg-black/70 backdrop-blur-sm"
+      onClick={onClose}
+      onContextMenu={(e) => !allowDownload && e.preventDefault()}
+    >
+      <button
+        onClick={onClose}
+        className="absolute top-4 left-4 px-3 py-1 rounded-full bg-white text-black shadow"
+      >
+        Back
+      </button>
+
+      {/* Anti-save discouragers (cannot be perfect on the web) */}
+      <div className="relative max-w-[92vw] max-h-[88vh]">
+        <img
+          src={absUrl(src)}
+          alt=""
+          className="max-w-full max-h-[88vh] rounded-xl shadow-2xl select-none"
+          draggable={false}
+          onDragStart={(e) => e.preventDefault()}
+          onContextMenu={(e) => !allowDownload && e.preventDefault()}
+        />
+        {!allowDownload && (
+          <div className="absolute inset-0" aria-hidden="true" />
+        )}
+      </div>
+    </div>
+  );
+}
+
 /* ------------------------ module + later components ------------------------ */
 
 // --- Locked preview card (NO TIME SHOWN) ---
@@ -149,30 +177,14 @@ function LockedPreviewCard({ m }) {
   const imgs = pick("image", m);
   const hasAudio = pick("audio", m).length > 0;
   const hasVideo = pick("video", m).length > 0;
-  const hasPdf   = pick("pdf", m).length > 0;
-  const mediaChips = [
-    imgs.length ? `🖼️ ${imgs.length}` : null,
-    hasAudio ? "🎧" : null,
-    hasVideo ? "🎬" : null,
-    hasPdf   ? "📄" : null,
-  ].filter(Boolean);
 
   return (
-    <div className="rounded-2xl border bg-white shadow-sm p-3 relative overflow-hidden">
-      <div className="absolute right-3 top-3 text-[10px] px-1.5 py-0.5 rounded bg-gray-200 text-gray-700">
+    <div className="rounded-lg border p-3 bg-gray-50 relative overflow-hidden">
+      <div className="absolute right-2 top-2 text-[10px] px-1.5 py-0.5 rounded bg-gray-200 text-gray-700">
         Preview
       </div>
 
-      <div className="flex items-center justify-between gap-3 mb-2">
-        <div className="font-semibold text-sm truncate">{m.title || "Untitled"}</div>
-        {!!mediaChips.length && (
-          <div className="flex items-center gap-1 text-[11px] text-gray-600">
-            {mediaChips.map((t, i) => (
-              <span key={i} className="px-1.5 py-0.5 rounded bg-gray-100 border">{t}</span>
-            ))}
-          </div>
-        )}
-      </div>
+      <div className="font-medium mb-2">{m.title || "Untitled"}</div>
 
       {!!imgs.length && (
         <div className="flex gap-2 overflow-x-auto pb-2">
@@ -205,7 +217,8 @@ function LockedPreviewCard({ m }) {
 
 /* --- Accordion-style module panel: IMAGES → TEXT → AUDIO → VIDEO → PDF --- */
 function ModulePanel({ m, index }) {
-  const imgUrls = pick("image", m).map((it) => absUrl(it.url || ""));
+  const imgObjs = pick("image", m);
+  const imgUrls = imgObjs.map((it) => absUrl(it.url || ""));
   const audioUrl = pick("audio", m)[0]?.url;
   const videoUrl = pick("video", m)[0]?.url;
   const pdfUrl   = pick("pdf",   m)[0]?.url;
@@ -214,90 +227,131 @@ function ModulePanel({ m, index }) {
   const videoAbs = videoUrl ? absUrl(videoUrl) : "";
   const pdfAbs   = pdfUrl   ? absUrl(pdfUrl)   : "";
 
-  const content = textOf(m);
+  const content = textOf(m); // ← robust text selection
+  const allowDownload = !!m?.flags?.allowDownload;
 
-  // Status pill
-  const isScheduled = m.releaseAt && Date.parse(m.releaseAt) > Date.now() && m.status !== "released";
-  const pill = isScheduled
-    ? { text: `Scheduled • ${fmtTime(m.releaseAt)}`, cls: "bg-amber-100 text-amber-800 border-amber-200" }
-    : { text: "Released", cls: "bg-emerald-100 text-emerald-800 border-emerald-200" };
+  const [viewerSrc, setViewerSrc] = useState("");
+  const [expandedText, setExpandedText] = useState(false);
 
-  // Media chips
-  const chips = [
-    imgUrls.length ? `🖼️ ${imgUrls.length}` : null,
-    audioAbs ? "🎧" : null,
-    videoAbs ? "🎬" : null,
-    pdfAbs   ? "📄" : null,
-  ].filter(Boolean);
+  // small, non-disruptive horizontal strip that opens the lightbox
+  const ImagesStrip = ({ images }) => {
+    if (!images?.length) return null;
+    return (
+      <div className="flex gap-2 overflow-x-auto pb-2">
+        {images.map((u, i) => (
+          <button
+            key={i}
+            type="button"
+            className="shrink-0 w-36 h-24 rounded-lg overflow-hidden bg-gray-200"
+            title="Tap to view"
+            onClick={() => setViewerSrc(imgObjs[i]?.url || u)}
+            onContextMenu={(e) => { if (!allowDownload) e.preventDefault(); }}
+          >
+            <img
+              src={u}
+              alt=""
+              className="w-full h-full object-cover select-none"
+              draggable={false}
+              onDragStart={(e) => e.preventDefault()}
+            />
+          </button>
+        ))}
+      </div>
+    );
+  };
 
   return (
-    <details className="rounded-2xl border bg-white shadow-sm" open={index === 0} style={{ marginBottom: 14 }}>
-      <summary className="list-none cursor-pointer select-none">
-        <div className="flex items-center justify-between gap-3 p-3">
-          <div className="min-w-0">
-            <div className="font-semibold leading-6 truncate">{m.title || "Untitled"}</div>
-            <div className="flex items-center gap-1 mt-1 text-[11px] text-gray-600">
-              <span className={`px-2 py-0.5 rounded-full border ${pill.cls}`}>{pill.text}</span>
-              {!!chips.length && <span className="text-gray-400">•</span>}
-              {chips.map((t, i) => (
-                <span key={i} className="px-1.5 py-0.5 rounded bg-gray-50 border text-gray-700">{t}</span>
-              ))}
+    <>
+      <details className="prep-card module" open={index === 0} style={{ marginBottom: 12 }}>
+        <summary>
+          <span style={{ fontWeight: 600 }}>{m.title || "Untitled"}</span>
+          <span className="chev">›</span>
+        </summary>
+
+        <div style={{ marginTop: 12 }}>
+          {/* IMAGES FIRST (clickable → fullscreen viewer) */}
+          {!!imgUrls.length && <ImagesStrip images={imgUrls} />}
+
+          {/* TEXT (scrollable, a bit taller + expandable) */}
+          {content && (
+            <div
+              className="ocr-box"
+              style={{
+                marginTop: 12,
+                maxHeight: expandedText ? 520 : 320, // a little longer than before (+ expand)
+                overflow: "auto",
+                whiteSpace: "pre-wrap",
+                wordBreak: "break-word",
+                lineHeight: 1.55,
+                background: "#fff",
+                border: "1px solid #eee",
+                borderRadius: 12,
+                padding: 12
+              }}
+            >
+              {content}
             </div>
-          </div>
-          <span className="chev text-gray-400">›</span>
+          )}
+          {content && (
+            <div className="mt-2">
+              <button
+                type="button"
+                className="text-xs px-2 py-1 rounded border"
+                onClick={() => setExpandedText((v) => !v)}
+              >
+                {expandedText ? "Collapse text" : "Expand text"}
+              </button>
+            </div>
+          )}
+
+          {/* AUDIO (hide download unless allowed) */}
+          {audioAbs && (
+            <div style={{ marginTop: 12 }}>
+              <audio
+                controls
+                src={audioAbs}
+                style={{ width: "100%" }}
+                controlsList={allowDownload ? undefined : "nodownload noplaybackrate noremoteplayback"}
+                onContextMenu={(e) => { if (!allowDownload) e.preventDefault(); }}
+              />
+            </div>
+          )}
+
+          {/* VIDEO (hide download/PiP unless allowed) */}
+          {videoAbs && (
+            <div style={{ marginTop: 12 }}>
+              <video
+                controls
+                src={videoAbs}
+                style={{ width: "100%", borderRadius: 12 }}
+                playsInline
+                disablePictureInPicture={!allowDownload}
+                controlsList={allowDownload ? undefined : "nodownload noplaybackrate noremoteplayback"}
+                onContextMenu={(e) => { if (!allowDownload) e.preventDefault(); }}
+              />
+            </div>
+          )}
+
+          {/* PDF (always opens in new tab) */}
+          {pdfAbs && (
+            <div style={{ marginTop: 10 }}>
+              <a className="badge" href={pdfAbs} target="_blank" rel="noreferrer">
+                Open PDF
+              </a>
+            </div>
+          )}
         </div>
-      </summary>
+      </details>
 
-      <div className="px-3 pb-3">
-        {/* IMAGES FIRST */}
-        {!!imgUrls.length && (
-          <div className="mb-3">
-            <ImageScroller images={imgUrls} />
-          </div>
-        )}
-
-        {/* TEXT (scrollable, clean) */}
-        {content && (
-          <div
-            className="
-              relative rounded-xl border bg-white
-              max-h-[220px] overflow-auto
-              p-3 leading-relaxed text-[14px]
-              whitespace-pre-wrap break-words
-            "
-          >
-            {content}
-            {/* subtle top/bottom fade */}
-            <div className="pointer-events-none absolute left-0 right-0 top-0 h-4 bg-gradient-to-b from-white to-transparent rounded-t-xl" />
-            <div className="pointer-events-none absolute left-0 right-0 bottom-0 h-4 bg-gradient-to-t from-white to-transparent rounded-b-xl" />
-          </div>
-        )}
-
-        {/* AUDIO */}
-        {audioAbs && (
-          <div className="mt-3">
-            <audio controls src={audioAbs} className="w-full" />
-          </div>
-        )}
-
-        {/* VIDEO */}
-        {videoAbs && (
-          <div className="mt-3">
-            <video controls src={videoAbs} className="w-full rounded-xl" />
-          </div>
-        )}
-
-        {/* PDF */}
-        {pdfAbs && (
-          <div className="mt-3">
-            <a className="inline-flex items-center gap-2 px-3 py-1.5 rounded-lg border bg-gray-50 hover:bg-gray-100 text-sm"
-               href={pdfAbs} target="_blank" rel="noreferrer">
-              📄 Open PDF
-            </a>
-          </div>
-        )}
-      </div>
-    </details>
+      {/* Fullscreen lightbox viewer */}
+      {viewerSrc && (
+        <MediaViewer
+          src={viewerSrc}
+          allowDownload={allowDownload}
+          onClose={() => setViewerSrc("")}
+        />
+      )}
+    </>
   );
 }
 
@@ -391,7 +445,7 @@ export default function PrepWizard() {
       const [metaRes, tmplRes, todayRes] = await Promise.allSettled([
         getJSON(`/api/prep/user/summary?${qs.toString()}`),                     // todayDay / planDays
         getJSON(`/api/prep/templates?examId=${encodeURIComponent(examId)}`),    // ALL templates (has files/media)
-        getJSON(`/api/prep/user/today?examId=${encodeURIComponent(examId)}`),   // today's items (server returns all; client splits later)
+        getJSON(`/api/prep/user/today?examId=${encodeURIComponent(examId)}`),   // may be absent; now exists as alias too
       ]);
 
       // meta (required)
@@ -446,6 +500,7 @@ export default function PrepWizard() {
 
   useEffect(() => {
     load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [examId]);
 
   // keep ?tab= in URL for consistency
@@ -646,21 +701,21 @@ export default function PrepWizard() {
       {/* Modern tabbar */}
       <div className="tabbar">
         <a
-          className={`tab ${tab === "calendar" ? "active" : ""} hover:bg-gray-50`}
+          className={`tab ${tab === "calendar" ? "active" : ""}`}
           href="?tab=calendar"
           onClick={(e) => { e.preventDefault(); setTab("calendar"); }}
         >
           Calendar
         </a>
         <a
-          className={`tab ${tab === "today" ? "active" : ""} hover:bg-gray-50`}
+          className={`tab ${tab === "today" ? "active" : ""}`}
           href="?tab=today"
           onClick={(e) => { e.preventDefault(); setTab("today"); }}
         >
           Today’s Task
         </a>
         <a
-          className={`tab ${tab === "progress" ? "active" : ""} hover:bg-gray-50`}
+          className={`tab ${tab === "progress" ? "active" : ""}`}
           href="?tab=progress"
           onClick={(e) => { e.preventDefault(); setTab("progress"); }}
         >
