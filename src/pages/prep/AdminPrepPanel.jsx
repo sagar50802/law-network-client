@@ -165,6 +165,7 @@ function ExamEditor({ examId }) {
 
     setBusy(true);
     try {
+      // IMPORTANT: native fetch via sendMultipart; no manual headers.
       const res = await sendMultipart("/api/prep/templates", fd);
       if (!res.ok || !res.data?.success) {
         console.warn("Upload response:", res.status, res.text?.slice?.(0, 300));
