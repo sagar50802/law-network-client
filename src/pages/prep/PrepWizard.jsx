@@ -84,9 +84,7 @@ function textOf(m) {
 }
 
 /* ====================== Colorful Notes (sentences + words) ====================== */
-/* drop-in replacement: sentence-level styles (yellow block / underline / blue+bold)
-   while word-level highlights (pink/yellow/green) still apply when the sentence
-   isn't block-highlighted.  */
+/* Balanced opacity so notebook lines & paper stay visible */
 
 const IMPORTANT = [
   /constitution/i, /fundamental rights?/i, /directive principles?/i, /preamble/i,
@@ -96,7 +94,7 @@ const IMPORTANT = [
 ];
 
 // deterministic 32-bit hash
-function seedFrom(str = "") {
+function seed32(str = "") {
   let h = 2166136261 >>> 0;
   for (let i = 0; i < str.length; i++) {
     h ^= str.charCodeAt(i);
@@ -132,31 +130,31 @@ function renderInline(sentence, rand) {
 
     // IMPORTANT → pink
     if (IMPORTANT.some((re) => re.test(tok))) {
-      return <mark key={i} className="px-0.5 rounded bg-rose-200/70">{tok}</mark>;
+      return <mark key={i} style={{ backgroundColor: "rgba(255, 138, 168, 0.35)", borderRadius: 2 }}>{tok}</mark>;
     }
 
     // Years → yellow
     if (YEAR_RE.test(tok)) {
-      return <mark key={i} className="px-0.5 rounded bg-yellow-200/70">{tok}</mark>;
+      return <mark key={i} style={{ backgroundColor: "rgba(255, 242, 0, 0.35)", borderRadius: 2 }}>{tok}</mark>;
     }
 
     // sprinkle a few green notes (very low probability)
-    if (rand() < 0.06) {
-      return <mark key={i} className="px-0.5 rounded bg-lime-200/70">{tok}</mark>;
+    if (rand() < 0.045) {
+      return <mark key={i} style={{ backgroundColor: "rgba(194, 255, 125, 0.35)", borderRadius: 2 }}>{tok}</mark>;
     }
 
     return <span key={i}>{tok}</span>;
   });
 }
 
-// decide per-sentence style (mutually exclusive)
+// decide per-sentence style (mutually exclusive) — tuned to be subtle
 function chooseSentenceStyle(sentence, rand) {
   const words = sentence.trim().split(/\s+/).filter(Boolean).length;
   const isLong = words >= 18;
 
-  if (isLong && rand() < 0.38) return "yellow";      // block highlight
-  if (rand() < 0.18)              return "underline";
-  if (rand() < 0.14)              return "bluebold";
+  if (isLong && rand() < 0.28) return "yellow";      // block highlight
+  if (rand() < 0.15)              return "underline";
+  if (rand() < 0.12)              return "bluebold";
   return null;
 }
 
@@ -164,7 +162,7 @@ function chooseSentenceStyle(sentence, rand) {
 export function highlightNotes(raw, seedKey = "") {
   if (!raw) return null;
   const paras = String(raw).trim().split(/\n{2,}/);
-  const baseSeed = seedFrom(seedKey + "|" + raw.length);
+  const baseSeed = seed32(seedKey + "|" + raw.length);
   const rand = rng(baseSeed);
 
   return paras.map((para, pi) => {
@@ -176,7 +174,13 @@ export function highlightNotes(raw, seedKey = "") {
         return (
           <mark
             key={si}
-            className="block bg-yellow-100/70 rounded-lg px-2 py-1 leading-relaxed"
+            style={{
+              backgroundColor: "rgba(255, 255, 150, 0.28)", // very transparent so lines show
+              borderRadius: 6,
+              display: "inline",
+              padding: "0 2px",
+              lineHeight: 1.6
+            }}
           >
             {s}
           </mark>
@@ -186,7 +190,12 @@ export function highlightNotes(raw, seedKey = "") {
         return (
           <span
             key={si}
-            className="underline decoration-amber-500/90 decoration-2 underline-offset-4"
+            style={{
+              textDecorationLine: "underline",
+              textDecorationStyle: "wavy",
+              textDecorationColor: "rgba(255,170,0,0.5)",
+              textDecorationThickness: "2px"
+            }}
           >
             {renderInline(s, rand)}
           </span>
@@ -194,7 +203,7 @@ export function highlightNotes(raw, seedKey = "") {
       }
       if (style === "bluebold") {
         return (
-          <span key={si} className="font-semibold text-blue-700/90">
+          <span key={si} style={{ fontWeight: 600, color: "#1d4ed8" }}>
             {renderInline(s, rand)}
           </span>
         );
@@ -204,12 +213,36 @@ export function highlightNotes(raw, seedKey = "") {
     });
 
     return (
-      <div key={pi} className="mb-2 last:mb-0">
+      <div key={pi} style={{ marginBottom: 6 }} className="last:mb-0">
         {nodes}
       </div>
     );
   });
 }
+
+/* ----------- Realistic notebook page (white paper + red margin + blue lines) ----------- */
+export const linedPage = {
+  // Layer 1: bold red margin (3px) at 56px from left
+  // Layer 2: subtle white-to-offwhite vertical fade for paper feel
+  // Layer 3: blue ruled lines (fade slightly toward bottom)
+  backgroundImage: `
+    linear-gradient(90deg, rgba(214, 28, 28, 0.85) 56px, rgba(214, 28, 28, 0.85) 59px, transparent 59px),
+    linear-gradient(to bottom, rgba(255,255,255,0.98), rgba(255,255,255,0.96)),
+    linear-gradient(to bottom, rgba(0, 92, 255, 0.22), rgba(0, 92, 255, 0.12)),
+    repeating-linear-gradient(transparent, transparent 26px, rgba(0, 92, 255, 0.22) 27px, transparent 27px)
+  `,
+  backgroundBlendMode: "normal, lighten, normal, normal",
+  backgroundSize: "100% 100%, 100% 100%, 100% 100%, 100% 27px",
+  backgroundPosition: "0 0, 0 0, 0 0, 0 14px",
+  backgroundColor: "#ffffff",
+  border: "1px solid #dbe3f6",
+  borderRadius: 12,
+  padding: "14px 14px 14px 72px", // left padding to clear red margin
+  lineHeight: 1.6,
+  whiteSpace: "pre-wrap",
+  wordBreak: "break-word",
+  boxShadow: "inset 0 0 8px rgba(0,0,0,0.03)"
+};
 
 /* ---------------- helpers for midnight countdown + day chips ---------------- */
 
@@ -269,6 +302,35 @@ function NextDayTeaser({ day }) {
   );
 }
 
+/* ------------------------ fullscreen image viewer ------------------------ */
+
+function FullscreenViewer({ urls, index, onClose }) {
+  if (!urls?.length) return null;
+  const src = urls[index] || urls[0];
+
+  return (
+    <div
+      className="fixed inset-0 z-[9999] backdrop-blur-md bg-black/70 flex items-center justify-center p-4"
+      onClick={onClose}
+      onContextMenu={(e) => e.preventDefault()} // soft block right-click save
+    >
+      <img
+        src={src}
+        alt=""
+        className="max-w-full max-h-[85vh] rounded-lg shadow-2xl object-contain select-none"
+        draggable={false}
+      />
+      <button
+        className="absolute top-4 right-6 text-white text-2xl font-bold bg-black/50 rounded-full px-3 py-1"
+        onClick={(e) => { e.stopPropagation(); onClose(); }}
+        aria-label="Close"
+      >
+        ✕
+      </button>
+    </div>
+  );
+}
+
 /* ------------------------ module + later components ------------------------ */
 
 // --- Locked preview card (NO TIME SHOWN) ---
@@ -295,7 +357,7 @@ function LockedPreviewCard({ m }) {
                 className="relative w-24 h-16 shrink-0 rounded overflow-hidden bg-gray-200"
                 title="Locked until release"
               >
-                <img src={u} alt="" className="w-full h-full object-cover opacity-60" />
+                <img src={u} alt="" className="w-full h-full object-cover opacity-60 select-none" draggable={false} />
                 <div className="absolute inset-0 grid place-items-center text-white/90 text-xs">
                   🔒
                 </div>
@@ -314,67 +376,10 @@ function LockedPreviewCard({ m }) {
   );
 }
 
-/* --- Simple fullscreen image viewer (non-intrusive) --- */
-function FullscreenViewer({ urls, index, onClose, onPrev, onNext, allowDownload }) {
-  if (!urls?.length) return null;
-  const src = urls[index] || urls[0] || "";
-
-  return (
-    <div
-      role="dialog"
-      aria-modal="true"
-      className="fixed inset-0 z-[9999] backdrop-blur-md bg-black/70 flex items-center justify-center p-4"
-      onClick={onClose}
-    >
-      <div className="relative max-w-5xl w-full" onClick={(e) => e.stopPropagation()}>
-        <img
-          src={src}
-          alt=""
-          className="w-full max-h-[80vh] object-contain rounded-lg shadow-2xl"
-          onContextMenu={(e) => {
-            if (!allowDownload) e.preventDefault();
-          }}
-          draggable={allowDownload}
-        />
-        <button
-          className="absolute top-2 right-2 bg-white/90 hover:bg-white text-black rounded-full px-3 py-1 shadow"
-          onClick={onClose}
-        >
-          Close
-        </button>
-        {urls.length > 1 && (
-          <>
-            <button
-              className="absolute left-2 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white text-black rounded-full px-3 py-1 shadow"
-              onClick={onPrev}
-            >
-              ‹
-            </button>
-            <button
-              className="absolute right-2 top-1/2 -translate-y-1/2 bg-white/80 hover:bg-white text-black rounded-full px-3 py-1 shadow"
-              onClick={onNext}
-            >
-              ›
-            </button>
-          </>
-        )}
-        {!allowDownload && (
-          <div className="absolute bottom-2 right-2 text-xs text-white/80">
-            Downloads disabled by admin
-          </div>
-        )}
-      </div>
-    </div>
-  );
-}
-
 /* --- Accordion-style module panel: IMAGES → TEXT → AUDIO → VIDEO → PDF --- */
 function ModulePanel({ m, index }) {
   const [expanded, setExpanded] = useState(false);
-
-  // fullscreen image viewer state
-  const [viewerOpen, setViewerOpen] = useState(false);
-  const [viewerIdx, setViewerIdx] = useState(0);
+  const [viewer, setViewer] = useState({ open: false, idx: 0 });
 
   const imgUrls = pick("image", m).map((it) => absUrl(it.url || ""));
   const audioUrl = pick("audio", m)[0]?.url;
@@ -387,40 +392,26 @@ function ModulePanel({ m, index }) {
 
   const content = textOf(m); // robust text selection
   const doHighlight = m?.flags?.highlight !== false;
-  const allowDownload = !!(m?.flags?.allowDownload);
+  const allowDownload = !!m?.flags?.allowDownload;
 
-  // notebook ruled paper w/ red margin + handwriting-like font (non-cursive)
-  const notebookStyle = {
-    backgroundColor: "#fff",
-    backgroundImage: `
-      linear-gradient(90deg, rgba(255, 0, 0, 0.35) 56px, transparent 56px),
-      repeating-linear-gradient(#f3f6ff, #f3f6ff 28px, #e1e9ff 28px, #e1e9ff 29px)
-    `,
-    backgroundSize: "100% 100%, 100% 29px",
-    backgroundPosition: "0 0, 0 14px",
-    border: "1px solid #E5EAF3",
-    borderRadius: 12,
-    padding: "14px 14px 14px 64px", // leave space for red margin
-    lineHeight: 1.6,
-    whiteSpace: "pre-wrap",
-    wordBreak: "break-word",
-    fontFamily: `"Patrick Hand", "Segoe Print", "Bradley Hand", system-ui, -apple-system, "Segoe UI", Arial, sans-serif`,
-    fontSize: "16px",
-    maxHeight: expanded ? "none" : 340, // a bit taller by default
+  // image click handler (works even if ImageScroller doesn't expose onClick)
+  function onImagesClick(e) {
+    const target = e.target;
+    if (!(target && target.tagName === "IMG")) return;
+    const src = target.getAttribute("src");
+    const idx = imgUrls.findIndex((u) => u === src);
+    setViewer({ open: true, idx: Math.max(0, idx) });
+  }
+
+  // “notebook page” with stronger red margin + faded blue lines
+  const notebookPage = {
+    ...linedPage,
+    maxHeight: expanded ? "none" : 320,
     overflow: "auto",
+    fontFamily: `"Patrick Hand", "KG Primary Penmanship", "Segoe Print", "Bradley Hand", system-ui, -apple-system, sans-serif`,
+    fontSize: 16,
+    color: "#111"
   };
-
-  // keyboard close for viewer (esc)
-  useEffect(() => {
-    if (!viewerOpen) return;
-    const onKey = (e) => {
-      if (e.key === "Escape") setViewerOpen(false);
-      if (e.key === "ArrowLeft") setViewerIdx(i => (i - 1 + imgUrls.length) % imgUrls.length);
-      if (e.key === "ArrowRight") setViewerIdx(i => (i + 1) % imgUrls.length);
-    };
-    window.addEventListener("keydown", onKey);
-    return () => window.removeEventListener("keydown", onKey);
-  }, [viewerOpen, imgUrls.length]);
 
   return (
     <details className="prep-card module" open={index === 0} style={{ marginBottom: 12 }}>
@@ -430,29 +421,21 @@ function ModulePanel({ m, index }) {
       </summary>
 
       <div style={{ marginTop: 12 }}>
-        {/* IMAGES FIRST (keep existing scroller for layout) */}
+        {/* IMAGES FIRST */}
         {!!imgUrls.length && (
-          <>
+          <div
+            className="mb-2"
+            onClick={onImagesClick}
+            onContextMenu={(e) => { if (!allowDownload) e.preventDefault(); }}
+          >
             <ImageScroller images={imgUrls} />
-            <div className="mt-2">
-              <button
-                type="button"
-                className="text-xs px-2 py-1 border rounded bg-white hover:bg-gray-50"
-                onClick={() => { setViewerIdx(0); setViewerOpen(true); }}
-              >
-                View images ({imgUrls.length})
-              </button>
-              {!allowDownload && (
-                <span className="ml-2 text-xs text-gray-500">Downloads disabled by admin</span>
-              )}
-            </div>
-          </>
+          </div>
         )}
 
-        {/* TEXT (scrollable, notebook look, sentence + word highlights) */}
+        {/* TEXT (scrollable, notebook, highlights transparent) */}
         {content && (
           <>
-            <div className="mt-3 ocr-box" style={notebookStyle}>
+            <div className="mt-3 ocr-box" style={notebookPage}>
               {doHighlight ? highlightNotes(content, m._id || m.title || "") : content}
             </div>
             <div className="mt-1">
@@ -472,9 +455,9 @@ function ModulePanel({ m, index }) {
           <div style={{ marginTop: 12 }}>
             <audio
               controls
-              src={absUrl(audioAbs)}
+              src={audioAbs}
               style={{ width: "100%" }}
-              controlsList={allowDownload ? "" : "nodownload noplaybackrate"}
+              controlsList={allowDownload ? undefined : "nodownload noplaybackrate"}
               onContextMenu={(e) => { if (!allowDownload) e.preventDefault(); }}
             />
           </div>
@@ -485,38 +468,31 @@ function ModulePanel({ m, index }) {
           <div style={{ marginTop: 12 }}>
             <video
               controls
-              src={absUrl(videoAbs)}
+              src={videoAbs}
               style={{ width: "100%", borderRadius: 12 }}
-              controlsList={allowDownload ? "" : "nodownload noplaybackrate"}
+              controlsList={allowDownload ? undefined : "nodownload noplaybackrate"}
               disablePictureInPicture={!allowDownload}
               onContextMenu={(e) => { if (!allowDownload) e.preventDefault(); }}
             />
           </div>
         )}
 
-        {/* PDF */}
-        {pdfAbs && (
+        {/* PDF (only show link if downloads are allowed) */}
+        {pdfAbs && allowDownload && (
           <div style={{ marginTop: 10 }}>
-            {allowDownload ? (
-              <a className="badge" href={absUrl(pdfAbs)} target="_blank" rel="noreferrer">
-                Open PDF
-              </a>
-            ) : (
-              <span className="text-xs text-gray-500">PDF download disabled by admin</span>
-            )}
+            <a className="badge" href={pdfAbs} target="_blank" rel="noreferrer">
+              Open PDF
+            </a>
           </div>
         )}
       </div>
 
-      {/* Fullscreen viewer overlay */}
-      {viewerOpen && (
+      {/* fullscreen viewer */}
+      {viewer.open && (
         <FullscreenViewer
           urls={imgUrls}
-          index={viewerIdx}
-          allowDownload={allowDownload}
-          onClose={() => setViewerOpen(false)}
-          onPrev={() => setViewerIdx((i) => (i - 1 + imgUrls.length) % imgUrls.length)}
-          onNext={() => setViewerIdx((i) => (i + 1) % imgUrls.length)}
+          index={viewer.idx}
+          onClose={() => setViewer({ open: false, idx: 0 })}
         />
       )}
     </details>
