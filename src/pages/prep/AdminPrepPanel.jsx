@@ -1,12 +1,12 @@
- // client/src/pages/prep/AdminPrepPanel.jsx
+// client/src/pages/prep/AdminPrepPanel.jsx
 import { useEffect, useRef, useState } from "react";
 import { getJSON, delJSON } from "../../utils/api";
 
 /** Robust multipart POST (keeps cookies, safe JSON parse) */
 async function sendMultipart(url, formData) {
   const res = await fetch(url, { method: "POST", body: formData, credentials: "include" });
-  const text = await res.text(); // some proxies strip content-type
-  let data = {};
+  const text = await res.text(); // some proxies send text/plain
+  let data = null;
   try { data = JSON.parse(text); } catch { /* tolerate non-JSON */ }
   return { ok: res.ok, status: res.status, data, text };
 }
@@ -38,16 +38,18 @@ export default function AdminPrepPanel() {
     fd.set("examId", examId);
     fd.set("name", name);
     fd.set("scheduleMode", "cohort");
-
     const r = await sendMultipart("/api/prep/exams", fd);
-    if (!r.ok || !r.data?.success) return alert("Create exam failed");
-
+    if (!r.ok || !(r.data?.success)) {
+      return alert("Create exam failed");
+    }
     setMakeExam({ examId: "", name: "" });
     await loadExams();
     setSelExam(examId);
   }
 
-  useEffect(() => { loadExams(); }, []);
+  useEffect(() => {
+    loadExams();
+  }, []);
 
   return (
     <div className="max-w-6xl mx-auto p-4">
@@ -117,9 +119,13 @@ function ExamEditor({ examId }) {
     const items = (r.items || []).sort((a, b) => a.dayIndex - b.dayIndex || a.slotMin - b.slotMin);
     setModules(items);
   }
-  useEffect(() => { load(true); }, [examId]);
+  useEffect(() => {
+    load(true);
+  }, [examId]);
 
-  function bool(v) { return v ? "true" : "false"; }
+  function bool(v) {
+    return v ? "true" : "false";
+  }
 
   async function onSave(e) {
     e.preventDefault();
@@ -129,22 +135,22 @@ function ExamEditor({ examId }) {
     // required
     fd.set("examId", examId);
 
-    // checkboxes
+    // checkboxes -> "true"/"false"
     fd.set("extractOCR",   bool(f.elements.extractOCR.checked));
     fd.set("showOriginal", bool(f.elements.showOriginal.checked));
     fd.set("allowDownload",bool(f.elements.allowDownload.checked));
     fd.set("highlight",    bool(f.elements.highlight.checked));
-    // ocrAtRelease is naturally included only when checked
+    // ocrAtRelease will only be sent automatically when checked
 
-    // releaseAt → ISO (UTC)
+    // normalize releaseAt (local -> ISO UTC)
     const ra = fd.get("releaseAt");
     if (ra) {
       const d = new Date(String(ra));
       if (!isNaN(d)) fd.set("releaseAt", d.toISOString());
     }
 
-    // quick local debug counts
-    const countFiles = (name) => fd.getAll(name).reduce((n, v) => (v instanceof File && v.size > 0 ? n + 1 : n), 0);
+    // quick debug
+    const countFiles = (name) => fd.getAll(name).filter(v => v instanceof File && v.size > 0).length;
     console.log("[AdminPrepPanel] files in FormData:", {
       images: countFiles("images"),
       pdf:    countFiles("pdf"),
@@ -154,17 +160,25 @@ function ExamEditor({ examId }) {
 
     setBusy(true);
     try {
-      const res = await sendMultipart("/api/prep/templates", fd);
-      console.log("[AdminPrepPanel] upload response:", res.status, res.data || res.text?.slice?.(0, 200));
-      if (!res.ok || !res.data?.success) {
-        alert(`Upload failed (HTTP ${res.status})`);
+      // native fetch (boundary set by browser)
+      const r = await sendMultipart("/api/prep/templates", fd);
+
+      console.log("▲ upload response:", r.status, r.data || r.text?.slice?.(0, 200));
+
+      // be tolerant of plain-text responses from edge proxies
+      const success =
+        (r.data && r.data.success === true) ||
+        /"success"\s*:\s*true/.test(r.text || "");
+
+      if (!r.ok || !success) {
+        alert(`Upload failed (HTTP ${r.status})`);
         return;
       }
 
       f.reset();
       await load(true);
-      // tiny delay helps if DB is eventually-consistent on your host
-      await new Promise((r) => setTimeout(r, 120));
+      // tiny delay helps when DB/edge cache is slightly behind
+      await new Promise((res) => setTimeout(res, 120));
       await load(true);
 
       alert("Module saved");
@@ -182,7 +196,7 @@ function ExamEditor({ examId }) {
     await load(true);
   }
 
-  // ---- helpers for grouped list ----
+  // ---------- grouped list ----------
   function groupByDay(items) {
     const m = new Map();
     for (const x of items) {
@@ -245,7 +259,7 @@ function ExamEditor({ examId }) {
       </div>
     );
   }
-  // ---- end helpers ----
+  // ---------- end helpers ----------
 
   return (
     <>
