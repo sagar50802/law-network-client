@@ -430,10 +430,13 @@ export default function PrepWizard() {
   const [currentDay, setCurrentDay] = useState(1);
   const [activeDay, setActiveDay] = useState(1);
 
+  // NEW: everything (released + scheduled) for today; used by ComingLater
+  const [todayPool, setTodayPool] = useState([]);
+
   // optional email (if your site stores it for progress API)
   const email = localStorage.getItem("userEmail") || "";
 
-  // ✅ UPDATED: fetch meta + full today items + templates
+  // ✅ ROBUST: meta + templates (and optional today endpoint if present)
   async function load() {
     if (!examId) return;
     setLoading(true);
@@ -441,26 +444,50 @@ export default function PrepWizard() {
       const qs = new URLSearchParams({ examId });
       if (email) qs.set("email", email);
 
-      // meta (planDays/todayDay) + full "today" items + all templates (for previews)
-      const [meta, today, t] = await Promise.all([
-        getJSON(`/api/prep/user/summary?${qs.toString()}`),                       // has todayDay / planDays
-        getJSON(`/api/prep/user/today?examId=${encodeURIComponent(examId)}`),     // full items WITH files
-        getJSON(`/api/prep/templates?examId=${encodeURIComponent(examId)}`),      // previews
+      const [metaRes, tmplRes, todayRes] = await Promise.allSettled([
+        getJSON(`/api/prep/user/summary?${qs.toString()}`),                     // todayDay / planDays
+        getJSON(`/api/prep/templates?examId=${encodeURIComponent(examId)}`),    // ALL templates (has files/media)
+        getJSON(`/api/prep/user/today?examId=${encodeURIComponent(examId)}`),   // may 404 on your backend
       ]);
 
+      // meta (required)
+      const meta = metaRes.status === "fulfilled" ? metaRes.value : {};
       const td = meta.todayDay || 1;
       const pd = meta.planDays || 1;
-
       setTodayDay(td);
       setPlanDays(pd);
 
-      // Prefer the full items from /user/today; fall back to summary if needed
-      const fullToday = Array.isArray(today.items)
-        ? today.items
-        : (Array.isArray(meta.modules) ? meta.modules : []);
-      setModules(fullToday);
+      // all templates (required)
+      const all =
+        tmplRes.status === "fulfilled" && Array.isArray(tmplRes.value?.items)
+          ? tmplRes.value.items
+          : [];
 
-      setAllModules(Array.isArray(t.items) ? t.items : []);
+      // try to use full today items if the endpoint exists; else compute from templates
+      let fullToday = [];
+      if (todayRes.status === "fulfilled" && Array.isArray(todayRes.value?.items)) {
+        fullToday = todayRes.value.items;
+      } else {
+        fullToday = all.filter((m) => Number(m.dayIndex) === Number(td));
+      }
+
+      // Keep a pool of ALL items for today (released + scheduled) for “Coming later”
+      setTodayPool(fullToday);
+
+      // The visible list = only released/available ones
+      const now = Date.now();
+      const releasedToday = fullToday
+        .filter((m) => !m.releaseAt || Date.parse(m.releaseAt) <= now || m.status === "released")
+        .sort((a, b) => {
+          const ta = a.releaseAt ? Date.parse(a.releaseAt) : 0;
+          const tb = b.releaseAt ? Date.parse(b.releaseAt) : 0;
+          return ta - tb;
+        });
+
+      setModules(releasedToday);
+
+      // Keep “allModules” for calendar preview
+      setAllModules(all);
 
       setCurrentDay(td);
       setActiveDay(td);
@@ -468,6 +495,7 @@ export default function PrepWizard() {
       console.error(e);
       setModules([]);
       setAllModules([]);
+      setTodayPool([]);
     } finally {
       setLoading(false);
     }
@@ -640,7 +668,8 @@ export default function PrepWizard() {
         }}
       />
 
-      <ComingLater modules={modules} />
+      {/* Use the full pool for later items */}
+      <ComingLater modules={todayPool} />
 
       {loading ? (
         <div className="text-gray-500">Loading…</div>
