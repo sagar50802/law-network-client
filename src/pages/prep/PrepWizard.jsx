@@ -69,6 +69,21 @@ function pick(kind, m) {
   });
 }
 
+/* --------------- prefer a non-empty text field across all shapes --------------- */
+function textOf(m) {
+  const candidates = [
+    m?.content,       // previously computed
+    m?.ocrText,       // OCR text
+    m?.text,          // server stores manualText into "text"
+    m?.manualText,    // legacy / form field name
+    m?.description    // optional
+  ];
+  for (const s of candidates) {
+    if (typeof s === "string" && s.trim()) return s.trim();
+  }
+  return "";
+}
+
 /* ---------------- helpers for midnight countdown + day chips ---------------- */
 
 function useCountdownToMidnight() {
@@ -163,7 +178,7 @@ function LockedPreviewCard({ m }) {
         </div>
       )}
 
-      {m.content && <p className="text-xs text-gray-600 italic line-clamp-3">Unlocks soon.</p>}
+      {textOf(m) && <p className="text-xs text-gray-600 italic line-clamp-3">Unlocks soon.</p>}
 
       {(hasAudio || hasVideo) && (
         <div className="mt-2 text-xs text-gray-500">Media will unlock when available.</div>
@@ -183,6 +198,8 @@ function ModulePanel({ m, index }) {
   const videoAbs = videoUrl ? absUrl(videoUrl) : "";
   const pdfAbs   = pdfUrl   ? absUrl(pdfUrl)   : "";
 
+  const content = textOf(m); // ← robust text selection
+
   return (
     <details className="prep-card module" open={index === 0} style={{ marginBottom: 12 }}>
       <summary>
@@ -194,27 +211,26 @@ function ModulePanel({ m, index }) {
         {/* IMAGES FIRST */}
         {!!imgUrls.length && <ImageScroller images={imgUrls} />}
 
-        {/* TEXT (scrollable) */}
-{m.content && (
-  <div
-    className="
-      ocr-box
-      mt-3
-      max-h-[220px]              /* <= scroll height */
-      overflow-y-auto
-      whitespace-pre-wrap        /* keep line breaks */
-      break-words
-      leading-relaxed
-      p-3
-      rounded-xl
-      border border-gray-200
-      bg-amber-50
-    "
-  >
-    {m.content}
-  </div>
-)}
-
+        {/* TEXT (scrollable, always shown when non-empty) */}
+        {content && (
+          <div
+            className="ocr-box"
+            style={{
+              marginTop: 12,
+              maxHeight: 220,
+              overflow: "auto",
+              whiteSpace: "pre-wrap",
+              wordBreak: "break-word",
+              lineHeight: 1.5,
+              background: "#fff",
+              border: "1px solid #eee",
+              borderRadius: 12,
+              padding: 12
+            }}
+          >
+            {content}
+          </div>
+        )}
 
         {/* AUDIO */}
         {audioAbs && (
@@ -279,12 +295,7 @@ function PreviewPanel({ day, modules }) {
         const images = pick("image", m).map((it) => it.url || "");
         const hasAudio = pick("audio", m).length > 0;
         const hasVideo = pick("video", m).length > 0;
-        const content =
-          (m.ocrText && String(m.ocrText).trim()) ||
-          (m.text && String(m.text).trim()) ||
-          (m.manualText && String(m.manualText).trim()) ||
-          m.content ||
-          "";
+        const content = textOf(m);
         return { ...m, images, audio: hasAudio, video: hasVideo, content };
       }),
     [modules]
@@ -434,7 +445,7 @@ export default function PrepWizard() {
       });
   }, [allModules, activeDay]);
 
-  // compute released modules and augment with `content`
+  // compute released modules and augment with robust `content`
   const releasedModules = useMemo(() => {
     const list = (modules || [])
       .filter((m) => !m.releaseAt || Date.parse(m.releaseAt) <= nowUtcMs() || m.status === "released")
@@ -445,12 +456,7 @@ export default function PrepWizard() {
       })
       .map((m) => ({
         ...m,
-        content:
-          m.content ??
-          (m.ocrText && String(m.ocrText).trim()) ??
-          (m.text && String(m.text).trim()) ??
-          (m.manualText && String(m.manualText).trim()) ??
-          "",
+        content: textOf(m), // <- use the helper
       }));
     return list;
   }, [modules]);
