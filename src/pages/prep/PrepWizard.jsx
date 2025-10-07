@@ -28,6 +28,68 @@ function fmtTime(iso) {
   }
 }
 
+/* ---------------- attachment normalization (new + legacy shapes) ---------------- */
+
+function fileKindOf(f) {
+  const mime = (f?.mime || f?.contentType || "").toLowerCase();
+  const byMime = mime.split("/")[0];
+  const k = (f?.kind || byMime || "").toLowerCase();
+  if (k) return k;
+  if (mime === "application/pdf") return "pdf";
+  return "";
+}
+
+/**
+ * pick("image"|"audio"|"video"|"pdf", module) -> normalized array
+ * Normalizes:
+ *  - module.files: [{kind,url,mime,name}] (preferred)
+ *  - legacy module.images: [string]
+ *  - single module.audio / module.video / module.pdf : string or {url}
+ */
+function pick(kind, m) {
+  const out = [];
+
+  // modern files[]
+  if (Array.isArray(m?.files)) {
+    for (const f of m.files) {
+      if (!f) continue;
+      const k = fileKindOf(f);
+      const mime = (f.mime || f.contentType || "").toLowerCase();
+      if (
+        (kind === "image" && (k === "image" || mime.startsWith("image/"))) ||
+        (kind === "audio" && (k === "audio" || mime.startsWith("audio/"))) ||
+        (kind === "video" && (k === "video" || mime.startsWith("video/"))) ||
+        (kind === "pdf" && (k === "pdf" || mime === "application/pdf"))
+      ) {
+        out.push({ url: f.url || f.path, kind: k || kind, mime: mime || undefined, name: f.name });
+      }
+    }
+  }
+
+  // legacy arrays/singles
+  if (kind === "image" && Array.isArray(m?.images)) {
+    m.images.forEach((u) => out.push({ url: u, kind: "image" }));
+  }
+  if (kind === "audio" && m?.audio) {
+    out.push(typeof m.audio === "string" ? { url: m.audio, kind: "audio" } : { ...m.audio, kind: "audio" });
+  }
+  if (kind === "video" && m?.video) {
+    out.push(typeof m.video === "string" ? { url: m.video, kind: "video" } : { ...m.video, kind: "video" });
+  }
+  if (kind === "pdf" && m?.pdf) {
+    out.push(typeof m.pdf === "string" ? { url: m.pdf, kind: "pdf" } : { ...m.pdf, kind: "pdf" });
+  }
+
+  // de-dupe by url
+  const seen = new Set();
+  return out.filter((x) => {
+    const key = x.url || x.path || "";
+    if (!key || seen.has(key)) return false;
+    seen.add(key);
+    return true;
+  });
+}
+
 /* ---------------- helpers for midnight countdown + day chips ---------------- */
 
 function useCountdownToMidnight() {
@@ -90,6 +152,10 @@ function NextDayTeaser({ day }) {
 
 // --- Locked preview card (NO TIME SHOWN) ---
 function LockedPreviewCard({ m }) {
+  const imgs = pick("image", m);
+  const hasAudio = pick("audio", m).length > 0;
+  const hasVideo = pick("video", m).length > 0;
+
   return (
     <div className="rounded-lg border p-3 bg-gray-50 relative overflow-hidden">
       <div className="absolute right-2 top-2 text-[10px] px-1.5 py-0.5 rounded bg-gray-200 text-gray-700">
@@ -99,63 +165,59 @@ function LockedPreviewCard({ m }) {
       <div className="font-medium mb-2">{m.title || "Untitled"}</div>
 
       {/* thumbnails (locked) */}
-      {Array.isArray(m.images) && m.images.length > 0 && (
+      {!!imgs.length && (
         <div className="flex gap-2 overflow-x-auto pb-2">
-          {m.images.slice(0, 6).map((u, i) => (
-            <div
-              key={i}
-              className="relative w-24 h-16 shrink-0 rounded overflow-hidden bg-gray-200"
-              title="Locked until release"
-            >
-              <img src={absUrl(u)} alt="" className="w-full h-full object-cover opacity-60" />
-              <div className="absolute inset-0 grid place-items-center text-white/90 text-xs">
-                🔒
+          {imgs.slice(0, 6).map((it, i) => {
+            const u = absUrl(it.url || it.path || "");
+            return (
+              <div
+                key={i}
+                className="relative w-24 h-16 shrink-0 rounded overflow-hidden bg-gray-200"
+                title="Locked until release"
+              >
+                <img src={u} alt="" className="w-full h-full object-cover opacity-60" />
+                <div className="absolute inset-0 grid place-items-center text-white/90 text-xs">
+                  🔒
+                </div>
               </div>
-            </div>
-          ))}
+            );
+          })}
         </div>
       )}
 
       {/* short text teaser (no time) */}
-      {m.content && (
-        <p className="text-xs text-gray-600 italic line-clamp-3">
-          Unlocks soon.
-        </p>
-      )}
+      {m.content && <p className="text-xs text-gray-600 italic line-clamp-3">Unlocks soon.</p>}
 
       {/* audio/video preview (disabled look) */}
-      {(m.audio || m.video) && (
+      {(hasAudio || hasVideo) && (
         <div className="mt-2 text-xs text-gray-500">Media will unlock when available.</div>
       )}
     </div>
   );
 }
 
-/* --- NEW: Accordion-style module panel (minimal drop-in) --- */
+/* --- Accordion-style module panel (drop-in, shows ALL attachment shapes) --- */
 function ModulePanel({ m, index }) {
-  const files = m.files || [];
-  const images =
-    m.images && m.images.length
-      ? m.images
-      : files.filter(f => (f.kind || "").toLowerCase() === "image").map(f => f.url);
-  const audio =
-    m.audio || (files.find(f => (f.kind || "").toLowerCase() === "audio") || {}).url;
-  const video =
-    m.video || (files.find(f => (f.kind || "").toLowerCase() === "video") || {}).url;
-  const pdf =
-    m.pdf || (files.find(f => (f.kind || "").toLowerCase() === "pdf") || {}).url;
+  // Images as plain URL list for ImageScroller
+  const imgUrls = pick("image", m).map((it) => absUrl(it.url || it.path || ""));
+  const audioUrl = pick("audio", m)[0]?.url || pick("audio", m)[0]?.path;
+  const videoUrl = pick("video", m)[0]?.url || pick("video", m)[0]?.path;
+  const pdfUrl = pick("pdf", m)[0]?.url || pick("pdf", m)[0]?.path;
+
+  const audioAbs = audioUrl ? absUrl(audioUrl) : "";
+  const videoAbs = videoUrl ? absUrl(videoUrl) : "";
+  const pdfAbs = pdfUrl ? absUrl(pdfUrl) : "";
 
   return (
     <details className="prep-card module" open={index === 0} style={{ marginBottom: 12 }}>
       <summary>
         <span style={{ fontWeight: 600 }}>{m.title || "Untitled"}</span>
-        {/* little chevron */}
         <span className="chev">›</span>
       </summary>
 
       <div style={{ marginTop: 12 }}>
         {/* Image gallery/strip */}
-        <ImageScroller images={images} />
+        {!!imgUrls.length && <ImageScroller images={imgUrls} />}
 
         {/* Text (OCR or manual) */}
         {m.content && (
@@ -165,27 +227,23 @@ function ModulePanel({ m, index }) {
         )}
 
         {/* Audio */}
-        {audio && (
+        {audioAbs && (
           <div style={{ marginTop: 12 }}>
-            <audio controls src={absUrl(audio)} style={{ width: "100%" }} />
+            <audio controls src={audioAbs} style={{ width: "100%" }} />
           </div>
         )}
 
-        {/* Video (optional) */}
-        {video && (
+        {/* Video */}
+        {videoAbs && (
           <div style={{ marginTop: 12 }}>
-            <video
-              controls
-              src={absUrl(video)}
-              style={{ width: "100%", borderRadius: 12 }}
-            />
+            <video controls src={videoAbs} style={{ width: "100%", borderRadius: 12 }} />
           </div>
         )}
 
-        {/* PDF link (optional) */}
-        {pdf && (
+        {/* PDF link */}
+        {pdfAbs && (
           <div style={{ marginTop: 10 }}>
-            <a className="badge" href={absUrl(pdf)} target="_blank" rel="noreferrer">
+            <a className="badge" href={pdfAbs} target="_blank" rel="noreferrer">
               Open PDF
             </a>
           </div>
@@ -195,7 +253,7 @@ function ModulePanel({ m, index }) {
   );
 }
 
-// (kept for completeness; not changed)
+// (kept for completeness; not used in Today list)
 function ModuleCard({ mod }) {
   const [open, setOpen] = useState(true);
 
@@ -207,7 +265,7 @@ function ModuleCard({ mod }) {
 
   const flags = mod.flags || {};
   const showImages = images.length && (!flags.extractOCR || flags.showOriginal);
-  const showPDF = pdfs.length && (flags.showOriginal ?? true); // default show
+  const showPDF = pdfs.length && (flags.showOriginal ?? true);
   const showAudio = audios.length;
   const showVideo = videos.length;
 
@@ -219,7 +277,6 @@ function ModuleCard({ mod }) {
 
   return (
     <div className="rounded-lg border bg-white mb-4 overflow-hidden">
-      {/* Header */}
       <div className="flex items-center justify-between px-3 py-2 bg-gray-50 border-b">
         <div className="font-medium">{mod.title || "Untitled"}</div>
         <div className="flex items-center gap-2 text-xs text-gray-600">
@@ -232,7 +289,6 @@ function ModuleCard({ mod }) {
 
       {!open ? null : (
         <div className="p-3 grid gap-3">
-          {/* Images gallery */}
           {showImages ? (
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-3">
               {images.map((im, i) => (
@@ -247,7 +303,6 @@ function ModuleCard({ mod }) {
             </div>
           ) : null}
 
-          {/* Text area (manual / OCR) */}
           {textBlock ? (
             <div className="rounded border bg-yellow-50 p-3" style={{ maxHeight: 360, overflowY: "auto" }}>
               <pre className="whitespace-pre-wrap font-[ui-sans-serif] leading-6 text-[0.95rem]">
@@ -256,7 +311,6 @@ function ModuleCard({ mod }) {
             </div>
           ) : null}
 
-          {/* PDF(s) */}
           {showPDF ? (
             <div className="grid gap-2">
               {pdfs.map((p, i) => (
@@ -273,7 +327,6 @@ function ModuleCard({ mod }) {
             </div>
           ) : null}
 
-          {/* Audio */}
           {showAudio ? (
             <div className="grid gap-2">
               {audios.map((a, i) => (
@@ -282,7 +335,6 @@ function ModuleCard({ mod }) {
             </div>
           ) : null}
 
-          {/* Video */}
           {showVideo ? (
             <div className="grid gap-2">
               {videos.map((v, i) => (
@@ -326,20 +378,19 @@ function ComingLater({ modules }) {
 function PreviewPanel({ day, modules }) {
   if (!modules?.length) return null;
 
-  // massage data so LockedPreviewCard can show thumbnails/content flags
   const previews = useMemo(
     () =>
       modules.map((m) => {
-        const files = Array.isArray(m.files) ? m.files : [];
-        const images = files.filter((f) => (f.kind || "").toLowerCase() === "image").map((f) => f.url);
-        const audio = files.some((f) => (f.kind || "").toLowerCase() === "audio");
-        const video = files.some((f) => (f.kind || "").toLowerCase() === "video");
+        const images = pick("image", m).map((it) => it.url || it.path || "");
+        const hasAudio = pick("audio", m).length > 0;
+        const hasVideo = pick("video", m).length > 0;
         const content =
           (m.ocrText && String(m.ocrText).trim()) ||
           (m.text && String(m.text).trim()) ||
           (m.manualText && String(m.manualText).trim()) ||
+          m.content ||
           "";
-        return { ...m, images, audio, video, content };
+        return { ...m, images, audio: hasAudio, video: hasVideo, content };
       }),
     [modules]
   );
@@ -400,7 +451,7 @@ export default function PrepWizard() {
 
       setAllModules(Array.isArray(t.items) ? t.items : []);
 
-      // NEW: mirror “context” into UI chips
+      // mirror “context” into UI chips
       setCurrentDay(td);
       setActiveDay(td);
     } catch (e) {
@@ -466,7 +517,6 @@ export default function PrepWizard() {
       })
       .map((m) => ({
         ...m,
-        // ensure ModulePanel sees `content`
         content:
           m.content ??
           (m.ocrText && String(m.ocrText).trim()) ??
@@ -500,24 +550,20 @@ export default function PrepWizard() {
           byDay.get(m.dayIndex).push(m);
         });
 
-        // Determine how many days to show (use max planned day or at least 21 to make grid pretty)
         const maxPlanned = Math.max(...Array.from(byDay.keys(), d => +d || 1), 1);
         const last = Math.max(maxPlanned, cohortDay + 6, 21);
 
-        // naive "is this module done" check (works with boolean map or {done:true} map)
         const isDone = (m, userStatesMap) => {
           const s = userStatesMap?.[m._id];
           return s === true || s?.done === true;
         };
 
-        // Build day cells
         const cells = [];
         for (let d = 1; d <= last; d++) {
           const items = byDay.get(d) || [];
           const released = items.filter(x => x.status === 'released');
           const anyReleased = released.length > 0;
 
-          // Decide visual status
           let cls = "daycell";
           let badge = "";
           if (d > cohortDay) {
@@ -525,19 +571,17 @@ export default function PrepWizard() {
             badge = "🔒";
           } else if (d === cohortDay) {
             cls += " today";
-            // show partial/completed subtly (optional)
             const allDone = released.length && released.every(m => isDone(m, userStates));
             if (allDone) badge = "✅";
             else if (released.length) badge = "●";
           } else {
-            // Past days
             const allDone = released.length && released.every(m => isDone(m, userStates));
             if (allDone) { cls += " completed"; badge = "✅"; }
             else if (anyReleased) { cls += " available"; badge = "●"; }
             else { cls += " locked"; badge = "—"; }
           }
 
-          const href = d <= cohortDay ? `?tab=today&d=${d}` : undefined; // keep your router behavior
+          const href = d <= cohortDay ? `?tab=today&d=${d}` : undefined;
 
           cells.push(
             href ? (
@@ -562,6 +606,11 @@ export default function PrepWizard() {
 
         return <div className="daygrid">{cells}</div>;
       })()}
+
+      {/* Optional: preview for any selected day */}
+      {!!previewModulesForActiveDay.length && (
+        <PreviewPanel day={activeDay} modules={previewModulesForActiveDay} />
+      )}
     </div>
   );
 
@@ -577,7 +626,7 @@ export default function PrepWizard() {
         activeDay={activeDay}
         onPick={(d) => {
           setActiveDay(d);
-          if (d !== currentDay) setTab("calendar"); // gently guide to calendar if they tap future day
+          if (d !== currentDay) setTab("calendar");
         }}
       />
 
@@ -588,9 +637,7 @@ export default function PrepWizard() {
       ) : !releasedModules.length ? (
         <div className="text-gray-500">No modules for today yet.</div>
       ) : (
-        releasedModules.map((m, i) => (
-          <ModulePanel key={m._id || i} m={m} index={i} />
-        ))
+        releasedModules.map((m, i) => <ModulePanel key={m._id || i} m={m} index={i} />)
       )}
 
       <div className="mt-4">
