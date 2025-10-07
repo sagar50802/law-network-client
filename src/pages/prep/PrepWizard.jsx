@@ -194,12 +194,27 @@ function ModulePanel({ m, index }) {
         {/* IMAGES FIRST */}
         {!!imgUrls.length && <ImageScroller images={imgUrls} />}
 
-        {/* TEXT */}
-        {m.content && (
-          <div className="ocr-box" style={{ marginTop: 12 }}>
-            {m.content}
-          </div>
-        )}
+        {/* TEXT (scrollable) */}
+{m.content && (
+  <div
+    className="
+      ocr-box
+      mt-3
+      max-h-[220px]              /* <= scroll height */
+      overflow-y-auto
+      whitespace-pre-wrap        /* keep line breaks */
+      break-words
+      leading-relaxed
+      p-3
+      rounded-xl
+      border border-gray-200
+      bg-amber-50
+    "
+  >
+    {m.content}
+  </div>
+)}
+
 
         {/* AUDIO */}
         {audioAbs && (
