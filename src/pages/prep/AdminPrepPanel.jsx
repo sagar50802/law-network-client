@@ -5,10 +5,14 @@ import { getJSON, delJSON } from "../../utils/api";
 /** Robust multipart POST (keeps cookies, safe JSON parse) */
 async function sendMultipart(url, formData) {
   const res = await fetch(url, { method: "POST", body: formData, credentials: "include" });
-  const text = await res.text(); // some proxies send text/plain
+  const text = await res.text(); // tolerate text/plain from proxies
   let data = null;
-  try { data = JSON.parse(text); } catch { /* tolerate non-JSON */ }
-  return { ok: res.ok, status: res.status, data, text };
+  try {
+    data = JSON.parse(text);
+  } catch {
+    /* non-JSON ok */
+  }
+  return { ok: res.ok, status: res.status, statusText: res.statusText, data, text };
 }
 
 export default function AdminPrepPanel() {
@@ -38,9 +42,11 @@ export default function AdminPrepPanel() {
     fd.set("examId", examId);
     fd.set("name", name);
     fd.set("scheduleMode", "cohort");
+
     const r = await sendMultipart("/api/prep/exams", fd);
     if (!r.ok || !(r.data?.success)) {
-      return alert("Create exam failed");
+      const msg = r.data?.error || r.data?.message || (r.text?.trim() || "Create exam failed");
+      return alert(msg.length > 240 ? msg.slice(0, 240) + "…" : msg);
     }
     setMakeExam({ examId: "", name: "" });
     await loadExams();
@@ -49,6 +55,7 @@ export default function AdminPrepPanel() {
 
   useEffect(() => {
     loadExams();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
   return (
@@ -64,7 +71,9 @@ export default function AdminPrepPanel() {
               value={selExam}
               onChange={(e) => setSelExam(e.target.value)}
             >
-              <option value="" disabled>— choose —</option>
+              <option value="" disabled>
+                — choose —
+              </option>
               {exams.map((x) => (
                 <option key={x.examId} value={x.examId}>
                   {x.name} ({x.examId})
@@ -127,6 +136,7 @@ function ExamEditor({ examId }) {
     return v ? "true" : "false";
   }
 
+  // === Only-changed handler ===
   async function onSave(e) {
     e.preventDefault();
     const f = formRef.current;
@@ -136,11 +146,11 @@ function ExamEditor({ examId }) {
     fd.set("examId", examId);
 
     // checkboxes -> "true"/"false"
-    fd.set("extractOCR",   bool(f.elements.extractOCR.checked));
+    fd.set("extractOCR", bool(f.elements.extractOCR.checked));
     fd.set("showOriginal", bool(f.elements.showOriginal.checked));
-    fd.set("allowDownload",bool(f.elements.allowDownload.checked));
-    fd.set("highlight",    bool(f.elements.highlight.checked));
-    // ocrAtRelease will only be sent automatically when checked
+    fd.set("allowDownload", bool(f.elements.allowDownload.checked));
+    fd.set("highlight", bool(f.elements.highlight.checked));
+    // ocrAtRelease will be sent automatically only when checked by browser
 
     // normalize releaseAt (local -> ISO UTC)
     const ra = fd.get("releaseAt");
@@ -150,35 +160,40 @@ function ExamEditor({ examId }) {
     }
 
     // quick debug
-    const countFiles = (name) => fd.getAll(name).filter(v => v instanceof File && v.size > 0).length;
+    const countFiles = (name) => fd.getAll(name).filter((v) => v instanceof File && v.size > 0).length;
+    // eslint-disable-next-line no-console
     console.log("[AdminPrepPanel] files in FormData:", {
       images: countFiles("images"),
-      pdf:    countFiles("pdf"),
-      audio:  countFiles("audio"),
-      video:  countFiles("video"),
+      pdf: countFiles("pdf"),
+      audio: countFiles("audio"),
+      video: countFiles("video"),
     });
 
     setBusy(true);
     try {
       // native fetch (boundary set by browser)
-      const r = await sendMultipart("/api/prep/templates", fd);
+      const resp = await sendMultipart("/api/prep/templates", fd);
+      // eslint-disable-next-line no-console
+      console.log("▲ upload response:", resp.status, resp.data || resp.text?.slice?.(0, 200));
 
-      console.log("▲ upload response:", r.status, r.data || r.text?.slice?.(0, 200));
-
-      // be tolerant of plain-text responses from edge proxies
       const success =
-        (r.data && r.data.success === true) ||
-        /"success"\s*:\s*true/.test(r.text || "");
+        (resp.data && resp.data.success === true) ||
+        /"success"\s*:\s*true/.test(resp.text || "");
 
-      if (!r.ok || !success) {
-        alert(`Upload failed (HTTP ${r.status})`);
+      if (!resp.ok || !success) {
+        // Never show “HTTP 200” — prefer server message or body text
+        const msg =
+          resp.data?.error ||
+          resp.data?.message ||
+          (resp.text?.trim() || "Upload failed");
+        alert(msg.length > 240 ? msg.slice(0, 240) + "…" : msg);
         return;
       }
 
       f.reset();
       await load(true);
-      // tiny delay helps when DB/edge cache is slightly behind
-      await new Promise((res) => setTimeout(res, 120));
+      // tiny delay in case DB/index is a tick behind
+      await new Promise((r) => setTimeout(r, 120));
       await load(true);
 
       alert("Module saved");
@@ -347,11 +362,7 @@ function ExamEditor({ examId }) {
           <label className="flex items-center gap-2">
             <input type="checkbox" name="highlight" /> Highlight
           </label>
-          <input
-            className="w-full border rounded px-3 py-2"
-            name="background"
-            placeholder="background (e.g. #fffbe7)"
-          />
+          <input className="w-full border rounded px-3 py-2" name="background" placeholder="background (e.g. #fffbe7)" />
         </div>
 
         <div className="flex gap-2">
@@ -369,9 +380,7 @@ function ExamEditor({ examId }) {
         {groupByDay(modules).map(([day, items]) => (
           <DayGroup key={day} day={day} items={items} onDelete={onDelete} />
         ))}
-        {!modules.length && (
-          <div className="px-4 py-6 text-center text-gray-500">No modules yet.</div>
-        )}
+        {!modules.length && <div className="px-4 py-6 text-center text-gray-500">No modules yet.</div>}
       </div>
     </>
   );
