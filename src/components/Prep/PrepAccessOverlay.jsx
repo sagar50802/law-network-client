@@ -1,8 +1,16 @@
+// client/src/components/Prep/PrepAccessOverlay.jsx
 import { useEffect, useState } from "react";
-import { getJSON, postJSON, absUrl } from "../../utils/api";
+import { getJSON, postJSON } from "../../utils/api";
 
 export default function PrepAccessOverlay({ examId, email }) {
-  const [state, setState] = useState({ loading: true, show: false, mode: "", exam: {}, access: {}, waiting: false });
+  const [state, setState] = useState({
+    loading: true,
+    show: false,
+    mode: "",
+    exam: {},
+    access: {},
+    waiting: false,
+  });
   const [file, setFile] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
@@ -10,28 +18,59 @@ export default function PrepAccessOverlay({ examId, email }) {
     if (!examId) return;
     const qs = new URLSearchParams({ examId, email: email || "" });
     const r = await getJSON(`/api/prep/access/status?${qs.toString()}`);
-    const { exam, access } = r || {};
+
+    const { exam, access, show, mode, forceOverlay } = r || {};
+
     // new user → create trial silently
     if ((access?.status === "none") && email) {
       await postJSON("/api/prep/access/start-trial", { examId, email });
       return fetchStatus();
     }
 
-    let mode = "";
-    let show = false;
+    // ✅ UPDATED BLOCK (accept server’s scheduling decision)
+    let nextMode = mode || "";
+    let nextShow = !!show;
     let waiting = !!access?.pending;
 
-    if (access?.status === "trial" && access?.trialEnded) { mode = "purchase"; show = true; }
-    else if (access?.status === "active" && access?.canRestart) { mode = "restart"; show = true; }
-    else if (waiting) { mode = "waiting"; show = true; }
+    // backward-compatible fallback if server doesn't send show/mode
+    if (!nextShow) {
+      if (access?.status === "trial" && access?.trialEnded) {
+        nextMode = "purchase";
+        nextShow = true;
+      } else if (access?.status === "active" && access?.canRestart) {
+        nextMode = "restart";
+        nextShow = true;
+      } else if (waiting) {
+        nextMode = "waiting";
+        nextShow = true;
+      }
+    }
 
-    setState({ loading: false, show, mode, exam: exam || {}, access: access || {}, waiting });
+    if (forceOverlay && !waiting) {
+      nextMode = "purchase";
+      nextShow = true;
+    }
+
+    setState({
+      loading: false,
+      show: nextShow,
+      mode: nextMode,
+      exam: exam || {},
+      access: access || {},
+      waiting,
+    });
   }
 
-  useEffect(() => { fetchStatus(); /* eslint-disable-next-line */ }, [examId, email]);
+  useEffect(() => {
+    fetchStatus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [examId, email]);
 
   async function submitRequest() {
-    if (!email) { alert("Need an email in localStorage as 'userEmail'"); return; }
+    if (!email) {
+      alert("Need an email in localStorage as 'userEmail'");
+      return;
+    }
     if (!state.mode || state.mode === "waiting") return;
     setSubmitting(true);
     try {
@@ -40,13 +79,13 @@ export default function PrepAccessOverlay({ examId, email }) {
       fd.append("email", email);
       fd.append("intent", state.mode === "purchase" ? "purchase" : "restart");
       if (file) fd.append("screenshot", file);
+
       const r = await fetch("/api/prep/access/request", { method: "POST", body: fd });
       const j = await r.json();
       if (j?.approved) {
-        // auto granted
         await fetchStatus();
       } else {
-        setState(s => ({ ...s, mode: "waiting", show: true, waiting: true }));
+        setState((s) => ({ ...s, mode: "waiting", show: true, waiting: true }));
       }
     } catch (e) {
       console.error(e);
@@ -59,14 +98,22 @@ export default function PrepAccessOverlay({ examId, email }) {
   if (!state.show) return null;
 
   const price = state.exam?.price || 0;
-  const title = state.mode === "purchase" ? "Unlock full course" :
-                state.mode === "restart" ? "Restart your preparation" :
-                "Waiting for approval";
+  const title =
+    state.mode === "purchase"
+      ? "Unlock full course"
+      : state.mode === "restart"
+      ? "Restart your preparation"
+      : "Waiting for approval";
 
-  const desc  = state.mode === "purchase"
-    ? `Your free trial of ${state.exam?.trialDays || 3} days is over. Buy "${state.exam?.name || examId}" for ₹${price} to continue.`
-    : state.mode === "restart"
-      ? `You've completed all ${state.access?.planDays || ""} day(s). Restart "${state.exam?.name || examId}" from Day 1.`
+  const desc =
+    state.mode === "purchase"
+      ? `Your free trial of ${state.exam?.trialDays || 3} days is over. Buy "${
+          state.exam?.name || examId
+        }" for ₹${price} to continue.`
+      : state.mode === "restart"
+      ? `You've completed all ${
+          state.access?.planDays || ""
+        } day(s). Restart "${state.exam?.name || examId}" from Day 1.`
       : `Your request has been submitted. You'll see "Waiting for approval" until the owner grants access.`;
 
   return (
@@ -81,8 +128,14 @@ export default function PrepAccessOverlay({ examId, email }) {
               Admin price: <b>₹{price}</b>
             </div>
             <div className="mb-3">
-              <label className="text-sm block mb-1">Upload payment screenshot (optional)</label>
-              <input type="file" accept="image/*,application/pdf" onChange={(e)=> setFile(e.target.files?.[0] || null)} />
+              <label className="text-sm block mb-1">
+                Upload payment screenshot (optional)
+              </label>
+              <input
+                type="file"
+                accept="image/*,application/pdf"
+                onChange={(e) => setFile(e.target.files?.[0] || null)}
+              />
             </div>
           </>
         )}
@@ -97,12 +150,17 @@ export default function PrepAccessOverlay({ examId, email }) {
             onClick={submitRequest}
             disabled={submitting}
           >
-            {submitting ? "Submitting…" : (state.mode === "purchase" ? "Submit & Unlock" : "Submit Restart Request")}
+            {submitting
+              ? "Submitting…"
+              : state.mode === "purchase"
+              ? "Submit & Unlock"
+              : "Submit Restart Request"}
           </button>
         )}
 
         <div className="text-[11px] text-gray-500 mt-3">
-          After approval, your schedule starts again from Day 1 with the original release timings.
+          After approval, your schedule starts again from Day 1 with the
+          original release timings.
         </div>
       </div>
     </div>
