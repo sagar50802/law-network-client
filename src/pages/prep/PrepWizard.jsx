@@ -90,7 +90,6 @@ function textOf(m) {
 }
 
 /* ====================== Colorful Notes (sentences + words) ====================== */
-/* Balanced opacity so notebook lines & paper stay visible */
 
 const IMPORTANT = [
   /constitution/i, /fundamental rights?/i, /directive principles?/i, /preamble/i,
@@ -128,23 +127,19 @@ function splitSentences(text) {
 
 const YEAR_RE = /\b(1[5-9]\d{2}|20\d{2}|2100)\b/;
 
-// inline (word-level) highlighting — used when sentence isn't block styled
 function renderInline(sentence, rand) {
-  const parts = sentence.split(/(\b[\p{L}\p{N}']+\b)/u); // keep punctuation and spaces
+  const parts = sentence.split(/(\b[\p{L}\p{N}']+\b)/u);
   return parts.map((tok, i) => {
     if (!/\b[\p{L}\p{N}']+\b/u.test(tok)) return <span key={i}>{tok}</span>;
 
-    // IMPORTANT → pink
     if (IMPORTANT.some((re) => re.test(tok))) {
       return <mark key={i} style={{ backgroundColor: "rgba(255, 138, 168, 0.35)", borderRadius: 2 }}>{tok}</mark>;
     }
 
-    // Years → yellow
     if (YEAR_RE.test(tok)) {
       return <mark key={i} style={{ backgroundColor: "rgba(255, 242, 0, 0.35)", borderRadius: 2 }}>{tok}</mark>;
     }
 
-    // sprinkle a few green notes (very low probability)
     if (rand() < 0.045) {
       return <mark key={i} style={{ backgroundColor: "rgba(194, 255, 125, 0.35)", borderRadius: 2 }}>{tok}</mark>;
     }
@@ -153,22 +148,19 @@ function renderInline(sentence, rand) {
   });
 }
 
-// decide per-sentence style (mutually exclusive) — tuned to be subtle but present
 function chooseSentenceStyle(sentence, rand) {
   const words = sentence.trim().split(/\s+/).filter(Boolean).length;
   const isLong = words >= 18;
 
-  // Balanced distribution: more long-sentence yellow; also blue/green blocks sprinkled
   const r = rand();
-  if (isLong && r < 0.32) return "yellow";     // block highlight (frequent on long sentences)
-  if (r < 0.18)            return "underline"; // wavy underline
-  if (r < 0.28)            return "bluebold";  // bold blue
-  if (r < 0.40)            return "green";     // soft green block
-  if (r < 0.52)            return "blue";      // soft light-blue block
+  if (isLong && r < 0.32) return "yellow";
+  if (r < 0.18)            return "underline";
+  if (r < 0.28)            return "bluebold";
+  if (r < 0.40)            return "green";
+  if (r < 0.52)            return "blue";
   return null;
 }
 
-// main renderer: paragraphs → sentences → styled spans
 export function highlightNotes(raw, seedKey = "") {
   if (!raw) return null;
   const paras = String(raw).trim().split(/\n{2,}/);
@@ -185,7 +177,7 @@ export function highlightNotes(raw, seedKey = "") {
           <mark
             key={si}
             style={{
-              backgroundColor: "rgba(255, 255, 150, 0.26)", // very transparent so lines show
+              backgroundColor: "rgba(255, 255, 150, 0.26)",
               borderRadius: 6,
               display: "inline",
               padding: "0 2px",
@@ -250,7 +242,6 @@ export function highlightNotes(raw, seedKey = "") {
           </span>
         );
       }
-      // no sentence style → do inline highlights
       return <span key={si}>{renderInline(s, rand)}</span>;
     });
 
@@ -262,7 +253,7 @@ export function highlightNotes(raw, seedKey = "") {
   });
 }
 
-/* ----------- Realistic notebook page (white paper + crisp red margin + blue rules) ----------- */
+/* ----------- Realistic notebook page ----------- */
 export const linedPage = {
   backgroundImage: `
     linear-gradient(90deg, transparent 0, transparent 56px, rgba(214,28,28,0.95) 56px, rgba(214,28,28,0.95) 58px, transparent 58px),
@@ -356,8 +347,9 @@ function FullscreenViewer({ urls, index, onClose }) {
       <img
         src={src}
         alt=""
-        className="max-w-full max-h-[85vh] rounded-lg shadow-2xl object-contain select-none"
+        className="max-w-[98vw] max-h-[85vh] rounded-lg shadow-2xl object-contain select-none"
         draggable={false}
+        loading="lazy"
       />
       <button
         className="absolute top-4 right-6 text-white text-2xl font-bold bg-black/50 rounded-full px-3 py-1"
@@ -425,6 +417,7 @@ function ModulePanel({ m, index }) {
   const pdfUrl   = pick("pdf",   m)[0]?.url;
 
   const audioAbs = audioUrl ? absUrl(audioUrl) : "";
+  the
   const videoAbs = videoUrl ? absUrl(videoUrl) : "";
   const pdfAbs   = pdfUrl   ? absUrl(pdfUrl)   : "";
 
@@ -450,6 +443,8 @@ function ModulePanel({ m, index }) {
     color: "#111"
   };
 
+  const singleImage = imgUrls.length === 1;
+
   return (
     <details className="prep-card module" open={index === 0} style={{ marginBottom: 12 }}>
       <summary>
@@ -463,16 +458,30 @@ function ModulePanel({ m, index }) {
       </summary>
 
       <div style={{ marginTop: 12 }}>
+        {/* IMAGES FIRST — now mobile-ready */}
         {!!imgUrls.length && (
           <div
             className="mb-2"
             onClick={onImagesClick}
             onContextMenu={(e) => { if (!allowDownload) e.preventDefault(); }}
           >
-            <ImageScroller images={imgUrls} />
+            {singleImage ? (
+              <img
+                src={imgUrls[0]}
+                alt=""
+                className="w-full h-auto rounded-lg shadow-sm object-contain"
+                style={{ maxHeight: "60vh" }}
+                loading="lazy"
+              />
+            ) : (
+              <div className="image-scroller-wrap">
+                <ImageScroller images={imgUrls} />
+              </div>
+            )}
           </div>
         )}
 
+        {/* TEXT */}
         {content && (
           <>
             <div className="mt-3 ocr-box" style={notebookPage}>
@@ -490,6 +499,7 @@ function ModulePanel({ m, index }) {
           </>
         )}
 
+        {/* AUDIO */}
         {audioAbs && (
           <div style={{ marginTop: 12 }}>
             <audio
@@ -502,6 +512,7 @@ function ModulePanel({ m, index }) {
           </div>
         )}
 
+        {/* VIDEO */}
         {videoAbs && (
           <div style={{ marginTop: 12 }}>
             <video
@@ -515,6 +526,7 @@ function ModulePanel({ m, index }) {
           </div>
         )}
 
+        {/* PDF (link only if downloads are allowed) */}
         {pdfAbs && allowDownload && (
           <div style={{ marginTop: 10 }}>
             <a className="badge" href={pdfAbs} target="_blank" rel="noreferrer">
@@ -524,6 +536,7 @@ function ModulePanel({ m, index }) {
         )}
       </div>
 
+      {/* fullscreen viewer */}
       {viewer.open && (
         <FullscreenViewer
           urls={imgUrls}
@@ -590,8 +603,8 @@ function PreviewPanel({ day, modules }) {
 /* ---------------------------------- page ---------------------------------- */
 
 export default function PrepWizard() {
-  const examSlug = readExamId();               // e.g. "up apo" or "UP_APO"
-  const [apiExamId, setApiExamId] = useState(""); // chosen id actually used in API calls
+  const examSlug = readExamId();
+  const [apiExamId, setApiExamId] = useState("");
 
   const [tab, setTab] = useState(() => new URLSearchParams(location.search).get("tab") || "today");
   const [loading, setLoading] = useState(false);
@@ -608,21 +621,19 @@ export default function PrepWizard() {
 
   const email = localStorage.getItem("userEmail") || "";
 
-  // Try BOTH ids and pick the one that actually has templates
+  // Try both ids and pick the one that has data
   async function load() {
     const candidates = Array.from(new Set([examSlug, toExamKey(examSlug)].filter(Boolean)));
     if (!candidates.length) return;
 
     setLoading(true);
     try {
-      // fetch templates for all candidates to decide
       const templateResults = await Promise.all(
         candidates.map((id) =>
           getJSON(`/api/prep/templates?examId=${encodeURIComponent(id)}`).catch(() => ({ items: [] }))
         )
       );
 
-      // choose the id that returned the most items (fallback to first)
       let choiceIndex = 0;
       let maxItems = -1;
       templateResults.forEach((res, idx) => {
@@ -640,7 +651,6 @@ export default function PrepWizard() {
         ? templateResults[choiceIndex].items
         : [];
 
-      // fetch meta + "today" for chosen id
       const qs = new URLSearchParams({ examId: chosenId });
       if (email) qs.set("email", email);
 
@@ -864,6 +874,15 @@ export default function PrepWizard() {
       </div>
 
       {currentDay < planDays && <NextDayTeaser day={currentDay + 1} />}
+
+      {/* tiny, safe CSS to help ImageScroller on narrow screens */}
+      <style>{`
+        .prep-card.module .image-scroller-wrap,
+        .prep-card.module .image-scroller-wrap * { max-width: 100%; }
+        @media (max-width: 640px) {
+          .prep-card.module .image-scroller-wrap img { height: auto !important; object-fit: contain !important; }
+        }
+      `}</style>
     </div>
   );
 
@@ -882,6 +901,7 @@ export default function PrepWizard() {
 
   return (
     <div className="prep-wrap">
+      {/* Modern tabbar */}
       <div className="tabbar">
         <a
           className={`tab ${tab === "calendar" ? "active" : ""}`}
