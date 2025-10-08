@@ -14,11 +14,6 @@ function readExamId() {
   return slug;
 }
 
-/** 🔒 NEW (tiny): turn a slug like `up apo` into the backend key `UP_APO` */
-function toExamKey(slug = "") {
-  return String(slug).replace(/\s+/g, "_").toUpperCase();
-}
-
 function nowUtcMs() {
   return Date.now();
 }
@@ -435,8 +430,7 @@ function ModulePanel({ m, index }) {
   const videoAbs = videoUrl ? absUrl(videoUrl) : "";
   const pdfAbs   = pdfUrl   ? absUrl(pdfUrl)   : "";
 
-  const content = textOf(m); // robust text selection (includes ocrText)
-  const isOCR = !!m?.ocrText && content === String(m.ocrText).trim();
+  const content = textOf(m); // robust text selection
   const doHighlight = m?.flags?.highlight !== false;
   const allowDownload = !!m?.flags?.allowDownload;
 
@@ -463,11 +457,6 @@ function ModulePanel({ m, index }) {
     <details className="prep-card module" open={index === 0} style={{ marginBottom: 12 }}>
       <summary>
         <span style={{ fontWeight: 600 }}>{m.title || "Untitled"}</span>
-        {isOCR && (
-          <span className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 align-middle">
-            OCR
-          </span>
-        )}
         <span className="chev">›</span>
       </summary>
 
@@ -607,9 +596,7 @@ function PreviewPanel({ day, modules }) {
 /* ---------------------------------- page ---------------------------------- */
 
 export default function PrepWizard() {
-  const examSlug = readExamId();        // e.g. "up apo"
-  const examKey  = toExamKey(examSlug); // e.g. "UP_APO"  🔒 use only for API calls
-
+  const examId = readExamId();
   const [tab, setTab] = useState(() => new URLSearchParams(location.search).get("tab") || "today");
   const [loading, setLoading] = useState(false);
 
@@ -633,16 +620,16 @@ export default function PrepWizard() {
 
   // ✅ ROBUST: meta + templates (and optional today endpoint if present)
   async function load() {
-    if (!examKey) return;
+    if (!examId) return;
     setLoading(true);
     try {
-      const qs = new URLSearchParams({ examId: examKey });
+      const qs = new URLSearchParams({ examId });
       if (email) qs.set("email", email);
 
       const [metaRes, tmplRes, todayRes] = await Promise.allSettled([
         getJSON(`/api/prep/user/summary?${qs.toString()}`),                     // todayDay / planDays
-        getJSON(`/api/prep/templates?examId=${encodeURIComponent(examKey)}`),   // ALL templates (has files/media)
-        getJSON(`/api/prep/user/today?examId=${encodeURIComponent(examKey)}`),  // released + scheduled for today
+        getJSON(`/api/prep/templates?examId=${encodeURIComponent(examId)}`),    // ALL templates (has files/media)
+        getJSON(`/api/prep/user/today?examId=${encodeURIComponent(examId)}`),   // may be absent; now exists as alias too
       ]);
 
       // meta (required)
@@ -697,8 +684,7 @@ export default function PrepWizard() {
 
   useEffect(() => {
     load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [examKey]); // 🔒 keyed on canonical id
+  }, [examId]);
 
   // keep ?tab= in URL for consistency
   useEffect(() => {
@@ -714,7 +700,7 @@ export default function PrepWizard() {
         return;
       }
       await postJSON("/api/prep/user/complete", {
-        examId: examKey, // 🔒 use canonical id here as well
+        examId,
         email,
         dayIndex: todayDay,
       });
@@ -842,7 +828,7 @@ export default function PrepWizard() {
 
   const todayTab = (
     <div className="max-w-3xl mx-auto">
-      <div className="text-lg font-semibold mb-1">{examSlug}</div>
+      <div className="text-lg font-semibold mb-1">{examId}</div>
       <div className="text-sm text-gray-600 mb-3">Day {todayDay}</div>
 
       {/* day chips */}
