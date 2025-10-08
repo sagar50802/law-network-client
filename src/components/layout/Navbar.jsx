@@ -62,15 +62,20 @@ export default function Navbar() {
           <a href="/plagiarism" className="hover:text-blue-600">Plagiarism</a>
           <a href="/scholar" className="hover:text-blue-600">Scholar Space</a>
 
+          {/* ✅ Owner-only links (admin view) */}
           {isOwner() && (
             <>
               <span className="text-gray-300">|</span>
               <a href="/admin/dashboard" className="text-blue-600 underline">Admin</a>
-              {/* ✅ Optional owner-only quick link */}
               <a href="/admin/prep" className="text-blue-600 underline">Prep Admin</a>
+              {/* ✅ NEW: Access Requests (desktop) */}
+              <a href="/admin/prep-access" className="text-blue-600 underline">Access Requests</a>
               <button
                 className="ml-2 text-xs border px-2 py-1 rounded"
-                onClick={() => { localStorage.removeItem("ownerKey"); location.reload(); }}
+                onClick={() => {
+                  localStorage.removeItem("ownerKey");
+                  location.reload();
+                }}
               >
                 Logout
               </button>
@@ -80,7 +85,7 @@ export default function Navbar() {
 
         {/* Mobile burger */}
         <div className="md:hidden">
-          <button onClick={() => setOpen(v => !v)} aria-label="Menu">☰</button>
+          <button onClick={() => setOpen((v) => !v)} aria-label="Menu">☰</button>
         </div>
       </div>
 
@@ -97,11 +102,14 @@ export default function Navbar() {
           <a href="/notebook">PDF Notebook</a>
           <a href="/plagiarism">Plagiarism</a>
           <a href="/scholar">Scholar Space</a>
+
+          {/* ✅ Owner-only mobile links */}
           {isOwner() && (
             <>
               <a href="/admin/dashboard" className="underline">Admin</a>
-              {/* ✅ Optional owner-only quick link (mobile) */}
               <a href="/admin/prep" className="underline">Prep Admin</a>
+              {/* ✅ NEW: Access Requests (mobile) */}
+              <a href="/admin/prep-access" className="underline">Access Requests</a>
             </>
           )}
         </div>
