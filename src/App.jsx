@@ -33,6 +33,8 @@ import PrepWizard from "./pages/prep/PrepWizard.jsx";
 import AdminPrepPanel from "./pages/prep/AdminPrepPanel.jsx";
 // ✅ NEW: Admin overlay editor
 import PrepOverlayEditor from "./pages/prep/PrepOverlayEditor.jsx";
+// ✅ NEW: Prep access control admin page
+import PrepAccessAdmin from "./pages/admin/PrepAccessAdmin.jsx";
 
 /* 🔤 Global UI styles (one-time import) */
 import "./styles/ui.css";
@@ -121,6 +123,15 @@ export default function App() {
               element={
                 <AdminRoute>
                   <PrepOverlayEditor />
+                </AdminRoute>
+              }
+            />
+            {/* ✅ NEW: Prep access admin route */}
+            <Route
+              path="/admin/prep-access"
+              element={
+                <AdminRoute>
+                  <PrepAccessAdmin />
                 </AdminRoute>
               }
             />
