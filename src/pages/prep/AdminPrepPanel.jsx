@@ -105,6 +105,23 @@ export default function AdminPrepPanel() {
     <div className="max-w-6xl mx-auto p-4">
       <h1 className="text-2xl font-bold mb-4">Admin Prep Panel</h1>
 
+      {/* ✅ NEW quick navigation buttons */}
+      <div className="mb-4 -mt-2">
+        <a
+          href="/admin/prep"
+          className="inline-block mr-2 px-3 py-1.5 text-sm rounded border bg-white hover:bg-gray-50"
+        >
+          Templates
+        </a>
+        <a
+          href="/admin/prep-access"
+          className="inline-block px-3 py-1.5 text-sm rounded border bg-white hover:bg-gray-50"
+          title="Review payments, grant/revoke access, or approve restarts"
+        >
+          Access Requests
+        </a>
+      </div>
+
       <div className="rounded-xl border bg-white p-4 mb-6">
         <div className="grid md:grid-cols-2 gap-4">
           <div>
@@ -168,6 +185,7 @@ export default function AdminPrepPanel() {
   );
 }
 
+/* -------------------- Exam Editor (unchanged logic) -------------------- */
 function ExamEditor({ examId }) {
   const [modules, setModules] = useState([]);
   const [busy, setBusy] = useState(false);
