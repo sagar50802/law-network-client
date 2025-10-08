@@ -1,14 +1,8 @@
 // client/src/pages/prep/PrepWizard.jsx
 import { useEffect, useMemo, useState } from "react";
 import { getJSON, postJSON, absUrl } from "../../utils/api";
-import { Card } from "../../components/ui/Card";
 import { ImageScroller } from "../../components/ui/ImageScroller";
-import { useEffect, useMemo, useState } from "react";
-import { getJSON, postJSON, absUrl } from "../../utils/api";
-import { Card } from "../../components/ui/Card";
-import { ImageScroller } from "../../components/ui/ImageScroller";
-import PrepAccessOverlay from "../../components/prep/PrepAccessOverlay"; 
-
+import PrepAccessOverlay from "../../components/prep/PrepAccessOverlay";
 
 /**
  * Route shape assumed: /prep/:examId
@@ -888,7 +882,7 @@ export default function PrepWizard() {
 
   return (
     <div className="prep-wrap">
-          {/* ✅ Access/Restart Overlay (non-intrusive) */}
+      {/* ✅ Access/Restart Overlay (non-intrusive) */}
       <PrepAccessOverlay
         examId={apiExamId || examSlug}
         email={localStorage.getItem("userEmail") || ""}
