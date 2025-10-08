@@ -14,14 +14,14 @@ export default function PrepAccessOverlay({ examId, email }) {
   const [file, setFile] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
-  /** ✅ Updated fetchStatus respecting backend overlay flags */
+  /** ✅ Updated fetchStatus respecting backend overlay + forced overlay */
   async function fetchStatus() {
     if (!examId) return;
     const qs = new URLSearchParams({ examId, email: email || "" });
     const r = await getJSON(`/api/prep/access/status?${qs.toString()}`);
     const { exam, access, overlay } = r || {};
 
-    // brand-new user → start trial automatically
+    // auto-start trial for brand new user
     if ((access?.status === "none") && email) {
       await postJSON("/api/prep/access/start-trial", { examId, email });
       return fetchStatus();
@@ -31,12 +31,18 @@ export default function PrepAccessOverlay({ examId, email }) {
     let show = false;
     let waiting = !!access?.pending;
 
-    // ✅ NEW: trust backend overlay decision
+    // ✅ 1️⃣ trust backend overlay decision
     if (overlay?.show && overlay?.mode) {
-      mode = overlay.mode; // "purchase" or "restart"
+      mode = overlay.mode;
       show = true;
-    } else {
-      // fallback to local decision (for older servers)
+    } 
+    // ✅ 2️⃣ honor server-forced overlay flags (overlayForce / forceMode)
+    else if (access?.overlayForce) {
+      mode = access.forceMode === "restart" ? "restart" : "purchase";
+      show = true;
+    } 
+    // ✅ 3️⃣ fallback to local logic
+    else {
       if (access?.status === "trial" && access?.trialEnded) {
         mode = "purchase";
         show = true;
