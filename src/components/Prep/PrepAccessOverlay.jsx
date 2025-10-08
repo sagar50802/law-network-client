@@ -14,47 +14,45 @@ export default function PrepAccessOverlay({ examId, email }) {
   const [file, setFile] = useState(null);
   const [submitting, setSubmitting] = useState(false);
 
+  /** ✅ Updated fetchStatus respecting backend overlay flags */
   async function fetchStatus() {
     if (!examId) return;
     const qs = new URLSearchParams({ examId, email: email || "" });
     const r = await getJSON(`/api/prep/access/status?${qs.toString()}`);
+    const { exam, access, overlay } = r || {};
 
-    const { exam, access, show, mode, forceOverlay } = r || {};
-
-    // new user → create trial silently
+    // brand-new user → start trial automatically
     if ((access?.status === "none") && email) {
       await postJSON("/api/prep/access/start-trial", { examId, email });
       return fetchStatus();
     }
 
-    // ✅ UPDATED BLOCK (accept server’s scheduling decision)
-    let nextMode = mode || "";
-    let nextShow = !!show;
+    let mode = "";
+    let show = false;
     let waiting = !!access?.pending;
 
-    // backward-compatible fallback if server doesn't send show/mode
-    if (!nextShow) {
+    // ✅ NEW: trust backend overlay decision
+    if (overlay?.show && overlay?.mode) {
+      mode = overlay.mode; // "purchase" or "restart"
+      show = true;
+    } else {
+      // fallback to local decision (for older servers)
       if (access?.status === "trial" && access?.trialEnded) {
-        nextMode = "purchase";
-        nextShow = true;
+        mode = "purchase";
+        show = true;
       } else if (access?.status === "active" && access?.canRestart) {
-        nextMode = "restart";
-        nextShow = true;
+        mode = "restart";
+        show = true;
       } else if (waiting) {
-        nextMode = "waiting";
-        nextShow = true;
+        mode = "waiting";
+        show = true;
       }
-    }
-
-    if (forceOverlay && !waiting) {
-      nextMode = "purchase";
-      nextShow = true;
     }
 
     setState({
       loading: false,
-      show: nextShow,
-      mode: nextMode,
+      show,
+      mode,
       exam: exam || {},
       access: access || {},
       waiting,
@@ -80,12 +78,20 @@ export default function PrepAccessOverlay({ examId, email }) {
       fd.append("intent", state.mode === "purchase" ? "purchase" : "restart");
       if (file) fd.append("screenshot", file);
 
-      const r = await fetch("/api/prep/access/request", { method: "POST", body: fd });
+      const r = await fetch("/api/prep/access/request", {
+        method: "POST",
+        body: fd,
+      });
       const j = await r.json();
       if (j?.approved) {
         await fetchStatus();
       } else {
-        setState((s) => ({ ...s, mode: "waiting", show: true, waiting: true }));
+        setState((s) => ({
+          ...s,
+          mode: "waiting",
+          show: true,
+          waiting: true,
+        }));
       }
     } catch (e) {
       console.error(e);
