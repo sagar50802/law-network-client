@@ -14,6 +14,11 @@ function readExamId() {
   return slug;
 }
 
+/** 🔒 NEW (tiny): turn a slug like `up apo` into the backend key `UP_APO` */
+function toExamKey(slug = "") {
+  return String(slug).replace(/\s+/g, "_").toUpperCase();
+}
+
 function nowUtcMs() {
   return Date.now();
 }
@@ -72,10 +77,10 @@ function pick(kind, m) {
 /* --------------- prefer a non-empty text field across all shapes --------------- */
 function textOf(m) {
   const candidates = [
-    m?.content,    // computed/legacy
-    m?.ocrText,    // <-- OCR output from the backend
-    m?.text,       // admin manual/pasted
-    m?.manualText, // legacy
+    m?.content,
+    m?.ocrText,
+    m?.text,
+    m?.manualText,
     m?.description
   ];
   for (const s of candidates) {
@@ -140,9 +145,10 @@ function renderInline(sentence, rand) {
     }
 
     // sprinkle a few green notes (very low probability)
-    if (rng(0) || Math.random() === -1) {} // no-op to keep tree-shakers calm
-    // controlled randomness:
-    // (we pass a seeded rand from highlightNotes)
+    if (rand() < 0.045) {
+      return <mark key={i} style={{ backgroundColor: "rgba(194, 255, 125, 0.35)", borderRadius: 2 }}>{tok}</mark>;
+    }
+
     return <span key={i}>{tok}</span>;
   });
 }
@@ -179,7 +185,7 @@ export function highlightNotes(raw, seedKey = "") {
           <mark
             key={si}
             style={{
-              backgroundColor: "rgba(255, 255, 150, 0.26)",
+              backgroundColor: "rgba(255, 255, 150, 0.26)", // very transparent so lines show
               borderRadius: 6,
               display: "inline",
               padding: "0 2px",
@@ -258,6 +264,12 @@ export function highlightNotes(raw, seedKey = "") {
 
 /* ----------- Realistic notebook page (white paper + crisp red margin + blue rules) ----------- */
 export const linedPage = {
+  /**
+   * Top layer: a real *line*, not a band — 2px crisp red at 56px.
+   * Next: white paper slight vertical shading for texture.
+   * Next: faint blue wash for ruled feel.
+   * Bottom: repeating blue ruled lines (27px leading) offset to sit between baselines.
+   */
   backgroundImage: `
     linear-gradient(90deg, transparent 0, transparent 56px, rgba(214,28,28,0.95) 56px, rgba(214,28,28,0.95) 58px, transparent 58px),
     linear-gradient(to bottom, rgba(255,255,255,0.98), rgba(255,255,255,0.96)),
@@ -270,7 +282,7 @@ export const linedPage = {
   backgroundColor: "#ffffff",
   border: "1px solid #dbe3f6",
   borderRadius: 12,
-  padding: "14px 14px 14px 72px",
+  padding: "14px 14px 14px 72px", // left padding to clear red margin
   lineHeight: 1.6,
   whiteSpace: "pre-wrap",
   wordBreak: "break-word",
@@ -345,7 +357,7 @@ function FullscreenViewer({ urls, index, onClose }) {
     <div
       className="fixed inset-0 z-[9999] backdrop-blur-md bg-black/70 flex items-center justify-center p-4"
       onClick={onClose}
-      onContextMenu={(e) => e.preventDefault()}
+      onContextMenu={(e) => e.preventDefault()} // soft block right-click save
     >
       <img
         src={src}
@@ -423,12 +435,10 @@ function ModulePanel({ m, index }) {
   const videoAbs = videoUrl ? absUrl(videoUrl) : "";
   const pdfAbs   = pdfUrl   ? absUrl(pdfUrl)   : "";
 
-  const content = textOf(m); // robust text selection
+  const content = textOf(m); // robust text selection (includes ocrText)
+  const isOCR = !!m?.ocrText && content === String(m.ocrText).trim();
   const doHighlight = m?.flags?.highlight !== false;
   const allowDownload = !!m?.flags?.allowDownload;
-
-  // If we're showing OCR specifically (i.e., OCR exists and no admin text)
-  const isShowingOCR = !!m?.ocrText && !(m?.text && String(m.text).trim());
 
   // image click handler (works even if ImageScroller doesn't expose onClick)
   function onImagesClick(e) {
@@ -453,6 +463,11 @@ function ModulePanel({ m, index }) {
     <details className="prep-card module" open={index === 0} style={{ marginBottom: 12 }}>
       <summary>
         <span style={{ fontWeight: 600 }}>{m.title || "Untitled"}</span>
+        {isOCR && (
+          <span className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 align-middle">
+            OCR
+          </span>
+        )}
         <span className="chev">›</span>
       </summary>
 
@@ -471,12 +486,7 @@ function ModulePanel({ m, index }) {
         {/* TEXT (scrollable, notebook, highlights transparent) */}
         {content && (
           <>
-            {isShowingOCR && (
-              <div className="text-[10px] font-medium text-indigo-600 mb-1">
-                OCR text (from PDF)
-              </div>
-            )}
-            <div className="mt-1 ocr-box" style={notebookPage}>
+            <div className="mt-3 ocr-box" style={notebookPage}>
               {doHighlight ? highlightNotes(content, m._id || m.title || "") : content}
             </div>
             <div className="mt-1">
@@ -597,7 +607,9 @@ function PreviewPanel({ day, modules }) {
 /* ---------------------------------- page ---------------------------------- */
 
 export default function PrepWizard() {
-  const examId = readExamId();
+  const examSlug = readExamId();        // e.g. "up apo"
+  const examKey  = toExamKey(examSlug); // e.g. "UP_APO"  🔒 use only for API calls
+
   const [tab, setTab] = useState(() => new URLSearchParams(location.search).get("tab") || "today");
   const [loading, setLoading] = useState(false);
 
@@ -621,16 +633,16 @@ export default function PrepWizard() {
 
   // ✅ ROBUST: meta + templates (and optional today endpoint if present)
   async function load() {
-    if (!examId) return;
+    if (!examKey) return;
     setLoading(true);
     try {
-      const qs = new URLSearchParams({ examId });
+      const qs = new URLSearchParams({ examId: examKey });
       if (email) qs.set("email", email);
 
       const [metaRes, tmplRes, todayRes] = await Promise.allSettled([
         getJSON(`/api/prep/user/summary?${qs.toString()}`),                     // todayDay / planDays
-        getJSON(`/api/prep/templates?examId=${encodeURIComponent(examId)}`),    // ALL templates (has files/media)
-        getJSON(`/api/prep/user/today?examId=${encodeURIComponent(examId)}`),   // may be absent; now exists as alias too
+        getJSON(`/api/prep/templates?examId=${encodeURIComponent(examKey)}`),   // ALL templates (has files/media)
+        getJSON(`/api/prep/user/today?examId=${encodeURIComponent(examKey)}`),  // released + scheduled for today
       ]);
 
       // meta (required)
@@ -685,7 +697,8 @@ export default function PrepWizard() {
 
   useEffect(() => {
     load();
-  }, [examId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [examKey]); // 🔒 keyed on canonical id
 
   // keep ?tab= in URL for consistency
   useEffect(() => {
@@ -701,7 +714,7 @@ export default function PrepWizard() {
         return;
       }
       await postJSON("/api/prep/user/complete", {
-        examId,
+        examId: examKey, // 🔒 use canonical id here as well
         email,
         dayIndex: todayDay,
       });
@@ -829,7 +842,7 @@ export default function PrepWizard() {
 
   const todayTab = (
     <div className="max-w-3xl mx-auto">
-      <div className="text-lg font-semibold mb-1">{examId}</div>
+      <div className="text-lg font-semibold mb-1">{examSlug}</div>
       <div className="text-sm text-gray-600 mb-3">Day {todayDay}</div>
 
       {/* day chips */}
