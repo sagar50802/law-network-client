@@ -1,94 +1,108 @@
 import { useEffect, useState } from "react";
-import { getJSON, postJSON, absUrl, upload } from "../../utils/api";
+import { getJSON, postJSON, absUrl } from "../../utils/api";
 
-export default function PrepOverlay({ open, onClose, examId, emailSource }) {
-  const [cfg, setCfg] = useState(null);
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [email, setEmail] = useState("");
+export default function PrepAccessOverlay({ examId, email }) {
+  const [state, setState] = useState({ loading: true, show: false, mode: "", exam: {}, access: {}, waiting: false });
+  const [file, setFile] = useState(null);
+  const [submitting, setSubmitting] = useState(false);
 
-  useEffect(() => {
-    if (!open) return;
-    getJSON(`/api/prep/overlay/${examId}`).then(r => setCfg(r.config || null)).catch(()=>{});
-    // try preload email from caller/localStorage
-    const e = emailSource?.() || localStorage.getItem("prepEmail") || localStorage.getItem("userEmail") || "";
-    if (e) setEmail(e);
-  }, [open, examId]);
+  async function fetchStatus() {
+    if (!examId) return;
+    const qs = new URLSearchParams({ examId, email: email || "" });
+    const r = await getJSON(`/api/prep/access/status?${qs.toString()}`);
+    const { exam, access } = r || {};
+    // new user → create trial silently
+    if ((access?.status === "none") && email) {
+      await postJSON("/api/prep/access/start-trial", { examId, email });
+      return fetchStatus();
+    }
 
-  if (!open) return null;
+    let mode = "";
+    let show = false;
+    let waiting = !!access?.pending;
 
-  const upiHref = cfg?.upiDeepLink || "#";
-  const waHref  = cfg?.whatsappLink ? `${cfg.whatsappLink}${cfg.whatsappLink.includes("?") ? "&" : "?"}text=${encodeURIComponent(
-      `Prep Payment Proof\nExam: ${examId}\nName: ${name}\nPhone: ${phone}\nEmail: ${email}\nAmount: ₹${cfg?.priceINR||0}`
-  )}` : "#";
+    if (access?.status === "trial" && access?.trialEnded) { mode = "purchase"; show = true; }
+    else if (access?.status === "active" && access?.canRestart) { mode = "restart"; show = true; }
+    else if (waiting) { mode = "waiting"; show = true; }
 
-  async function handleStart() {
-    // store in db as intent for admin tracking (no disruption to current flow)
-    try {
-      await postJSON("/api/prep/intent", {
-        examId, name, phone, email, priceINR: cfg?.priceINR || 0
-      });
-      if (email) localStorage.setItem("prepEmail", email);
-      // Trigger UPI app immediately (Step 1)
-      window.location.href = upiHref;
-      // user returns → they can click WhatsApp proof (Step 2)
-    } catch {}
+    setState({ loading: false, show, mode, exam: exam || {}, access: access || {}, waiting });
   }
 
+  useEffect(() => { fetchStatus(); /* eslint-disable-next-line */ }, [examId, email]);
+
+  async function submitRequest() {
+    if (!email) { alert("Need an email in localStorage as 'userEmail'"); return; }
+    if (!state.mode || state.mode === "waiting") return;
+    setSubmitting(true);
+    try {
+      const fd = new FormData();
+      fd.append("examId", examId);
+      fd.append("email", email);
+      fd.append("intent", state.mode === "purchase" ? "purchase" : "restart");
+      if (file) fd.append("screenshot", file);
+      const r = await fetch("/api/prep/access/request", { method: "POST", body: fd });
+      const j = await r.json();
+      if (j?.approved) {
+        // auto granted
+        await fetchStatus();
+      } else {
+        setState(s => ({ ...s, mode: "waiting", show: true, waiting: true }));
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Failed to submit");
+    } finally {
+      setSubmitting(false);
+    }
+  }
+
+  if (!state.show) return null;
+
+  const price = state.exam?.price || 0;
+  const title = state.mode === "purchase" ? "Unlock full course" :
+                state.mode === "restart" ? "Restart your preparation" :
+                "Waiting for approval";
+
+  const desc  = state.mode === "purchase"
+    ? `Your free trial of ${state.exam?.trialDays || 3} days is over. Buy "${state.exam?.name || examId}" for ₹${price} to continue.`
+    : state.mode === "restart"
+      ? `You've completed all ${state.access?.planDays || ""} day(s). Restart "${state.exam?.name || examId}" from Day 1.`
+      : `Your request has been submitted. You'll see "Waiting for approval" until the owner grants access.`;
+
   return (
-    <div className="fixed inset-0 bg-black/40 grid place-items-center z-[100]">
-      <div className="w-[min(95vw,720px)] rounded-2xl bg-white overflow-hidden shadow-xl">
-        {/* Banner */}
-        <div className="h-40 bg-gray-100 relative">
-          {cfg?.bannerUrl ? (
-            <img src={absUrl(cfg.bannerUrl)} className="absolute inset-0 w-full h-full object-cover" />
-          ) : (
-            <div className="absolute inset-0 grid place-items-center text-gray-400">Exam Banner</div>
-          )}
-          <button className="absolute top-2 right-2 bg-white/90 rounded px-2 py-1 text-sm border" onClick={onClose}>✕</button>
-        </div>
+    <div className="fixed inset-0 z-[99999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
+      <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-5">
+        <div className="text-lg font-semibold mb-1">{title}</div>
+        <div className="text-sm text-gray-700 mb-3">{desc}</div>
 
-        <div className="p-4 grid md:grid-cols-2 gap-4">
-          <div className="text-sm">
-            <div className="font-semibold text-lg mb-1">{examId.replace(/_/g," ")}</div>
-            <div className="text-gray-600 mb-3">Plan Price: <b>₹{cfg?.priceINR || 0}</b></div>
-
-            <div className="grid gap-2">
-              <input className="border rounded px-2 py-1" placeholder="Your name" value={name} onChange={e=>setName(e.target.value)} />
-              <input className="border rounded px-2 py-1" placeholder="Phone number" value={phone} onChange={e=>setPhone(e.target.value)} />
-              <input className="border rounded px-2 py-1" placeholder="Email" value={email} onChange={e=>setEmail(e.target.value)} />
+        {state.mode !== "waiting" && (
+          <>
+            <div className="text-sm text-gray-600 mb-2">
+              Admin price: <b>₹{price}</b>
             </div>
-
-            <button
-              className="mt-3 w-full rounded bg-green-600 text-white py-2 font-semibold"
-              onClick={handleStart}
-            >
-              Start
-            </button>
-            <div className="text-xs text-gray-500 mt-1">Tap “Start” to open UPI app. After paying, send proof via WhatsApp (Step 2).</div>
-          </div>
-
-          <div className="text-sm">
-            <div className="font-semibold mb-2">Step 1 – Pay via UPI</div>
-            <a
-              href={upiHref}
-              className="block text-center rounded bg-green-600 text-white py-2 font-semibold"
-            >
-              Pay ₹{cfg?.priceINR || 0} with UPI
-            </a>
-
-            <div className="font-semibold mt-4 mb-2">Step 2 – Send Proof on WhatsApp</div>
-            <a
-              target="_blank" rel="noreferrer"
-              href={waHref}
-              className="block text-center rounded border py-2"
-            >
-              Open WhatsApp Chat
-            </a>
-            <div className="text-xs text-gray-500 mt-2">
-              We don’t show WhatsApp QR here—just tap to open chat and send screenshot.
+            <div className="mb-3">
+              <label className="text-sm block mb-1">Upload payment screenshot (optional)</label>
+              <input type="file" accept="image/*,application/pdf" onChange={(e)=> setFile(e.target.files?.[0] || null)} />
             </div>
+          </>
+        )}
+
+        {state.mode === "waiting" ? (
+          <div className="text-amber-700 bg-amber-50 border border-amber-200 rounded p-2 text-sm">
+            Waiting for approval…
           </div>
+        ) : (
+          <button
+            className="w-full py-2 rounded bg-emerald-600 text-white disabled:opacity-60"
+            onClick={submitRequest}
+            disabled={submitting}
+          >
+            {submitting ? "Submitting…" : (state.mode === "purchase" ? "Submit & Unlock" : "Submit Restart Request")}
+          </button>
+        )}
+
+        <div className="text-[11px] text-gray-500 mt-3">
+          After approval, your schedule starts again from Day 1 with the original release timings.
         </div>
       </div>
     </div>
