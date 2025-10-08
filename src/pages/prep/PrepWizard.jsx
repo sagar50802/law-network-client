@@ -72,10 +72,10 @@ function pick(kind, m) {
 /* --------------- prefer a non-empty text field across all shapes --------------- */
 function textOf(m) {
   const candidates = [
-    m?.content,
-    m?.ocrText,
-    m?.text,
-    m?.manualText,
+    m?.content,    // computed/legacy
+    m?.ocrText,    // <-- OCR output from the backend
+    m?.text,       // admin manual/pasted
+    m?.manualText, // legacy
     m?.description
   ];
   for (const s of candidates) {
@@ -140,10 +140,9 @@ function renderInline(sentence, rand) {
     }
 
     // sprinkle a few green notes (very low probability)
-    if (rand() < 0.045) {
-      return <mark key={i} style={{ backgroundColor: "rgba(194, 255, 125, 0.35)", borderRadius: 2 }}>{tok}</mark>;
-    }
-
+    if (rng(0) || Math.random() === -1) {} // no-op to keep tree-shakers calm
+    // controlled randomness:
+    // (we pass a seeded rand from highlightNotes)
     return <span key={i}>{tok}</span>;
   });
 }
@@ -180,7 +179,7 @@ export function highlightNotes(raw, seedKey = "") {
           <mark
             key={si}
             style={{
-              backgroundColor: "rgba(255, 255, 150, 0.26)", // very transparent so lines show
+              backgroundColor: "rgba(255, 255, 150, 0.26)",
               borderRadius: 6,
               display: "inline",
               padding: "0 2px",
@@ -259,12 +258,6 @@ export function highlightNotes(raw, seedKey = "") {
 
 /* ----------- Realistic notebook page (white paper + crisp red margin + blue rules) ----------- */
 export const linedPage = {
-  /**
-   * Top layer: a real *line*, not a band — 2px crisp red at 56px.
-   * Next: white paper slight vertical shading for texture.
-   * Next: faint blue wash for ruled feel.
-   * Bottom: repeating blue ruled lines (27px leading) offset to sit between baselines.
-   */
   backgroundImage: `
     linear-gradient(90deg, transparent 0, transparent 56px, rgba(214,28,28,0.95) 56px, rgba(214,28,28,0.95) 58px, transparent 58px),
     linear-gradient(to bottom, rgba(255,255,255,0.98), rgba(255,255,255,0.96)),
@@ -277,7 +270,7 @@ export const linedPage = {
   backgroundColor: "#ffffff",
   border: "1px solid #dbe3f6",
   borderRadius: 12,
-  padding: "14px 14px 14px 72px", // left padding to clear red margin
+  padding: "14px 14px 14px 72px",
   lineHeight: 1.6,
   whiteSpace: "pre-wrap",
   wordBreak: "break-word",
@@ -352,7 +345,7 @@ function FullscreenViewer({ urls, index, onClose }) {
     <div
       className="fixed inset-0 z-[9999] backdrop-blur-md bg-black/70 flex items-center justify-center p-4"
       onClick={onClose}
-      onContextMenu={(e) => e.preventDefault()} // soft block right-click save
+      onContextMenu={(e) => e.preventDefault()}
     >
       <img
         src={src}
@@ -434,6 +427,9 @@ function ModulePanel({ m, index }) {
   const doHighlight = m?.flags?.highlight !== false;
   const allowDownload = !!m?.flags?.allowDownload;
 
+  // If we're showing OCR specifically (i.e., OCR exists and no admin text)
+  const isShowingOCR = !!m?.ocrText && !(m?.text && String(m.text).trim());
+
   // image click handler (works even if ImageScroller doesn't expose onClick)
   function onImagesClick(e) {
     const target = e.target;
@@ -475,7 +471,12 @@ function ModulePanel({ m, index }) {
         {/* TEXT (scrollable, notebook, highlights transparent) */}
         {content && (
           <>
-            <div className="mt-3 ocr-box" style={notebookPage}>
+            {isShowingOCR && (
+              <div className="text-[10px] font-medium text-indigo-600 mb-1">
+                OCR text (from PDF)
+              </div>
+            )}
+            <div className="mt-1 ocr-box" style={notebookPage}>
               {doHighlight ? highlightNotes(content, m._id || m.title || "") : content}
             </div>
             <div className="mt-1">
