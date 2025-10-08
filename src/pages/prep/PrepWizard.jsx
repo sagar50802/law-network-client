@@ -14,6 +14,11 @@ function readExamId() {
   return slug;
 }
 
+/** canonical form some admins use: spaces → "_", uppercase */
+function toExamKey(slug = "") {
+  return String(slug).replace(/\s+/g, "_").toUpperCase();
+}
+
 function nowUtcMs() {
   return Date.now();
 }
@@ -259,12 +264,6 @@ export function highlightNotes(raw, seedKey = "") {
 
 /* ----------- Realistic notebook page (white paper + crisp red margin + blue rules) ----------- */
 export const linedPage = {
-  /**
-   * Top layer: a real *line*, not a band — 2px crisp red at 56px.
-   * Next: white paper slight vertical shading for texture.
-   * Next: faint blue wash for ruled feel.
-   * Bottom: repeating blue ruled lines (27px leading) offset to sit between baselines.
-   */
   backgroundImage: `
     linear-gradient(90deg, transparent 0, transparent 56px, rgba(214,28,28,0.95) 56px, rgba(214,28,28,0.95) 58px, transparent 58px),
     linear-gradient(to bottom, rgba(255,255,255,0.98), rgba(255,255,255,0.96)),
@@ -277,7 +276,7 @@ export const linedPage = {
   backgroundColor: "#ffffff",
   border: "1px solid #dbe3f6",
   borderRadius: 12,
-  padding: "14px 14px 14px 72px", // left padding to clear red margin
+  padding: "14px 14px 14px 72px",
   lineHeight: 1.6,
   whiteSpace: "pre-wrap",
   wordBreak: "break-word",
@@ -352,7 +351,7 @@ function FullscreenViewer({ urls, index, onClose }) {
     <div
       className="fixed inset-0 z-[9999] backdrop-blur-md bg-black/70 flex items-center justify-center p-4"
       onClick={onClose}
-      onContextMenu={(e) => e.preventDefault()} // soft block right-click save
+      onContextMenu={(e) => e.preventDefault()}
     >
       <img
         src={src}
@@ -373,7 +372,6 @@ function FullscreenViewer({ urls, index, onClose }) {
 
 /* ------------------------ module + later components ------------------------ */
 
-// --- Locked preview card (NO TIME SHOWN) ---
 function LockedPreviewCard({ m }) {
   const imgs = pick("image", m);
   const hasAudio = pick("audio", m).length > 0;
@@ -430,11 +428,11 @@ function ModulePanel({ m, index }) {
   const videoAbs = videoUrl ? absUrl(videoUrl) : "";
   const pdfAbs   = pdfUrl   ? absUrl(pdfUrl)   : "";
 
-  const content = textOf(m); // robust text selection
+  const content = textOf(m);
+  const isOCR = !!m?.ocrText && content === String(m.ocrText).trim();
   const doHighlight = m?.flags?.highlight !== false;
   const allowDownload = !!m?.flags?.allowDownload;
 
-  // image click handler (works even if ImageScroller doesn't expose onClick)
   function onImagesClick(e) {
     const target = e.target;
     if (!(target && target.tagName === "IMG")) return;
@@ -443,7 +441,6 @@ function ModulePanel({ m, index }) {
     setViewer({ open: true, idx: Math.max(0, idx) });
   }
 
-  // “notebook page” with handwritten font; paper always visible under highlights
   const notebookPage = {
     ...linedPage,
     maxHeight: expanded ? "none" : 320,
@@ -457,11 +454,15 @@ function ModulePanel({ m, index }) {
     <details className="prep-card module" open={index === 0} style={{ marginBottom: 12 }}>
       <summary>
         <span style={{ fontWeight: 600 }}>{m.title || "Untitled"}</span>
+        {isOCR && (
+          <span className="ml-2 inline-block text-[10px] px-1.5 py-0.5 rounded bg-emerald-100 text-emerald-700 align-middle">
+            OCR
+          </span>
+        )}
         <span className="chev">›</span>
       </summary>
 
       <div style={{ marginTop: 12 }}>
-        {/* IMAGES FIRST */}
         {!!imgUrls.length && (
           <div
             className="mb-2"
@@ -472,7 +473,6 @@ function ModulePanel({ m, index }) {
           </div>
         )}
 
-        {/* TEXT (scrollable, notebook, highlights transparent) */}
         {content && (
           <>
             <div className="mt-3 ocr-box" style={notebookPage}>
@@ -490,7 +490,6 @@ function ModulePanel({ m, index }) {
           </>
         )}
 
-        {/* AUDIO */}
         {audioAbs && (
           <div style={{ marginTop: 12 }}>
             <audio
@@ -503,7 +502,6 @@ function ModulePanel({ m, index }) {
           </div>
         )}
 
-        {/* VIDEO */}
         {videoAbs && (
           <div style={{ marginTop: 12 }}>
             <video
@@ -517,7 +515,6 @@ function ModulePanel({ m, index }) {
           </div>
         )}
 
-        {/* PDF (only show link if downloads are allowed) */}
         {pdfAbs && allowDownload && (
           <div style={{ marginTop: 10 }}>
             <a className="badge" href={pdfAbs} target="_blank" rel="noreferrer">
@@ -527,7 +524,6 @@ function ModulePanel({ m, index }) {
         )}
       </div>
 
-      {/* fullscreen viewer */}
       {viewer.open && (
         <FullscreenViewer
           urls={imgUrls}
@@ -564,8 +560,6 @@ function ComingLater({ modules }) {
   );
 }
 
-/* --------------------------- preview panel (no time) --------------------------- */
-
 function PreviewPanel({ day, modules }) {
   if (!modules?.length) return null;
 
@@ -596,69 +590,83 @@ function PreviewPanel({ day, modules }) {
 /* ---------------------------------- page ---------------------------------- */
 
 export default function PrepWizard() {
-  const examId = readExamId();
+  const examSlug = readExamId();               // e.g. "up apo" or "UP_APO"
+  const [apiExamId, setApiExamId] = useState(""); // chosen id actually used in API calls
+
   const [tab, setTab] = useState(() => new URLSearchParams(location.search).get("tab") || "today");
   const [loading, setLoading] = useState(false);
 
-  // existing
   const [todayDay, setTodayDay] = useState(1);
   const [planDays, setPlanDays] = useState(1);
   const [modules, setModules] = useState([]);
 
-  // for previewing any day
   const [allModules, setAllModules] = useState([]);
-
-  // everything (released + scheduled) for "today" – used by ComingLater
   const [todayPool, setTodayPool] = useState([]);
 
-  // tiny UI states
   const [currentDay, setCurrentDay] = useState(1);
   const [activeDay, setActiveDay] = useState(1);
 
-  // optional email (if your site stores it for progress API)
   const email = localStorage.getItem("userEmail") || "";
 
-  // ✅ ROBUST: meta + templates (and optional today endpoint if present)
+  // Try BOTH ids and pick the one that actually has templates
   async function load() {
-    if (!examId) return;
+    const candidates = Array.from(new Set([examSlug, toExamKey(examSlug)].filter(Boolean)));
+    if (!candidates.length) return;
+
     setLoading(true);
     try {
-      const qs = new URLSearchParams({ examId });
+      // fetch templates for all candidates to decide
+      const templateResults = await Promise.all(
+        candidates.map((id) =>
+          getJSON(`/api/prep/templates?examId=${encodeURIComponent(id)}`).catch(() => ({ items: [] }))
+        )
+      );
+
+      // choose the id that returned the most items (fallback to first)
+      let choiceIndex = 0;
+      let maxItems = -1;
+      templateResults.forEach((res, idx) => {
+        const count = Array.isArray(res?.items) ? res.items.length : 0;
+        if (count > maxItems) {
+          maxItems = count;
+          choiceIndex = idx;
+        }
+      });
+
+      const chosenId = candidates[choiceIndex];
+      setApiExamId(chosenId);
+
+      const all = Array.isArray(templateResults[choiceIndex]?.items)
+        ? templateResults[choiceIndex].items
+        : [];
+
+      // fetch meta + "today" for chosen id
+      const qs = new URLSearchParams({ examId: chosenId });
       if (email) qs.set("email", email);
 
-      const [metaRes, tmplRes, todayRes] = await Promise.allSettled([
-        getJSON(`/api/prep/user/summary?${qs.toString()}`),                     // todayDay / planDays
-        getJSON(`/api/prep/templates?examId=${encodeURIComponent(examId)}`),    // ALL templates (has files/media)
-        getJSON(`/api/prep/user/today?examId=${encodeURIComponent(examId)}`),   // may be absent; now exists as alias too
+      const [metaRes, todayRes] = await Promise.allSettled([
+        getJSON(`/api/prep/user/summary?${qs.toString()}`),
+        getJSON(`/api/prep/user/today?examId=${encodeURIComponent(chosenId)}${email ? `&email=${encodeURIComponent(email)}` : ""}`),
       ]);
 
-      // meta (required)
       const meta = metaRes.status === "fulfilled" ? metaRes.value : {};
       const td = meta.todayDay || 1;
       const pd = meta.planDays || 1;
       setTodayDay(td);
       setPlanDays(pd);
 
-      // all templates (required)
-      const all = tmplRes.status === "fulfilled" && Array.isArray(tmplRes.value?.items)
-        ? tmplRes.value.items
-        : [];
-
-      // try to use full today items if the endpoint exists; else compute from templates
       let fullToday = [];
       if (todayRes.status === "fulfilled" && Array.isArray(todayRes.value?.items)) {
         fullToday = todayRes.value.items;
       } else {
-        fullToday = all.filter(m => Number(m.dayIndex) === Number(td));
+        fullToday = all.filter((m) => Number(m.dayIndex) === Number(td));
       }
 
-      // Keep a pool of ALL items for today (released + scheduled) for “Coming later”
       setTodayPool(fullToday);
 
-      // Visible list = only released/available ones
       const now = Date.now();
       const releasedToday = fullToday
-        .filter(m => !m.releaseAt || Date.parse(m.releaseAt) <= now || m.status === "released")
+        .filter((m) => !m.releaseAt || Date.parse(m.releaseAt) <= now || m.status === "released")
         .sort((a, b) => {
           const ta = a.releaseAt ? Date.parse(a.releaseAt) : 0;
           const tb = b.releaseAt ? Date.parse(b.releaseAt) : 0;
@@ -666,10 +674,7 @@ export default function PrepWizard() {
         });
 
       setModules(releasedToday);
-
-      // Keep “allModules” for calendar preview
       setAllModules(all);
-
       setCurrentDay(td);
       setActiveDay(td);
     } catch (e) {
@@ -684,7 +689,8 @@ export default function PrepWizard() {
 
   useEffect(() => {
     load();
-  }, [examId]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [examSlug]);
 
   // keep ?tab= in URL for consistency
   useEffect(() => {
@@ -700,7 +706,7 @@ export default function PrepWizard() {
         return;
       }
       await postJSON("/api/prep/user/complete", {
-        examId,
+        examId: apiExamId || examSlug,
         email,
         dayIndex: todayDay,
       });
@@ -712,7 +718,6 @@ export default function PrepWizard() {
     }
   }
 
-  // modules to preview for the currently selected calendar day (no time shown)
   const previewModulesForActiveDay = useMemo(() => {
     return (allModules || [])
       .filter((m) => Number(m.dayIndex) === Number(activeDay))
@@ -725,7 +730,6 @@ export default function PrepWizard() {
       });
   }, [allModules, activeDay]);
 
-  // compute released modules and augment with robust `content`
   const releasedModules = useMemo(() => {
     const list = (modules || [])
       .filter((m) => !m.releaseAt || Date.parse(m.releaseAt) <= nowUtcMs() || m.status === "released")
@@ -746,7 +750,6 @@ export default function PrepWizard() {
   const cohortDay = todayDay;
   const userStates = undefined;
 
-  /* ========= CALENDAR TAB ========= */
   const calendarTab = (
     <div style={{ marginTop: 16 }}>
       <div className="text-sm text-gray-500">
@@ -828,10 +831,9 @@ export default function PrepWizard() {
 
   const todayTab = (
     <div className="max-w-3xl mx-auto">
-      <div className="text-lg font-semibold mb-1">{examId}</div>
+      <div className="text-lg font-semibold mb-1">{examSlug}</div>
       <div className="text-sm text-gray-600 mb-3">Day {todayDay}</div>
 
-      {/* day chips */}
       <DayNav
         planDays={planDays}
         currentDay={currentDay}
@@ -842,7 +844,6 @@ export default function PrepWizard() {
         }}
       />
 
-      {/* Use the complete pool (released + scheduled) for "Coming later" */}
       <ComingLater modules={todayPool} />
 
       {loading ? (
@@ -881,7 +882,6 @@ export default function PrepWizard() {
 
   return (
     <div className="prep-wrap">
-      {/* Modern tabbar */}
       <div className="tabbar">
         <a
           className={`tab ${tab === "calendar" ? "active" : ""}`}
