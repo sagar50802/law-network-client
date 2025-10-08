@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useState } from "react";
 import { getJSON, postJSON, absUrl } from "../../utils/api";
 import { ImageScroller } from "../../components/ui/ImageScroller";
-import PrepAccessOverlay from "../../components/prep/PrepAccessOverlay";
+import PrepAccessOverlay from "../../components/Prep/PrepAccessOverlay.jsx";
 
 /**
  * Route shape assumed: /prep/:examId
