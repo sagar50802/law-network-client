@@ -31,9 +31,11 @@ import PdfDemo from "./pages/PdfDemo.jsx";
 import PrepList from "./pages/prep/PrepList.jsx";
 import PrepWizard from "./pages/prep/PrepWizard.jsx";
 import AdminPrepPanel from "./pages/prep/AdminPrepPanel.jsx";
-// ✅ NEW: Admin overlay editor
+
+// ✅ Admin overlay editor
 import PrepOverlayEditor from "./pages/prep/PrepOverlayEditor.jsx";
-// ✅ NEW: Prep access control admin page
+
+// ✅ Prep access control admin page
 import PrepAccessAdmin from "./pages/admin/PrepAccessAdmin.jsx";
 
 /* 🔤 Global UI styles (one-time import) */
@@ -71,7 +73,11 @@ function ScrollToHash() {
     const t0 = setTimeout(tryScroll, 0);
     const t1 = setTimeout(tryScroll, 120);
     const t2 = setTimeout(tryScroll, 350);
-    return () => { clearTimeout(t0); clearTimeout(t1); clearTimeout(t2); };
+    return () => {
+      clearTimeout(t0);
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
   }, [hash, pathname]);
   return null;
 }
@@ -99,16 +105,20 @@ export default function App() {
             <Route path="/videos" element={<VideosPage />} />
             <Route path="/podcasts" element={<PodcastsPage />} />
             <Route path="/notebook" element={<NotebookPage />} />
+
             {/* ✅ Scholar Space */}
             <Route path="/scholar" element={<ScholarPage />} />
+
             {/* ✅ NEW route */}
             <Route path="/plagiarism" element={<Plagiarism />} />
+
             {/* ✅ PDF Demo route */}
             <Route path="/pdfdemo" element={<PdfDemo />} />
 
             {/* ✅ Exam Preparation routes (isolated) */}
             <Route path="/prep" element={<PrepList />} />
             <Route path="/prep/:examId" element={<PrepWizard />} />
+
             <Route
               path="/admin/prep"
               element={
@@ -117,7 +127,18 @@ export default function App() {
                 </AdminRoute>
               }
             />
-            {/* ✅ NEW: Admin overlay editor route */}
+
+            {/* ✅ Admin overlay editor routes
+                - New canonical path: /admin/prep-overlay
+                - Keep old path /admin/prep/overlay for backward compatibility */}
+            <Route
+              path="/admin/prep-overlay"
+              element={
+                <AdminRoute>
+                  <PrepOverlayEditor />
+                </AdminRoute>
+              }
+            />
             <Route
               path="/admin/prep/overlay"
               element={
@@ -126,7 +147,8 @@ export default function App() {
                 </AdminRoute>
               }
             />
-            {/* ✅ NEW: Prep access admin route */}
+
+            {/* ✅ Prep access admin route */}
             <Route
               path="/admin/prep-access"
               element={
