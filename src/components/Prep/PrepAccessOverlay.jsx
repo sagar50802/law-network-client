@@ -1,3 +1,4 @@
+// client/src/pages/prep/PrepAccessOverlay.jsx
 import { useEffect, useMemo, useState } from "react";
 import { getJSON, postJSON } from "../../utils/api";
 
@@ -5,7 +6,7 @@ import { getJSON, postJSON } from "../../utils/api";
  * Overlay that gates prep pages until purchase/restart is approved.
  * - Veil always blocks interaction when "show" is true or a "waiting" gate is set.
  * - Panel can be hidden for the day, but veil remains.
- * - Adds UPI+WhatsApp deep links and requires Name+Phone before submit.
+ * - Adds UPI+WhatsApp deep links; compact form fields.
  */
 export default function PrepAccessOverlay({ examId, email }) {
   // ----------------------- localStorage keys -----------------------
@@ -32,12 +33,11 @@ export default function PrepAccessOverlay({ examId, email }) {
   const [submitting, setSubmitting] = useState(false);
   const [panelHidden, setPanelHidden] = useState(false);
 
-  // New: lightweight checkout fields
-  const [name, setName] = useState("");
-  const [phone, setPhone] = useState("");
-  const [emailInput, setEmailInput] = useState(email || "");
-  const [note, setNote] = useState("");
-  const [proofSent, setProofSent] = useState(false);
+  // --- add state near other useState ---
+  const [emailField, setEmailField] = useState(localStorage.getItem("userEmail") || (email || ""));
+  const [nameField, setNameField] = useState("");
+  const [phoneField, setPhoneField] = useState("");
+  const [waClicked, setWaClicked] = useState(false);
 
   // ----------------------- utilities -------------------------------
   const price = Number(state.exam?.price || 0);
@@ -88,7 +88,7 @@ export default function PrepAccessOverlay({ examId, email }) {
       waTextTemplate ||
       `Hello, I paid for "${courseName}" (₹${price}). Attaching proof.`;
     const link = formatWhatsAppLink({ phone: waPhone, text });
-    setProofSent(true);
+    setWaClicked(true);
     window.open(link, "_blank", "noopener,noreferrer");
   }
 
@@ -109,7 +109,7 @@ export default function PrepAccessOverlay({ examId, email }) {
         return fetchStatus();
       }
 
-      // get user's today day (for planDayTime checks if your server still returns it)
+      // get user's today day (if your server endpoint exists)
       let todayDay = 1;
       try {
         const meta = await getJSON(`/api/prep/user/summary?${qs.toString()}`);
@@ -129,7 +129,7 @@ export default function PrepAccessOverlay({ examId, email }) {
         waiting = true;
       }
 
-      // (A) trust server (now server already respects admin timezone)
+      // (A) trust server
       if (!show && overlay?.show && overlay?.mode) {
         mode = overlay.mode; // "purchase" | "restart"
         show = true;
@@ -154,7 +154,7 @@ export default function PrepAccessOverlay({ examId, email }) {
         }
       }
 
-      // (D) client-side planDayTime (kept for safety; server now rules)
+      // (D) client-side planDayTime (kept as safety)
       if (!show) {
         const plan = access?.overlayPlan;
         if (plan?.mode === "planDayTime") {
@@ -203,8 +203,8 @@ export default function PrepAccessOverlay({ examId, email }) {
 
       if (effectiveShow) setPanelHidden(false);
 
-      // pre-fill email input if empty
-      if (!emailInput && email) setEmailInput(email);
+      // pre-fill email field if empty
+      if (!emailField && email) setEmailField(email);
     } catch (e) {
       // keep veil if waiting gate is on
       setState((s) => ({
@@ -228,49 +228,62 @@ export default function PrepAccessOverlay({ examId, email }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [examId, email]);
 
+  // --- helper to safely parse server responses ---
+  async function readJsonSafe(res) {
+    const ct = (res.headers.get("content-type") || "").toLowerCase();
+    if (ct.includes("application/json")) return await res.json();
+    const txt = await res.text();
+    try { return JSON.parse(txt); } catch { return { success:false, error: (txt || `HTTP ${res.status}`) }; }
+  }
+
   // ----------------------- actions -------------------------------
+  // --- your existing action, but hardened & with required email ---
   async function submitRequest() {
-    const finalEmail = email || emailInput || "";
-    if (!finalEmail) {
-      alert("Please enter your email.");
-      return;
-    }
-    // Require Name and Phone
-    if (!name.trim() || !phone.trim()) {
-      alert("Please fill Name and Phone to continue.");
-      return;
-    }
     if (!state.mode || state.mode === "waiting") return;
+
+    const emailVal = (emailField || "").trim();
+    if (!emailVal) { alert("Please enter your email."); return; }
+
+    // If you want BOTH screenshot and WA mandatory, enforce here instead.
+    const hasProof = !!file || waClicked;
+    // If you want to allow submit without proof, set `const hasProof = true;`
+    if (!hasProof) {
+      // eslint-disable-next-line no-restricted-globals
+      if (!confirm("No proof attached. Submit request anyway?")) return;
+    }
 
     setSubmitting(true);
     try {
       const fd = new FormData();
       fd.append("examId", examId);
-      fd.append("email", finalEmail);
-      fd.append("name", name.trim());
-      fd.append("phone", phone.trim());
-      fd.append("note", note || "");
-      fd.append("proofSent", proofSent ? "1" : "0");
+      fd.append("email", emailVal);
       fd.append("intent", state.mode === "purchase" ? "purchase" : "restart");
+      const note = [
+        nameField ? `name=${nameField}` : "",
+        phoneField ? `phone=${phoneField}` : "",
+        waClicked ? "wa=clicked" : ""
+      ].filter(Boolean).join("; ");
+      if (note) fd.append("note", note);
       if (file) fd.append("screenshot", file);
 
-      const r = await fetch("/api/prep/access/request", {
-        method: "POST",
-        body: fd,
-      });
-      const j = await r.json();
+      // remember email for future
+      localStorage.setItem("userEmail", emailVal);
+
+      const res = await fetch("/api/prep/access/request", { method: "POST", body: fd });
+      const j = await readJsonSafe(res);
+
+      if (!res.ok || j?.success === false) {
+        const msg = j?.error || j?.message || `Request failed (${res.status})`;
+        alert(msg);
+        return;
+      }
 
       if (j?.approved) {
         localStorage.removeItem(ks.wait);
         await fetchStatus();
       } else {
         localStorage.setItem(ks.wait, "1");
-        setState((s) => ({
-          ...s,
-          mode: "waiting",
-          show: true,
-          waiting: true,
-        }));
+        setState((s) => ({ ...s, mode: "waiting", show: true, waiting: true }));
       }
     } catch (e) {
       console.error(e);
@@ -312,11 +325,7 @@ export default function PrepAccessOverlay({ examId, email }) {
       : `Your request has been submitted. You'll see "Waiting for approval" until the owner grants access.`;
 
   const submitDisabled =
-    submitting ||
-    state.mode === "waiting" ||
-    !name.trim() ||
-    !phone.trim() ||
-    !(email || emailInput);
+    submitting || state.mode === "waiting" || !(emailField && emailField.trim());
 
   return (
     <div className="fixed inset-0 z-[99999] bg-black/60 backdrop-blur-sm" aria-hidden>
@@ -332,11 +341,10 @@ export default function PrepAccessOverlay({ examId, email }) {
             {/* Price + CTAs */}
             {state.mode !== "waiting" && (
               <>
-                <div className="text-sm text-gray-800 mb-3">
-                  <div className="font-medium">{courseName}</div>
-                  <div>
-                    Price: <b>₹{price}</b>
-                  </div>
+                {/* Course + price block */}
+                <div className="mb-2">
+                  <div className="text-xs text-gray-600 mb-1">{state.exam?.name || examId}</div>
+                  <div className="text-xs text-gray-600">Price: ₹{state.exam?.price ?? 0}</div>
                 </div>
 
                 {/* UPI button (shows only if configured) */}
@@ -349,55 +357,51 @@ export default function PrepAccessOverlay({ examId, email }) {
                   </button>
                 )}
 
-                {/* WhatsApp proof button */}
+                {/* WhatsApp proof button (records click as proof) */}
                 {canShowWA && (
                   <button
-                    onClick={openWhatsApp}
-                    className="w-full mb-3 py-2 rounded bg-[#25D366] text-white"
+                    type="button"
+                    className="w-full py-2 rounded bg-[#25D366] text-white mb-2"
+                    onClick={() => {
+                      setWaClicked(true);
+                      const text = `Hello, I paid for "${state.exam?.name || examId}" (₹${state.exam?.price ?? 0}).`;
+                      const link = formatWhatsAppLink({ phone: waPhone, text });
+                      window.open(link, "_blank", "noopener,noreferrer");
+                    }}
                   >
                     Send Proof on WhatsApp
                   </button>
                 )}
 
-                {/* Minimal form */}
-                <div className="grid grid-cols-1 gap-2 mb-3">
-                  <input
-                    type="text"
-                    placeholder="Name (required)"
-                    className="border rounded px-3 py-2 text-sm"
-                    value={name}
-                    onChange={(e) => setName(e.target.value)}
-                  />
-                  <input
-                    type="tel"
-                    placeholder="Phone Number (required)"
-                    className="border rounded px-3 py-2 text-sm"
-                    value={phone}
-                    onChange={(e) => setPhone(e.target.value)}
-                  />
-                  {!email && (
-                    <input
-                      type="email"
-                      placeholder="Email (required)"
-                      className="border rounded px-3 py-2 text-sm"
-                      value={emailInput}
-                      onChange={(e) => setEmailInput(e.target.value)}
-                    />
-                  )}
-                  <textarea
-                    placeholder="Note (optional)"
-                    className="border rounded px-3 py-2 text-sm"
-                    rows={2}
-                    value={note}
-                    onChange={(e) => setNote(e.target.value)}
-                  />
-                </div>
+                {/* Compact inputs (required email; optional name/phone) */}
+                <input
+                  type="email"
+                  required
+                  placeholder="Email"
+                  className="w-full border rounded px-2 py-1 mb-2"
+                  value={emailField}
+                  onChange={(e) => setEmailField(e.target.value)}
+                />
+
+                <input
+                  type="text"
+                  placeholder="Name (optional)"
+                  className="w-full border rounded px-2 py-1 mb-2"
+                  value={nameField}
+                  onChange={(e) => setNameField(e.target.value)}
+                />
+
+                <input
+                  type="tel"
+                  placeholder="Phone (optional)"
+                  className="w-full border rounded px-2 py-1 mb-2"
+                  value={phoneField}
+                  onChange={(e) => setPhoneField(e.target.value)}
+                />
 
                 {/* Optional screenshot */}
                 <div className="mb-3">
-                  <label className="text-sm block mb-1">
-                    Upload payment screenshot (optional)
-                  </label>
+                  <label className="text-sm block mb-1">Upload payment screenshot (optional)</label>
                   <input
                     type="file"
                     accept="image/*,application/pdf"
