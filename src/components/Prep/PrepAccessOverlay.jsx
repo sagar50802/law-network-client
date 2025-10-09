@@ -8,22 +8,26 @@ export default function PrepAccessOverlay({ examId, email }) {
     const e = String(examId || "").trim();
     const u = String(email || "").trim() || "anon";
     return {
-      wait: `overlayWaiting:${e}:${u}`,   // waiting-for-approval (refresh-proof gate)
-      dismiss: (hhmm = "09:00", day = 1) => `overlayDismiss:${e}:${day}:${hhmm}`, // daily panel-dismiss
+      wait: `overlayWaiting:${e}:${u}`, // waiting-for-approval (refresh-proof gate)
+      dismiss: (hhmm = "09:00", day = 1) =>
+        `overlayDismiss:${e}:${day}:${hhmm}`, // daily panel-dismiss (veil stays)
     };
   }, [examId, email]);
 
   // ----------------------- component state ------------------------
   const [state, setState] = useState({
     loading: true,
-    show: !!(examId && localStorage.getItem(ks.wait)), // अगर पहले से waiting था तो वील तुरंत दिखे
+    // अगर पहले से waiting था तो वील तुरंत दिखे
+    show: !!(examId && localStorage.getItem(ks.wait)),
     mode: localStorage.getItem(ks.wait) ? "waiting" : "", // waiting मोड पिन करें
     exam: {},
     access: {},
     waiting: !!localStorage.getItem(ks.wait),
   });
+
   const [file, setFile] = useState(null);
   const [submitting, setSubmitting] = useState(false);
+
   // पैनल छुपाना (blur veil बना रहेगा)
   const [panelHidden, setPanelHidden] = useState(false);
 
@@ -40,7 +44,7 @@ export default function PrepAccessOverlay({ examId, email }) {
       const { exam, access, overlay } = r || {};
 
       // brand-new user → auto start trial → re-fetch
-      if ((access?.status === "none") && email) {
+      if (access?.status === "none" && email) {
         await postJSON("/api/prep/access/start-trial", { examId, email });
         return fetchStatus();
       }
@@ -57,7 +61,7 @@ export default function PrepAccessOverlay({ examId, email }) {
       let show = false;
       let waiting = !!access?.pending;
 
-      // planDayTime होने पर सर्वर का overlay.show भरोसा न करें
+      // planDayTime detection (इस पर guard लगेगा step-C में)
       const isPlanDayTime = access?.overlayPlan?.mode === "planDayTime";
 
       // (0) local waiting gate highest priority (refresh-proof)
@@ -67,8 +71,8 @@ export default function PrepAccessOverlay({ examId, email }) {
         waiting = true;
       }
 
-      // (A) backend निर्देश — planDayTime में स्किप
-      if (!show && !isPlanDayTime && overlay?.show && overlay?.mode) {
+      // (A) backend निर्देश — (server already fixed for planDayTime)
+      if (!show && overlay?.show && overlay?.mode) {
         mode = overlay.mode; // "purchase" | "restart"
         show = true;
       }
@@ -77,14 +81,18 @@ export default function PrepAccessOverlay({ examId, email }) {
         mode = access.forceMode === "restart" ? "restart" : "purchase";
         show = true;
       }
-      // (C) fallback reasons
-      if (!show) {
+
+      // (C) fallback reasons — planDayTime में इसे SKIP करें
+      if (!show && !isPlanDayTime) {
         if (access?.status === "trial" && access?.trialEnded) {
-          mode = "purchase"; show = true;
+          mode = "purchase";
+          show = true;
         } else if (access?.status === "active" && access?.canRestart) {
-          mode = "restart"; show = true;
+          mode = "restart";
+          show = true;
         } else if (waiting) {
-          mode = "waiting"; show = true;
+          mode = "waiting";
+          show = true;
         }
       }
 
@@ -109,7 +117,8 @@ export default function PrepAccessOverlay({ examId, email }) {
             })();
 
             if (todayDay >= wantDay && now >= target && notDismissed) {
-              mode = "purchase"; show = true;
+              mode = "purchase";
+              show = true;
             }
           } catch {}
         }
@@ -128,7 +137,8 @@ export default function PrepAccessOverlay({ examId, email }) {
 
       setState({
         loading: false,
-        show: effectiveShow || hasWaitingGate, // लोडिंग से वापस आते समय भी वील न गिरे
+        // लोडिंग से वापस आते समय भी वील न गिरे
+        show: effectiveShow || hasWaitingGate,
         mode: mode || (hasWaitingGate ? "waiting" : ""),
         exam: exam || {},
         access: access || {},
@@ -138,7 +148,12 @@ export default function PrepAccessOverlay({ examId, email }) {
       if (effectiveShow) setPanelHidden(false);
     } catch (e) {
       // अगर API fail भी हो जाए और waiting gate लगा है, तो वील बनाए रखें
-      setState((s) => ({ ...s, loading: false, show: s.show || !!localStorage.getItem(ks.wait), mode: s.mode || (localStorage.getItem(ks.wait) ? "waiting" : "") }));
+      setState((s) => ({
+        ...s,
+        loading: false,
+        show: s.show || !!localStorage.getItem(ks.wait),
+        mode: s.mode || (localStorage.getItem(ks.wait) ? "waiting" : ""),
+      }));
     }
   }
 
@@ -170,7 +185,10 @@ export default function PrepAccessOverlay({ examId, email }) {
       fd.append("intent", state.mode === "purchase" ? "purchase" : "restart");
       if (file) fd.append("screenshot", file);
 
-      const r = await fetch("/api/prep/access/request", { method: "POST", body: fd });
+      const r = await fetch("/api/prep/access/request", {
+        method: "POST",
+        body: fd,
+      });
       const j = await r.json();
 
       if (j?.approved) {
@@ -180,7 +198,12 @@ export default function PrepAccessOverlay({ examId, email }) {
       } else {
         // pending → waiting gate ON (refresh-proof)
         localStorage.setItem(ks.wait, "1");
-        setState((s) => ({ ...s, mode: "waiting", show: true, waiting: true }));
+        setState((s) => ({
+          ...s,
+          mode: "waiting",
+          show: true,
+          waiting: true,
+        }));
       }
     } catch (e) {
       console.error(e);
@@ -195,7 +218,10 @@ export default function PrepAccessOverlay({ examId, email }) {
     const plan = state.access?.overlayPlan;
     const hhmm = String(plan?.showAtLocal || "09:00");
     const wantDay = Number(plan?.showOnDay || 1);
-    localStorage.setItem(ks.dismiss(hhmm, wantDay), new Date().toISOString().slice(0, 10));
+    localStorage.setItem(
+      ks.dismiss(hhmm, wantDay),
+      new Date().toISOString().slice(0, 10)
+    );
     setPanelHidden(true);
   }
 
@@ -203,7 +229,8 @@ export default function PrepAccessOverlay({ examId, email }) {
   // वील कब दिखाएँ?
   // 1) state.show true हो, या
   // 2) लोडिंग के दौरान waiting gate लगा हो
-  const mustVeil = state.show || (state.loading && !!localStorage.getItem(ks.wait));
+  const mustVeil =
+    state.show || (state.loading && !!localStorage.getItem(ks.wait));
   if (!mustVeil) return null;
 
   const price = state.exam?.price || 0;
@@ -216,9 +243,13 @@ export default function PrepAccessOverlay({ examId, email }) {
 
   const desc =
     state.mode === "purchase"
-      ? `Your free trial of ${state.exam?.trialDays || 3} days is over. Buy "${state.exam?.name || examId}" for ₹${price} to continue.`
+      ? `Your free trial of ${state.exam?.trialDays || 3} days is over. Buy "${
+          state.exam?.name || examId
+        }" for ₹${price} to continue.`
       : state.mode === "restart"
-      ? `You've completed all ${state.access?.planDays || ""} day(s). Restart "${state.exam?.name || examId}" from Day 1.`
+      ? `You've completed all ${
+          state.access?.planDays || ""
+        } day(s). Restart "${state.exam?.name || examId}" from Day 1.`
       : `Your request has been submitted. You'll see "Waiting for approval" until the owner grants access.`;
 
   return (
@@ -238,15 +269,25 @@ export default function PrepAccessOverlay({ examId, email }) {
                   Admin price: <b>₹{price}</b>
                 </div>
                 <div className="mb-3">
-                  <label className="text-sm block mb-1">Upload payment screenshot (optional)</label>
-                  <input type="file" accept="image/*,application/pdf" onChange={(e) => setFile(e.target.files?.[0] || null)} />
+                  <label className="text-sm block mb-1">
+                    Upload payment screenshot (optional)
+                  </label>
+                  <input
+                    type="file"
+                    accept="image/*,application/pdf"
+                    onChange={(e) => setFile(e.target.files?.[0] || null)}
+                  />
                 </div>
                 <button
                   className="w-full py-2 rounded bg-emerald-600 text-white disabled:opacity-60"
                   onClick={submitRequest}
                   disabled={submitting}
                 >
-                  {submitting ? "Submitting…" : state.mode === "purchase" ? "Submit & Unlock" : "Submit Restart Request"}
+                  {submitting
+                    ? "Submitting…"
+                    : state.mode === "purchase"
+                    ? "Submit & Unlock"
+                    : "Submit Restart Request"}
                 </button>
               </>
             ) : (
@@ -255,6 +296,7 @@ export default function PrepAccessOverlay({ examId, email }) {
               </div>
             )}
 
+            {/* Close = सिर्फ़ panel hide; veil/blur बना रहेगा */}
             <button className="w-full mt-2 py-2 rounded border bg-white" onClick={closeForToday}>
               Close
             </button>
