@@ -7,7 +7,7 @@ export default function PrepOverlayEditor() {
   const [examId, setExamId] = useState("");
   const [loading, setLoading] = useState(false);
 
-  // meta from server
+  // meta from server (matches your existing server contract)
   const [meta, setMeta] = useState({
     price: 0,
     trialDays: 3,
@@ -35,7 +35,7 @@ export default function PrepOverlayEditor() {
     setMeta((m) => ({ ...m, payment: { ...m.payment, ...patch } }));
   }
 
-  // Deep-link previews (for your own verification)
+  // Deep-link previews
   const upiLink = useMemo(() => {
     const id = (meta.payment?.upiId || "").trim();
     const amount = Number(meta.price || 0);
@@ -94,9 +94,7 @@ export default function PrepOverlayEditor() {
     }
   }
 
-  useEffect(() => {
-    loadExams();
-  }, []);
+  useEffect(() => { loadExams(); }, []);
   useEffect(() => {
     loadMeta();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -111,7 +109,8 @@ export default function PrepOverlayEditor() {
         price: Number(meta.price || 0),
         trialDays: Number(meta.trialDays || 3),
         mode: meta.overlay.mode,
-        // conditionally include relevant fields
+
+        // include only the relevant fields for the chosen mode
         ...(meta.overlay.mode === "planDayTime"
           ? {
               showOnDay: Number(meta.overlay.showOnDay || 1),
@@ -119,14 +118,19 @@ export default function PrepOverlayEditor() {
               tz: String(meta.overlay.tz || "Asia/Kolkata"),
             }
           : {}),
+
         ...(meta.overlay.mode === "afterN"
           ? { offsetDays: Number(meta.overlay.offsetDays || 0) }
           : {}),
+
         ...(meta.overlay.mode === "fixed-date"
           ? {
-              fixedAt: meta.overlay.fixedAt ? new Date(meta.overlay.fixedAt).toISOString() : null,
+              fixedAt: meta.overlay.fixedAt
+                ? new Date(meta.overlay.fixedAt).toISOString()
+                : null,
             }
           : {}),
+
         payment: {
           upiId: (meta.payment.upiId || "").trim(),
           waPhone: (meta.payment.waPhone || "").trim(),
@@ -134,13 +138,15 @@ export default function PrepOverlayEditor() {
         },
       };
 
-      await fetch(`/api/prep/exams/${encodeURIComponent(examId)}/overlay-config`, {
-        method: "PATCH",
-        headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(body),
-      }).then(async (r) => {
-        if (!r.ok) throw new Error((await r.text()) || "Save failed");
-      });
+      const res = await fetch(
+        `/api/prep/exams/${encodeURIComponent(examId)}/overlay-config`,
+        {
+          method: "PATCH",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify(body),
+        }
+      );
+      if (!res.ok) throw new Error((await res.text()) || "Save failed");
 
       alert("Saved.");
       await loadMeta();
@@ -154,13 +160,19 @@ export default function PrepOverlayEditor() {
 
   const mode = meta.overlay.mode;
 
+  const Label = ({ children }) => (
+    <label className="block text-xs uppercase tracking-wide text-gray-600 mb-1">
+      {children}
+    </label>
+  );
+
   return (
     <div className="max-w-5xl mx-auto p-4">
       <div className="flex items-center gap-2 mb-4">
         <h1 className="text-xl font-bold">Prep Overlay Editor</h1>
 
         <select
-          className="border rounded px-2 py-1 ml-auto"
+          className="border rounded px-2 py-1 ml-auto bg-white"
           value={examId}
           onChange={(e) => setExamId(e.target.value)}
         >
@@ -174,9 +186,9 @@ export default function PrepOverlayEditor() {
 
       <form onSubmit={save} className="grid gap-4 rounded-xl border bg-white p-4">
         {/* Course meta */}
-        <div className="grid sm:grid-cols-3 gap-3">
+        <div className="grid sm:grid-cols-3 gap-4">
           <div>
-            <label className="block text-xs">Course name</label>
+            <Label>Course name</Label>
             <input
               className="border rounded px-2 py-1 w-full bg-gray-50"
               value={meta.name}
@@ -185,22 +197,26 @@ export default function PrepOverlayEditor() {
             />
           </div>
           <div>
-            <label className="block text-xs">Price (₹)</label>
+            <Label>Price (₹)</Label>
             <input
               type="number"
               className="border rounded px-2 py-1 w-full"
               value={meta.price}
-              onChange={(e) => setMeta((m) => ({ ...m, price: +e.target.value || 0 }))}
+              onChange={(e) =>
+                setMeta((m) => ({ ...m, price: +e.target.value || 0 }))
+              }
             />
           </div>
           <div>
-            <label className="block text-xs">Trial Days</label>
+            <Label>Trial Days</Label>
             <input
               type="number"
               min="0"
               className="border rounded px-2 py-1 w-full"
               value={meta.trialDays}
-              onChange={(e) => setMeta((m) => ({ ...m, trialDays: +e.target.value || 0 }))}
+              onChange={(e) =>
+                setMeta((m) => ({ ...m, trialDays: +e.target.value || 0 }))
+              }
             />
           </div>
         </div>
@@ -210,7 +226,7 @@ export default function PrepOverlayEditor() {
           <div className="flex items-center gap-2 mb-3">
             <h2 className="text-sm font-semibold">Overlay Mode</h2>
             <select
-              className="border rounded px-2 py-1"
+              className="border rounded px-2 py-1 bg-white"
               value={mode}
               onChange={(e) => setOverlay({ mode: e.target.value })}
             >
@@ -221,69 +237,80 @@ export default function PrepOverlayEditor() {
             </select>
           </div>
 
-          {/* planDayTime */}
-          <div className="grid sm:grid-cols-3 gap-3">
-            <div>
-              <label className="block text-xs">Show on Day</label>
-              <input
-                type="number"
-                min="1"
-                className="border rounded px-2 py-1 w-full"
-                value={meta.overlay.showOnDay}
-                onChange={(e) => setOverlay({ showOnDay: +e.target.value || 1 })}
-                disabled={mode !== "planDayTime"}
-              />
-            </div>
-            <div>
-              <label className="block text-xs">Time (HH:mm, admin TZ)</label>
-              <input
-                type="time"
-                className="border rounded px-2 py-1 w-full"
-                value={meta.overlay.showAtLocal}
-                onChange={(e) => setOverlay({ showAtLocal: e.target.value })}
-                disabled={mode !== "planDayTime"}
-              />
-            </div>
-            <div>
-              <label className="block text-xs">Time zone (IANA)</label>
-              <input
-                className="border rounded px-2 py-1 w-full"
-                placeholder="Asia/Kolkata"
-                value={meta.overlay.tz}
-                onChange={(e) => setOverlay({ tz: e.target.value })}
-                disabled={mode !== "planDayTime"}
-              />
-            </div>
-          </div>
+          {/* Show ONLY the fields for the selected mode */}
 
-          {/* afterN */}
-          <div className="grid sm:grid-cols-3 gap-3 mt-3">
-            <div>
-              <label className="block text-xs">Days after start</label>
-              <input
-                type="number"
-                min="0"
-                className="border rounded px-2 py-1 w-full"
-                value={meta.overlay.offsetDays}
-                onChange={(e) => setOverlay({ offsetDays: +e.target.value || 0 })}
-                disabled={mode !== "afterN"}
-              />
+          {mode === "planDayTime" && (
+            <div className="grid sm:grid-cols-3 gap-3">
+              <div>
+                <Label>Show on Day</Label>
+                <input
+                  type="number"
+                  min="1"
+                  className="border rounded px-2 py-1 w-full"
+                  value={meta.overlay.showOnDay}
+                  onChange={(e) =>
+                    setOverlay({ showOnDay: +e.target.value || 1 })
+                  }
+                />
+              </div>
+              <div>
+                <Label>Time (HH:mm, admin TZ)</Label>
+                <input
+                  type="time"
+                  className="border rounded px-2 py-1 w-full"
+                  value={meta.overlay.showAtLocal}
+                  onChange={(e) => setOverlay({ showAtLocal: e.target.value })}
+                />
+              </div>
+              <div>
+                <Label>Time zone (IANA)</Label>
+                <input
+                  className="border rounded px-2 py-1 w-full"
+                  placeholder="Asia/Kolkata"
+                  value={meta.overlay.tz}
+                  onChange={(e) => setOverlay({ tz: e.target.value })}
+                />
+              </div>
             </div>
-          </div>
+          )}
 
-          {/* fixed-date */}
-          <div className="grid sm:grid-cols-3 gap-3 mt-3">
-            <div>
-              <label className="block text-xs">Fixed date/time (local)</label>
-              <input
-                type="datetime-local"
-                className="border rounded px-2 py-1 w-full"
-                value={meta.overlay.fixedAt ? meta.overlay.fixedAt.slice(0, 16) : ""}
-                onChange={(e) => setOverlay({ fixedAt: e.target.value ? new Date(e.target.value).toISOString() : "" })}
-                disabled={mode !== "fixed-date"}
-              />
+          {mode === "afterN" && (
+            <div className="grid sm:grid-cols-3 gap-3">
+              <div>
+                <Label>Days after start</Label>
+                <input
+                  type="number"
+                  min="0"
+                  className="border rounded px-2 py-1 w-full"
+                  value={meta.overlay.offsetDays}
+                  onChange={(e) =>
+                    setOverlay({ offsetDays: +e.target.value || 0 })
+                  }
+                />
+              </div>
             </div>
-          </div>
+          )}
+
+          {mode === "fixed-date" && (
+            <div className="grid sm:grid-cols-3 gap-3">
+              <div>
+                <Label>Fixed date/time (local)</Label>
+                <input
+                  type="datetime-local"
+                  className="border rounded px-2 py-1 w-full"
+                  value={meta.overlay.fixedAt ? meta.overlay.fixedAt.slice(0, 16) : ""}
+                  onChange={(e) =>
+                    setOverlay({
+                      fixedAt: e.target.value
+                        ? new Date(e.target.value).toISOString()
+                        : "",
+                    })
+                  }
+                />
+              </div>
+            </div>
+          )}
+          {/* mode === "never" → no extra fields */}
         </div>
 
         {/* Payment config */}
@@ -292,7 +319,7 @@ export default function PrepOverlayEditor() {
 
           <div className="grid sm:grid-cols-3 gap-3">
             <div>
-              <label className="block text-xs">UPI ID</label>
+              <Label>UPI ID</Label>
               <input
                 className="border rounded px-2 py-1 w-full"
                 placeholder="7767045080@ptyes"
@@ -301,13 +328,13 @@ export default function PrepOverlayEditor() {
               />
               {upiLink ? (
                 <div className="text-[11px] text-gray-500 mt-1 break-all">
-                  upi://pay… preview: {upiLink}
+                  upi://pay preview: {upiLink}
                 </div>
               ) : null}
             </div>
 
             <div>
-              <label className="block text-xs">WhatsApp number</label>
+              <Label>WhatsApp number</Label>
               <input
                 className="border rounded px-2 py-1 w-full"
                 placeholder="+9199xxxxxxx"
@@ -322,7 +349,7 @@ export default function PrepOverlayEditor() {
             </div>
 
             <div>
-              <label className="block text-xs">Default WhatsApp text (optional)</label>
+              <Label>Default WhatsApp text (optional)</Label>
               <input
                 className="border rounded px-2 py-1 w-full"
                 placeholder={`Hello, I paid for "${meta.name}" (₹${meta.price}).`}
