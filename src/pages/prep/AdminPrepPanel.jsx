@@ -103,7 +103,18 @@ export default function AdminPrepPanel() {
 
   return (
     <div className="max-w-6xl mx-auto p-4">
-      <h1 className="text-2xl font-bold mb-4">Admin Prep Panel</h1>
+      <div className="flex items-center gap-3 mb-4">
+        <h1 className="text-2xl font-bold">Admin Prep Panel</h1>
+        <div className="flex-1" />
+        {/* ✅ quick access to Overlay Editor */}
+        <a
+          href="/admin/prep-overlay"
+          className="px-3 py-1.5 rounded bg-black text-white hover:opacity-90"
+          title="Open Overlay Editor"
+        >
+          Overlay Editor
+        </a>
+      </div>
 
       <div className="rounded-xl border bg-white p-4 mb-6">
         <div className="grid md:grid-cols-2 gap-4">
@@ -227,7 +238,7 @@ function ExamEditor({ examId }) {
     return () => { ignore = true; };
   }, [examId]);
 
-  // ✅ JSON POST helper for overlay config (as requested)
+  // ✅ JSON PATCH helper for overlay config (matches server)
   async function saveOverlayJSON({
     price,
     trialDays,
@@ -241,17 +252,17 @@ function ExamEditor({ examId }) {
     const body = JSON.stringify({
       price,
       trialDays,
-      mode: overlayMode,      // 'planDayTime' | 'afterN' | 'fixed'
+      mode: overlayMode,      // 'planDayTime' | 'afterN' | 'fixed' | 'never'
       showOnDay,
       showAtLocal,            // 'HH:mm'
-      daysAfterStart,
+      offsetDays: daysAfterStart,
       fixedAt,
     });
 
     const r = await fetch(
       buildUrl(`/api/prep/exams/${encodeURIComponent(examId)}/overlay-config`),
       {
-        method: "POST",
+        method: "PATCH",
         headers: {
           "Content-Type": "application/json",
           "X-Owner-Key": ownerKey,
@@ -264,18 +275,18 @@ function ExamEditor({ examId }) {
     if (!r.ok) throw new Error(`Save overlay failed: ${r.status}`);
   }
 
-  // Wire Save button → JSON POST of the Day & Time plan
+  // Wire Save button → JSON PATCH of the Day & Time plan
   async function handleSaveOverlay() {
     try {
       setOverlayLoading(true);
       await saveOverlayJSON({
         price: Number(overlay.price) || 0,
         trialDays: Number(overlay.trialDays) || 0,
-        overlayMode: "planDayTime",                 // per spec: save Day & Time schedule
+        overlayMode: overlay.mode,                 // respect current select value
         showOnDay: Math.max(1, Number(overlay.showOnDay) || 1),
         showAtLocal: overlay.showAtLocal || "09:00",
-        daysAfterStart: 0,                          // not used for planDayTime
-        fixedAt: null,                              // not used for planDayTime
+        daysAfterStart: Number(overlay.daysAfterStart) || 0,
+        fixedAt: overlay.fixedAt || null,
       });
       alert("Overlay saved");
     } catch (e) {
@@ -425,14 +436,23 @@ function ExamEditor({ examId }) {
       <section className="rounded-xl border bg-white p-4 mb-6">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-xl font-semibold">Access &amp; Overlay</h2>
-          <button
-            type="button"
-            onClick={handleSaveOverlay}
-            className="px-3 py-2 rounded border bg-white"
-            disabled={overlayLoading}
-          >
-            {overlayLoading ? "Saving…" : "Save Overlay"}
-          </button>
+          <div className="flex items-center gap-2">
+            <a
+              href="/admin/prep-overlay"
+              className="px-3 py-2 rounded bg-black text-white hover:opacity-90"
+              title="Open Overlay Editor"
+            >
+              Overlay Editor
+            </a>
+            <button
+              type="button"
+              onClick={handleSaveOverlay}
+              className="px-3 py-2 rounded border bg-white"
+              disabled={overlayLoading}
+            >
+              {overlayLoading ? "Saving…" : "Save Overlay"}
+            </button>
+          </div>
         </div>
 
         <div className="grid md:grid-cols-3 gap-3">
