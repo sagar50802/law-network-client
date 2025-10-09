@@ -160,9 +160,9 @@ export default function AdminPrepPanel() {
       </div>
 
       {!selExam ? (
-        <div className="text-gray-500">Select or create an exam to continue.</div>
+          <div className="text-gray-500">Select or create an exam to continue.</div>
       ) : (
-        <ExamEditor examId={selExam} />
+          <ExamEditor examId={selExam} />
       )}
     </div>
   );
@@ -173,13 +173,15 @@ function ExamEditor({ examId }) {
   const [busy, setBusy] = useState(false);
   const formRef = useRef(null);
 
-  // ── OVERLAY STATE (new; does not affect templates logic) ─────────────────────
+  // ── OVERLAY STATE (new keys for Day & Time schedule; does not affect templates logic) ──
   const [overlay, setOverlay] = useState({
     price: 0,
     trialDays: 3,
-    mode: "per-user",      // "per-user" | "fixed" | "never"
-    daysAfterStart: 3,     // used when mode = per-user
-    fixedAt: ""            // ISO string used when mode = fixed (datetime-local)
+    mode: "planDayTime",  // "planDayTime" | "afterN" | "fixed" | "never"
+    showOnDay: 1,         // used when mode = planDayTime
+    showAtLocal: "09:00", // HH:mm, used when mode = planDayTime
+    daysAfterStart: 3,    // used when mode = afterN
+    fixedAt: ""           // ISO string (datetime-local) used when mode = fixed
   });
   const [overlayLoading, setOverlayLoading] = useState(false);
 
@@ -194,7 +196,7 @@ function ExamEditor({ examId }) {
     load(true);
   }, [examId]);
 
-  // Fetch overlay config
+  // Fetch overlay config (price, trialDays, overlay fields)
   useEffect(() => {
     let ignore = false;
     (async () => {
@@ -205,11 +207,13 @@ function ExamEditor({ examId }) {
         );
         if (ignore) return;
         const ov = r?.overlay || {};
-        setOverlay(o => ({
+        setOverlay((o) => ({
           ...o,
           price: typeof r?.price === "number" ? r.price : o.price,
           trialDays: typeof r?.trialDays === "number" ? r.trialDays : o.trialDays,
           mode: ov?.mode || o.mode,
+          showOnDay: typeof ov?.showOnDay === "number" ? ov.showOnDay : o.showOnDay,
+          showAtLocal: ov?.showAtLocal || o.showAtLocal,
           daysAfterStart: typeof ov?.daysAfterStart === "number" ? ov.daysAfterStart : o.daysAfterStart,
           fixedAt: ov?.fixedAt || ""
         }));
@@ -221,34 +225,31 @@ function ExamEditor({ examId }) {
     })();
     return () => { ignore = true; };
   }, [examId]);
-  // Save overlay config
+
+  // Save overlay config (POST FormData with Day & Time fields)
   async function saveOverlay() {
     try {
-      const ownerKey = localStorage.getItem("ownerKey") || "";
+      const fd = new FormData();
+      fd.set("price", overlay.price);
+      fd.set("trialDays", overlay.trialDays);
+      fd.set("mode", overlay.mode);                           // 'planDayTime' | 'afterN' | 'fixed' | 'never'
+      fd.set("showOnDay", overlay.showOnDay || 1);            // number
+      fd.set("showAtLocal", overlay.showAtLocal || "09:00");  // 'HH:mm'
+      // legacy/compat fields (no harm if unused on server)
+      fd.set("daysAfterStart", overlay.daysAfterStart || 0);
+      fd.set("fixedAt", overlay.fixedAt || "");
+
       const res = await fetch(
         buildUrl(`/api/prep/exams/${encodeURIComponent(examId)}/overlay-config`),
         {
-          method: "PATCH",
-          headers: {
-            "Content-Type": "application/json",
-            ...(ownerKey ? { "X-Owner-Key": ownerKey } : {}),
-          },
-          credentials: "include",
-          body: JSON.stringify({
-            price: Number(overlay.price) || 0,
-            trialDays: Number(overlay.trialDays) || 0,
-            overlay: {
-              mode: overlay.mode,
-              daysAfterStart: Number(overlay.daysAfterStart) || 0,
-              fixedAt: overlay.mode === "fixed" ? overlay.fixedAt : ""
-            }
-          }),
+          method: "POST",
+          headers: { "X-Owner-Key": localStorage.getItem("ownerKey") || "" },
+          body: fd
         }
       );
+
       const data = await res.json().catch(() => ({}));
-      if (!res.ok || data?.success === false) {
-        throw new Error(data?.message || "Save failed");
-      }
+      if (!res.ok || data?.success === false) throw new Error("Save failed");
       alert("Overlay settings saved");
     } catch (e) {
       console.error(e);
@@ -391,7 +392,7 @@ function ExamEditor({ examId }) {
 
   return (
     <>
-      {/* ── Access & Overlay (new card) ───────────────────────────────────── */}
+      {/* ── Access & Overlay (new card; minimal safe) ─────────────────────── */}
       <section className="rounded-xl border bg-white p-4 mb-6">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-xl font-semibold">Access &amp; Overlay</h2>
@@ -430,14 +431,42 @@ function ExamEditor({ examId }) {
               value={overlay.mode}
               onChange={(e) => setOverlay((o) => ({ ...o, mode: e.target.value }))}
             >
-              <option value="per-user">After N days (per user)</option>
+              <option value="planDayTime">At specific Day & Time</option>
+              <option value="afterN">After N days (per user)</option>
               <option value="fixed">At fixed date/time</option>
               <option value="never">Never</option>
             </select>
           </div>
         </div>
 
-        {overlay.mode === "per-user" && (
+        {/* Day & Time fields (only when planDayTime) */}
+        {overlay.mode === "planDayTime" && (
+          <div className="grid md:grid-cols-3 gap-3 mt-3">
+            <div>
+              <label className="block text-sm font-medium mb-1">Show on Day</label>
+              <input
+                type="number"
+                className="w-full border rounded px-3 py-2"
+                value={overlay.showOnDay}
+                onChange={(e) =>
+                  setOverlay((o) => ({ ...o, showOnDay: Math.max(1, +e.target.value || 1) }))
+                }
+              />
+            </div>
+            <div>
+              <label className="block text-sm font-medium mb-1">Time (local, HH:mm)</label>
+              <input
+                type="time"
+                className="w-full border rounded px-3 py-2"
+                value={overlay.showAtLocal}
+                onChange={(e) => setOverlay((o) => ({ ...o, showAtLocal: e.target.value }))}
+              />
+            </div>
+          </div>
+        )}
+
+        {/* After-N-days field */}
+        {overlay.mode === "afterN" && (
           <div className="grid md:grid-cols-3 gap-3 mt-3">
             <div>
               <label className="block text-sm font-medium mb-1">Days after start</label>
@@ -445,12 +474,15 @@ function ExamEditor({ examId }) {
                 type="number"
                 className="w-full border rounded px-3 py-2"
                 value={overlay.daysAfterStart}
-                onChange={(e) => setOverlay((o) => ({ ...o, daysAfterStart: Math.max(0, +e.target.value || 0) }))}
+                onChange={(e) =>
+                  setOverlay((o) => ({ ...o, daysAfterStart: Math.max(0, +e.target.value || 0) }))
+                }
               />
             </div>
           </div>
         )}
 
+        {/* Fixed date/time */}
         {overlay.mode === "fixed" && (
           <div className="grid md:grid-cols-3 gap-3 mt-3">
             <div>
