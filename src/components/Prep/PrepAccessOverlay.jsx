@@ -1,4 +1,4 @@
-// client/src/pages/prep/PrepAccessOverlay.jsx
+// client/src/pages/prep/PrepAccessOverlay.jsx 
 import { useEffect, useMemo, useState } from "react";
 import { getJSON, postJSON } from "../../utils/api";
 
@@ -305,6 +305,25 @@ export default function PrepAccessOverlay({ examId, email }) {
     setPanelHidden(true);
   }
 
+  // -------- NEW: derive deep links from server overlay.payment -----
+  const pay = state?.overlay?.payment || state?.exam?.overlay?.payment || {};
+  const dlCourseName = pay.courseName || state?.exam?.name || examId;
+  const dlAmount = Number(pay.priceINR || state?.exam?.price || 0);
+
+  const upiLink =
+    pay.upiId
+      ? `upi://pay?pa=${encodeURIComponent(pay.upiId)}`
+        + (pay.upiName ? `&pn=${encodeURIComponent(pay.upiName)}` : "")
+        + (dlAmount > 0 ? `&am=${encodeURIComponent(dlAmount)}` : "")
+        + `&cu=INR`
+        + `&tn=${encodeURIComponent(`Payment for ${dlCourseName}`)}`
+      : "";
+
+  const waNum = (pay.whatsappNumber || "").replace(/[^\d+]/g, "");
+  const waText = pay.whatsappText || `Hello, I paid for "${dlCourseName}" (₹${dlAmount}).`;
+  const waLink = waNum ? `https://wa.me/${waNum.replace(/^\+/, "")}?text=${encodeURIComponent(waText)}` : "";
+  // ----------------------------------------------------------------
+
   // ----------------------- render -------------------------------
   const mustVeil =
     state.show || (state.loading && !!localStorage.getItem(ks.wait));
@@ -347,30 +366,29 @@ export default function PrepAccessOverlay({ examId, email }) {
                   <div className="text-xs text-gray-600">Price: ₹{state.exam?.price ?? 0}</div>
                 </div>
 
-                {/* UPI button (shows only if configured) */}
-                {canShowUPI && (
-                  <button
-                    onClick={openUPI}
-                    className="w-full mb-2 py-2 rounded bg-emerald-600 text-white"
-                  >
-                    Pay via UPI
-                  </button>
-                )}
-
-                {/* WhatsApp proof button (records click as proof) */}
-                {canShowWA && (
-                  <button
-                    type="button"
-                    className="w-full py-2 rounded bg-[#25D366] text-white mb-2"
-                    onClick={() => {
-                      setWaClicked(true);
-                      const text = `Hello, I paid for "${state.exam?.name || examId}" (₹${state.exam?.price ?? 0}).`;
-                      const link = formatWhatsAppLink({ phone: waPhone, text });
-                      window.open(link, "_blank", "noopener,noreferrer");
-                    }}
-                  >
-                    Send Proof on WhatsApp
-                  </button>
+                {/* NEW: Deep-link buttons from overlay.payment */}
+                {(upiLink || waLink) && (
+                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
+                    {upiLink && (
+                      <a
+                        href={upiLink}
+                        className="w-full py-2 rounded bg-green-600 text-white text-center"
+                      >
+                        Pay via UPI
+                      </a>
+                    )}
+                    {waLink && (
+                      <a
+                        href={waLink}
+                        target="_blank"
+                        rel="noreferrer"
+                        onClick={() => setWaClicked(true)}
+                        className="w-full py-2 rounded border bg-white text-center"
+                      >
+                        Send Proof on WhatsApp
+                      </a>
+                    )}
+                  </div>
                 )}
 
                 {/* Compact inputs (required email; optional name/phone) */}
