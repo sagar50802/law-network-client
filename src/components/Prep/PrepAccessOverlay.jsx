@@ -49,7 +49,7 @@ export default function PrepAccessOverlay({ examId, email }) {
         return fetchStatus();
       }
 
-      // user summary से टुडे-डे
+      // user summary से टुडे-डे (display/debug; server already enforces timing)
       let todayDay = 1;
       try {
         const meta = await getJSON(`/api/prep/user/summary?${qs.toString()}`);
@@ -61,7 +61,7 @@ export default function PrepAccessOverlay({ examId, email }) {
       let show = false;
       let waiting = !!access?.pending;
 
-      // planDayTime detection (इस पर guard लगेगा step-C में)
+      // planDayTime detection (सिर्फ fallback C को रोकने के लिए)
       const isPlanDayTime = access?.overlayPlan?.mode === "planDayTime";
 
       // (0) local waiting gate highest priority (refresh-proof)
@@ -71,7 +71,7 @@ export default function PrepAccessOverlay({ examId, email }) {
         waiting = true;
       }
 
-      // (A) backend निर्देश — (server already fixed for planDayTime)
+      // (A) TRUST SERVER: backend निर्देश — अब planDayTime में भी भरोसा करें
       if (!show && overlay?.show && overlay?.mode) {
         mode = overlay.mode; // "purchase" | "restart"
         show = true;
@@ -82,7 +82,7 @@ export default function PrepAccessOverlay({ examId, email }) {
         show = true;
       }
 
-      // (C) fallback reasons — planDayTime में इसे SKIP करें
+      // (C) fallback reasons — planDayTime में इसे SKIP करें (ताकि समय से पहले न खुले)
       if (!show && !isPlanDayTime) {
         if (access?.status === "trial" && access?.trialEnded) {
           mode = "purchase";
@@ -96,33 +96,9 @@ export default function PrepAccessOverlay({ examId, email }) {
         }
       }
 
-      // (D) planDayTime → local time/day पर auto-open
-      if (!show) {
-        const plan = access?.overlayPlan;
-        if (plan?.mode === "planDayTime") {
-          try {
-            const wantDay = Number(plan.showOnDay || 1);
-            const hhmm = String(plan.showAtLocal || "09:00");
-            const [hh, mm] = hhmm.split(":").map((n) => parseInt(n, 10));
-
-            const now = new Date();
-            const target = new Date(now);
-            target.setHours(hh || 0, mm || 0, 0, 0);
-
-            const notDismissed = (() => {
-              const k = ks.dismiss(hhmm, wantDay);
-              const v = localStorage.getItem(k);
-              const todayKey = new Date().toISOString().slice(0, 10);
-              return v !== todayKey;
-            })();
-
-            if (todayDay >= wantDay && now >= target && notDismissed) {
-              mode = "purchase";
-              show = true;
-            }
-          } catch {}
-        }
-      }
+      // (D) REMOVE local-time auto-open:
+      // पहले क्लाइंट यहाँ local समय से खोल रहा था — अब सर्वर timezone-आधारित निर्णय देता है,
+      // इसलिए इस स्टेप की ज़रूरत नहीं (और इससे किसी भी यूज़र के फोन समय का असर नहीं होगा)।
 
       // waiting gate persist/clear
       const effectiveShow = !!show && !!mode;
@@ -157,7 +133,7 @@ export default function PrepAccessOverlay({ examId, email }) {
     }
   }
 
-  // first load + minute polling (so planDayTime minute पर खुल जाए)
+  // first load + minute polling (server timing के लिए refresh friendly)
   useEffect(() => {
     fetchStatus();
     // eslint-disable-next-line react-hooks/exhaustive-deps
@@ -302,7 +278,8 @@ export default function PrepAccessOverlay({ examId, email }) {
             </button>
 
             <div className="text-[11px] text-gray-500 mt-3">
-              After approval, your schedule starts again from Day 1 with the original release timings.
+              After approval, your schedule starts again from Day 1 with the
+              original release timings.
             </div>
           </div>
         </div>
