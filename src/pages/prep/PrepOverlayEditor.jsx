@@ -1,74 +1,164 @@
 // client/src/pages/prep/PrepOverlayEditor.jsx
-import { useEffect, useState } from "react";
-import { getJSON, upload } from "../../utils/api";
+import { useEffect, useMemo, useState } from "react";
+import { getJSON } from "../../utils/api";
 
 export default function PrepOverlayEditor() {
   const [exams, setExams] = useState([]);
   const [examId, setExamId] = useState("");
-  const [form, setForm] = useState({
-    upiId: "",
-    upiName: "",
-    priceINR: 0,
-    whatsappId: "",
-  });
-  const [banner, setBanner] = useState(null);
-  const [waQR, setWaQR] = useState(null);
-  const [overlay, setOverlay] = useState({});
+  const [loading, setLoading] = useState(false);
 
-  async function loadExams() {
-    const r = await getJSON("/api/prep/exams");
-    setExams(r.exams || []);
-    if (!examId && r.exams?.[0]) setExamId(r.exams[0].examId);
+  // meta from server
+  const [meta, setMeta] = useState({
+    price: 0,
+    trialDays: 3,
+    overlay: {
+      mode: "never",            // "planDayTime" | "afterN" | "fixed-date" | "never"
+      showOnDay: 1,             // planDayTime
+      showAtLocal: "09:00",     // planDayTime (HH:mm in admin TZ)
+      tz: "Asia/Kolkata",       // optional; server defaults to Asia/Kolkata
+      offsetDays: 3,            // afterN
+      fixedAt: "",              // fixed-date (ISO or yyyy-mm-ddThh:mm)
+    },
+    payment: {
+      upiId: "",                // e.g. 7767045080@ptyes
+      waPhone: "",              // e.g. +9199xxxxxxx or 9199xxxxxxx
+      waText: "",               // default message
+    },
+    name: "",
+  });
+
+  // ---------- helpers ----------
+  function setOverlay(patch) {
+    setMeta((m) => ({ ...m, overlay: { ...m.overlay, ...patch } }));
+  }
+  function setPayment(patch) {
+    setMeta((m) => ({ ...m, payment: { ...m.payment, ...patch } }));
   }
 
-  async function loadCfg() {
-    if (!examId) return;
-    const r = await getJSON(`/api/prep/overlay/${examId}`);
-    const c = r.config || {};
-    setForm({
-      upiId: c.upiId || "",
-      upiName: c.upiName || "",
-      priceINR: c.priceINR || 0,
-      whatsappId: (c.whatsappLink || "").replace(/^https?:\/\/wa\.me\//, "") || "",
+  // Deep-link previews (for your own verification)
+  const upiLink = useMemo(() => {
+    const id = (meta.payment?.upiId || "").trim();
+    const amount = Number(meta.price || 0);
+    if (!id) return "";
+    const params = new URLSearchParams({
+      pa: id,
+      am: amount > 0 ? String(amount) : "",
+      cu: "INR",
     });
-    setOverlay(c);
+    return `upi://pay?${params.toString()}`;
+  }, [meta.payment?.upiId, meta.price]);
+
+  const waLink = useMemo(() => {
+    const phone = (meta.payment?.waPhone || "").replace(/[^\d+]/g, "");
+    if (!phone) return "";
+    const text = meta.payment?.waText || "";
+    const q = new URLSearchParams({ text });
+    return `https://wa.me/${phone.replace(/^\+/, "")}?${q.toString()}`;
+  }, [meta.payment?.waPhone, meta.payment?.waText]);
+
+  // ---------- load exam list ----------
+  async function loadExams() {
+    const r = await getJSON("/api/prep/exams");
+    const list = r.exams || [];
+    setExams(list);
+    if (!examId && list[0]?.examId) setExamId(list[0].examId);
+  }
+
+  // ---------- load selected exam meta ----------
+  async function loadMeta() {
+    if (!examId) return;
+    setLoading(true);
+    try {
+      const r = await getJSON(`/api/prep/exams/${encodeURIComponent(examId)}/meta`);
+      const { price = 0, trialDays = 3, overlay = {}, payment = {}, name = "" } = r || {};
+      setMeta({
+        price: Number(price || 0),
+        trialDays: Number(trialDays || 3),
+        overlay: {
+          mode: overlay.mode || "never",
+          showOnDay: Number(overlay.showOnDay ?? 1),
+          showAtLocal: overlay.showAtLocal || "09:00",
+          tz: overlay.tz || "Asia/Kolkata",
+          offsetDays: Number(overlay.offsetDays ?? 3),
+          fixedAt: overlay.fixedAt || "",
+        },
+        payment: {
+          upiId: payment.upiId || "",
+          waPhone: payment.waPhone || "",
+          waText: payment.waText || "",
+        },
+        name: name || examId,
+      });
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
     loadExams();
   }, []);
   useEffect(() => {
-    loadCfg();
+    loadMeta();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [examId]);
 
+  // ---------- save ----------
   async function save(e) {
     e.preventDefault();
-    const fd = new FormData();
-    fd.append("upiId", form.upiId);
-    fd.append("upiName", form.upiName);
-    fd.append("priceINR", String(form.priceINR || 0));
-    fd.append("whatsappId", form.whatsappId);
+    setLoading(true);
+    try {
+      const body = {
+        price: Number(meta.price || 0),
+        trialDays: Number(meta.trialDays || 3),
+        mode: meta.overlay.mode,
+        // conditionally include relevant fields
+        ...(meta.overlay.mode === "planDayTime"
+          ? {
+              showOnDay: Number(meta.overlay.showOnDay || 1),
+              showAtLocal: String(meta.overlay.showAtLocal || "09:00"),
+              tz: String(meta.overlay.tz || "Asia/Kolkata"),
+            }
+          : {}),
+        ...(meta.overlay.mode === "afterN"
+          ? { offsetDays: Number(meta.overlay.offsetDays || 0) }
+          : {}),
+        ...(meta.overlay.mode === "fixed-date"
+          ? {
+              fixedAt: meta.overlay.fixedAt ? new Date(meta.overlay.fixedAt).toISOString() : null,
+            }
+          : {}),
+        payment: {
+          upiId: (meta.payment.upiId || "").trim(),
+          waPhone: (meta.payment.waPhone || "").trim(),
+          waText: (meta.payment.waText || "").trim(),
+        },
+      };
 
-    // include new scheduling fields automatically
-    const f = e.target;
-    fd.append("forceOverlayAfterDays", f.forceOverlayAfterDays?.value ?? "");
-    fd.append("forceOverlayAt", f.forceOverlayAt?.value ?? "");
-    fd.append("tz", f.tz?.value ?? "");
+      await fetch(`/api/prep/exams/${encodeURIComponent(examId)}/overlay-config`, {
+        method: "PATCH",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(body),
+      }).then(async (r) => {
+        if (!r.ok) throw new Error((await r.text()) || "Save failed");
+      });
 
-    if (banner) fd.append("banner", banner);
-    if (waQR) fd.append("whatsappQR", waQR);
-
-    await upload(`/api/prep/overlay/${examId}`, fd);
-    alert("Saved.");
-    setBanner(null);
-    setWaQR(null);
-    await loadCfg();
+      alert("Saved.");
+      await loadMeta();
+    } catch (err) {
+      console.error(err);
+      alert(`Save failed: ${err.message || err}`);
+    } finally {
+      setLoading(false);
+    }
   }
+
+  const mode = meta.overlay.mode;
 
   return (
     <div className="max-w-5xl mx-auto p-4">
       <div className="flex items-center gap-2 mb-4">
         <h1 className="text-xl font-bold">Prep Overlay Editor</h1>
+
         <select
           className="border rounded px-2 py-1 ml-auto"
           value={examId}
@@ -82,129 +172,173 @@ export default function PrepOverlayEditor() {
         </select>
       </div>
 
-      <form
-        onSubmit={save}
-        className="grid sm:grid-cols-2 gap-4 rounded-xl border bg-white p-4"
-      >
-        <div>
-          <label className="block text-xs">UPI ID</label>
-          <input
-            className="border rounded px-2 py-1 w-full"
-            value={form.upiId}
-            onChange={(e) => setForm({ ...form, upiId: e.target.value })}
-          />
-        </div>
-        <div>
-          <label className="block text-xs">UPI Name (optional)</label>
-          <input
-            className="border rounded px-2 py-1 w-full"
-            value={form.upiName}
-            onChange={(e) => setForm({ ...form, upiName: e.target.value })}
-          />
-        </div>
-        <div>
-          <label className="block text-xs">Price (₹)</label>
-          <input
-            type="number"
-            className="border rounded px-2 py-1 w-40"
-            value={form.priceINR}
-            onChange={(e) =>
-              setForm({ ...form, priceINR: +e.target.value || 0 })
-            }
-          />
-        </div>
-        <div>
-          <label className="block text-xs">
-            WhatsApp number/id (e.g., 9198xxxxxxx)
-          </label>
-          <input
-            className="border rounded px-2 py-1 w-full"
-            value={form.whatsappId}
-            onChange={(e) => setForm({ ...form, whatsappId: e.target.value })}
-          />
+      <form onSubmit={save} className="grid gap-4 rounded-xl border bg-white p-4">
+        {/* Course meta */}
+        <div className="grid sm:grid-cols-3 gap-3">
+          <div>
+            <label className="block text-xs">Course name</label>
+            <input
+              className="border rounded px-2 py-1 w-full bg-gray-50"
+              value={meta.name}
+              disabled
+              readOnly
+            />
+          </div>
+          <div>
+            <label className="block text-xs">Price (₹)</label>
+            <input
+              type="number"
+              className="border rounded px-2 py-1 w-full"
+              value={meta.price}
+              onChange={(e) => setMeta((m) => ({ ...m, price: +e.target.value || 0 }))}
+            />
+          </div>
+          <div>
+            <label className="block text-xs">Trial Days</label>
+            <input
+              type="number"
+              min="0"
+              className="border rounded px-2 py-1 w-full"
+              value={meta.trialDays}
+              onChange={(e) => setMeta((m) => ({ ...m, trialDays: +e.target.value || 0 }))}
+            />
+          </div>
         </div>
 
-        <div>
-          <label className="block text-xs">Banner (shown to users)</label>
-          <input
-            type="file"
-            accept="image/*"
-            onChange={(e) => setBanner(e.target.files?.[0] || null)}
-          />
-        </div>
-        <div>
-          <label className="block text-xs">WhatsApp QR (stored only)</label>
-          <input
-            type="file"
-            accept="image/*"
-            onChange={(e) => setWaQR(e.target.files?.[0] || null)}
-          />
-        </div>
+        {/* Overlay scheduling */}
+        <div className="border rounded-lg p-3">
+          <div className="flex items-center gap-2 mb-3">
+            <h2 className="text-sm font-semibold">Overlay Mode</h2>
+            <select
+              className="border rounded px-2 py-1"
+              value={mode}
+              onChange={(e) => setOverlay({ mode: e.target.value })}
+            >
+              <option value="planDayTime">At specific Day & Time</option>
+              <option value="afterN">After N days (per user)</option>
+              <option value="fixed-date">At fixed date/time</option>
+              <option value="never">Never</option>
+            </select>
+          </div>
 
-        {/* ✅ NEW scheduling inputs block */}
-        <div className="sm:col-span-2 mt-4">
-          <h2 className="text-sm font-semibold mb-2">
-            Overlay Scheduling (optional)
-          </h2>
-
-          <div className="grid md:grid-cols-3 gap-3">
+          {/* planDayTime */}
+          <div className="grid sm:grid-cols-3 gap-3">
             <div>
-              <label className="block text-sm font-medium mb-1">
-                Force overlay after N days (per user)
-              </label>
+              <label className="block text-xs">Show on Day</label>
               <input
-                name="forceOverlayAfterDays"
+                type="number"
+                min="1"
+                className="border rounded px-2 py-1 w-full"
+                value={meta.overlay.showOnDay}
+                onChange={(e) => setOverlay({ showOnDay: +e.target.value || 1 })}
+                disabled={mode !== "planDayTime"}
+              />
+            </div>
+            <div>
+              <label className="block text-xs">Time (HH:mm, admin TZ)</label>
+              <input
+                type="time"
+                className="border rounded px-2 py-1 w-full"
+                value={meta.overlay.showAtLocal}
+                onChange={(e) => setOverlay({ showAtLocal: e.target.value })}
+                disabled={mode !== "planDayTime"}
+              />
+            </div>
+            <div>
+              <label className="block text-xs">Time zone (IANA)</label>
+              <input
+                className="border rounded px-2 py-1 w-full"
+                placeholder="Asia/Kolkata"
+                value={meta.overlay.tz}
+                onChange={(e) => setOverlay({ tz: e.target.value })}
+                disabled={mode !== "planDayTime"}
+              />
+            </div>
+          </div>
+
+          {/* afterN */}
+          <div className="grid sm:grid-cols-3 gap-3 mt-3">
+            <div>
+              <label className="block text-xs">Days after start</label>
+              <input
                 type="number"
                 min="0"
-                placeholder="e.g., 3"
-                className="w-full border rounded px-3 py-2"
-                defaultValue={overlay?.forceOverlayAfterDays ?? ""}
+                className="border rounded px-2 py-1 w-full"
+                value={meta.overlay.offsetDays}
+                onChange={(e) => setOverlay({ offsetDays: +e.target.value || 0 })}
+                disabled={mode !== "afterN"}
               />
-              <div className="text-xs text-gray-500 mt-1">
-                Example: 3 → shows overlay 3 days after a user starts.
-              </div>
             </div>
+          </div>
 
+          {/* fixed-date */}
+          <div className="grid sm:grid-cols-3 gap-3 mt-3">
             <div>
-              <label className="block text-sm font-medium mb-1">
-                Force overlay at (absolute)
-              </label>
+              <label className="block text-xs">Fixed date/time (local)</label>
               <input
-                name="forceOverlayAt"
                 type="datetime-local"
-                className="w-full border rounded px-3 py-2"
-                defaultValue={
-                  overlay?.forceOverlayAt
-                    ? overlay.forceOverlayAt.slice(0, 16)
-                    : ""
-                }
+                className="border rounded px-2 py-1 w-full"
+                value={meta.overlay.fixedAt ? meta.overlay.fixedAt.slice(0, 16) : ""}
+                onChange={(e) => setOverlay({ fixedAt: e.target.value ? new Date(e.target.value).toISOString() : "" })}
+                disabled={mode !== "fixed-date"}
               />
-              <div className="text-xs text-gray-500 mt-1">
-                Exact date & time (UTC if no timezone set).
-              </div>
-            </div>
-
-            <div>
-              <label className="block text-sm font-medium mb-1">
-                Time zone (optional)
-              </label>
-              <input
-                name="tz"
-                type="text"
-                placeholder="Asia/Kolkata"
-                className="w-full border rounded px-3 py-2"
-                defaultValue={overlay?.tz || ""}
-              />
-              <div className="text-xs text-gray-500 mt-1">
-                Stored for reference; server saves times in UTC.
-              </div>
             </div>
           </div>
         </div>
 
-        <div className="sm:col-span-2 mt-4">
-          <button className="px-3 py-1.5 rounded bg-black text-white">
-            Save
+        {/* Payment config */}
+        <div className="border rounded-lg p-3">
+          <h2 className="text-sm font-semibold mb-2">Payment & Proof</h2>
+
+          <div className="grid sm:grid-cols-3 gap-3">
+            <div>
+              <label className="block text-xs">UPI ID</label>
+              <input
+                className="border rounded px-2 py-1 w-full"
+                placeholder="7767045080@ptyes"
+                value={meta.payment.upiId}
+                onChange={(e) => setPayment({ upiId: e.target.value })}
+              />
+              {upiLink ? (
+                <div className="text-[11px] text-gray-500 mt-1 break-all">
+                  upi://pay… preview: {upiLink}
+                </div>
+              ) : null}
+            </div>
+
+            <div>
+              <label className="block text-xs">WhatsApp number</label>
+              <input
+                className="border rounded px-2 py-1 w-full"
+                placeholder="+9199xxxxxxx"
+                value={meta.payment.waPhone}
+                onChange={(e) => setPayment({ waPhone: e.target.value })}
+              />
+              {waLink ? (
+                <div className="text-[11px] text-gray-500 mt-1 break-all">
+                  wa.me preview: {waLink}
+                </div>
+              ) : null}
+            </div>
+
+            <div>
+              <label className="block text-xs">Default WhatsApp text (optional)</label>
+              <input
+                className="border rounded px-2 py-1 w-full"
+                placeholder={`Hello, I paid for "${meta.name}" (₹${meta.price}).`}
+                value={meta.payment.waText}
+                onChange={(e) => setPayment({ waText: e.target.value })}
+              />
+            </div>
+          </div>
+        </div>
+
+        <div className="mt-2">
+          <button
+            className="px-3 py-2 rounded bg-black text-white disabled:opacity-50"
+            disabled={loading || !examId}
+          >
+            {loading ? "Saving…" : "Save"}
           </button>
         </div>
       </form>
