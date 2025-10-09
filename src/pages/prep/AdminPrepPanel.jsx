@@ -160,9 +160,9 @@ export default function AdminPrepPanel() {
       </div>
 
       {!selExam ? (
-          <div className="text-gray-500">Select or create an exam to continue.</div>
+        <div className="text-gray-500">Select or create an exam to continue.</div>
       ) : (
-          <ExamEditor examId={selExam} />
+        <ExamEditor examId={selExam} />
       )}
     </div>
   );
@@ -173,7 +173,7 @@ function ExamEditor({ examId }) {
   const [busy, setBusy] = useState(false);
   const formRef = useRef(null);
 
-  // ── OVERLAY STATE (new keys for Day & Time schedule; does not affect templates logic) ──
+  // ── OVERLAY STATE (Day & Time schedule; does not affect templates logic) ──
   const [overlay, setOverlay] = useState({
     price: 0,
     trialDays: 3,
@@ -209,8 +209,9 @@ function ExamEditor({ examId }) {
         const ov = r?.overlay || {};
         setOverlay((o) => ({
           ...o,
-          price: typeof r?.price === "number" ? r.price : o.price,
-          trialDays: typeof r?.trialDays === "number" ? r.trialDays : o.trialDays,
+          // read from overlay object primarily; fallback to top-level if present
+          price: typeof ov?.price === "number" ? ov.price : (typeof r?.price === "number" ? r.price : o.price),
+          trialDays: typeof ov?.trialDays === "number" ? ov.trialDays : (typeof r?.trialDays === "number" ? r.trialDays : o.trialDays),
           mode: ov?.mode || o.mode,
           showOnDay: typeof ov?.showOnDay === "number" ? ov.showOnDay : o.showOnDay,
           showAtLocal: ov?.showAtLocal || o.showAtLocal,
@@ -226,34 +227,62 @@ function ExamEditor({ examId }) {
     return () => { ignore = true; };
   }, [examId]);
 
-  // Save overlay config (POST FormData with Day & Time fields)
-  async function saveOverlay() {
+  // ✅ JSON POST helper for overlay config (as requested)
+  async function saveOverlayJSON({
+    price,
+    trialDays,
+    overlayMode,
+    showOnDay,
+    showAtLocal,
+    daysAfterStart,
+    fixedAt,
+  }) {
+    const ownerKey = localStorage.getItem("ownerKey") || "";
+    const body = JSON.stringify({
+      price,
+      trialDays,
+      mode: overlayMode,      // 'planDayTime' | 'afterN' | 'fixed'
+      showOnDay,
+      showAtLocal,            // 'HH:mm'
+      daysAfterStart,
+      fixedAt,
+    });
+
+    const r = await fetch(
+      buildUrl(`/api/prep/exams/${encodeURIComponent(examId)}/overlay-config`),
+      {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          "X-Owner-Key": ownerKey,
+        },
+        credentials: "include",
+        body,
+      }
+    );
+
+    if (!r.ok) throw new Error(`Save overlay failed: ${r.status}`);
+  }
+
+  // Wire Save button → JSON POST of the Day & Time plan
+  async function handleSaveOverlay() {
     try {
-      const fd = new FormData();
-      fd.set("price", overlay.price);
-      fd.set("trialDays", overlay.trialDays);
-      fd.set("mode", overlay.mode);                           // 'planDayTime' | 'afterN' | 'fixed' | 'never'
-      fd.set("showOnDay", overlay.showOnDay || 1);            // number
-      fd.set("showAtLocal", overlay.showAtLocal || "09:00");  // 'HH:mm'
-      // legacy/compat fields (no harm if unused on server)
-      fd.set("daysAfterStart", overlay.daysAfterStart || 0);
-      fd.set("fixedAt", overlay.fixedAt || "");
-
-      const res = await fetch(
-        buildUrl(`/api/prep/exams/${encodeURIComponent(examId)}/overlay-config`),
-        {
-          method: "POST",
-          headers: { "X-Owner-Key": localStorage.getItem("ownerKey") || "" },
-          body: fd
-        }
-      );
-
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || data?.success === false) throw new Error("Save failed");
-      alert("Overlay settings saved");
+      setOverlayLoading(true);
+      await saveOverlayJSON({
+        price: Number(overlay.price) || 0,
+        trialDays: Number(overlay.trialDays) || 0,
+        overlayMode: "planDayTime",                 // per spec: save Day & Time schedule
+        showOnDay: Math.max(1, Number(overlay.showOnDay) || 1),
+        showAtLocal: overlay.showAtLocal || "09:00",
+        daysAfterStart: 0,                          // not used for planDayTime
+        fixedAt: null,                              // not used for planDayTime
+      });
+      alert("Overlay saved");
     } catch (e) {
       console.error(e);
-      alert(e.message || "Save failed");
+      alert("Save failed");
+    } finally {
+      setOverlayLoading(false);
     }
   }
   // ─────────────────────────────────────────────────────────────────────────────
@@ -397,11 +426,12 @@ function ExamEditor({ examId }) {
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-xl font-semibold">Access &amp; Overlay</h2>
           <button
-            onClick={saveOverlay}
+            type="button"
+            onClick={handleSaveOverlay}
             className="px-3 py-2 rounded border bg-white"
             disabled={overlayLoading}
           >
-            {overlayLoading ? "Loading…" : "Save Overlay"}
+            {overlayLoading ? "Saving…" : "Save Overlay"}
           </button>
         </div>
 
