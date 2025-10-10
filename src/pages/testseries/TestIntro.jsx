@@ -1,6 +1,6 @@
 import { useEffect, useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { getJSON } from "@/utils/api";
+import { getJSON } from "../../utils/api";
 import { Loader2 } from "lucide-react";
 
 export default function TestIntro({ code }) {
