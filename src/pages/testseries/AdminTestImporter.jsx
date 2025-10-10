@@ -1,5 +1,5 @@
 import { useState } from "react";
-import { absUrl } from "@/utils/api"; // your global helper
+import { absUrl } from "../../utils/api";
 import toast from "react-hot-toast";
 
 export default function AdminTestImporter() {
