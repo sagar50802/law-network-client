@@ -5,11 +5,19 @@ import { getJSON } from "../../utils/api";
 
 export default function Navbar() {
   const [articleCount, setArticleCount] = useState(0);
+  const [testCount, setTestCount] = useState(0); // ✅ NEW: total tests
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
     getJSON("/api/articles")
       .then((r) => setArticleCount((r.articles || r.data || []).length))
+      .catch(() => {});
+  }, []);
+
+  // ✅ NEW: fetch total number of tests (safe, read-only)
+  useEffect(() => {
+    getJSON("/api/testseries/tests")
+      .then((r) => setTestCount(Array.isArray(r) ? r.length : 0))
       .catch(() => {});
   }, []);
 
@@ -56,6 +64,11 @@ export default function Navbar() {
             Preparation
           </a>
 
+          {/* ✅ NEW: Test Series (dashboard) */}
+          <a href="/tests" className="hover:text-blue-600">
+            Test Series {testCount ? `(${testCount})` : ""}
+          </a>
+
           <a href="/podcasts" className="hover:text-blue-600">Podcasts</a>
           <a href="/videos" className="hover:text-blue-600">Video Gallery</a>
           <a href="/notebook" className="hover:text-blue-600">PDF Notebook</a>
@@ -68,8 +81,9 @@ export default function Navbar() {
               <span className="text-gray-300">|</span>
               <a href="/admin/dashboard" className="text-blue-600 underline">Admin</a>
               <a href="/admin/prep" className="text-blue-600 underline">Prep Admin</a>
-              {/* ✅ NEW: Access Requests (desktop) */}
               <a href="/admin/prep-access" className="text-blue-600 underline">Access Requests</a>
+              {/* ✅ NEW: Test Importer (owner only) */}
+              <a href="/owner/tests/import" className="text-blue-600 underline">Import Tests</a>
               <button
                 className="ml-2 text-xs border px-2 py-1 rounded"
                 onClick={() => {
@@ -93,10 +107,10 @@ export default function Navbar() {
       {open && (
         <div className="md:hidden px-4 pb-3 flex flex-col gap-2">
           <a href="/articles">Articles</a>
-          {/* Consultancy (mobile) */}
           <a href="/#consultancy" onClick={goConsultancy}>Consultancy</a>
-          {/* ✅ New: Exam Preparation (mobile) */}
           <a href="/prep">Preparation</a>
+          {/* ✅ NEW: Test Series (mobile) */}
+          <a href="/tests">Test Series {testCount ? `(${testCount})` : ""}</a>
           <a href="/podcasts">Podcasts</a>
           <a href="/videos">Video Gallery</a>
           <a href="/notebook">PDF Notebook</a>
@@ -108,8 +122,9 @@ export default function Navbar() {
             <>
               <a href="/admin/dashboard" className="underline">Admin</a>
               <a href="/admin/prep" className="underline">Prep Admin</a>
-              {/* ✅ NEW: Access Requests (mobile) */}
               <a href="/admin/prep-access" className="underline">Access Requests</a>
+              {/* ✅ NEW: Test Importer (mobile) */}
+              <a href="/owner/tests/import" className="underline">Import Tests</a>
             </>
           )}
         </div>
