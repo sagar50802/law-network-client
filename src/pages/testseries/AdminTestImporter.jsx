@@ -1,6 +1,6 @@
+// client/src/pages/testseries/AdminTestImporter.jsx
 import { useState } from "react";
-import { absUrl } from "../../utils/api";
-import toast from "react-hot-toast";
+import { absUrl } from "../../utils/api"; // changed to relative path, no aliases
 
 export default function AdminTestImporter() {
   const [paper, setPaper] = useState("");
@@ -13,7 +13,7 @@ export default function AdminTestImporter() {
   async function handleSubmit(e) {
     e.preventDefault();
     if (!file) {
-      toast.error("Please choose a .txt or .json file");
+      alert("Please choose a .txt or .json file");
       return;
     }
     setLoading(true);
@@ -35,7 +35,7 @@ export default function AdminTestImporter() {
       const data = await res.json();
       if (!res.ok) throw new Error(data.message || "Upload failed");
 
-      toast.success("✅ Test imported successfully!");
+      alert("✅ Test imported successfully!");
       setPreview(data.test);
       setFile(null);
       setPaper("");
@@ -43,7 +43,7 @@ export default function AdminTestImporter() {
       setCode("");
     } catch (err) {
       console.error("Import error:", err);
-      toast.error(err.message);
+      alert(err.message);
     } finally {
       setLoading(false);
     }
@@ -120,18 +120,10 @@ export default function AdminTestImporter() {
           <h2 className="text-2xl font-bold mb-3 text-green-700">
             ✅ Import Summary
           </h2>
-          <p>
-            <strong>Paper:</strong> {preview.paper}
-          </p>
-          <p>
-            <strong>Title:</strong> {preview.title}
-          </p>
-          <p>
-            <strong>Code:</strong> {preview.code}
-          </p>
-          <p>
-            <strong>Total Questions:</strong> {preview.totalQuestions}
-          </p>
+          <p><strong>Paper:</strong> {preview.paper}</p>
+          <p><strong>Title:</strong> {preview.title}</p>
+          <p><strong>Code:</strong> {preview.code}</p>
+          <p><strong>Total Questions:</strong> {preview.totalQuestions}</p>
           <p className="mt-3 text-gray-600 text-sm">
             Created at {new Date(preview.createdAt).toLocaleString()}
           </p>
