@@ -4,20 +4,15 @@ import { getJSON, absUrl } from "../../utils/api";
 
 export default function AdminTestManager() {
   const [tab, setTab] = useState("tests"); // "tests" | "results"
-
-  /* ---------- TESTS STATE ---------- */
   const [rows, setRows] = useState([]);
   const [papers, setPapers] = useState([]);
   const [paperSel, setPaperSel] = useState("");
   const [q, setQ] = useState("");
-  const [msg, setMsg] = useState("");
   const [loading, setLoading] = useState(true);
-
-  /* ---------- RESULTS STATE ---------- */
+  const [msg, setMsg] = useState("");
   const [results, setResults] = useState([]);
-  const [resLoading, setResLoading] = useState(false);
 
-  /* ---------- FETCH TESTS + PAPERS ---------- */
+  /* ---------- Load tests + papers ---------- */
   useEffect(() => {
     (async () => {
       try {
@@ -35,8 +30,21 @@ export default function AdminTestManager() {
     })();
   }, []);
 
-  /* ---------- FILTER TESTS ---------- */
-  const filtered = useMemo(() => {
+  /* ---------- Load results when tab opens ---------- */
+  useEffect(() => {
+    if (tab !== "results") return;
+    (async () => {
+      try {
+        const r = await getJSON("/api/testseries/results");
+        setResults(r?.results || []);
+      } catch {
+        setResults([]);
+      }
+    })();
+  }, [tab]);
+
+  /* ---------- Filters ---------- */
+  const filteredTests = useMemo(() => {
     const needle = q.trim().toLowerCase();
     return rows
       .filter((t) => (paperSel ? t.paper === paperSel : true))
@@ -49,62 +57,56 @@ export default function AdminTestManager() {
       );
   }, [rows, q, paperSel]);
 
-  /* ---------- DELETE TEST ---------- */
+  const filteredResults = useMemo(() => {
+    const needle = q.trim().toLowerCase();
+    return results.filter((r) =>
+      !needle
+        ? true
+        : [r.testCode, r.user?.email, r.user?.name]
+            .join(" ")
+            .toLowerCase()
+            .includes(needle)
+    );
+  }, [results, q]);
+
+  /* ---------- Actions ---------- */
   async function handleDelete(code) {
     if (!code) return;
     const ownerKey = localStorage.getItem("ownerKey") || "";
-    const yes = confirm(`Delete test "${code}"? This cannot be undone.`);
-    if (!yes) return;
-
+    if (!confirm(`Delete test "${code}"? This cannot be undone.`)) return;
     try {
       const res = await fetch(absUrl(`/api/testseries/${code}`), {
         method: "DELETE",
         headers: { "X-Owner-Key": ownerKey },
       });
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data?.success)
-        throw new Error(data?.message || "Delete failed");
-
+      const data = await res.json();
+      if (!res.ok || !data.success)
+        throw new Error(data.message || "Delete failed");
       setRows((r) => r.filter((t) => t.code !== code));
-      setPapers((ps) =>
-        ps
-          .map((p) =>
-            p.paper === (rows.find((t) => t.code === code)?.paper || p.paper)
-              ? { ...p, count: Math.max(0, (p.count || 1) - 1) }
-              : p
-          )
-          .filter((p) => p.count > 0)
-      );
       flash(`✅ Deleted ${code}`);
     } catch (e) {
-      alert(e?.message || "Delete failed");
+      alert(e.message);
     }
   }
 
-  /* ---------- DELETE PAPER ---------- */
   async function deletePaper(paper) {
     if (!paper) return;
     const ownerKey = localStorage.getItem("ownerKey") || "";
-    const yes = confirm(
-      `⚠️ Delete ALL tests under "${paper}"? This cannot be undone.`
-    );
-    if (!yes) return;
-
+    if (!confirm(`⚠️ Delete ALL tests under "${paper}"?`)) return;
     try {
       const res = await fetch(
         absUrl(`/api/testseries/paper/${encodeURIComponent(paper)}`),
         { method: "DELETE", headers: { "X-Owner-Key": ownerKey } }
       );
-      const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data?.success)
-        throw new Error(data?.message || "Delete failed");
-
+      const data = await res.json();
+      if (!res.ok || !data.success)
+        throw new Error(data.message || "Delete failed");
       setRows((r) => r.filter((t) => t.paper !== paper));
       setPapers((ps) => ps.filter((p) => p.paper !== paper));
       setPaperSel("");
       flash(`🗑 Removed "${paper}" (${data.deleted || 0} tests)`);
     } catch (e) {
-      alert(e?.message || "Delete paper failed");
+      alert(e.message);
     }
   }
 
@@ -113,56 +115,28 @@ export default function AdminTestManager() {
     setTimeout(() => setMsg(""), 2500);
   }
 
-  /* ---------- FETCH RESULTS ---------- */
-  async function loadResults() {
-    setResLoading(true);
-    try {
-      const r = await getJSON("/api/testseries/results");
-      setResults(r?.results || []);
-    } catch (e) {
-      alert(e?.message || "Failed to load results");
-    } finally {
-      setResLoading(false);
-    }
-  }
-
-  /* ---------- UI ---------- */
   if (loading) return <div className="p-6">Loading…</div>;
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
-      {/* Header + Tabs */}
-      <div className="flex items-center justify-between mb-6 flex-wrap gap-2">
-        <h1 className="text-2xl font-bold text-[#0b1220]">
-          🧮 Admin Test Manager
-        </h1>
-        <div className="flex gap-2">
+      {/* Tabs */}
+      <div className="flex border-b mb-6">
+        {["tests", "results"].map((t) => (
           <button
-            className={`px-4 py-2 rounded-lg ${
-              tab === "tests"
-                ? "bg-indigo-600 text-white"
-                : "bg-gray-100 text-gray-700"
+            key={t}
+            onClick={() => setTab(t)}
+            className={`px-5 py-2 font-medium border-b-2 ${
+              tab === t
+                ? "border-indigo-600 text-indigo-700"
+                : "border-transparent text-gray-500 hover:text-indigo-600"
             }`}
-            onClick={() => setTab("tests")}
           >
-            Tests
+            {t === "tests" ? "🧾 Tests" : "📊 Results"}
           </button>
-          <button
-            className={`px-4 py-2 rounded-lg ${
-              tab === "results"
-                ? "bg-indigo-600 text-white"
-                : "bg-gray-100 text-gray-700"
-            }`}
-            onClick={() => {
-              setTab("results");
-              if (!results.length) loadResults();
-            }}
-          >
-            Results
-          </button>
-        </div>
+        ))}
       </div>
 
+      {/* Flash Message */}
       {msg && (
         <div className="mb-4 text-sm px-3 py-2 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200">
           {msg}
@@ -172,46 +146,48 @@ export default function AdminTestManager() {
       {/* TESTS TAB */}
       {tab === "tests" && (
         <>
-          {/* Toolbar */}
-          <div className="flex flex-col sm:flex-row gap-2 sm:items-center mb-6">
-            <select
-              value={paperSel}
-              onChange={(e) => setPaperSel(e.target.value)}
-              className="border rounded-lg px-3 py-2 min-w-[220px]"
-              title="Filter by paper"
-            >
-              <option value="">All Papers</option>
-              {papers.map((p) => (
-                <option key={p.paper} value={p.paper}>
-                  {p.paper} ({p.count})
-                </option>
-              ))}
-            </select>
-
-            {paperSel && (
-              <button
-                onClick={() => deletePaper(paperSel)}
-                className="px-3 py-2 rounded-lg bg-rose-600 text-white hover:bg-rose-700"
+          <div className="flex flex-col sm:flex-row sm:items-end sm:justify-between mb-6 gap-3">
+            <div className="flex flex-wrap gap-2 items-center">
+              <select
+                value={paperSel}
+                onChange={(e) => setPaperSel(e.target.value)}
+                className="border rounded-lg px-3 py-2 min-w-[220px]"
               >
-                Delete Paper
-              </button>
-            )}
+                <option value="">All Papers</option>
+                {papers.map((p) => (
+                  <option key={p.paper} value={p.paper}>
+                    {p.paper} ({p.count})
+                  </option>
+                ))}
+              </select>
 
-            <input
-              value={q}
-              onChange={(e) => setQ(e.target.value)}
-              placeholder="Search by code, title, paper…"
-              className="w-full sm:w-72 border rounded-lg px-3 py-2"
-            />
-            <Link
-              to="/owner/tests/import"
-              className="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700"
-            >
-              + Import
-            </Link>
+              {paperSel && (
+                <button
+                  onClick={() => deletePaper(paperSel)}
+                  className="px-3 py-2 rounded-lg bg-rose-600 text-white hover:bg-rose-700"
+                >
+                  Delete Paper
+                </button>
+              )}
+            </div>
+
+            <div className="flex gap-2">
+              <input
+                value={q}
+                onChange={(e) => setQ(e.target.value)}
+                placeholder="Search by code, title, paper…"
+                className="w-full sm:w-72 border rounded-lg px-3 py-2"
+              />
+              <Link
+                to="/owner/tests/import"
+                className="px-4 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700"
+              >
+                + Import
+              </Link>
+            </div>
           </div>
 
-          {!filtered.length ? (
+          {!filteredTests.length ? (
             <div className="text-gray-600">No tests found.</div>
           ) : (
             <div className="overflow-x-auto bg-white border rounded-2xl shadow-sm">
@@ -227,7 +203,7 @@ export default function AdminTestManager() {
                   </tr>
                 </thead>
                 <tbody>
-                  {filtered.map((t) => (
+                  {filteredTests.map((t) => (
                     <tr key={t.code} className="border-t hover:bg-gray-50">
                       <td className="px-3 py-2">{t.paper}</td>
                       <td className="px-3 py-2">{t.title}</td>
@@ -243,7 +219,7 @@ export default function AdminTestManager() {
                           to={`/tests/${t.code}`}
                           className="px-3 py-1.5 rounded-lg border bg-white hover:bg-gray-50"
                         >
-                          Open Intro
+                          Intro
                         </Link>
                         <Link
                           to={`/tests/${t.code}/play`}
@@ -269,52 +245,63 @@ export default function AdminTestManager() {
 
       {/* RESULTS TAB */}
       {tab === "results" && (
-        <div className="bg-white border rounded-2xl shadow-sm p-4">
-          {resLoading ? (
-            <div className="p-4 text-gray-500">Loading results...</div>
-          ) : !results.length ? (
-            <div className="p-4 text-gray-500">No results found yet.</div>
+        <>
+          <div className="flex justify-between items-center mb-4 gap-2">
+            <input
+              value={q}
+              onChange={(e) => setQ(e.target.value)}
+              placeholder="Search by code, user, or email..."
+              className="w-full sm:w-80 border rounded-lg px-3 py-2"
+            />
+            <span className="text-sm text-gray-500">
+              {filteredResults.length} results
+            </span>
+          </div>
+
+          {!filteredResults.length ? (
+            <div className="text-gray-600">No results found.</div>
           ) : (
-            <table className="min-w-full text-sm">
-              <thead className="bg-gray-50 text-left">
-                <tr>
-                  <th className="px-3 py-2">Test Code</th>
-                  <th className="px-3 py-2">User</th>
-                  <th className="px-3 py-2 text-center">Score</th>
-                  <th className="px-3 py-2 text-center">Time (sec)</th>
-                  <th className="px-3 py-2">Submitted</th>
-                </tr>
-              </thead>
-              <tbody>
-                {results.map((r) => (
-                  <tr key={r._id} className="border-t">
-                    <td className="px-3 py-2 font-mono">{r.testCode}</td>
-                    <td className="px-3 py-2">
-                      {r.user?.name || "—"}{" "}
-                      <span className="text-gray-500 text-xs">
-                        ({r.user?.email || "no email"})
-                      </span>
-                    </td>
-                    <td className="px-3 py-2 text-center font-semibold text-indigo-700">
-                      {r.score}
-                    </td>
-                    <td className="px-3 py-2 text-center">
-                      {r.timeTakenSec ?? "—"}
-                    </td>
-                    <td className="px-3 py-2 text-gray-500 text-xs">
-                      {new Date(r.createdAt).toLocaleString()}
-                    </td>
+            <div className="overflow-x-auto bg-white border rounded-2xl shadow-sm">
+              <table className="min-w-full text-sm">
+                <thead className="bg-gray-50 text-left">
+                  <tr>
+                    <th className="px-3 py-2">Test Code</th>
+                    <th className="px-3 py-2">User</th>
+                    <th className="px-3 py-2 text-center">Score</th>
+                    <th className="px-3 py-2 text-center">Time Taken</th>
+                    <th className="px-3 py-2 text-center">Date</th>
                   </tr>
-                ))}
-              </tbody>
-            </table>
+                </thead>
+                <tbody>
+                  {filteredResults.map((r) => (
+                    <tr key={r._id} className="border-t hover:bg-gray-50">
+                      <td className="px-3 py-2 font-mono">{r.testCode}</td>
+                      <td className="px-3 py-2">
+                        <div className="font-medium">{r.user?.name || "—"}</div>
+                        <div className="text-xs text-gray-500">
+                          {r.user?.email || ""}
+                        </div>
+                      </td>
+                      <td className="px-3 py-2 text-center font-semibold">
+                        {r.score}
+                      </td>
+                      <td className="px-3 py-2 text-center text-gray-500">
+                        {r.timeTakenSec ? `${r.timeTakenSec}s` : "—"}
+                      </td>
+                      <td className="px-3 py-2 text-center text-gray-500">
+                        {new Date(r.createdAt).toLocaleDateString()}
+                      </td>
+                    </tr>
+                  ))}
+                </tbody>
+              </table>
+            </div>
           )}
-        </div>
+        </>
       )}
 
       <div className="text-xs text-gray-500 mt-4">
-        Tip: Keep your <span className="font-mono">ownerKey</span> in
-        localStorage to authorize admin actions.
+        Tip: Keep your <span className="font-mono">ownerKey</span> in localStorage for admin actions.
       </div>
     </div>
   );
