@@ -1,4 +1,3 @@
-// client/src/pages/testseries/AdminTestManager.jsx
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 import { getJSON, absUrl } from "../../utils/api";
@@ -8,28 +7,19 @@ export default function AdminTestManager() {
   const [loading, setLoading] = useState(true);
   const [q, setQ] = useState("");
   const [msg, setMsg] = useState("");
-
-  // NEW: papers dropdown state
   const [papers, setPapers] = useState([]);      // [{paper, count}]
   const [paperSel, setPaperSel] = useState("");  // current filter
 
-  // fetch tests (flat list)
+  // ✅ Fetch tests (flat list) and papers
   useEffect(() => {
     (async () => {
       try {
-        // API returns { papers: { [paperName]: [{ code, title, totalQuestions, durationMin }] } }
-        const r = await getJSON("/api/testseries?_=" + Date.now());
-        const groups = r?.papers || {};
-        const flat = [];
-        Object.keys(groups).forEach((paper) => {
-          (groups[paper] || []).forEach((t) => flat.push({ ...t, paper }));
-        });
-        flat.sort(
-          (a, b) =>
-            (a.paper || "").localeCompare(b.paper || "") ||
-            (a.title || "").localeCompare(b.title || "")
-        );
-        setRows(flat);
+        const [pRes, tRes] = await Promise.all([
+          getJSON("/api/testseries/papers"),
+          getJSON("/api/testseries/tests"),
+        ]);
+        setPapers(pRes?.papers || []);
+        setRows(tRes?.tests || []);
       } catch (e) {
         setMsg(e?.message || "Failed to load tests");
       } finally {
@@ -38,14 +28,7 @@ export default function AdminTestManager() {
     })();
   }, []);
 
-  // NEW: fetch papers for dropdown
-  useEffect(() => {
-    getJSON("/api/testseries/papers")
-      .then((r) => setPapers(r?.papers || []))
-      .catch(() => {});
-  }, []);
-
-  // filter by paper + text query
+  // ✅ Filter by paper and search query
   const filtered = useMemo(() => {
     const needle = q.trim().toLowerCase();
     return rows
@@ -59,6 +42,7 @@ export default function AdminTestManager() {
       );
   }, [rows, q, paperSel]);
 
+  // ✅ Delete individual test
   async function handleDelete(code) {
     if (!code) return;
     const ownerKey = localStorage.getItem("ownerKey") || "";
@@ -71,11 +55,12 @@ export default function AdminTestManager() {
         headers: { "X-Owner-Key": ownerKey },
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data?.success) throw new Error(data?.message || "Delete failed");
+      if (!res.ok || !data?.success)
+        throw new Error(data?.message || "Delete failed");
 
       setRows((r) => r.filter((t) => t.code !== code));
 
-      // keep paper counts in sync (soft update)
+      // soft update paper count
       setPapers((ps) =>
         ps
           .map((p) =>
@@ -92,11 +77,13 @@ export default function AdminTestManager() {
     }
   }
 
-  // NEW: delete an entire paper
+  // ✅ Delete entire paper
   async function deletePaper(paper) {
     if (!paper) return;
     const ownerKey = localStorage.getItem("ownerKey") || "";
-    const yes = confirm(`Delete ALL tests under "${paper}"? This cannot be undone.`);
+    const yes = confirm(
+      `⚠️ Delete ALL tests under "${paper}"? This cannot be undone.`
+    );
     if (!yes) return;
 
     try {
@@ -105,11 +92,11 @@ export default function AdminTestManager() {
         { method: "DELETE", headers: { "X-Owner-Key": ownerKey } }
       );
       const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data?.success) throw new Error(data?.message || "Delete failed");
+      if (!res.ok || !data?.success)
+        throw new Error(data?.message || "Delete failed");
 
-      // remove those tests locally
+      // remove tests and update dropdown
       setRows((r) => r.filter((t) => t.paper !== paper));
-      // drop paper from dropdown
       setPapers((ps) => ps.filter((p) => p.paper !== paper));
       setPaperSel("");
 
@@ -128,14 +115,19 @@ export default function AdminTestManager() {
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-8">
+      {/* Header */}
       <div className="flex flex-col gap-3 sm:flex-row sm:items-end sm:justify-between mb-6">
         <div>
-          <h1 className="text-2xl font-bold text-[#0b1220]">🗂 Manage Tests (Admin)</h1>
-          <p className="text-gray-600 text-sm">Filter, open, or delete tests and papers.</p>
+          <h1 className="text-2xl font-bold text-[#0b1220]">
+            🗂 Manage Tests (Admin)
+          </h1>
+          <p className="text-gray-600 text-sm">
+            Filter, open, or delete tests and papers.
+          </p>
         </div>
 
+        {/* Toolbar */}
         <div className="flex flex-col sm:flex-row gap-2 sm:items-center">
-          {/* NEW: paper filter */}
           <select
             value={paperSel}
             onChange={(e) => setPaperSel(e.target.value)}
@@ -150,7 +142,6 @@ export default function AdminTestManager() {
             ))}
           </select>
 
-          {/* delete paper button */}
           {paperSel && (
             <button
               onClick={() => deletePaper(paperSel)}
@@ -161,7 +152,7 @@ export default function AdminTestManager() {
             </button>
           )}
 
-          {/* search + import */}
+          {/* Search + Import */}
           <div className="flex gap-2">
             <input
               value={q}
@@ -185,6 +176,7 @@ export default function AdminTestManager() {
         </div>
       )}
 
+      {/* Table */}
       {!filtered.length ? (
         <div className="text-gray-600">No tests found.</div>
       ) : (
@@ -195,20 +187,24 @@ export default function AdminTestManager() {
                 <th className="px-3 py-2">Paper</th>
                 <th className="px-3 py-2">Title</th>
                 <th className="px-3 py-2">Code</th>
-                <th className="px-3 py-2">Questions</th>
-                <th className="px-3 py-2">Duration</th>
-                <th className="px-3 py-2">Actions</th>
+                <th className="px-3 py-2 text-center">Questions</th>
+                <th className="px-3 py-2 text-center">Duration</th>
+                <th className="px-3 py-2 text-center">Actions</th>
               </tr>
             </thead>
             <tbody>
               {filtered.map((t) => (
-                <tr key={t.code} className="border-t">
+                <tr key={t.code} className="border-t hover:bg-gray-50">
                   <td className="px-3 py-2">{t.paper}</td>
                   <td className="px-3 py-2">{t.title}</td>
                   <td className="px-3 py-2 font-mono">{t.code}</td>
-                  <td className="px-3 py-2">{t.totalQuestions}</td>
-                  <td className="px-3 py-2">{t.durationMin} min</td>
-                  <td className="px-3 py-2 flex flex-wrap gap-2">
+                  <td className="px-3 py-2 text-center">
+                    {t.totalQuestions ?? "—"}
+                  </td>
+                  <td className="px-3 py-2 text-center">
+                    {t.durationMin ?? "—"} min
+                  </td>
+                  <td className="px-3 py-2 flex flex-wrap gap-2 justify-center">
                     <Link
                       to={`/tests/${t.code}`}
                       className="px-3 py-1.5 rounded-lg border bg-white hover:bg-gray-50"
@@ -236,7 +232,8 @@ export default function AdminTestManager() {
       )}
 
       <div className="text-xs text-gray-500 mt-4">
-        Tip: Keep your <span className="font-mono">ownerKey</span> in localStorage to authorize admin actions.
+        Tip: Keep your <span className="font-mono">ownerKey</span> in
+        localStorage to authorize admin actions.
       </div>
     </div>
   );
