@@ -1,83 +1,196 @@
-import { useEffect, useMemo, useRef, useState } from "react";
-import { getJSON, postJSON } from "../../utils/api";
+import { useEffect, useState, useRef } from "react";
+import { useNavigate } from "react-router-dom";
+import { getJSON, postJSON } from "@/utils/api";
+import { Loader2 } from "lucide-react";
+import toast from "react-hot-toast";
 
-export default function TestPlayer({ code, userEmail="anon" }) {
-  const [t, setT] = useState(null);
-  const [i, setI] = useState(0);                 // question index
-  const [answers, setAnswers] = useState({});     // {"1": 0, ...}
+export default function TestPlayer({ code }) {
+  const [questions, setQuestions] = useState([]);
+  const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+  const [current, setCurrent] = useState(0);
+  const [answers, setAnswers] = useState({});
+  const [duration, setDuration] = useState(0);
+  const [timeLeft, setTimeLeft] = useState(0);
   const [submitting, setSubmitting] = useState(false);
+  const navigate = useNavigate();
+  const timerRef = useRef(null);
 
-  const endAt = useRef(null);
-  const [now, setNow] = useState(Date.now());
-  useEffect(() => { const id = setInterval(() => setNow(Date.now()), 1000); return () => clearInterval(id); }, []);
-
+  /* ----------------- Fetch questions ----------------- */
   useEffect(() => {
-    getJSON(`/testseries/test/${code}`).then((data) => {
-      setT(data);
-      endAt.current = Date.now() + data.durationMin * 60 * 1000;
-    });
+    if (!code) return;
+    getJSON(`/api/testseries/${code}/play`)
+      .then((res) => {
+        if (res.success && Array.isArray(res.questions)) {
+          setQuestions(res.questions);
+          //  default duration = 1 min per 2 questions, fallback 30 mins
+          const est = Math.ceil(res.questions.length / 2) || 30;
+          setDuration(est);
+          setTimeLeft(est * 60);
+        } else setError(res.message || "Failed to load questions");
+      })
+      .catch((err) => setError(err.message))
+      .finally(() => setLoading(false));
   }, [code]);
 
-  const timeLeft = Math.max(0, Math.floor((endAt.current ?? Date.now()) - now)/1000|0);
-  useEffect(() => { if (t && timeLeft === 0) doSubmit(); }, [timeLeft, t]);
+  /* ----------------- Timer countdown ----------------- */
+  useEffect(() => {
+    if (!timeLeft || timeLeft <= 0) return;
+    timerRef.current = setInterval(() => {
+      setTimeLeft((t) => {
+        if (t <= 1) {
+          clearInterval(timerRef.current);
+          handleSubmit(true); // auto submit when timer ends
+          return 0;
+        }
+        return t - 1;
+      });
+    }, 1000);
+    return () => clearInterval(timerRef.current);
+  }, [timeLeft]);
 
-  if (!t) return <div className="p-6">Loading…</div>;
-  const q = t.questions[i];
-  const attempted = Object.keys(answers).length;
-  const total = t.questions.length;
-
-  function sel(optIdx) {
-    setAnswers(a => ({ ...a, [String(q.n)]: optIdx }));
+  /* ----------------- Helpers ----------------- */
+  function handleOptionSelect(qno, opt) {
+    setAnswers((prev) => ({ ...prev, [qno]: opt }));
   }
-  function next() { setI(x => Math.min(x+1, total-1)); }
-  function prev() { setI(x => Math.max(x-1, 0)); }
 
-  async function doSubmit() {
+  function next() {
+    if (current < questions.length - 1) setCurrent(current + 1);
+  }
+
+  function prev() {
+    if (current > 0) setCurrent(current - 1);
+  }
+
+  function formatTime(sec) {
+    const m = Math.floor(sec / 60)
+      .toString()
+      .padStart(2, "0");
+    const s = (sec % 60).toString().padStart(2, "0");
+    return `${m}:${s}`;
+  }
+
+  /* ----------------- Submit ----------------- */
+  async function handleSubmit(auto = false) {
     if (submitting) return;
     setSubmitting(true);
+    clearInterval(timerRef.current);
+
     try {
-      const r = await postJSON(`/testseries/attempt/${code}/submit`, {
-        user: userEmail, answers, timeTakenSec: t.durationMin*60 - timeLeft
+      const res = await postJSON(`/api/testseries/${code}/submit`, {
+        answers,
+        user: { email: "guest@lawnetwork.com" },
+        timeTakenSec: duration * 60 - timeLeft,
       });
-      window.location.href = `/tests/result/${r.resultId}`;
-    } catch (e) {
-      alert("Submit failed");
+
+      if (res.success) {
+        toast.success(auto ? "Time up! Auto-submitted." : "Test submitted!");
+        navigate(`/tests/result/${res.resultId}`);
+      } else throw new Error(res.message || "Submission failed");
+    } catch (err) {
+      console.error("Submit error:", err);
+      toast.error(err.message);
+    } finally {
       setSubmitting(false);
     }
   }
 
+  /* ----------------- Rendering ----------------- */
+  if (loading)
+    return (
+      <div className="flex items-center justify-center h-[70vh] text-gray-600">
+        <Loader2 className="animate-spin w-8 h-8 mr-2" />
+        Loading test...
+      </div>
+    );
+
+  if (error)
+    return (
+      <div className="text-center py-20 text-red-600 font-semibold">
+        ⚠️ {error}
+      </div>
+    );
+
+  if (!questions.length)
+    return (
+      <div className="text-center py-20 text-gray-600">
+        No questions found.
+      </div>
+    );
+
+  const q = questions[current];
+
   return (
-    <div className="max-w-3xl mx-auto p-4">
-      {/* top bar */}
-      <div className="flex items-center justify-between mb-4">
-        <div className="text-sm">Attempted: <b>{attempted}/{total}</b></div>
-        <div className="text-sm">Time Left: <b>{fmt(timeLeft)}</b></div>
-        <button className="px-4 py-2 rounded-lg border" onClick={doSubmit} disabled={submitting}>End Test</button>
+    <div className="max-w-5xl mx-auto px-4 py-8">
+      {/* Header with timer */}
+      <div className="flex items-center justify-between mb-6">
+        <h1 className="text-2xl font-bold text-[#0b1220]">
+          🧾 Question {current + 1} / {questions.length}
+        </h1>
+        <div
+          className={`px-4 py-2 rounded-lg font-semibold ${
+            timeLeft < 60 ? "bg-red-100 text-red-600" : "bg-indigo-100 text-indigo-700"
+          }`}
+        >
+          ⏱ {formatTime(timeLeft)}
+        </div>
       </div>
 
-      {/* question */}
-      <div className="bg-white rounded-2xl shadow p-5">
-        <div className="text-gray-500 mb-2">Question {q.n}</div>
-        <div className="text-lg font-medium mb-4">{q.q}</div>
+      {/* Question */}
+      <div className="bg-white border border-gray-200 rounded-2xl shadow-sm p-6 mb-8">
+        <p className="font-medium text-lg mb-4">{q.qno}. {q.text}</p>
         <div className="space-y-3">
-          {q.options.map((opt, idx) => {
-            const active = answers[String(q.n)] === idx;
+          {q.options.map((opt, i) => {
+            const letter = String.fromCharCode(65 + i); // A,B,C,D
+            const selected = answers[q.qno] === letter;
             return (
-              <button key={idx}
-                onClick={() => sel(idx)}
-                className={`w-full text-left p-4 rounded-xl border ${active ? "bg-blue-50 border-blue-600" : "hover:bg-gray-50"}`}>
-                <span className="mr-2 font-semibold">{String.fromCharCode(65+idx)}.</span> {opt}
-              </button>
+              <label
+                key={i}
+                className={`block border rounded-lg p-3 cursor-pointer transition ${
+                  selected
+                    ? "bg-indigo-600 text-white border-indigo-700"
+                    : "bg-gray-50 hover:bg-gray-100 border-gray-200"
+                }`}
+                onClick={() => handleOptionSelect(q.qno, letter)}
+              >
+                ({letter}) {opt.replace(/^\([a-dA-D]\)\s*/, "")}
+              </label>
             );
           })}
         </div>
+      </div>
 
-        <div className="flex items-center justify-between mt-6">
-          <button onClick={prev} className="px-4 py-2 rounded-lg border">← Prev</button>
-          <button onClick={next} className="px-4 py-2 rounded-lg border">Next →</button>
-        </div>
+      {/* Navigation buttons */}
+      <div className="flex justify-between items-center">
+        <button
+          onClick={prev}
+          disabled={current === 0}
+          className="px-5 py-2 rounded-lg bg-gray-200 hover:bg-gray-300 disabled:opacity-50"
+        >
+          ← Prev
+        </button>
+
+        {current < questions.length - 1 ? (
+          <button
+            onClick={next}
+            className="px-5 py-2 rounded-lg bg-indigo-600 text-white hover:bg-indigo-700"
+          >
+            Next →
+          </button>
+        ) : (
+          <button
+            onClick={() => handleSubmit(false)}
+            disabled={submitting}
+            className={`px-5 py-2 rounded-lg font-semibold ${
+              submitting
+                ? "bg-gray-400"
+                : "bg-green-600 text-white hover:bg-green-700"
+            }`}
+          >
+            {submitting ? "Submitting..." : "Submit Test"}
+          </button>
+        )}
       </div>
     </div>
   );
 }
-function fmt(s){const h=(s/3600)|0,m=((s%3600)/60)|0,ss=s%60|0;return `${h.toString().padStart(2,"0")}:${m.toString().padStart(2,"0")}:${ss.toString().padStart(2,"0")}`;}
