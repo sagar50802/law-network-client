@@ -1,9 +1,9 @@
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { getJSON, absUrl } from "../../utils/api";
+import { getJSON } from "../../utils/api";
 
 export default function AdminTestManager() {
-  const [tab, setTab] = useState("tests"); // "tests" | "results"
+  const [tab, setTab] = useState("tests");
   const [rows, setRows] = useState([]);
   const [papers, setPapers] = useState([]);
   const [paperSel, setPaperSel] = useState("");
@@ -12,7 +12,6 @@ export default function AdminTestManager() {
   const [msg, setMsg] = useState("");
   const [results, setResults] = useState([]);
 
-  // ✅ Hard-fixed backend base (no env / api.js / server.js change)
   const FIXED_API = "https://lawnetwork-api.onrender.com/api";
 
   /* ---------- Load tests + papers ---------- */
@@ -78,7 +77,7 @@ export default function AdminTestManager() {
     const ownerKey = localStorage.getItem("ownerKey") || "";
     if (!confirm(`Delete test "${code}"? This cannot be undone.`)) return;
     try {
-      const res = await fetch(absUrl(`/api/testseries/${code}`), {
+      const res = await fetch(`${FIXED_API}/testseries/${encodeURIComponent(code)}`, {
         method: "DELETE",
         headers: { "X-Owner-Key": ownerKey },
       });
@@ -98,7 +97,7 @@ export default function AdminTestManager() {
     if (!confirm(`⚠️ Delete ALL tests under "${paper}"?`)) return;
     try {
       const res = await fetch(
-        absUrl(`/api/testseries/paper/${encodeURIComponent(paper)}`),
+        `${FIXED_API}/testseries/paper/${encodeURIComponent(paper)}`,
         { method: "DELETE", headers: { "X-Owner-Key": ownerKey } }
       );
       const data = await res.json();
@@ -139,7 +138,6 @@ export default function AdminTestManager() {
         ))}
       </div>
 
-      {/* Flash Message */}
       {msg && (
         <div className="mb-4 text-sm px-3 py-2 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200">
           {msg}
