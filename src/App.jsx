@@ -45,6 +45,9 @@ import TestPlayer from "./pages/testseries/TestPlayer.jsx";
 import ResultScreen from "./pages/testseries/ResultScreen.jsx";
 import AdminTestImporter from "./pages/testseries/AdminTestImporter.jsx";
 
+// ✅ NEW: Admin results page (added per your request)
+import AdminTestResults from "./pages/testseries/AdminTestResults.jsx";
+
 // ✅ Admin-only component wrapper (already exists globally)
 import IfOwnerOnly from "./components/common/IfOwnerOnly.jsx";
 
@@ -188,6 +191,16 @@ export default function App() {
               element={
                 <IfOwnerOnly>
                   <AdminTestImporter />
+                </IfOwnerOnly>
+              }
+            />
+
+            {/* ✅ NEW: admin-only results page */}
+            <Route
+              path="/owner/tests/results"
+              element={
+                <IfOwnerOnly>
+                  <AdminTestResults />
                 </IfOwnerOnly>
               }
             />
