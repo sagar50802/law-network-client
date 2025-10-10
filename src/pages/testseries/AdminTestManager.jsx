@@ -12,13 +12,16 @@ export default function AdminTestManager() {
   const [msg, setMsg] = useState("");
   const [results, setResults] = useState([]);
 
+  // ✅ Hard-fixed backend base (no env / api.js / server.js change)
+  const FIXED_API = "https://lawnetwork-api.onrender.com/api";
+
   /* ---------- Load tests + papers ---------- */
   useEffect(() => {
     (async () => {
       try {
         const [pRes, tRes] = await Promise.all([
-          getJSON("/api/testseries/papers"),
-          getJSON("/api/testseries/tests"),
+          getJSON(FIXED_API + "/testseries/papers"),
+          getJSON(FIXED_API + "/testseries/tests"),
         ]);
         setPapers(pRes?.papers || []);
         setRows(tRes?.tests || []);
@@ -35,7 +38,7 @@ export default function AdminTestManager() {
     if (tab !== "results") return;
     (async () => {
       try {
-        const r = await getJSON("/api/testseries/results");
+        const r = await getJSON(FIXED_API + "/testseries/results");
         setResults(r?.results || []);
       } catch {
         setResults([]);
