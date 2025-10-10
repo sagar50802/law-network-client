@@ -305,24 +305,78 @@ export default function PrepAccessOverlay({ examId, email }) {
     setPanelHidden(true);
   }
 
-  // -------- NEW: derive deep links from server overlay.payment -----
-  const pay = state?.overlay?.payment || state?.exam?.overlay?.payment || {};
-  const dlCourseName = pay.courseName || state?.exam?.name || examId;
-  const dlAmount = Number(pay.priceINR || state?.exam?.price || 0);
+  // ------- robust deep-link derivation (overlay.payment -> exam.payment -> overlayUI) -------
+  function pick(obj, path, def = "") {
+    try { return path.split(".").reduce((a, k) => a?.[k], obj) ?? def; } catch { return def; }
+  }
+  const overlayPay = pick(state, "overlay.payment", null) || pick(state, "exam.overlay.payment", null);
+  const examPay     = pick(state, "exam.payment", null);
+  const overlayUI   = pick(state, "exam.overlayUI", null);
 
+  const pay = {
+    courseName: overlayPay?.courseName || state?.exam?.name || examId,
+    priceINR: Number(overlayPay?.priceINR ?? state?.exam?.price ?? overlayUI?.priceINR ?? 0),
+    upiId: overlayPay?.upiId || examPay?.upiId || overlayUI?.upiId || "",
+    upiName: overlayPay?.upiName || "",
+    whatsappNumber: (() => {
+      const a = overlayPay?.whatsappNumber || examPay?.waPhone || "";
+      if (a) return a;
+      const link = overlayUI?.whatsappLink || "";
+      const m = link?.match?.(/wa\.me\/(\+?\d+)/i);
+      return m ? m[1] : "";
+    })(),
+    whatsappText: overlayPay?.whatsappText || examPay?.waText || "",
+  };
+
+  const amount = Number(pay.priceINR || 0);
   const upiLink =
     pay.upiId
       ? `upi://pay?pa=${encodeURIComponent(pay.upiId)}`
         + (pay.upiName ? `&pn=${encodeURIComponent(pay.upiName)}` : "")
-        + (dlAmount > 0 ? `&am=${encodeURIComponent(dlAmount)}` : "")
+        + (amount > 0 ? `&am=${encodeURIComponent(amount)}` : "")
         + `&cu=INR`
-        + `&tn=${encodeURIComponent(`Payment for ${dlCourseName}`)}`
+        + `&tn=${encodeURIComponent(`Payment for ${pay.courseName}`)}`
       : "";
 
-  const waNum = (pay.whatsappNumber || "").replace(/[^\d+]/g, "");
-  const waText = pay.whatsappText || `Hello, I paid for "${dlCourseName}" (₹${dlAmount}).`;
-  const waLink = waNum ? `https://wa.me/${waNum.replace(/^\+/, "")}?text=${encodeURIComponent(waText)}` : "";
-  // ----------------------------------------------------------------
+  const waNumRaw = (pay.whatsappNumber || "").replace(/[^\d+]/g, "");
+  const waNum    = waNumRaw.replace(/^\+/, "");
+  const waText   = pay.whatsappText || `Hello, I paid for "${pay.courseName}" (₹${amount}).`;
+  const waLink   = waNum ? `https://wa.me/${waNum}?text=${encodeURIComponent(waText)}` : "";
+  // ------------------------------------------------------------------------------------------
+
+  // -------- 3-minute return timer after WA click ----------
+  const [waStartTs, setWaStartTs] = useState(() => {
+    const t = localStorage.getItem("overlayWAStartTs");
+    return t ? Number(t) : 0;
+  });
+  const [waSecondsLeft, setWaSecondsLeft] = useState(0);
+
+  useEffect(() => {
+    if (!waStartTs) return;
+    const DURATION = 180; // 3 min
+    const tick = () => {
+      const elapsed = Math.floor((Date.now() - waStartTs) / 1000);
+      const left = Math.max(0, DURATION - elapsed);
+      setWaSecondsLeft(left);
+      if (left <= 0) {
+        setPanelHidden(false);
+        try { window.focus(); } catch {}
+      }
+    };
+    tick();
+    const id = setInterval(tick, 1000);
+    return () => clearInterval(id);
+  }, [waStartTs]);
+
+  const handleWaClick = () => {
+    if (!waLink) return;
+    setWaClicked(true);
+    const now = Date.now();
+    setWaStartTs(now);
+    localStorage.setItem("overlayWAStartTs", String(now));
+    window.open(waLink, "_blank", "noopener,noreferrer");
+  };
+  // --------------------------------------------------------
 
   // ----------------------- render -------------------------------
   const mustVeil =
@@ -366,7 +420,7 @@ export default function PrepAccessOverlay({ examId, email }) {
                   <div className="text-xs text-gray-600">Price: ₹{state.exam?.price ?? 0}</div>
                 </div>
 
-                {/* NEW: Deep-link buttons from overlay.payment */}
+                {/* NEW: Deep-link buttons (prefer overlay.payment -> fallbacks) */}
                 {(upiLink || waLink) && (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
                     {upiLink && (
@@ -382,12 +436,19 @@ export default function PrepAccessOverlay({ examId, email }) {
                         href={waLink}
                         target="_blank"
                         rel="noreferrer"
-                        onClick={() => setWaClicked(true)}
+                        onClick={(e) => { e.preventDefault(); handleWaClick(); }}
                         className="w-full py-2 rounded border bg-white text-center"
                       >
                         Send Proof on WhatsApp
                       </a>
                     )}
+                  </div>
+                )}
+
+                {/* Optional: small countdown hint after WA click */}
+                {waStartTs > 0 && waSecondsLeft > 0 && (
+                  <div className="text-[12px] text-gray-600 mb-2">
+                    Returning in ~{waSecondsLeft}s… switch back after sending the screenshot.
                   </div>
                 )}
 
