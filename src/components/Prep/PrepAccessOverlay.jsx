@@ -1,4 +1,4 @@
-// client/src/pages/prep/PrepAccessOverlay.jsx 
+// src/components/Prep/PrepAccessOverlay.jsx
 import { useEffect, useMemo, useState } from "react";
 import { getJSON, postJSON } from "../../utils/api";
 
@@ -26,6 +26,7 @@ export default function PrepAccessOverlay({ examId, email }) {
     mode: localStorage.getItem(ks.wait) ? "waiting" : "", // "purchase" | "restart" | "waiting"
     exam: {},
     access: {},
+    overlay: {},            // <— keep overlay in state so overlay.payment can be used
     waiting: !!localStorage.getItem(ks.wait),
   });
 
@@ -33,7 +34,7 @@ export default function PrepAccessOverlay({ examId, email }) {
   const [submitting, setSubmitting] = useState(false);
   const [panelHidden, setPanelHidden] = useState(false);
 
-  // --- add state near other useState ---
+  // Minimal user inputs
   const [emailField, setEmailField] = useState(localStorage.getItem("userEmail") || (email || ""));
   const [nameField, setNameField] = useState("");
   const [phoneField, setPhoneField] = useState("");
@@ -42,55 +43,6 @@ export default function PrepAccessOverlay({ examId, email }) {
   // ----------------------- utilities -------------------------------
   const price = Number(state.exam?.price || 0);
   const courseName = state.exam?.name || String(examId || "").toUpperCase();
-
-  const upiId = state.exam?.payment?.upiId || "";         // e.g. "merchant@upi"
-  const waPhone = state.exam?.payment?.waPhone || "";     // e.g. "+9198xxxxxxx" or "98xxxxxxx"
-  const waTextTemplate =
-    state.exam?.payment?.waText ||
-    `Hello, I paid for "${courseName}" (₹${price}). Attaching proof.`; // default prefill
-
-  const canShowUPI = Boolean(upiId && price > 0);
-  const canShowWA = Boolean(waPhone);
-
-  function formatUPILink({ pa, pn, amt, tn }) {
-    // https://www.npci.org.in/what-we-do/upi/product-overview
-    const params = new URLSearchParams();
-    params.set("pa", pa);
-    if (pn) params.set("pn", pn);
-    if (amt) params.set("am", String(amt));
-    params.set("cu", "INR");
-    if (tn) params.set("tn", tn);
-    return `upi://pay?${params.toString()}`;
-  }
-
-  function formatWhatsAppLink({ phone, text }) {
-    // accepts "+91xxxxx" or "91xxxxx" or plain number
-    const digits = String(phone).replace(/[^\d]/g, "");
-    const withCC = digits.startsWith("91") ? digits : `91${digits}`;
-    const msg = encodeURIComponent(text || "");
-    return `https://wa.me/${withCC}?text=${msg}`;
-  }
-
-  function openUPI() {
-    if (!canShowUPI) return;
-    const link = formatUPILink({
-      pa: upiId,
-      pn: courseName,
-      amt: price > 0 ? price.toFixed(2) : undefined,
-      tn: `Payment for ${courseName}`,
-    });
-    window.location.href = link; // open UPI app
-  }
-
-  function openWhatsApp() {
-    if (!canShowWA) return;
-    const text =
-      waTextTemplate ||
-      `Hello, I paid for "${courseName}" (₹${price}). Attaching proof.`;
-    const link = formatWhatsAppLink({ phone: waPhone, text });
-    setWaClicked(true);
-    window.open(link, "_blank", "noopener,noreferrer");
-  }
 
   // ----------------------- core fetch ------------------------------
   async function fetchStatus() {
@@ -198,6 +150,7 @@ export default function PrepAccessOverlay({ examId, email }) {
         mode: mode || (hasWaitingGate ? "waiting" : ""),
         exam: exam || {},
         access: access || {},
+        overlay: overlay || {},     // <— keep the overlay data
         waiting: isWaitingNow || hasWaitingGate,
       });
 
@@ -237,16 +190,14 @@ export default function PrepAccessOverlay({ examId, email }) {
   }
 
   // ----------------------- actions -------------------------------
-  // --- your existing action, but hardened & with required email ---
   async function submitRequest() {
     if (!state.mode || state.mode === "waiting") return;
 
     const emailVal = (emailField || "").trim();
     if (!emailVal) { alert("Please enter your email."); return; }
 
-    // If you want BOTH screenshot and WA mandatory, enforce here instead.
+    // Either screenshot OR WA click is enough; change to `const hasProof = true;` if optional
     const hasProof = !!file || waClicked;
-    // If you want to allow submit without proof, set `const hasProof = true;`
     if (!hasProof) {
       // eslint-disable-next-line no-restricted-globals
       if (!confirm("No proof attached. Submit request anyway?")) return;
