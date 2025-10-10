@@ -1,5 +1,5 @@
 // client/src/App.jsx
-import { BrowserRouter as Router, Routes, Route, useLocation } from "react-router-dom";
+import { BrowserRouter as Router, Routes, Route, useLocation, useParams } from "react-router-dom";
 import { useEffect } from "react";
 
 import Navbar from "./components/layout/Navbar";
@@ -37,6 +37,16 @@ import PrepOverlayEditor from "./pages/prep/PrepOverlayEditor.jsx";
 
 // ✅ Prep access control admin page
 import PrepAccessAdmin from "./pages/admin/PrepAccessAdmin.jsx";
+
+// ✅ NEW: Test Series pages (Step 4 integration)
+import TestDashboard from "./pages/testseries/TestDashboard.jsx";
+import TestIntro from "./pages/testseries/TestIntro.jsx";
+import TestPlayer from "./pages/testseries/TestPlayer.jsx";
+import ResultScreen from "./pages/testseries/ResultScreen.jsx";
+import AdminTestImporter from "./pages/testseries/AdminTestImporter.jsx";
+
+// ✅ Admin-only component wrapper (already exists globally)
+import IfOwnerOnly from "./components/common/IfOwnerOnly.jsx";
 
 /* 🔤 Global UI styles (one-time import) */
 import "./styles/ui.css";
@@ -82,6 +92,16 @@ function ScrollToHash() {
   return null;
 }
 
+/* ---------- Test route helpers ---------- */
+function RouteWithCode({ Comp }) {
+  const { code } = useParams();
+  return <Comp code={code} />;
+}
+function RouteWithResultId({ Comp }) {
+  const { id } = useParams();
+  return <Comp id={id} />;
+}
+
 /* ------------------------------- App ------------------------------- */
 
 export default function App() {
@@ -115,7 +135,7 @@ export default function App() {
             {/* ✅ PDF Demo route */}
             <Route path="/pdfdemo" element={<PdfDemo />} />
 
-            {/* ✅ Exam Preparation routes (isolated) */}
+            {/* ✅ Exam Preparation routes */}
             <Route path="/prep" element={<PrepList />} />
             <Route path="/prep/:examId" element={<PrepWizard />} />
 
@@ -128,9 +148,7 @@ export default function App() {
               }
             />
 
-            {/* ✅ Admin overlay editor routes
-                - New canonical path: /admin/prep-overlay
-                - Keep old path /admin/prep/overlay for backward compatibility */}
+            {/* ✅ Admin overlay editor */}
             <Route
               path="/admin/prep-overlay"
               element={
@@ -155,6 +173,22 @@ export default function App() {
                 <AdminRoute>
                   <PrepAccessAdmin />
                 </AdminRoute>
+              }
+            />
+
+            {/* ✅ Test Series Routes (new feature, non-conflicting) */}
+            <Route path="/tests" element={<TestDashboard />} />
+            <Route path="/tests/:code" element={<RouteWithCode Comp={TestIntro} />} />
+            <Route path="/tests/:code/play" element={<RouteWithCode Comp={TestPlayer} />} />
+            <Route path="/tests/result/:id" element={<RouteWithResultId Comp={ResultScreen} />} />
+
+            {/* Admin-only import page for tests */}
+            <Route
+              path="/owner/tests/import"
+              element={
+                <IfOwnerOnly>
+                  <AdminTestImporter />
+                </IfOwnerOnly>
               }
             />
 
