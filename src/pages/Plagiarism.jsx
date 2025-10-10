@@ -1,5 +1,4 @@
 import { useEffect, useState } from "react";
-import { motion } from "framer-motion";
 import { Tabs, TabsList, TabsTrigger, TabsContent } from "@/components/ui/tabs";
 import { Card, CardContent, CardHeader, CardTitle } from "@/components/ui/card";
 import { Button } from "@/components/ui/button";
@@ -8,7 +7,7 @@ import { getJSON } from "@/utils/api"; // ✅ use your existing helper for API r
 
 /**
  * LawNetwork Plagiarism Checker (Rich UI)
- * Now with live history + download report support.
+ * Safe build version (removed framer-motion)
  */
 
 export default function Plagiarism() {
@@ -53,13 +52,10 @@ export default function Plagiarism() {
   return (
     <div className="min-h-screen bg-gradient-to-br from-indigo-50 to-purple-100 p-6">
       <div className="max-w-6xl mx-auto">
-        <motion.h1
-          initial={{ opacity: 0, y: -20 }}
-          animate={{ opacity: 1, y: 0 }}
-          className="text-3xl md:text-4xl font-bold text-center mb-8 text-purple-700"
-        >
+        {/* Title (static, no animation now) */}
+        <h1 className="text-3xl md:text-4xl font-bold text-center mb-8 text-purple-700">
           🔍 Plagiarism & Grammar Checker
-        </motion.h1>
+        </h1>
 
         <Tabs defaultValue="checker" className="w-full">
           <TabsList className="grid grid-cols-2 bg-white shadow-md rounded-lg mb-6">
@@ -195,9 +191,7 @@ export default function Plagiarism() {
                             <Button
                               variant="outline"
                               size="sm"
-                              onClick={() =>
-                                alert("Report viewer coming soon.")
-                              }
+                              onClick={() => alert("Report viewer coming soon.")}
                             >
                               View
                             </Button>
