@@ -1,5 +1,7 @@
+// vite.config.js
 import { defineConfig } from 'vite';
 import react from '@vitejs/plugin-react';
+import path from 'path'; // ✅ added safely for alias resolution
 
 export default defineConfig({
   base: '/', // ensures relative paths in production
@@ -24,5 +26,11 @@ export default defineConfig({
   build: {
     outDir: "dist",
     copyPublicDir: true, // ✅ force Vite to copy everything from /public
+  },
+  // ✅ add this safe alias — nothing else changed
+  resolve: {
+    alias: {
+      "@": path.resolve(__dirname, "src"),
+    },
   },
 });
