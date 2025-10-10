@@ -1,6 +1,6 @@
 import { useEffect, useState, useRef } from "react";
 import { useNavigate } from "react-router-dom";
-import { getJSON, postJSON } from "@/utils/api";
+import { getJSON, postJSON } from "../../utils/api";
 import { Loader2 } from "lucide-react";
 import toast from "react-hot-toast";
 
