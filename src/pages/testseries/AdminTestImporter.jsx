@@ -39,7 +39,11 @@ export default function AdminTestImporter() {
 
       toast.success("✅ Test imported successfully!");
       setPreview(data.test);
-      setPaper(""); setTitle(""); setCode(""); setRawText(""); setFile(null);
+      setPaper("");
+      setTitle("");
+      setCode("");
+      setRawText("");
+      setFile(null);
     } catch (err) {
       console.error("Import error:", err);
       toast.error(err.message);
@@ -54,20 +58,40 @@ export default function AdminTestImporter() {
         🧩 Test Series Importer (Admin)
       </h1>
 
-      <form onSubmit={handleSubmit} className="bg-white rounded-2xl shadow-md p-6 space-y-6 border border-gray-200">
+      <form
+        onSubmit={handleSubmit}
+        className="bg-white rounded-2xl shadow-md p-6 space-y-6 border border-gray-200"
+      >
         <div>
           <label className="block font-semibold mb-1">Paper Name</label>
-          <input className="w-full p-3 border rounded-lg" required value={paper} onChange={e=>setPaper(e.target.value)} placeholder="e.g. Paper 1"/>
+          <input
+            className="w-full p-3 border rounded-lg"
+            required
+            value={paper}
+            onChange={(e) => setPaper(e.target.value)}
+            placeholder="e.g. Paper 1"
+          />
         </div>
 
         <div>
           <label className="block font-semibold mb-1">Test Title</label>
-          <input className="w-full p-3 border rounded-lg" required value={title} onChange={e=>setTitle(e.target.value)} placeholder="e.g. Mock Test 1"/>
+          <input
+            className="w-full p-3 border rounded-lg"
+            required
+            value={title}
+            onChange={(e) => setTitle(e.target.value)}
+            placeholder="e.g. Mock Test 1"
+          />
         </div>
 
         <div>
           <label className="block font-semibold mb-1">Test Code (optional)</label>
-          <input className="w-full p-3 border rounded-lg" value={code} onChange={e=>setCode(e.target.value)} placeholder="e.g. LAWMOCK101"/>
+          <input
+            className="w-full p-3 border rounded-lg"
+            value={code}
+            onChange={(e) => setCode(e.target.value)}
+            placeholder="e.g. LAWMOCK101"
+          />
         </div>
 
         {/* Paste text (optional) */}
@@ -107,12 +131,21 @@ Ans: (a)`}
             className="block w-full text-sm border rounded-lg p-2 bg-gray-50"
           />
           <div className="text-xs text-gray-500 mt-1">
-            .json may contain {{`{ questions: [{ qno, text, options, correct }] }`}}; .docx is auto-converted to text.
+            <span>.json may contain </span>
+            <code className="px-1 py-0.5 rounded bg-gray-100">
+              {`{ "questions": [{ "qno": 1, "text": "...", "options": ["(a) ...","(b) ...","(c) ...","(d) ..."], "correct": "B" }] }`}
+            </code>
+            <span>; .docx is auto-converted to text.</span>
           </div>
         </div>
 
-        <button type="submit" disabled={loading}
-          className={`w-full py-3 rounded-lg text-white font-semibold ${loading ? "bg-gray-400" : "bg-indigo-600 hover:bg-indigo-700"}`}>
+        <button
+          type="submit"
+          disabled={loading}
+          className={`w-full py-3 rounded-lg text-white font-semibold transition ${
+            loading ? "bg-gray-400" : "bg-indigo-600 hover:bg-indigo-700"
+          }`}
+        >
           {loading ? "Importing..." : "📤 Import Test"}
         </button>
       </form>
@@ -124,7 +157,9 @@ Ans: (a)`}
           <p><strong>Title:</strong> {preview.title}</p>
           <p><strong>Code:</strong> {preview.code}</p>
           <p><strong>Total Questions:</strong> {preview.totalQuestions}</p>
-          <p className="mt-3 text-gray-600 text-sm">Created at {new Date(preview.createdAt).toLocaleString()}</p>
+          <p className="mt-3 text-gray-600 text-sm">
+            Created at {new Date(preview.createdAt).toLocaleString()}
+          </p>
         </div>
       )}
     </div>
