@@ -1,82 +1,76 @@
+// client/src/pages/testseries/TestIntro.jsx
 import { useEffect, useState } from "react";
-import { useNavigate } from "react-router-dom";
+import { useParams, Link } from "react-router-dom";
 import { getJSON } from "../../utils/api";
-import { Loader2 } from "lucide-react";
 
-export default function TestIntro({ code }) {
-  const [test, setTest] = useState(null);
+export default function TestIntro() {
+  const { code } = useParams();
+  const [info, setInfo] = useState(null);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
-  const navigate = useNavigate();
+  const [err, setErr] = useState("");
 
   useEffect(() => {
-    if (!code) return;
-    getJSON(`/api/testseries/${code}`)
-      .then((res) => {
-        if (res.success) setTest(res.test);
-        else setError(res.message || "Failed to load test");
-      })
-      .catch((err) => setError(err.message))
-      .finally(() => setLoading(false));
+    (async () => {
+      try {
+        const r = await getJSON(`/api/testseries/${encodeURIComponent(code)}?_=${Date.now()}`);
+        if (!r?.success) throw new Error(r?.message || "Failed to load test");
+        setInfo(r.test || null);
+      } catch (e) {
+        setErr(e?.message || "Failed to load test");
+      } finally {
+        setLoading(false);
+      }
+    })();
   }, [code]);
 
-  if (loading)
-    return (
-      <div className="flex items-center justify-center h-[70vh] text-gray-600">
-        <Loader2 className="animate-spin w-8 h-8 mr-2" />
-        Loading test details...
-      </div>
-    );
+  if (loading) return <div className="p-6">Loading…</div>;
+  if (err) return <div className="p-6 text-red-600">{err}</div>;
+  if (!info) return <div className="p-6 text-gray-600">Test not found.</div>;
 
-  if (error)
-    return (
-      <div className="text-center py-20 text-red-600 font-semibold">
-        ⚠️ {error}
-      </div>
-    );
-
-  if (!test)
-    return (
-      <div className="text-center py-20 text-gray-600">
-        Test not found or unavailable.
-      </div>
-    );
+  const { title, durationMin, totalQuestions, paper } = info;
 
   return (
-    <div className="max-w-2xl mx-auto px-6 py-10">
-      <div className="bg-white shadow-md rounded-2xl border border-gray-200 p-8">
-        <h1 className="text-3xl font-bold mb-4 text-[#0b1220] text-center">
-          {test.title}
-        </h1>
-
-        <div className="text-center mb-6 text-gray-600">
-          <p className="text-sm">
-            <strong>Paper:</strong> {test.paper}
-          </p>
-          <p className="text-sm">
-            <strong>Total Questions:</strong> {test.totalQuestions}
-          </p>
-          <p className="text-sm">
-            <strong>Duration:</strong> {test.durationMin} minutes
-          </p>
-        </div>
-
-        <div className="bg-gray-50 p-4 rounded-xl border border-gray-100 text-gray-700 leading-relaxed text-sm mb-6">
-          <ul className="list-disc pl-6 space-y-1">
-            <li>Each question carries {test.marks || 1} mark.</li>
-            <li>There may be negative marking for wrong answers.</li>
-            <li>You must finish the test within the allotted time.</li>
-            <li>Do not refresh or close the tab while the test is running.</li>
-          </ul>
-        </div>
-
-        <button
-          onClick={() => navigate(`/tests/${code}/play`)}
-          className="w-full py-3 rounded-lg bg-indigo-600 text-white font-semibold hover:bg-indigo-700 transition"
-        >
-          ▶️ Start Test
-        </button>
+    <div className="max-w-3xl mx-auto px-4 py-10">
+      <h1 className="text-2xl font-bold mb-2">{title}</h1>
+      <div className="text-gray-600 mb-6">
+        Paper: <b>{paper || "—"}</b> • Code: <span className="font-mono">{code}</span>
       </div>
+
+      <div className="grid sm:grid-cols-3 gap-3 mb-8">
+        <Stat label="Duration" value={`${durationMin ?? "—"} min`} />
+        <Stat label="Questions" value={totalQuestions ?? "—"} />
+        <Stat label="Negative Marking" value="As set per question" />
+      </div>
+
+      <div className="rounded-xl border bg-white p-4 mb-6">
+        <h2 className="font-semibold mb-2">Instructions</h2>
+        <ul className="list-disc ml-5 text-sm text-gray-700 space-y-1">
+          <li>Choose the best option for each question.</li>
+          <li>You can navigate between questions freely.</li>
+          <li>Your time will be recorded once you start.</li>
+        </ul>
+      </div>
+
+      <div className="flex gap-3">
+        <Link
+          to={`/tests/${encodeURIComponent(code)}/play`}
+          className="px-4 py-2 rounded bg-indigo-600 text-white"
+        >
+          ▶ Start Test
+        </Link>
+        <Link to="/tests" className="px-4 py-2 rounded border bg-white">
+          ← Back to Tests
+        </Link>
+      </div>
+    </div>
+  );
+}
+
+function Stat({ label, value }) {
+  return (
+    <div className="rounded-lg border bg-white p-4">
+      <div className="text-sm text-gray-500">{label}</div>
+      <div className="text-lg font-semibold">{value}</div>
     </div>
   );
 }
