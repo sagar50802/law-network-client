@@ -1,7 +1,6 @@
 import { useEffect, useState } from "react";
 import { Loader2 } from "lucide-react";
-import { getJSON } from "../../utils/api"; // ← fixed: relative import so Vite can resolve
-
+import { getJSON } from "../../utils/api";
 export default function AdminTestResults() {
   const [results, setResults] = useState([]);
   const [loading, setLoading] = useState(true);
