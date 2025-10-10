@@ -45,13 +45,14 @@ import TestPlayer from "./pages/testseries/TestPlayer.jsx";
 import ResultScreen from "./pages/testseries/ResultScreen.jsx";
 import AdminTestImporter from "./pages/testseries/AdminTestImporter.jsx";
 
-// ✅ NEW: Admin results page (added per your request)
+// ✅ NEW: Admin results + manager pages
 import AdminTestResults from "./pages/testseries/AdminTestResults.jsx";
+import AdminTestManager from "./pages/testseries/AdminTestManager.jsx";
 
-// ✅ Admin-only component wrapper (already exists globally)
+// ✅ Admin-only component wrapper
 import IfOwnerOnly from "./components/common/IfOwnerOnly.jsx";
 
-/* 🔤 Global UI styles (one-time import) */
+/* 🔤 Global UI styles */
 import "./styles/ui.css";
 
 /* -------------------- Local helpers/components -------------------- */
@@ -73,7 +74,6 @@ function NotFound() {
   );
 }
 
-/** Scroll to #hash after route changes (tries a few times to wait for render) */
 function ScrollToHash() {
   const { hash, pathname } = useLocation();
   useEffect(() => {
@@ -95,11 +95,11 @@ function ScrollToHash() {
   return null;
 }
 
-/* ---------- Test route helpers ---------- */
 function RouteWithCode({ Comp }) {
   const { code } = useParams();
   return <Comp code={code} />;
 }
+
 function RouteWithResultId({ Comp }) {
   const { id } = useParams();
   return <Comp id={id} />;
@@ -111,15 +111,12 @@ export default function App() {
   return (
     <Router>
       <div className="bg-gradient-to-br from-[#f8fafc] to-[#e6edf5] text-[#0b1220] min-h-screen font-inter antialiased">
-        {/* Navbar with subtle glass effect */}
         <nav className="bg-white/70 backdrop-blur-md shadow-md sticky top-0 z-50">
           <Navbar />
         </nav>
 
-        {/* 🔎 hash scroller (handles /#consultancy) */}
         <ScrollToHash />
 
-        {/* Page transition wrapper */}
         <div className="animate-fadeIn">
           <Routes>
             <Route path="/" element={<HomePage />} />
@@ -129,16 +126,11 @@ export default function App() {
             <Route path="/podcasts" element={<PodcastsPage />} />
             <Route path="/notebook" element={<NotebookPage />} />
 
-            {/* ✅ Scholar Space */}
             <Route path="/scholar" element={<ScholarPage />} />
-
-            {/* ✅ NEW route */}
             <Route path="/plagiarism" element={<Plagiarism />} />
-
-            {/* ✅ PDF Demo route */}
             <Route path="/pdfdemo" element={<PdfDemo />} />
 
-            {/* ✅ Exam Preparation routes */}
+            {/* ✅ Exam Preparation */}
             <Route path="/prep" element={<PrepList />} />
             <Route path="/prep/:examId" element={<PrepWizard />} />
 
@@ -151,7 +143,6 @@ export default function App() {
               }
             />
 
-            {/* ✅ Admin overlay editor */}
             <Route
               path="/admin/prep-overlay"
               element={
@@ -169,7 +160,6 @@ export default function App() {
               }
             />
 
-            {/* ✅ Prep access admin route */}
             <Route
               path="/admin/prep-access"
               element={
@@ -179,13 +169,13 @@ export default function App() {
               }
             />
 
-            {/* ✅ Test Series Routes (new feature, non-conflicting) */}
+            {/* ✅ Test Series */}
             <Route path="/tests" element={<TestDashboard />} />
             <Route path="/tests/:code" element={<RouteWithCode Comp={TestIntro} />} />
             <Route path="/tests/:code/play" element={<RouteWithCode Comp={TestPlayer} />} />
             <Route path="/tests/result/:id" element={<RouteWithResultId Comp={ResultScreen} />} />
 
-            {/* Admin-only import page for tests */}
+            {/* ✅ Admin Test Importer */}
             <Route
               path="/owner/tests/import"
               element={
@@ -195,7 +185,7 @@ export default function App() {
               }
             />
 
-            {/* ✅ NEW: admin-only results page */}
+            {/* ✅ Admin Results */}
             <Route
               path="/owner/tests/results"
               element={
@@ -205,7 +195,17 @@ export default function App() {
               }
             />
 
-            {/* Admin */}
+            {/* ✅ Admin Test Manager */}
+            <Route
+              path="/owner/tests"
+              element={
+                <IfOwnerOnly>
+                  <AdminTestManager />
+                </IfOwnerOnly>
+              }
+            />
+
+            {/* ✅ Admin core pages */}
             <Route path="/admin/login" element={<AdminLogin />} />
             <Route
               path="/admin/dashboard"
