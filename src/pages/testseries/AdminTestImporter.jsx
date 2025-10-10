@@ -1,5 +1,5 @@
+// client/src/pages/testseries/AdminTestImporter.jsx
 import { useEffect, useState } from "react";
-import { absUrl, getJSON } from "../../utils/api";
 
 export default function AdminTestImporter() {
   const [paper, setPaper] = useState("");
@@ -12,11 +12,23 @@ export default function AdminTestImporter() {
   const [msg, setMsg] = useState({ type: "", text: "" }); // "ok" | "err"
   const [paperList, setPaperList] = useState([]);
 
-  // ✅ Fetch all papers for datalist
+  // ✅ Hard-fixed API base (no env / api.js / server edit)
+  const FIXED_API = "https://lawnetwork-api.onrender.com/api";
+
+  // ✅ Fetch all papers for datalist (absolute URL as requested)
   useEffect(() => {
-    getJSON("/api/testseries/papers")
-      .then((r) => setPaperList(r?.papers || []))
-      .catch(() => {});
+    fetch(`${FIXED_API}/testseries/papers`)
+      .then(async (r) => {
+        try {
+          const data = await r.json();
+          // Support multiple shapes: {papers:[...]}, or [...] directly
+          const arr = Array.isArray(data) ? data : (data?.papers || data?.data || []);
+          setPaperList(Array.isArray(arr) ? arr : []);
+        } catch {
+          setPaperList([]);
+        }
+      })
+      .catch(() => setPaperList([]));
   }, []);
 
   async function handleSubmit(e) {
@@ -41,14 +53,21 @@ export default function AdminTestImporter() {
 
     try {
       const ownerKey = localStorage.getItem("ownerKey") || "";
-      const res = await fetch(absUrl("/api/testseries/import"), {
+      const res = await fetch(`${FIXED_API}/testseries/import`, {
         method: "POST",
         headers: { "X-Owner-Key": ownerKey },
         body: fd,
+        // credentials not required for owner-key header, keep it simple
       });
-      const data = await res.json();
-      if (!res.ok || !data.success)
-        throw new Error(data.message || "Import failed");
+
+      // Safely parse
+      const text = await res.text();
+      let data = null;
+      try { data = JSON.parse(text); } catch {}
+
+      if (!res.ok || !data?.success) {
+        throw new Error(data?.message || `Import failed (${res.status})`);
+      }
 
       setMsg({ type: "ok", text: "✅ Test imported successfully!" });
       setPreview(data.test);
@@ -64,6 +83,26 @@ export default function AdminTestImporter() {
       setLoading(false);
     }
   }
+
+  // Helper to render paper options for various API shapes
+  const renderPaperOption = (p, idx) => {
+    // Shapes supported:
+    // 1) { paper: "UPJS Paper 1", count: 5 }
+    // 2) { paper: "UPJS Paper 1", tests: [...] }
+    // 3) "UPJS Paper 1"
+    const name =
+      typeof p === "string" ? p :
+      p?.paper ?? "";
+    const count =
+      typeof p === "string" ? undefined :
+      (typeof p?.count === "number" ? p.count : (Array.isArray(p?.tests) ? p.tests.length : undefined));
+    const label = count != null ? `${name} (${count})` : name;
+    return (
+      <option key={`${name}-${idx}`} value={name}>
+        {label}
+      </option>
+    );
+  };
 
   return (
     <div className="max-w-3xl mx-auto px-6 py-10">
@@ -100,11 +139,7 @@ export default function AdminTestImporter() {
             className="w-full p-3 border rounded-lg focus:ring-2 focus:ring-indigo-500"
           />
           <datalist id="papers-datalist">
-            {paperList.map((p) => (
-              <option key={p.paper} value={p.paper}>
-                {p.paper} ({p.count})
-              </option>
-            ))}
+            {paperList.map(renderPaperOption)}
           </datalist>
           <p className="text-xs text-gray-500 mt-1">
             Pick an existing paper or type a new name.
