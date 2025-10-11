@@ -1,6 +1,6 @@
+// client/src/pages/testseries/AdminTestManager.jsx
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { absUrl } from "../../utils/api"; // keep for other relative calls if needed
 
 export default function AdminTestManager() {
   const [tab, setTab] = useState("tests"); // "tests" | "results"
@@ -12,7 +12,7 @@ export default function AdminTestManager() {
   const [msg, setMsg] = useState("");
   const [results, setResults] = useState([]);
 
-  // ✅ Talk to your API directly (do NOT use getJSON here to avoid double-prefix)
+  // ✅ absolute API base (do NOT pass this through getJSON/absUrl)
   const API = "https://law-network-api.onrender.com/api";
 
   const fetchJSON = async (url, opts) => {
