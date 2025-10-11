@@ -37,8 +37,7 @@ export default function PrepAccessOverlay({ examId, email }) {
   const [nameField, setNameField] = useState("");
   const [phoneField, setPhoneField] = useState("");
 
-  // "Domino’s/Zomato" style step tracker
-  // 0 = Pay → 1 = Proof → 2 = Submit
+  // "Domino’s/Zomato" style step tracker: 0 = Pay → 1 = Proof → 2 = Submit
   const [step, setStep] = useState(0);
 
   // ----------------------- timers for return flows -----------------
@@ -170,6 +169,39 @@ export default function PrepAccessOverlay({ examId, email }) {
   useEffect(() => { fetchStatus(); /* eslint-disable-next-line */ }, [examId, email]);
   useEffect(() => { const t = setInterval(fetchStatus, 60_000); return () => clearInterval(t); /* eslint-disable-next-line */ }, [examId, email]);
 
+  // --- extra: best-effort META fetch to get payment aliases if status lacks them ---
+  const [payMeta, setPayMeta] = useState(null);
+  useEffect(() => {
+    let ignore = false;
+    (async () => {
+      if (!examId) return;
+      try {
+        const j = await getJSON(`/api/prep/exams/${encodeURIComponent(examId)}/meta?_=${Date.now()}`);
+        if (ignore || !j) return;
+
+        const ov = j.overlay || {};
+        const p = ov.payment || j.payment || j.overlayUI || {};
+        let wa = String(p.whatsappNumber || "").trim();
+        if (!wa && p.whatsappLink) {
+          const m = String(p.whatsappLink).match(/wa\.me\/(\+?\d+)/i);
+          if (m) wa = m[1];
+        }
+        setPayMeta({
+          courseName: j.name || j.examId || "",
+          priceINR: Number(ov.priceINR ?? j.price ?? 0),
+          upiId: p.upiId || p.upid || p.upi || p.pa || "",
+          upiName: p.upiName || "",
+          whatsappNumber: wa || "",
+          whatsappLink: p.whatsappLink || "",
+          whatsappText: p.whatsappText || "",
+        });
+      } catch {
+        // ignore meta failures; overlay still works with status response
+      }
+    })();
+    return () => { ignore = true; };
+  }, [examId]);
+
   // --- safe JSON parse for file submit ---
   async function readJsonSafe(res) {
     const ct = (res.headers.get("content-type") || "").toLowerCase();
@@ -177,41 +209,6 @@ export default function PrepAccessOverlay({ examId, email }) {
     const txt = await res.text();
     try { return JSON.parse(txt); } catch { return { success:false, error: (txt || `HTTP ${res.status}`) }; }
   }
-
-  // =================================================================
-  // 1) EXTRA STATE for fallback meta payment
-  const [payMeta, setPayMeta] = useState(null);
-
-  // 2) EFFECT: if /status doesn't provide deep-link info, fetch /meta once
-  useEffect(() => {
-    if (!examId) return;
-
-    const overlayPayTry = state?.overlay?.payment;
-    const examPayTry    = state?.exam?.payment;
-    const overlayUITry  = state?.exam?.overlayUI;
-
-    const haveAny =
-      (overlayPayTry && (overlayPayTry.upiId || overlayPayTry.whatsappNumber)) ||
-      (examPayTry && (examPayTry.upiId || examPayTry.waPhone || examPayTry.whatsappText)) ||
-      (overlayUITry && (overlayUITry.upiId || overlayUITry.whatsappLink));
-
-    if (haveAny || payMeta) return;
-
-    (async () => {
-      try {
-        const meta = await getJSON(`/api/prep/exams/${encodeURIComponent(examId)}/meta?_=${Date.now()}`);
-        const src =
-          (meta?.overlay?.payment) ||
-          (meta?.payment) ||
-          (meta?.overlayUI) ||
-          null;
-        setPayMeta(src);
-      } catch {
-        /* ignore */
-      }
-    })();
-  }, [examId, state.overlay, state.exam, payMeta]);
-  // =================================================================
 
   // ------- robust deep-link derivation (hide IDs from UI) -------
   function pick(obj, path, def = "") {
@@ -222,36 +219,44 @@ export default function PrepAccessOverlay({ examId, email }) {
   const overlayUI   = pick(state, "exam.overlayUI", null);
   const metaPay     = payMeta || {};
 
-  // 3) FOLD payMeta into the pay object
+  // helper: first defined/trimmed
+  const first = (...vals) => {
+    for (const v of vals) {
+      if (v === 0 || (typeof v === "number" && !Number.isNaN(v))) return v;
+      if (v !== undefined && v !== null && String(v).trim() !== "") return String(v).trim();
+    }
+    return "";
+  };
+
+  const upiRaw = first(
+    overlayPay?.upiId, overlayPay?.upid, overlayPay?.upi, overlayPay?.pa,
+    examPay?.upiId,    examPay?.upid,    examPay?.upi,    examPay?.pa,
+    overlayUI?.upiId,  overlayUI?.upid,
+    metaPay?.upiId
+  );
+
+  const upiNameRaw = first(overlayPay?.upiName, overlayUI?.upiName, metaPay?.upiName);
+
+  const priceINRRaw = Number(first(
+    overlayPay?.priceINR, state?.exam?.price, overlayUI?.priceINR, metaPay?.priceINR
+  )) || 0;
+
+  let waNum = first(overlayPay?.whatsappNumber, examPay?.waPhone, metaPay?.whatsappNumber);
+  const waLinkCombined = first(overlayUI?.whatsappLink, metaPay?.whatsappLink);
+  if (!waNum && waLinkCombined) {
+    const m = String(waLinkCombined).match(/wa\.me\/(\+?\d+)/i);
+    if (m) waNum = m[1];
+  }
+  const waNumSanitized = String(waNum || "").replace(/[^\d+]/g, "").replace(/^\+/, "");
+  const waTextRaw = first(overlayPay?.whatsappText, examPay?.waText, metaPay?.whatsappText);
+
   const pay = {
-    courseName: overlayPay?.courseName || state?.exam?.name || examId,
-    priceINR: Number(
-      overlayPay?.priceINR ??
-      state?.exam?.price ??
-      overlayUI?.priceINR ??
-      metaPay?.priceINR ??
-      0
-    ),
-    upiId:
-      overlayPay?.upiId ||
-      examPay?.upiId ||
-      overlayUI?.upiId ||
-      metaPay?.upiId || "",
-    upiName:
-      overlayPay?.upiName ||
-      overlayUI?.upiName ||
-      metaPay?.upiName || "",
-    whatsappNumber: (() => {
-      const fromStatus = overlayPay?.whatsappNumber || examPay?.waPhone || "";
-      if (fromStatus) return fromStatus;
-      const link = overlayUI?.whatsappLink || metaPay?.whatsappLink || "";
-      const m = link?.match?.(/wa\.me\/(\+?\d+)/i);
-      return m ? m[1] : (metaPay?.whatsappNumber || "");
-    })(),
-    whatsappText:
-      overlayPay?.whatsappText ||
-      examPay?.waText ||
-      metaPay?.whatsappText || "",
+    courseName: first(overlayPay?.courseName, state?.exam?.name, metaPay?.courseName, examId),
+    priceINR: priceINRRaw,
+    upiId: upiRaw,
+    upiName: upiNameRaw,
+    whatsappNumber: waNumSanitized,
+    whatsappText: waTextRaw || `Hello, I paid for "${first(state?.exam?.name, metaPay?.courseName, examId)}" (₹${priceINRRaw}).`,
   };
 
   const amount = Number(pay.priceINR || 0);
@@ -262,10 +267,9 @@ export default function PrepAccessOverlay({ examId, email }) {
       + `&cu=INR&tn=${encodeURIComponent(`Payment for ${pay.courseName}`)}`
     : "";
 
-  const waNumRaw = (pay.whatsappNumber || "").replace(/[^\d+]/g, "");
-  const waNum    = waNumRaw.replace(/^\+/, "");
-  const waText   = pay.whatsappText || `Hello, I paid for "${pay.courseName}" (₹${amount}).`;
-  const waLink   = waNum ? `https://wa.me/${waNum}?text=${encodeURIComponent(waText)}` : "";
+  const waLink = pay.whatsappNumber
+    ? `https://wa.me/${pay.whatsappNumber}?text=${encodeURIComponent(pay.whatsappText)}`
+    : "";
 
   // ----------------------- actions -------------------------------
   async function submitRequest() {
