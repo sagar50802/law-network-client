@@ -1,9 +1,8 @@
-// client/src/pages/testseries/ResultScreen.jsx
 import { useEffect, useMemo, useState } from "react";
 import { useParams, useNavigate, Link } from "react-router-dom";
 import { getJSON } from "../../utils/api";
 
-/* ---------- small UI helpers ---------- */
+/* ---------- tiny UI helpers ---------- */
 const btn = "px-4 py-2 rounded-lg font-semibold transition focus:outline-none focus:ring-2";
 const primary = `${btn} bg-indigo-600 text-white hover:bg-indigo-700 focus:ring-indigo-200`;
 const ghost = `${btn} border bg-white hover:bg-gray-50 focus:ring-gray-200`;
@@ -31,32 +30,17 @@ function ProgressRing({ value = 0 }) {
   );
 }
 
-function Chip({ label, value, tone = "slate" }) {
-  const toneMap = {
-    slate: "bg-slate-100 text-slate-800",
-    indigo: "bg-indigo-100 text-indigo-800",
-    emerald: "bg-emerald-100 text-emerald-800",
-  };
-  return (
-    <div className={`px-3 py-2 rounded-xl ${toneMap[tone]} text-sm`}>
-      <div className="text-[11px] uppercase tracking-wide opacity-75">{label}</div>
-      <div className="font-semibold">{value}</div>
-    </div>
-  );
-}
-
-function Stat({ title, value, tone = "slate" }) {
-  const toneMap = {
-    slate: "bg-gray-50",
-    green: "bg-emerald-50",
-    red: "bg-rose-50",
-  };
-  return (
-    <div className={`rounded-xl border ${toneMap[tone]} p-4`}>
-      <div className="text-xs uppercase tracking-wider text-gray-500">{title}</div>
-      <div className="text-xl font-bold mt-1">{value}</div>
-    </div>
-  );
+/* ---------- helpers for normalization ---------- */
+function normLetter(v) {
+  // Accept: "b", "(b)", "B ", "option b", "2" (=> B)
+  if (v == null) return "";
+  let s = String(v).trim().toUpperCase();
+  const num = Number(s);
+  if (!isNaN(num) && num >= 1 && num <= 4) return String.fromCharCode(64 + num); // 1..4 => A..D
+  s = s.replace(/^\(|\)$/g, "");           // remove surrounding parentheses
+  s = s.replace(/^OPTION\s*/i, "");        // "Option B" -> "B"
+  s = s.replace(/[^A-D]/g, "");            // keep only A..D if any stray chars
+  return s.length ? s[0] : "";
 }
 
 /* ---------- page ---------- */
@@ -80,7 +64,15 @@ export default function ResultScreen() {
         // 2) Fetch questions of the same test to compare correct vs chosen
         const r2 = await getJSON(`/api/testseries/${r1.result.testCode}/play`);
         if (!r2?.success) throw new Error(r2?.message || "Failed to load questions");
-        setQuestions(r2.questions || []);
+
+        // Normalize correct keys defensively so UI logic is stable
+        const qs = (r2.questions || []).map((q, i) => ({
+          ...q,
+          qno: Number(q.qno ?? i + 1),
+          correct: normLetter(q.correct),
+          options: Array.isArray(q.options) ? q.options.map(String) : [],
+        }));
+        setQuestions(qs);
       } catch (e) {
         setErr(e?.message || "Failed to load result");
       } finally {
@@ -95,10 +87,10 @@ export default function ResultScreen() {
 
     let attempted = 0, correct = 0, wrong = 0;
     for (const q of questions) {
-      const pick = result.answers?.[q.qno];
+      const pick = normLetter(result.answers?.[q.qno]);
       if (!pick) continue;
       attempted++;
-      if (pick === q.correct) correct++;
+      if (pick && q.correct && pick === q.correct) correct++;
       else wrong++;
     }
     const skipped = questions.length - attempted;
@@ -110,7 +102,7 @@ export default function ResultScreen() {
     if (!questions.length || !result) return;
     const rows = [["Qno", "Your", "Correct"]];
     for (const q of questions) {
-      rows.push([q.qno, result.answers?.[q.qno] || "", q.correct || ""]);
+      rows.push([q.qno, normLetter(result.answers?.[q.qno]) || "", q.correct || ""]);
     }
     const csv = rows.map((r) => r.join(",")).join("\n");
     const blob = new Blob([csv], { type: "text/csv" });
@@ -126,10 +118,8 @@ export default function ResultScreen() {
   if (err) return <div className="p-6 text-red-600">{err}</div>;
   if (!result) return <div className="p-6">No result.</div>;
 
-  const score = typeof result.score === "number" ? result.score.toFixed(2) : "—";
   const when = result.createdAt ? new Date(result.createdAt).toLocaleString() : "—";
   const email = result.user?.email || "—";
-  const name = result.user?.name || "—";
 
   return (
     <div className="max-w-6xl mx-auto px-4 py-10 relative">
@@ -168,7 +158,9 @@ export default function ResultScreen() {
           </div>
         </div>
 
-        <div className="mt-6 flex flex-wrap gap-2">
+        <div className="mt-6 text-xs text-gray-500">Submitted: {when}</div>
+
+        <div className="mt-4 flex flex-wrap gap-2">
           <button onClick={() => window.print()} className={ghost}>Print</button>
           <button onClick={downloadCsv} className={ghost}>Export CSV</button>
           <button
@@ -187,8 +179,9 @@ export default function ResultScreen() {
         <h2 className="text-lg font-semibold mb-4">Answer Review</h2>
         <div className="space-y-4">
           {questions.map((q) => {
-            const pick = result.answers?.[q.qno];
-            const isCorrect = pick && pick === q.correct;
+            const pick = normLetter(result.answers?.[q.qno]);
+            const corr = normLetter(q.correct);
+            const isCorrect = pick && corr && pick === corr;
             const state = pick ? (isCorrect ? "correct" : "wrong") : "skipped";
             const badge =
               state === "correct"
@@ -201,20 +194,27 @@ export default function ResultScreen() {
               <div key={q.qno} className="border rounded-xl p-4 bg-white">
                 <div className="flex items-start justify-between gap-3">
                   <div className="font-medium">Q{q.qno}. {q.text}</div>
-                  <span className={`text-[11px] px-2 py-0.5 rounded-full ${badge}`}>
-                    {state.toUpperCase()}
-                  </span>
+                  <div className="flex items-center gap-2">
+                    <span className={`text-[11px] px-2 py-0.5 rounded-full ${badge}`}>
+                      {state.toUpperCase()}
+                    </span>
+                    {!corr && (
+                      <span className="text-[11px] px-2 py-0.5 rounded-full bg-amber-100 text-amber-800">
+                        No key
+                      </span>
+                    )}
+                  </div>
                 </div>
 
                 <div className="mt-3 grid sm:grid-cols-2 gap-2">
                   {(q.options || []).map((optText, idx) => {
-                    const letter = String.fromCharCode(65 + idx);
-                    const correct = q.correct === letter;
-                    const picked = pick === letter;
+                    const letter = String.fromCharCode(65 + idx); // A/B/C/D by position
+                    const isCorr = corr === letter;                // correct -> green
+                    const isPicked = pick === letter;              // your pick -> red if wrong
 
                     let cls = "rounded-lg border p-2 text-sm";
-                    if (correct) cls += " bg-emerald-50 border-emerald-200";
-                    else if (picked) cls += " bg-rose-50 border-rose-200";
+                    if (isCorr) cls += " bg-emerald-50 border-emerald-200";
+                    else if (isPicked) cls += " bg-rose-50 border-rose-200";
                     else cls += " bg-gray-50 border-gray-200";
 
                     return (
