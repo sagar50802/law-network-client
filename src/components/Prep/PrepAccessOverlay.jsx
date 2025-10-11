@@ -1,7 +1,15 @@
-// src/components/Prep/PrepAccessOverlay.jsx
 import { useEffect, useMemo, useState } from "react";
 import { getJSON, postJSON } from "../../utils/api";
 
+/**
+ * PrepAccessOverlay
+ * - Shows purchase/restart/waiting overlay
+ * - Deep links: UPI + WhatsApp (IDs never shown to user)
+ * - 2/3 minute return timers like Domino’s/Zomato steps
+ * - Pulls payment meta from /api/prep/exams/:examId/meta
+ *
+ * Version tag (for cache verification): v2025-10-11-a
+ */
 export default function PrepAccessOverlay({ examId, email }) {
   // ----------------------- localStorage keys -----------------------
   const ks = useMemo(() => {
@@ -19,7 +27,7 @@ export default function PrepAccessOverlay({ examId, email }) {
   const [state, setState] = useState({
     loading: true,
     show: !!(examId && localStorage.getItem(ks.wait)),
-    mode: localStorage.getItem(ks.wait) ? "waiting" : "",
+    mode: localStorage.getItem(ks.wait) ? "waiting" : "", // "purchase" | "restart" | "waiting"
     exam: {},
     access: {},
     overlay: {},
@@ -30,24 +38,22 @@ export default function PrepAccessOverlay({ examId, email }) {
   const [submitting, setSubmitting] = useState(false);
   const [panelHidden, setPanelHidden] = useState(false);
 
-  // Minimal user inputs
-  const [emailField, setEmailField] = useState(
-    localStorage.getItem("userEmail") || (email || "")
-  );
+  // minimal inputs
+  const [emailField, setEmailField] = useState(localStorage.getItem("userEmail") || (email || ""));
   const [nameField, setNameField] = useState("");
   const [phoneField, setPhoneField] = useState("");
 
-  // "Domino’s/Zomato" style step tracker: 0 = Pay → 1 = Proof → 2 = Submit
+  // Step tracker: 0 Pay → 1 Proof → 2 Submit
   const [step, setStep] = useState(0);
 
-  // ----------------------- timers for return flows -----------------
+  // Timers
   const [upiStartTs, setUpiStartTs] = useState(() => Number(localStorage.getItem(ks.upiStart) || 0));
   const [upiLeft, setUpiLeft] = useState(0);
   const [waStartTs, setWaStartTs] = useState(() => Number(localStorage.getItem(ks.waStart) || 0));
   const [waLeft, setWaLeft] = useState(0);
 
-  const UPI_SECONDS = 120;   // 2 minutes
-  const WA_SECONDS  = 180;   // 3 minutes
+  const UPI_SECONDS = 120;
+  const WA_SECONDS = 180;
 
   useEffect(() => {
     if (!upiStartTs) return;
@@ -73,35 +79,30 @@ export default function PrepAccessOverlay({ examId, email }) {
     return () => clearInterval(id);
   }, [waStartTs]);
 
-  // ----------------------- utilities -------------------------------
-  const price = Number(state.exam?.price || 0);
-  const courseName = state.exam?.name || String(examId || "").toUpperCase();
-
   // ----------------------- core fetch ------------------------------
   async function fetchStatus() {
     if (!examId) return;
 
     const hasWaitingGate = !!localStorage.getItem(ks.wait);
-
     try {
       const qs = new URLSearchParams({ examId, email: email || "" });
       const r = await getJSON(`/api/prep/access/status?${qs.toString()}`);
       const { exam, access, overlay } = r || {};
 
-      // brand-new user → auto trial → re-fetch
+      // new user → auto start trial
       if (access?.status === "none" && email) {
         await postJSON("/api/prep/access/start-trial", { examId, email });
         return fetchStatus();
       }
 
-      // try to read todayDay (best-effort)
+      // read todayDay (best-effort)
       let todayDay = 1;
       try {
         const meta = await getJSON(`/api/prep/user/summary?${qs.toString()}`);
         todayDay = Number(meta?.todayDay || 1);
       } catch {}
 
-      // --------- decide overlay ---------
+      // decide overlay
       let mode = "";
       let show = false;
       let waiting = !!access?.pending;
@@ -169,34 +170,33 @@ export default function PrepAccessOverlay({ examId, email }) {
   useEffect(() => { fetchStatus(); /* eslint-disable-next-line */ }, [examId, email]);
   useEffect(() => { const t = setInterval(fetchStatus, 60_000); return () => clearInterval(t); /* eslint-disable-next-line */ }, [examId, email]);
 
-  // --- extra: best-effort META fetch to get payment aliases if status lacks them ---
+  // ----------------------- payment meta (extra fetch) ---------------
   const [payMeta, setPayMeta] = useState(null);
+
   useEffect(() => {
     let ignore = false;
     (async () => {
       if (!examId) return;
       try {
-        const j = await getJSON(`/api/prep/exams/${encodeURIComponent(examId)}/meta?_=${Date.now()}`);
-        if (ignore || !j) return;
-
-        const ov = j.overlay || {};
-        const p = ov.payment || j.payment || j.overlayUI || {};
-        let wa = String(p.whatsappNumber || "").trim();
-        if (!wa && p.whatsappLink) {
-          const m = String(p.whatsappLink).match(/wa\.me\/(\+?\d+)/i);
+        const meta = await getJSON(`/api/prep/exams/${encodeURIComponent(examId)}/meta?_=${Date.now()}`);
+        if (ignore) return;
+        const ov = meta?.overlay || {};
+        const src = ov?.payment || meta?.payment || meta?.overlayUI || {};
+        let wa = String(src.whatsappNumber || "").trim();
+        if (!wa && src.whatsappLink) {
+          const m = String(src.whatsappLink).match(/wa\.me\/(\+?\d+)/i);
           if (m) wa = m[1];
         }
         setPayMeta({
-          courseName: j.name || j.examId || "",
-          priceINR: Number(ov.priceINR ?? j.price ?? 0),
-          upiId: p.upiId || p.upid || p.upi || p.pa || "",
-          upiName: p.upiName || "",
-          whatsappNumber: wa || "",
-          whatsappLink: p.whatsappLink || "",
-          whatsappText: p.whatsappText || "",
+          priceINR: Number(ov?.price ?? meta?.price ?? 0),
+          upiId: String(src.upiId || "").trim(),
+          upiName: String(src.upiName || "").trim(),
+          whatsappNumber: wa,
+          whatsappText: String(src.whatsappText || "").trim(),
+          courseName: String(meta?.name || examId),
         });
       } catch {
-        // ignore meta failures; overlay still works with status response
+        setPayMeta(null);
       }
     })();
     return () => { ignore = true; };
@@ -210,53 +210,47 @@ export default function PrepAccessOverlay({ examId, email }) {
     try { return JSON.parse(txt); } catch { return { success:false, error: (txt || `HTTP ${res.status}`) }; }
   }
 
-  // ------- robust deep-link derivation (hide IDs from UI) -------
+  // ------- deep-link derivation (hide IDs from UI) -------
   function pick(obj, path, def = "") {
     try { return path.split(".").reduce((a, k) => a?.[k], obj) ?? def; } catch { return def; }
   }
   const overlayPay = pick(state, "overlay.payment", null) || pick(state, "exam.overlay.payment", null);
   const examPay     = pick(state, "exam.payment", null);
   const overlayUI   = pick(state, "exam.overlayUI", null);
-  const metaPay     = payMeta || {};
 
-  // helper: first defined/trimmed
-  const first = (...vals) => {
-    for (const v of vals) {
-      if (v === 0 || (typeof v === "number" && !Number.isNaN(v))) return v;
-      if (v !== undefined && v !== null && String(v).trim() !== "") return String(v).trim();
-    }
-    return "";
-  };
-
-  const upiRaw = first(
-    overlayPay?.upiId, overlayPay?.upid, overlayPay?.upi, overlayPay?.pa,
-    examPay?.upiId,    examPay?.upid,    examPay?.upi,    examPay?.pa,
-    overlayUI?.upiId,  overlayUI?.upid,
-    metaPay?.upiId
-  );
-
-  const upiNameRaw = first(overlayPay?.upiName, overlayUI?.upiName, metaPay?.upiName);
-
-  const priceINRRaw = Number(first(
-    overlayPay?.priceINR, state?.exam?.price, overlayUI?.priceINR, metaPay?.priceINR
-  )) || 0;
-
-  let waNum = first(overlayPay?.whatsappNumber, examPay?.waPhone, metaPay?.whatsappNumber);
-  const waLinkCombined = first(overlayUI?.whatsappLink, metaPay?.whatsappLink);
-  if (!waNum && waLinkCombined) {
-    const m = String(waLinkCombined).match(/wa\.me\/(\+?\d+)/i);
-    if (m) waNum = m[1];
-  }
-  const waNumSanitized = String(waNum || "").replace(/[^\d+]/g, "").replace(/^\+/, "");
-  const waTextRaw = first(overlayPay?.whatsappText, examPay?.waText, metaPay?.whatsappText);
+  // Optional: DevTools override (helps when server meta isn’t there yet)
+  const override = (typeof window !== "undefined" && window.__PAY_OVERRIDE) || null;
 
   const pay = {
-    courseName: first(overlayPay?.courseName, state?.exam?.name, metaPay?.courseName, examId),
-    priceINR: priceINRRaw,
-    upiId: upiRaw,
-    upiName: upiNameRaw,
-    whatsappNumber: waNumSanitized,
-    whatsappText: waTextRaw || `Hello, I paid for "${first(state?.exam?.name, metaPay?.courseName, examId)}" (₹${priceINRRaw}).`,
+    courseName: override?.courseName || payMeta?.courseName || state?.exam?.name || examId,
+    priceINR: Number(
+      override?.priceINR ??
+      payMeta?.priceINR ??
+      overlayPay?.priceINR ??
+      state?.exam?.price ??
+      overlayUI?.priceINR ??
+      0
+    ),
+    upiId: (override?.upiId || overlayPay?.upiId || examPay?.upiId || overlayUI?.upiId || payMeta?.upiId || ""),
+    upiName: (override?.upiName || overlayPay?.upiName || overlayUI?.upiName || payMeta?.upiName || ""),
+    whatsappNumber: (() => {
+      const cand =
+        override?.whatsappNumber ||
+        overlayPay?.whatsappNumber ||
+        examPay?.waPhone ||
+        payMeta?.whatsappNumber ||
+        "";
+      if (cand) return cand;
+      const link = overlayUI?.whatsappLink || "";
+      const m = link?.match?.(/wa\.me\/(\+?\d+)/i);
+      return m ? m[1] : "";
+    })(),
+    whatsappText:
+      override?.whatsappText ||
+      overlayPay?.whatsappText ||
+      examPay?.waText ||
+      payMeta?.whatsappText ||
+      "",
   };
 
   const amount = Number(pay.priceINR || 0);
@@ -267,11 +261,12 @@ export default function PrepAccessOverlay({ examId, email }) {
       + `&cu=INR&tn=${encodeURIComponent(`Payment for ${pay.courseName}`)}`
     : "";
 
-  const waLink = pay.whatsappNumber
-    ? `https://wa.me/${pay.whatsappNumber}?text=${encodeURIComponent(pay.whatsappText)}`
-    : "";
+  const waNumRaw = (pay.whatsappNumber || "").replace(/[^\d+]/g, "");
+  const waNum    = waNumRaw.replace(/^\+/, "");
+  const waText   = pay.whatsappText || `Hello, I paid for "${pay.courseName}" (₹${amount}).`;
+  const waLink   = waNum ? `https://wa.me/${waNum}?text=${encodeURIComponent(waText)}` : "";
 
-  // ----------------------- actions -------------------------------
+  // ----------------------- submission -------------------------------
   async function submitRequest() {
     if (!state.mode || state.mode === "waiting") return;
     const emailVal = (emailField || "").trim();
@@ -332,16 +327,15 @@ export default function PrepAccessOverlay({ examId, email }) {
     const now = Date.now();
     setUpiStartTs(now);
     localStorage.setItem(ks.upiStart, String(now));
-    setStep(0); // user is on Pay step
-    window.location.href = upiLink; // better handoff for mobile UPI apps
+    setStep(0);
+    window.location.href = upiLink;
   };
-
   const handleWAClick = () => {
     if (!waLink) return;
     const now = Date.now();
     setWaStartTs(now);
     localStorage.setItem(ks.waStart, String(now));
-    setStep(s => Math.max(s, 1)); // move to Proof step
+    setStep(s => Math.max(s, 1));
     window.open(waLink, "_blank", "noopener,noreferrer");
   };
 
@@ -349,6 +343,7 @@ export default function PrepAccessOverlay({ examId, email }) {
   const mustVeil = state.show || (state.loading && !!localStorage.getItem(ks.wait));
   if (!mustVeil) return null;
 
+  const courseName = state.exam?.name || String(examId || "").toUpperCase();
   const title =
     state.mode === "purchase" ? `Unlock – ${courseName}`
     : state.mode === "restart" ? `Restart – ${courseName}`
@@ -383,6 +378,7 @@ export default function PrepAccessOverlay({ examId, email }) {
         <div className="w-full h-full flex items-center justify-center p-4">
           <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-5">
             <div className="text-lg font-semibold mb-1">{title}</div>
+            <div className="text-[11px] text-gray-500 mb-2">overlay v2025-10-11-a</div>
             <div className="text-sm text-gray-700 mb-3">{desc}</div>
 
             {/* Progress / tracker */}
@@ -401,14 +397,14 @@ export default function PrepAccessOverlay({ examId, email }) {
             {/* Action area */}
             {state.mode !== "waiting" && (
               <>
-                {/* Price + CTAs */}
+                {/* Course + price */}
                 <div className="mb-2">
                   <div className="text-xs text-gray-600 mb-1">{state.exam?.name || examId}</div>
                   <div className="text-xs text-gray-600">Price: ₹{state.exam?.price ?? 0}</div>
                 </div>
 
-                {/* UPI + WhatsApp deep links (no IDs shown) */}
-                {(upiLink || waLink) && (
+                {/* Deep-link buttons */}
+                {(upiLink || waLink) ? (
                   <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
                     {upiLink && (
                       <button
@@ -427,21 +423,24 @@ export default function PrepAccessOverlay({ examId, email }) {
                       </button>
                     )}
                   </div>
+                ) : (
+                  <div className="text-[12px] text-amber-700 bg-amber-50 border border-amber-200 rounded p-2 mb-3">
+                    Admin hasn’t set UPI/WhatsApp in <b>Access &amp; Overlay</b> yet.  
+                    Set UPI ID and WhatsApp number and click <b>Save Overlay</b>.
+                  </div>
                 )}
 
-                {/* Timers / guidance banners */}
+                {/* Timers / guidance */}
                 {(upiLeft > 0 || waLeft > 0) && (
                   <div className="text-[12px] text-gray-700 mb-2">
                     {upiLeft > 0 && (
                       <div className="mb-1">
-                        After paying, <b>return to this tab</b> to upload the receipt.
-                        Auto-focus in ~{upiLeft}s.
+                        After paying, <b>return to this tab</b> to upload the receipt. Auto-focus in ~{upiLeft}s.
                       </div>
                     )}
                     {waLeft > 0 && (
                       <div>
-                        After sending the screenshot on WhatsApp, <b>come back here</b>.
-                        We’ll bring you back in ~{waLeft}s.
+                        After sending the screenshot on WhatsApp, <b>come back here</b>. We’ll bring you back in ~{waLeft}s.
                       </div>
                     )}
                   </div>
@@ -457,7 +456,6 @@ export default function PrepAccessOverlay({ examId, email }) {
                   onChange={(e) => setEmailField(e.target.value)}
                   onFocus={() => setStep(s => Math.max(s, 2))}
                 />
-
                 <input
                   type="text"
                   placeholder="Name (optional)"
@@ -465,7 +463,6 @@ export default function PrepAccessOverlay({ examId, email }) {
                   value={nameField}
                   onChange={(e) => setNameField(e.target.value)}
                 />
-
                 <input
                   type="tel"
                   placeholder="Phone (optional)"
