@@ -248,7 +248,7 @@ function ExamEditor({ examId }) {
     return () => { ignore = true; };
   }, [examId]);
 
-  // PATCH helper (now also sends payment fields)
+  // PATCH helper (send schedule + price + payment in BOTH shapes)
   async function saveOverlayJSON({
     price,
     trialDays,
@@ -264,27 +264,41 @@ function ExamEditor({ examId }) {
   }) {
     const ownerKey = localStorage.getItem("ownerKey") || "";
 
-    // map UI mode to server mode
+    // map UI -> server
     const modeForServer =
       overlayMode === "afterN" ? "offset-days" :
       overlayMode === "fixed"  ? "fixed-date"  :
-      overlayMode; // "planDayTime" or "never"
+      overlayMode; // "planDayTime" | "never"
 
-    const body = {
-      price,
-      trialDays,
-      mode: modeForServer,
-      offsetDays: modeForServer === "offset-days" ? Number(daysAfterStart || 0) : undefined,
-      fixedAt: modeForServer === "fixed-date" && fixedAt ? new Date(fixedAt).toISOString() : undefined,
-      showOnDay: modeForServer === "planDayTime" ? Number(showOnDay || 1) : undefined,
-      showAtLocal: modeForServer === "planDayTime" ? (showAtLocal || "09:00") : undefined,
-      // payment (flat fields accepted by server)
+    // single source of truth for payment
+    const payment = {
       upiId: (upiId || "").trim(),
       upiName: (upiName || "").trim(),
       whatsappNumber: (whatsappNumber || "").trim(),
       whatsappText: (whatsappText || "").trim(),
     };
 
+    const body = {
+      // essentials
+      price: Number(price || 0),
+      trialDays: Number(trialDays || 0),
+      mode: modeForServer,
+
+      // schedule
+      offsetDays: modeForServer === "offset-days" ? Number(daysAfterStart || 0) : undefined,
+      fixedAt:    modeForServer === "fixed-date"  && fixedAt
+                    ? new Date(fixedAt).toISOString()
+                    : undefined,
+      showOnDay:  modeForServer === "planDayTime" ? Number(showOnDay || 1) : undefined,
+      showAtLocal:modeForServer === "planDayTime" ? (showAtLocal || "09:00") : undefined,
+
+      // send payment in BOTH shapes so whichever your server expects will persist
+      ...payment,           // flat
+      payment,              // root.payment
+      overlay: { payment }, // overlay.payment (most readers look here)
+    };
+
+    // drop undefined
     Object.keys(body).forEach(k => body[k] === undefined && delete body[k]);
 
     const r = await fetch(
@@ -313,7 +327,7 @@ function ExamEditor({ examId }) {
         showAtLocal: overlay.showAtLocal || "09:00",
         daysAfterStart: Number(overlay.daysAfterStart) || 0,
         fixedAt: overlay.fixedAt || null,
-        // NEW: payment fields
+        // payment fields
         upiId: pay.upiId,
         upiName: pay.upiName,
         whatsappNumber: pay.whatsappNumber,
