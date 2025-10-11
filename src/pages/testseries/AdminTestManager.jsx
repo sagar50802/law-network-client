@@ -1,8 +1,7 @@
+// client/src/pages/testseries/AdminTestManager.jsx
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-
-// We will not touch api.js or env; use a fixed base here so it always works.
-const FIXED_API = "https://law-network-api.onrender.com/api";
+import { absUrl, getJSON } from "../../utils/api";
 
 export default function AdminTestManager() {
   const [tab, setTab] = useState("tests"); // "tests" | "results"
@@ -14,34 +13,33 @@ export default function AdminTestManager() {
   const [msg, setMsg] = useState("");
   const [results, setResults] = useState([]);
 
-  // ---------------- Load tests + papers (from fixed host) ----------------
+  // ✅ Talk to the API directly so render proxy/cors never blocks you
+  const API = "https://law-network-api.onrender.com/api"; // <- your server (do not change render, api.js, server.js)
+
+  /* ---------- Load tests + papers ---------- */
   useEffect(() => {
     (async () => {
       try {
         const [pRes, tRes] = await Promise.all([
-          fetch(`${FIXED_API}/testseries/papers`).then((r) => r.json()),
-          fetch(`${FIXED_API}/testseries/tests`).then((r) => r.json()),
+          getJSON(`${API}/testseries/papers`),
+          getJSON(`${API}/testseries/tests`),
         ]);
-        if (!pRes?.success) throw new Error(pRes?.message || "Failed to fetch papers");
-        if (!tRes?.success) throw new Error(tRes?.message || "Failed to fetch tests");
-        setPapers(pRes.papers || []);
-        setRows(tRes.tests || []);
+        setPapers(pRes?.papers || []);
+        setRows(tRes?.tests || []);
       } catch (e) {
-        setMsg(e?.message || "Failed to fetch");
+        setMsg("Failed to fetch");
       } finally {
         setLoading(false);
       }
     })();
   }, []);
 
-  // ---------------- Load results when the tab opens ----------------
+  /* ---------- Load results when tab opens ---------- */
   useEffect(() => {
     if (tab !== "results") return;
     (async () => {
       try {
-        const r = await fetch(`${FIXED_API}/testseries/results`, {
-          headers: { "X-Owner-Key": localStorage.getItem("ownerKey") || "" },
-        }).then((res) => res.json());
+        const r = await getJSON(`${API}/testseries/results`);
         setResults(r?.results || []);
       } catch {
         setResults([]);
@@ -49,10 +47,10 @@ export default function AdminTestManager() {
     })();
   }, [tab]);
 
-  // ---------------- Filters ----------------
+  /* ---------- Filters ---------- */
   const filteredTests = useMemo(() => {
     const needle = q.trim().toLowerCase();
-    return (rows || [])
+    return rows
       .filter((t) => (paperSel ? t.paper === paperSel : true))
       .filter((t) =>
         !needle
@@ -65,63 +63,54 @@ export default function AdminTestManager() {
 
   const filteredResults = useMemo(() => {
     const needle = q.trim().toLowerCase();
-    return (results || []).filter((r) =>
+    return results.filter((r) =>
       !needle
         ? true
-        : [r.testCode, r.user?.email, r.user?.name].join(" ").toLowerCase().includes(needle)
+        : [r.testCode, r.user?.email, r.user?.name]
+            .join(" ")
+            .toLowerCase()
+            .includes(needle)
     );
   }, [results, q]);
 
-  // ---------------- Actions ----------------
+  /* ---------- Actions ---------- */
   async function handleDelete(code) {
     if (!code) return;
     const ownerKey = localStorage.getItem("ownerKey") || "";
     if (!confirm(`Delete test "${code}"? This cannot be undone.`)) return;
-
     try {
-      const res = await fetch(`${FIXED_API}/testseries/${encodeURIComponent(code)}`, {
+      const res = await fetch(`${API}/testseries/${encodeURIComponent(code)}`, {
         method: "DELETE",
         headers: { "X-Owner-Key": ownerKey },
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data?.success) throw new Error(data?.message || "Delete failed");
-
+      if (!res.ok || !data.success)
+        throw new Error(data.message || "Delete failed");
       setRows((r) => r.filter((t) => t.code !== code));
-      // Soft-update paper counts
-      setPapers((ps) =>
-        ps
-          .map((p) =>
-            p.paper === (rows.find((t) => t.code === code)?.paper || p.paper)
-              ? { ...p, count: Math.max(0, (p.count || 1) - 1) }
-              : p
-          )
-          .filter((p) => p.count > 0)
-      );
       flash(`✅ Deleted ${code}`);
     } catch (e) {
-      alert(e?.message || "Delete failed");
+      alert(e.message);
     }
   }
 
   async function deletePaper(paper) {
     if (!paper) return;
     const ownerKey = localStorage.getItem("ownerKey") || "";
-    if (!confirm(`⚠️ Delete ALL tests under "${paper}"? This cannot be undone.`)) return;
-
+    if (!confirm(`⚠️ Delete ALL tests under "${paper}"?`)) return;
     try {
-      const res = await fetch(`${FIXED_API}/testseries/paper/${encodeURIComponent(paper)}`, {
-        method: "DELETE",
-        headers: { "X-Owner-Key": ownerKey },
-      });
+      const res = await fetch(
+        `${API}/testseries/paper/${encodeURIComponent(paper)}`,
+        { method: "DELETE", headers: { "X-Owner-Key": ownerKey } }
+      );
       const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data?.success) throw new Error(data?.message || "Delete failed");
-
+      if (!res.ok || !data.success)
+        throw new Error(data.message || "Delete failed");
       setRows((r) => r.filter((t) => t.paper !== paper));
       setPapers((ps) => ps.filter((p) => p.paper !== paper));
       setPaperSel("");
       flash(`🗑 Removed "${paper}" (${data.deleted || 0} tests)`);
     } catch (e) {
-      alert(e?.message || "Delete paper failed");
+      alert(e.message);
     }
   }
 
@@ -130,7 +119,6 @@ export default function AdminTestManager() {
     setTimeout(() => setMsg(""), 2500);
   }
 
-  // ---------------- UI ----------------
   if (loading) return <div className="p-6">Loading…</div>;
 
   return (
@@ -152,6 +140,7 @@ export default function AdminTestManager() {
         ))}
       </div>
 
+      {/* Flash Message */}
       {msg && (
         <div className="mb-4 text-sm px-3 py-2 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200">
           {msg}
@@ -223,8 +212,12 @@ export default function AdminTestManager() {
                       <td className="px-3 py-2">{t.paper}</td>
                       <td className="px-3 py-2">{t.title}</td>
                       <td className="px-3 py-2 font-mono">{t.code}</td>
-                      <td className="px-3 py-2 text-center">{t.totalQuestions ?? "—"}</td>
-                      <td className="px-3 py-2 text-center">{t.durationMin ?? "—"} min</td>
+                      <td className="px-3 py-2 text-center">
+                        {t.totalQuestions ?? "—"}
+                      </td>
+                      <td className="px-3 py-2 text-center">
+                        {t.durationMin ?? "—"} min
+                      </td>
                       <td className="px-3 py-2 flex flex-wrap gap-2 justify-center">
                         <Link
                           to={`/tests/${t.code}`}
@@ -264,7 +257,9 @@ export default function AdminTestManager() {
               placeholder="Search by code, user, or email..."
               className="w-full sm:w-80 border rounded-lg px-3 py-2"
             />
-            <span className="text-sm text-gray-500">{filteredResults.length} results</span>
+            <span className="text-sm text-gray-500">
+              {filteredResults.length} results
+            </span>
           </div>
 
           {!filteredResults.length ? (
@@ -287,9 +282,13 @@ export default function AdminTestManager() {
                       <td className="px-3 py-2 font-mono">{r.testCode}</td>
                       <td className="px-3 py-2">
                         <div className="font-medium">{r.user?.name || "—"}</div>
-                        <div className="text-xs text-gray-500">{r.user?.email || ""}</div>
+                        <div className="text-xs text-gray-500">
+                          {r.user?.email || ""}
+                        </div>
                       </td>
-                      <td className="px-3 py-2 text-center font-semibold">{r.score}</td>
+                      <td className="px-3 py-2 text-center font-semibold">
+                        {r.score}
+                      </td>
                       <td className="px-3 py-2 text-center text-gray-500">
                         {r.timeTakenSec ? `${r.timeTakenSec}s` : "—"}
                       </td>
