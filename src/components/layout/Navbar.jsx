@@ -5,7 +5,7 @@ import { getJSON } from "../../utils/api";
 
 export default function Navbar() {
   const [articleCount, setArticleCount] = useState(0);
-  const [testCount, setTestCount] = useState(0); // ✅ NEW: total tests
+  const [testCount, setTestCount] = useState(0); // ✅ total tests
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -14,10 +14,10 @@ export default function Navbar() {
       .catch(() => {});
   }, []);
 
-  // ✅ NEW: fetch total number of tests (safe, read-only)
+  // ✅ fetch total number of tests (reads r.tests)
   useEffect(() => {
     getJSON("/api/testseries/tests")
-      .then((r) => setTestCount(Array.isArray(r) ? r.length : 0))
+      .then((r) => setTestCount(r?.tests?.length || 0))
       .catch(() => {});
   }, []);
 
@@ -59,12 +59,12 @@ export default function Navbar() {
             Consultancy
           </a>
 
-          {/* ✅ New: Exam Preparation */}
+          {/* ✅ Exam Preparation */}
           <a href="/prep" className="hover:text-blue-600">
             Preparation
           </a>
 
-          {/* ✅ NEW: Test Series (dashboard) */}
+          {/* ✅ Test Series (dashboard) */}
           <a href="/tests" className="hover:text-blue-600">
             Test Series {testCount ? `(${testCount})` : ""}
           </a>
@@ -82,7 +82,8 @@ export default function Navbar() {
               <a href="/admin/dashboard" className="text-blue-600 underline">Admin</a>
               <a href="/admin/prep" className="text-blue-600 underline">Prep Admin</a>
               <a href="/admin/prep-access" className="text-blue-600 underline">Access Requests</a>
-              {/* ✅ NEW: Test Importer (owner only) */}
+              {/* ✅ NEW: Manage + Import */}
+              <a href="/owner/tests" className="text-blue-600 underline">Manage Tests</a>
               <a href="/owner/tests/import" className="text-blue-600 underline">Import Tests</a>
               <button
                 className="ml-2 text-xs border px-2 py-1 rounded"
@@ -109,7 +110,7 @@ export default function Navbar() {
           <a href="/articles">Articles</a>
           <a href="/#consultancy" onClick={goConsultancy}>Consultancy</a>
           <a href="/prep">Preparation</a>
-          {/* ✅ NEW: Test Series (mobile) */}
+          {/* ✅ Test Series (mobile) */}
           <a href="/tests">Test Series {testCount ? `(${testCount})` : ""}</a>
           <a href="/podcasts">Podcasts</a>
           <a href="/videos">Video Gallery</a>
@@ -123,8 +124,18 @@ export default function Navbar() {
               <a href="/admin/dashboard" className="underline">Admin</a>
               <a href="/admin/prep" className="underline">Prep Admin</a>
               <a href="/admin/prep-access" className="underline">Access Requests</a>
-              {/* ✅ NEW: Test Importer (mobile) */}
+              {/* ✅ NEW: Manage + Import (mobile) */}
+              <a href="/owner/tests" className="underline">Manage Tests</a>
               <a href="/owner/tests/import" className="underline">Import Tests</a>
+              <button
+                className="text-left text-xs border px-2 py-1 rounded w-fit"
+                onClick={() => {
+                  localStorage.removeItem("ownerKey");
+                  location.reload();
+                }}
+              >
+                Logout
+              </button>
             </>
           )}
         </div>
