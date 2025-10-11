@@ -1,15 +1,6 @@
 import { useEffect, useMemo, useState } from "react";
 import { getJSON, postJSON } from "../../utils/api";
 
-/**
- * PrepAccessOverlay
- * - Shows purchase/restart/waiting overlay
- * - Deep links: UPI + WhatsApp (IDs never shown to user)
- * - 2/3 minute return timers like Domino’s/Zomato steps
- * - Pulls payment meta from /api/prep/exams/:examId/meta
- *
- * Version tag (for cache verification): v2025-10-11-a
- */
 export default function PrepAccessOverlay({ examId, email }) {
   // ----------------------- localStorage keys -----------------------
   const ks = useMemo(() => {
@@ -27,33 +18,38 @@ export default function PrepAccessOverlay({ examId, email }) {
   const [state, setState] = useState({
     loading: true,
     show: !!(examId && localStorage.getItem(ks.wait)),
-    mode: localStorage.getItem(ks.wait) ? "waiting" : "", // "purchase" | "restart" | "waiting"
+    mode: localStorage.getItem(ks.wait) ? "waiting" : "",
     exam: {},
     access: {},
     overlay: {},
     waiting: !!localStorage.getItem(ks.wait),
   });
 
+  // NEW: payMeta from /meta to ensure UPI/WA show even if other readers use different shapes
+  const [payMeta, setPayMeta] = useState(null);
+
   const [file, setFile] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [panelHidden, setPanelHidden] = useState(false);
 
-  // minimal inputs
-  const [emailField, setEmailField] = useState(localStorage.getItem("userEmail") || (email || ""));
+  // Minimal user inputs
+  const [emailField, setEmailField] = useState(
+    localStorage.getItem("userEmail") || (email || "")
+  );
   const [nameField, setNameField] = useState("");
   const [phoneField, setPhoneField] = useState("");
 
-  // Step tracker: 0 Pay → 1 Proof → 2 Submit
+  // "Domino’s/Zomato" style step tracker (kept for logic, UI is simplified)
   const [step, setStep] = useState(0);
 
-  // Timers
+  // ----------------------- timers for return flows -----------------
   const [upiStartTs, setUpiStartTs] = useState(() => Number(localStorage.getItem(ks.upiStart) || 0));
   const [upiLeft, setUpiLeft] = useState(0);
   const [waStartTs, setWaStartTs] = useState(() => Number(localStorage.getItem(ks.waStart) || 0));
   const [waLeft, setWaLeft] = useState(0);
 
-  const UPI_SECONDS = 120;
-  const WA_SECONDS = 180;
+  const UPI_SECONDS = 120;   // 2 minutes
+  const WA_SECONDS  = 180;   // 3 minutes
 
   useEffect(() => {
     if (!upiStartTs) return;
@@ -79,30 +75,35 @@ export default function PrepAccessOverlay({ examId, email }) {
     return () => clearInterval(id);
   }, [waStartTs]);
 
+  // ----------------------- utilities -------------------------------
+  const price = Number(state.exam?.price || 0);
+  const courseName = state.exam?.name || String(examId || "").toUpperCase();
+
   // ----------------------- core fetch ------------------------------
   async function fetchStatus() {
     if (!examId) return;
 
     const hasWaitingGate = !!localStorage.getItem(ks.wait);
+
     try {
       const qs = new URLSearchParams({ examId, email: email || "" });
       const r = await getJSON(`/api/prep/access/status?${qs.toString()}`);
       const { exam, access, overlay } = r || {};
 
-      // new user → auto start trial
+      // brand-new user → auto trial → re-fetch
       if (access?.status === "none" && email) {
         await postJSON("/api/prep/access/start-trial", { examId, email });
         return fetchStatus();
       }
 
-      // read todayDay (best-effort)
+      // try to read todayDay (best-effort)
       let todayDay = 1;
       try {
         const meta = await getJSON(`/api/prep/user/summary?${qs.toString()}`);
         todayDay = Number(meta?.todayDay || 1);
       } catch {}
 
-      // decide overlay
+      // --------- decide overlay ---------
       let mode = "";
       let show = false;
       let waiting = !!access?.pending;
@@ -170,36 +171,32 @@ export default function PrepAccessOverlay({ examId, email }) {
   useEffect(() => { fetchStatus(); /* eslint-disable-next-line */ }, [examId, email]);
   useEffect(() => { const t = setInterval(fetchStatus, 60_000); return () => clearInterval(t); /* eslint-disable-next-line */ }, [examId, email]);
 
-  // ----------------------- payment meta (extra fetch) ---------------
-  const [payMeta, setPayMeta] = useState(null);
-
+  // NEW: Fetch /meta (once per examId) so we can fold in payment regardless of server shape
   useEffect(() => {
-    let ignore = false;
+    if (!examId) return;
     (async () => {
-      if (!examId) return;
       try {
-        const meta = await getJSON(`/api/prep/exams/${encodeURIComponent(examId)}/meta?_=${Date.now()}`);
-        if (ignore) return;
-        const ov = meta?.overlay || {};
-        const src = ov?.payment || meta?.payment || meta?.overlayUI || {};
+        const j = await getJSON(`/api/prep/exams/${encodeURIComponent(examId)}/meta?_=${Date.now()}`);
+        // normalize to a flat payment object
+        const ov = j?.overlay || {};
+        const src = ov?.payment || j?.payment || j?.overlayUI || {};
         let wa = String(src.whatsappNumber || "").trim();
         if (!wa && src.whatsappLink) {
           const m = String(src.whatsappLink).match(/wa\.me\/(\+?\d+)/i);
           if (m) wa = m[1];
         }
         setPayMeta({
-          priceINR: Number(ov?.price ?? meta?.price ?? 0),
           upiId: String(src.upiId || "").trim(),
           upiName: String(src.upiName || "").trim(),
           whatsappNumber: wa,
           whatsappText: String(src.whatsappText || "").trim(),
-          courseName: String(meta?.name || examId),
+          priceINR: Number(j?.price ?? ov?.price ?? 0),
+          courseName: j?.name || examId,
         });
       } catch {
         setPayMeta(null);
       }
     })();
-    return () => { ignore = true; };
   }, [examId]);
 
   // --- safe JSON parse for file submit ---
@@ -210,7 +207,7 @@ export default function PrepAccessOverlay({ examId, email }) {
     try { return JSON.parse(txt); } catch { return { success:false, error: (txt || `HTTP ${res.status}`) }; }
   }
 
-  // ------- deep-link derivation (hide IDs from UI) -------
+  // ------- robust deep-link derivation (hide IDs from UI) -------
   function pick(obj, path, def = "") {
     try { return path.split(".").reduce((a, k) => a?.[k], obj) ?? def; } catch { return def; }
   }
@@ -218,40 +215,34 @@ export default function PrepAccessOverlay({ examId, email }) {
   const examPay     = pick(state, "exam.payment", null);
   const overlayUI   = pick(state, "exam.overlayUI", null);
 
-  // Optional: DevTools override (helps when server meta isn’t there yet)
-  const override = (typeof window !== "undefined" && window.__PAY_OVERRIDE) || null;
-
-  const pay = {
-    courseName: override?.courseName || payMeta?.courseName || state?.exam?.name || examId,
-    priceINR: Number(
-      override?.priceINR ??
-      payMeta?.priceINR ??
-      overlayPay?.priceINR ??
-      state?.exam?.price ??
-      overlayUI?.priceINR ??
-      0
-    ),
-    upiId: (override?.upiId || overlayPay?.upiId || examPay?.upiId || overlayUI?.upiId || payMeta?.upiId || ""),
-    upiName: (override?.upiName || overlayPay?.upiName || overlayUI?.upiName || payMeta?.upiName || ""),
+  // Base pay built from status payloads
+  let pay = {
+    courseName: overlayPay?.courseName || state?.exam?.name || examId,
+    priceINR: Number(overlayPay?.priceINR ?? state?.exam?.price ?? overlayUI?.priceINR ?? 0),
+    upiId: overlayPay?.upiId || examPay?.upiId || overlayUI?.upiId || "",
+    upiName: overlayPay?.upiName || overlayUI?.upiName || "",
     whatsappNumber: (() => {
-      const cand =
-        override?.whatsappNumber ||
-        overlayPay?.whatsappNumber ||
-        examPay?.waPhone ||
-        payMeta?.whatsappNumber ||
-        "";
-      if (cand) return cand;
+      const a = overlayPay?.whatsappNumber || examPay?.waPhone || "";
+      if (a) return a;
       const link = overlayUI?.whatsappLink || "";
       const m = link?.match?.(/wa\.me\/(\+?\d+)/i);
       return m ? m[1] : "";
     })(),
-    whatsappText:
-      override?.whatsappText ||
-      overlayPay?.whatsappText ||
-      examPay?.waText ||
-      payMeta?.whatsappText ||
-      "",
+    whatsappText: overlayPay?.whatsappText || examPay?.waText || "",
   };
+
+  // Fold in payMeta last so it wins (covers /meta shapes)
+  if (payMeta) {
+    pay = {
+      ...pay,
+      courseName: pay.courseName || payMeta.courseName || examId,
+      priceINR: (Number(pay.priceINR) || Number(payMeta.priceINR) || 0),
+      upiId: pay.upiId || payMeta.upiId || "",
+      upiName: pay.upiName || payMeta.upiName || "",
+      whatsappNumber: pay.whatsappNumber || payMeta.whatsappNumber || "",
+      whatsappText: pay.whatsappText || payMeta.whatsappText || "",
+    };
+  }
 
   const amount = Number(pay.priceINR || 0);
   const upiLink = pay.upiId
@@ -266,7 +257,7 @@ export default function PrepAccessOverlay({ examId, email }) {
   const waText   = pay.whatsappText || `Hello, I paid for "${pay.courseName}" (₹${amount}).`;
   const waLink   = waNum ? `https://wa.me/${waNum}?text=${encodeURIComponent(waText)}` : "";
 
-  // ----------------------- submission -------------------------------
+  // ----------------------- actions -------------------------------
   async function submitRequest() {
     if (!state.mode || state.mode === "waiting") return;
     const emailVal = (emailField || "").trim();
@@ -327,15 +318,16 @@ export default function PrepAccessOverlay({ examId, email }) {
     const now = Date.now();
     setUpiStartTs(now);
     localStorage.setItem(ks.upiStart, String(now));
-    setStep(0);
-    window.location.href = upiLink;
+    setStep(0); // user is on Pay step
+    window.location.href = upiLink; // better handoff for mobile UPI apps
   };
+
   const handleWAClick = () => {
     if (!waLink) return;
     const now = Date.now();
     setWaStartTs(now);
     localStorage.setItem(ks.waStart, String(now));
-    setStep(s => Math.max(s, 1));
+    setStep(s => Math.max(s, 1)); // move to Proof step
     window.open(waLink, "_blank", "noopener,noreferrer");
   };
 
@@ -343,32 +335,16 @@ export default function PrepAccessOverlay({ examId, email }) {
   const mustVeil = state.show || (state.loading && !!localStorage.getItem(ks.wait));
   if (!mustVeil) return null;
 
-  const courseName = state.exam?.name || String(examId || "").toUpperCase();
   const title =
-    state.mode === "purchase" ? `Unlock – ${courseName}`
-    : state.mode === "restart" ? `Restart – ${courseName}`
+    state.mode === "purchase" ? `Start / Restart – ${courseName}`
+    : state.mode === "restart" ? `Start / Restart – ${courseName}`
     : `Waiting for approval`;
-
-  const desc =
-    state.mode === "purchase"
-      ? `Your free trial of ${state.exam?.trialDays || 3} days is over. Buy "${courseName}" to continue.`
-      : state.mode === "restart"
-      ? `You've completed all ${state.access?.planDays || ""} day(s). Restart "${courseName}" from Day 1.`
-      : `Your request has been submitted. You'll see "Waiting for approval" until the owner grants access.`;
 
   const submitDisabled = submitting || state.mode === "waiting" || !(emailField && emailField.trim());
 
-  const StepBadge = ({ idx, label }) => (
-    <div className="flex items-center gap-2">
-      <div
-        className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold
-          ${step >= idx ? "bg-emerald-600 text-white" : "bg-gray-200 text-gray-700"}`}
-      >
-        {idx + 1}
-      </div>
-      <div className={`text-xs ${step >= idx ? "text-emerald-700" : "text-gray-600"}`}>{label}</div>
-    </div>
-  );
+  const adminHint = (!upiLink || !waLink)
+    ? "Admin hasn’t set UPI/WhatsApp in Access & Overlay yet. Set UPI ID and WhatsApp number and click Save Overlay."
+    : "";
 
   return (
     <div className="fixed inset-0 z-[99999] bg-black/60 backdrop-blur-sm" aria-hidden>
@@ -377,130 +353,98 @@ export default function PrepAccessOverlay({ examId, email }) {
       {!panelHidden && !state.loading && (
         <div className="w-full h-full flex items-center justify-center p-4">
           <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-5">
-            <div className="text-lg font-semibold mb-1">{title}</div>
-            <div className="text-[11px] text-gray-500 mb-2">overlay v2025-10-11-a</div>
-            <div className="text-sm text-gray-700 mb-3">{desc}</div>
+            <div className="text-lg font-semibold mb-3">{title}</div>
 
-            {/* Progress / tracker */}
-            {state.mode !== "waiting" && (
-              <div className="mb-3">
-                <div className="flex items-center justify-between">
-                  <StepBadge idx={0} label="Pay via UPI" />
-                  <div className="flex-1 h-px bg-gray-200 mx-2" />
-                  <StepBadge idx={1} label="Send Proof" />
-                  <div className="flex-1 h-px bg-gray-200 mx-2" />
-                  <StepBadge idx={2} label="Submit" />
-                </div>
+            {/* Admin hint if payment links are missing */}
+            {adminHint && (
+              <div className="text-[12px] text-amber-800 bg-amber-50 border border-amber-200 rounded p-2 mb-3">
+                {adminHint}
               </div>
             )}
 
-            {/* Action area */}
-            {state.mode !== "waiting" && (
-              <>
-                {/* Course + price */}
-                <div className="mb-2">
-                  <div className="text-xs text-gray-600 mb-1">{state.exam?.name || examId}</div>
-                  <div className="text-xs text-gray-600">Price: ₹{state.exam?.price ?? 0}</div>
-                </div>
+            {/* Big buttons like your mock */}
+            <div className="grid grid-cols-1 gap-2 mb-3">
+              <button
+                className={`w-full py-3 rounded text-white text-lg font-semibold ${upiLink ? "bg-emerald-600" : "bg-gray-300 cursor-not-allowed"}`}
+                onClick={handleUPIClick}
+                disabled={!upiLink}
+              >
+                Pay via UPI
+              </button>
 
-                {/* Deep-link buttons */}
-                {(upiLink || waLink) ? (
-                  <div className="grid grid-cols-1 sm:grid-cols-2 gap-2 mb-3">
-                    {upiLink && (
-                      <button
-                        onClick={handleUPIClick}
-                        className="w-full py-2 rounded bg-emerald-600 text-white"
-                      >
-                        Pay via UPI
-                      </button>
-                    )}
-                    {waLink && (
-                      <button
-                        onClick={handleWAClick}
-                        className="w-full py-2 rounded border bg-white"
-                      >
-                        Send Proof on WhatsApp
-                      </button>
-                    )}
-                  </div>
-                ) : (
-                  <div className="text-[12px] text-amber-700 bg-amber-50 border border-amber-200 rounded p-2 mb-3">
-                    Admin hasn’t set UPI/WhatsApp in <b>Access &amp; Overlay</b> yet.  
-                    Set UPI ID and WhatsApp number and click <b>Save Overlay</b>.
+              <button
+                className={`w-full py-3 rounded text-lg font-semibold border ${waLink ? "bg-white" : "bg-gray-100 cursor-not-allowed"}`}
+                onClick={handleWAClick}
+                disabled={!waLink}
+              >
+                Send Proof on WhatsApp
+              </button>
+            </div>
+
+            {/* Name → Phone → Email (order adjusted as requested) */}
+            <input
+              type="text"
+              placeholder="Name"
+              className="w-full border rounded px-3 py-2 mb-2"
+              value={nameField}
+              onChange={(e) => setNameField(e.target.value)}
+            />
+
+            <input
+              type="tel"
+              placeholder="Phone Number"
+              className="w-full border rounded px-3 py-2 mb-2"
+              value={phoneField}
+              onChange={(e) => setPhoneField(e.target.value)}
+            />
+
+            <input
+              type="email"
+              required
+              placeholder="Email"
+              className="w-full border rounded px-3 py-2 mb-2"
+              value={emailField}
+              onChange={(e) => setEmailField(e.target.value)}
+              onFocus={() => setStep(s => Math.max(s, 2))}
+            />
+
+            {/* Screenshot (optional) */}
+            <div className="mb-3">
+              <label className="text-sm block mb-1">Upload payment screenshot (optional)</label>
+              <input
+                type="file"
+                accept="image/*,application/pdf"
+                onChange={(e) => {
+                  setFile(e.target.files?.[0] || null);
+                  setStep(2);
+                }}
+              />
+            </div>
+
+            {/* Submit (big green) */}
+            <button
+              className="w-full py-3 rounded bg-emerald-600 text-white text-lg font-semibold disabled:opacity-60"
+              onClick={submitRequest}
+              disabled={submitDisabled}
+            >
+              Submit
+            </button>
+
+            {/* Optional timers text if the user clicked the links */}
+            {(upiLeft > 0 || waLeft > 0) && (
+              <div className="text-[12px] text-gray-700 mt-2">
+                {upiLeft > 0 && (
+                  <div className="mb-1">
+                    After paying, <b>return to this tab</b> to upload the receipt.
+                    Auto-focus in ~{upiLeft}s.
                   </div>
                 )}
-
-                {/* Timers / guidance */}
-                {(upiLeft > 0 || waLeft > 0) && (
-                  <div className="text-[12px] text-gray-700 mb-2">
-                    {upiLeft > 0 && (
-                      <div className="mb-1">
-                        After paying, <b>return to this tab</b> to upload the receipt. Auto-focus in ~{upiLeft}s.
-                      </div>
-                    )}
-                    {waLeft > 0 && (
-                      <div>
-                        After sending the screenshot on WhatsApp, <b>come back here</b>. We’ll bring you back in ~{waLeft}s.
-                      </div>
-                    )}
+                {waLeft > 0 && (
+                  <div>
+                    After sending the screenshot on WhatsApp, <b>come back here</b>.
+                    We’ll bring you back in ~{waLeft}s.
                   </div>
                 )}
-
-                {/* Inputs */}
-                <input
-                  type="email"
-                  required
-                  placeholder="Email"
-                  className="w-full border rounded px-2 py-1 mb-2"
-                  value={emailField}
-                  onChange={(e) => setEmailField(e.target.value)}
-                  onFocus={() => setStep(s => Math.max(s, 2))}
-                />
-                <input
-                  type="text"
-                  placeholder="Name (optional)"
-                  className="w-full border rounded px-2 py-1 mb-2"
-                  value={nameField}
-                  onChange={(e) => setNameField(e.target.value)}
-                />
-                <input
-                  type="tel"
-                  placeholder="Phone (optional)"
-                  className="w-full border rounded px-2 py-1 mb-2"
-                  value={phoneField}
-                  onChange={(e) => setPhoneField(e.target.value)}
-                />
-
-                {/* Screenshot */}
-                <div className="mb-3">
-                  <label className="text-sm block mb-1">Upload payment screenshot (optional)</label>
-                  <input
-                    type="file"
-                    accept="image/*,application/pdf"
-                    onChange={(e) => {
-                      setFile(e.target.files?.[0] || null);
-                      setStep(2);
-                    }}
-                  />
-                </div>
-
-                <button
-                  className="w-full py-2 rounded bg-emerald-600 text-white disabled:opacity-60"
-                  onClick={submitRequest}
-                  disabled={submitDisabled}
-                >
-                  {submitting
-                    ? "Submitting…"
-                    : state.mode === "purchase"
-                    ? "Submit & Unlock"
-                    : "Submit Restart Request"}
-                </button>
-              </>
-            )}
-
-            {state.mode === "waiting" && (
-              <div className="text-amber-700 bg-amber-50 border border-amber-200 rounded p-2 text-sm mb-2">
-                Waiting for approval…
               </div>
             )}
 
