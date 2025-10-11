@@ -1,3 +1,4 @@
+// client/src/pages/testseries/AdminTestManager.jsx
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -11,15 +12,15 @@ export default function AdminTestManager() {
   const [msg, setMsg] = useState("");
   const [results, setResults] = useState([]);
 
-  // 👈 Use the ACTUAL running API host
-  const API = "https://law-network-server.onrender.com/api";
+  // ✅ hard-fixed working API base (do not change)
+  const API = "https://law-network-api.onrender.com/api";
 
-  const fetchJSON = async (url, opts) => {
+  async function fetchJSON(url, opts) {
     const res = await fetch(url, opts);
     const data = await res.json().catch(() => ({}));
     if (!res.ok) throw new Error(data.message || `HTTP ${res.status}`);
     return data;
-  };
+  }
 
   // ---------- Load tests + papers ----------
   useEffect(() => {
@@ -31,7 +32,7 @@ export default function AdminTestManager() {
         ]);
         setPapers(pRes?.papers || []);
         setRows(tRes?.tests || []);
-      } catch (e) {
+      } catch {
         setMsg("Failed to fetch");
       } finally {
         setLoading(false);
@@ -44,7 +45,9 @@ export default function AdminTestManager() {
     if (tab !== "results") return;
     (async () => {
       try {
-        const r = await fetchJSON(`${API}/testseries/results`);
+        const r = await fetchJSON(`${API}/testseries/results`, {
+          headers: { "X-Owner-Key": localStorage.getItem("ownerKey") || "" },
+        });
         setResults(r?.results || []);
       } catch {
         setResults([]);
@@ -67,14 +70,11 @@ export default function AdminTestManager() {
   }, [rows, q, paperSel]);
 
   const filteredResults = useMemo(() => {
-    const needle = q.trim().toLowerCase();
+    const n = q.trim().toLowerCase();
     return results.filter((r) =>
-      !needle
+      !n
         ? true
-        : [r.testCode, r.user?.email, r.user?.name]
-            .join(" ")
-            .toLowerCase()
-            .includes(needle)
+        : [r.testCode, r.user?.email, r.user?.name].join(" ").toLowerCase().includes(n)
     );
   }, [results, q]);
 
@@ -89,8 +89,7 @@ export default function AdminTestManager() {
         headers: { "X-Owner-Key": ownerKey },
       });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.success)
-        throw new Error(data.message || "Delete failed");
+      if (!res.ok || !data.success) throw new Error(data.message || "Delete failed");
       setRows((r) => r.filter((t) => t.code !== code));
       flash(`✅ Deleted ${code}`);
     } catch (e) {
@@ -103,13 +102,12 @@ export default function AdminTestManager() {
     const ownerKey = localStorage.getItem("ownerKey") || "";
     if (!confirm(`⚠️ Delete ALL tests under "${paper}"?`)) return;
     try {
-      const res = await fetch(
-        `${API}/testseries/paper/${encodeURIComponent(paper)}`,
-        { method: "DELETE", headers: { "X-Owner-Key": ownerKey } }
-      );
+      const res = await fetch(`${API}/testseries/paper/${encodeURIComponent(paper)}`, {
+        method: "DELETE",
+        headers: { "X-Owner-Key": ownerKey },
+      });
       const data = await res.json().catch(() => ({}));
-      if (!res.ok || !data.success)
-        throw new Error(data.message || "Delete failed");
+      if (!res.ok || !data.success) throw new Error(data.message || "Delete failed");
       setRows((r) => r.filter((t) => t.paper !== paper));
       setPapers((ps) => ps.filter((p) => p.paper !== paper));
       setPaperSel("");
