@@ -233,7 +233,7 @@ export default function AdminTestManager() {
                         </Link>
                         <Link
                           to={`/tests/${t.code}/play`}
-                          className="px-3 py-1.5 rounded-lg bg-slate-800 text-white hover:bg-slate-900"}
+                          className="px-3 py-1.5 rounded-lg bg-slate-800 text-white hover:bg-slate-900"
                         >
                           Play
                         </Link>
