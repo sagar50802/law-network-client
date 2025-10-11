@@ -178,6 +178,41 @@ export default function PrepAccessOverlay({ examId, email }) {
     try { return JSON.parse(txt); } catch { return { success:false, error: (txt || `HTTP ${res.status}`) }; }
   }
 
+  // =================================================================
+  // 1) EXTRA STATE for fallback meta payment
+  const [payMeta, setPayMeta] = useState(null);
+
+  // 2) EFFECT: if /status doesn't provide deep-link info, fetch /meta once
+  useEffect(() => {
+    if (!examId) return;
+
+    const overlayPayTry = state?.overlay?.payment;
+    const examPayTry    = state?.exam?.payment;
+    const overlayUITry  = state?.exam?.overlayUI;
+
+    const haveAny =
+      (overlayPayTry && (overlayPayTry.upiId || overlayPayTry.whatsappNumber)) ||
+      (examPayTry && (examPayTry.upiId || examPayTry.waPhone || examPayTry.whatsappText)) ||
+      (overlayUITry && (overlayUITry.upiId || overlayUITry.whatsappLink));
+
+    if (haveAny || payMeta) return;
+
+    (async () => {
+      try {
+        const meta = await getJSON(`/api/prep/exams/${encodeURIComponent(examId)}/meta?_=${Date.now()}`);
+        const src =
+          (meta?.overlay?.payment) ||
+          (meta?.payment) ||
+          (meta?.overlayUI) ||
+          null;
+        setPayMeta(src);
+      } catch {
+        /* ignore */
+      }
+    })();
+  }, [examId, state.overlay, state.exam, payMeta]);
+  // =================================================================
+
   // ------- robust deep-link derivation (hide IDs from UI) -------
   function pick(obj, path, def = "") {
     try { return path.split(".").reduce((a, k) => a?.[k], obj) ?? def; } catch { return def; }
@@ -185,20 +220,38 @@ export default function PrepAccessOverlay({ examId, email }) {
   const overlayPay = pick(state, "overlay.payment", null) || pick(state, "exam.overlay.payment", null);
   const examPay     = pick(state, "exam.payment", null);
   const overlayUI   = pick(state, "exam.overlayUI", null);
+  const metaPay     = payMeta || {};
 
+  // 3) FOLD payMeta into the pay object
   const pay = {
     courseName: overlayPay?.courseName || state?.exam?.name || examId,
-    priceINR: Number(overlayPay?.priceINR ?? state?.exam?.price ?? overlayUI?.priceINR ?? 0),
-    upiId: overlayPay?.upiId || examPay?.upiId || overlayUI?.upiId || "",         // used only to build link
-    upiName: overlayPay?.upiName || overlayUI?.upiName || "",
+    priceINR: Number(
+      overlayPay?.priceINR ??
+      state?.exam?.price ??
+      overlayUI?.priceINR ??
+      metaPay?.priceINR ??
+      0
+    ),
+    upiId:
+      overlayPay?.upiId ||
+      examPay?.upiId ||
+      overlayUI?.upiId ||
+      metaPay?.upiId || "",
+    upiName:
+      overlayPay?.upiName ||
+      overlayUI?.upiName ||
+      metaPay?.upiName || "",
     whatsappNumber: (() => {
-      const a = overlayPay?.whatsappNumber || examPay?.waPhone || "";
-      if (a) return a;
-      const link = overlayUI?.whatsappLink || "";
+      const fromStatus = overlayPay?.whatsappNumber || examPay?.waPhone || "";
+      if (fromStatus) return fromStatus;
+      const link = overlayUI?.whatsappLink || metaPay?.whatsappLink || "";
       const m = link?.match?.(/wa\.me\/(\+?\d+)/i);
-      return m ? m[1] : "";
+      return m ? m[1] : (metaPay?.whatsappNumber || "");
     })(),
-    whatsappText: overlayPay?.whatsappText || examPay?.waText || "",
+    whatsappText:
+      overlayPay?.whatsappText ||
+      examPay?.waText ||
+      metaPay?.whatsappText || "",
   };
 
   const amount = Number(pay.priceINR || 0);
