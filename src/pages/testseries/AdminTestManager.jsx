@@ -1,7 +1,6 @@
-// client/src/pages/testseries/AdminTestManager.jsx
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { absUrl, getJSON } from "../../utils/api";
+import { absUrl } from "../../utils/api"; // keep for other relative calls if needed
 
 export default function AdminTestManager() {
   const [tab, setTab] = useState("tests"); // "tests" | "results"
@@ -13,16 +12,23 @@ export default function AdminTestManager() {
   const [msg, setMsg] = useState("");
   const [results, setResults] = useState([]);
 
-  // ✅ Talk to the API directly so render proxy/cors never blocks you
-  const API = "https://law-network-api.onrender.com/api"; // <- your server (do not change render, api.js, server.js)
+  // ✅ Talk to your API directly (do NOT use getJSON here to avoid double-prefix)
+  const API = "https://law-network-api.onrender.com/api";
+
+  const fetchJSON = async (url, opts) => {
+    const res = await fetch(url, opts);
+    const data = await res.json().catch(() => ({}));
+    if (!res.ok) throw new Error(data.message || `HTTP ${res.status}`);
+    return data;
+  };
 
   /* ---------- Load tests + papers ---------- */
   useEffect(() => {
     (async () => {
       try {
         const [pRes, tRes] = await Promise.all([
-          getJSON(`${API}/testseries/papers`),
-          getJSON(`${API}/testseries/tests`),
+          fetchJSON(`${API}/testseries/papers`),
+          fetchJSON(`${API}/testseries/tests`),
         ]);
         setPapers(pRes?.papers || []);
         setRows(tRes?.tests || []);
@@ -39,7 +45,7 @@ export default function AdminTestManager() {
     if (tab !== "results") return;
     (async () => {
       try {
-        const r = await getJSON(`${API}/testseries/results`);
+        const r = await fetchJSON(`${API}/testseries/results`);
         setResults(r?.results || []);
       } catch {
         setResults([]);
