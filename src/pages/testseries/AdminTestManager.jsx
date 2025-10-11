@@ -12,8 +12,11 @@ export default function AdminTestManager() {
   const [msg, setMsg] = useState("");
   const [results, setResults] = useState([]);
 
-  // ✅ Correct absolute API base for your server
+  // ✅ Set this to whichever /api/ping worked in your browser:
+  // If #1 worked, keep this:
   const API = "https://law-network-server.onrender.com/api";
+  // If #2 worked instead, replace the line above with:
+  // const API = "https://law-network-api.onrender.com/api";
 
   const fetchJSON = async (url, opts) => {
     const res = await fetch(url, opts);
