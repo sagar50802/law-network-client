@@ -14,7 +14,7 @@ export default function Navbar() {
       .catch(() => {});
   }, []);
 
-  // ✅ fetch total number of tests (reads r.tests)
+  // ✅ fetch total number of tests (reads r.tests safely)
   useEffect(() => {
     getJSON("/api/testseries/tests")
       .then((r) => setTestCount(r?.tests?.length || 0))
