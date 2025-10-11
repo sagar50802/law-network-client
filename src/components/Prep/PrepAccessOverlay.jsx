@@ -1,3 +1,4 @@
+// src/components/Prep/PrepAccessOverlay.jsx
 import { useEffect, useMemo, useState } from "react";
 import { getJSON, postJSON } from "../../utils/api";
 
@@ -25,21 +26,20 @@ export default function PrepAccessOverlay({ examId, email }) {
     waiting: !!localStorage.getItem(ks.wait),
   });
 
-  // NEW: payMeta from /meta to ensure UPI/WA show even if other readers use different shapes
+  // Payment/meta (from /meta to support all server shapes)
   const [payMeta, setPayMeta] = useState(null);
 
-  const [file, setFile] = useState(null);
   const [submitting, setSubmitting] = useState(false);
   const [panelHidden, setPanelHidden] = useState(false);
 
-  // Minimal user inputs
+  // Minimal user inputs (order: name → phone → email)
   const [emailField, setEmailField] = useState(
     localStorage.getItem("userEmail") || (email || "")
   );
   const [nameField, setNameField] = useState("");
   const [phoneField, setPhoneField] = useState("");
 
-  // "Domino’s/Zomato" style step tracker (kept for logic, UI is simplified)
+  // Progress tracker (0=Pay, 1=Proof, 2=Submit)
   const [step, setStep] = useState(0);
 
   // ----------------------- timers for return flows -----------------
@@ -78,6 +78,7 @@ export default function PrepAccessOverlay({ examId, email }) {
   // ----------------------- utilities -------------------------------
   const price = Number(state.exam?.price || 0);
   const courseName = state.exam?.name || String(examId || "").toUpperCase();
+  const isAndroid = /Android/i.test(navigator.userAgent);
 
   // ----------------------- core fetch ------------------------------
   async function fetchStatus() {
@@ -171,13 +172,12 @@ export default function PrepAccessOverlay({ examId, email }) {
   useEffect(() => { fetchStatus(); /* eslint-disable-next-line */ }, [examId, email]);
   useEffect(() => { const t = setInterval(fetchStatus, 60_000); return () => clearInterval(t); /* eslint-disable-next-line */ }, [examId, email]);
 
-  // NEW: Fetch /meta (once per examId) so we can fold in payment regardless of server shape
+  // Fetch /meta for payment (works regardless of server shape)
   useEffect(() => {
     if (!examId) return;
     (async () => {
       try {
         const j = await getJSON(`/api/prep/exams/${encodeURIComponent(examId)}/meta?_=${Date.now()}`);
-        // normalize to a flat payment object
         const ov = j?.overlay || {};
         const src = ov?.payment || j?.payment || j?.overlayUI || {};
         let wa = String(src.whatsappNumber || "").trim();
@@ -199,15 +199,7 @@ export default function PrepAccessOverlay({ examId, email }) {
     })();
   }, [examId]);
 
-  // --- safe JSON parse for file submit ---
-  async function readJsonSafe(res) {
-    const ct = (res.headers.get("content-type") || "").toLowerCase();
-    if (ct.includes("application/json")) return await res.json();
-    const txt = await res.text();
-    try { return JSON.parse(txt); } catch { return { success:false, error: (txt || `HTTP ${res.status}`) }; }
-  }
-
-  // ------- robust deep-link derivation (hide IDs from UI) -------
+  // --- helpers -----------------------------------------------------
   function pick(obj, path, def = "") {
     try { return path.split(".").reduce((a, k) => a?.[k], obj) ?? def; } catch { return def; }
   }
@@ -215,7 +207,7 @@ export default function PrepAccessOverlay({ examId, email }) {
   const examPay     = pick(state, "exam.payment", null);
   const overlayUI   = pick(state, "exam.overlayUI", null);
 
-  // Base pay built from status payloads
+  // Build payment links (status payloads first)
   let pay = {
     courseName: overlayPay?.courseName || state?.exam?.name || examId,
     priceINR: Number(overlayPay?.priceINR ?? state?.exam?.price ?? overlayUI?.priceINR ?? 0),
@@ -231,7 +223,7 @@ export default function PrepAccessOverlay({ examId, email }) {
     whatsappText: overlayPay?.whatsappText || examPay?.waText || "",
   };
 
-  // Fold in payMeta last so it wins (covers /meta shapes)
+  // Fold in /meta (wins last)
   if (payMeta) {
     pay = {
       ...pay,
@@ -244,6 +236,11 @@ export default function PrepAccessOverlay({ examId, email }) {
     };
   }
 
+  // Normalize WA number
+  let waNum = (pay.whatsappNumber || "").replace(/[^\d+]/g, "");
+  if (waNum.startsWith("+")) waNum = waNum.slice(1);
+  if (/^\d{10}$/.test(waNum)) waNum = "91" + waNum; // assume India if 10 digits
+
   const amount = Number(pay.priceINR || 0);
   const upiLink = pay.upiId
     ? `upi://pay?pa=${encodeURIComponent(pay.upiId)}`
@@ -252,10 +249,8 @@ export default function PrepAccessOverlay({ examId, email }) {
       + `&cu=INR&tn=${encodeURIComponent(`Payment for ${pay.courseName}`)}`
     : "";
 
-  const waNumRaw = (pay.whatsappNumber || "").replace(/[^\d+]/g, "");
-  const waNum    = waNumRaw.replace(/^\+/, "");
-  const waText   = pay.whatsappText || `Hello, I paid for "${pay.courseName}" (₹${amount}).`;
-  const waLink   = waNum ? `https://wa.me/${waNum}?text=${encodeURIComponent(waText)}` : "";
+  const waText = (pay.whatsappText || `Hello, I paid for "${pay.courseName}" (₹${amount}).`).trim();
+  const waLink = waNum ? `https://wa.me/${waNum}?text=${encodeURIComponent(waText)}` : "";
 
   // ----------------------- actions -------------------------------
   async function submitRequest() {
@@ -274,20 +269,19 @@ export default function PrepAccessOverlay({ examId, email }) {
       waStartTs ? `wa_clicked=1` : ""
     ].filter(Boolean).join("; ");
     if (note) fd.append("note", note);
-    if (file) fd.append("screenshot", file);
 
     localStorage.setItem("userEmail", emailVal);
 
     setSubmitting(true);
     try {
       const res = await fetch("/api/prep/access/request", { method: "POST", body: fd });
-      const j = await readJsonSafe(res);
+      const ct = (res.headers.get("content-type") || "").toLowerCase();
+      const j = ct.includes("application/json") ? await res.json() : {};
       if (!res.ok || j?.success === false) {
         const msg = j?.error || j?.message || `Request failed (${res.status})`;
         alert(msg);
         return;
       }
-
       if (j?.approved) {
         localStorage.removeItem(ks.wait);
         await fetchStatus();
@@ -312,14 +306,23 @@ export default function PrepAccessOverlay({ examId, email }) {
     setPanelHidden(true);
   }
 
-  // Handlers that start timers + open deep links
+  // Copy helper for desktop UPI fallback
+  function copy(text) {
+    try { navigator.clipboard?.writeText(text); } catch {}
+  }
+
+  // Deep-link handlers (start timers + open)
   const handleUPIClick = () => {
     if (!upiLink) return;
     const now = Date.now();
     setUpiStartTs(now);
     localStorage.setItem(ks.upiStart, String(now));
-    setStep(0); // user is on Pay step
-    window.location.href = upiLink; // better handoff for mobile UPI apps
+    setStep(0);
+
+    // On Android, UPI apps handle the scheme. On desktop, nothing will happen.
+    try {
+      window.location.href = upiLink;
+    } catch {}
   };
 
   const handleWAClick = () => {
@@ -327,7 +330,7 @@ export default function PrepAccessOverlay({ examId, email }) {
     const now = Date.now();
     setWaStartTs(now);
     localStorage.setItem(ks.waStart, String(now));
-    setStep(s => Math.max(s, 1)); // move to Proof step
+    setStep(s => Math.max(s, 1));
     window.open(waLink, "_blank", "noopener,noreferrer");
   };
 
@@ -336,15 +339,28 @@ export default function PrepAccessOverlay({ examId, email }) {
   if (!mustVeil) return null;
 
   const title =
-    state.mode === "purchase" ? `Start / Restart – ${courseName}`
-    : state.mode === "restart" ? `Start / Restart – ${courseName}`
+    state.mode === "purchase" ? `Start / Restart — ${courseName}`
+    : state.mode === "restart" ? `Start / Restart — ${courseName}`
     : `Waiting for approval`;
 
   const submitDisabled = submitting || state.mode === "waiting" || !(emailField && emailField.trim());
 
-  const adminHint = (!upiLink || !waLink)
-    ? "Admin hasn’t set UPI/WhatsApp in Access & Overlay yet. Set UPI ID and WhatsApp number and click Save Overlay."
+  const adminMissing = !pay.upiId || !waNum;
+  const adminHint = adminMissing
+    ? `Admin hasn’t set ${!pay.upiId ? "UPI ID" : ""}${!pay.upiId && !waNum ? " & " : ""}${!waNum ? "WhatsApp number" : ""} in Access & Overlay.`
     : "";
+
+  const StepBadge = ({ idx, label }) => (
+    <div className="flex items-center gap-2">
+      <div
+        className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold
+          ${step >= idx ? "bg-emerald-600 text-white" : "bg-gray-200 text-gray-700"}`}
+      >
+        {idx + 1}
+      </div>
+      <div className={`text-xs ${step >= idx ? "text-emerald-700" : "text-gray-600"}`}>{label}</div>
+    </div>
+  );
 
   return (
     <div className="fixed inset-0 z-[99999] bg-black/60 backdrop-blur-sm" aria-hidden>
@@ -355,14 +371,27 @@ export default function PrepAccessOverlay({ examId, email }) {
           <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-5">
             <div className="text-lg font-semibold mb-3">{title}</div>
 
-            {/* Admin hint if payment links are missing */}
             {adminHint && (
               <div className="text-[12px] text-amber-800 bg-amber-50 border border-amber-200 rounded p-2 mb-3">
                 {adminHint}
+                <div className="mt-1 opacity-70">
+                  Resolved: UPI <code>{pay.upiId || "—"}</code> • WhatsApp <code>{waNum || "—"}</code>
+                </div>
               </div>
             )}
 
-            {/* Big buttons like your mock */}
+            {/* Step tracker */}
+            <div className="mb-3">
+              <div className="flex items-center justify-between">
+                <StepBadge idx={0} label="Pay via UPI" />
+                <div className="flex-1 h-px bg-gray-200 mx-2" />
+                <StepBadge idx={1} label="Send Proof" />
+                <div className="flex-1 h-px bg-gray-200 mx-2" />
+                <StepBadge idx={2} label="Submit" />
+              </div>
+            </div>
+
+            {/* Big action buttons */}
             <div className="grid grid-cols-1 gap-2 mb-3">
               <button
                 className={`w-full py-3 rounded text-white text-lg font-semibold ${upiLink ? "bg-emerald-600" : "bg-gray-300 cursor-not-allowed"}`}
@@ -381,7 +410,33 @@ export default function PrepAccessOverlay({ examId, email }) {
               </button>
             </div>
 
-            {/* Name → Phone → Email (order adjusted as requested) */}
+            {/* Desktop UPI fallback/help */}
+            {!isAndroid && upiLink && (
+              <div className="text-[12px] text-gray-600 mb-3">
+                Tip: UPI deep links open in mobile UPI apps (Android). On desktop, copy UPI ID{" "}
+                <code className="bg-gray-100 px-1 rounded">{pay.upiId}</code>{" "}
+                and pay from your phone.{" "}
+                <button className="underline" onClick={() => copy(pay.upiId)}>Copy</button>
+              </div>
+            )}
+
+            {/* Timers / guidance banners */}
+            {(upiLeft > 0 || waLeft > 0) && (
+              <div className="text-[12px] text-gray-700 mb-3">
+                {upiLeft > 0 && (
+                  <div className="mb-1">
+                    After paying, <b>return to this tab</b> to finish. Auto-focus in ~{upiLeft}s.
+                  </div>
+                )}
+                {waLeft > 0 && (
+                  <div>
+                    After sending the screenshot on WhatsApp, <b>come back here</b>. We’ll bring you back in ~{waLeft}s.
+                  </div>
+                )}
+              </div>
+            )}
+
+            {/* Inputs (Name → Phone → Email) */}
             <input
               type="text"
               placeholder="Name"
@@ -402,26 +457,13 @@ export default function PrepAccessOverlay({ examId, email }) {
               type="email"
               required
               placeholder="Email"
-              className="w-full border rounded px-3 py-2 mb-2"
+              className="w-full border rounded px-3 py-2 mb-3"
               value={emailField}
               onChange={(e) => setEmailField(e.target.value)}
               onFocus={() => setStep(s => Math.max(s, 2))}
             />
 
-            {/* Screenshot (optional) */}
-            <div className="mb-3">
-              <label className="text-sm block mb-1">Upload payment screenshot (optional)</label>
-              <input
-                type="file"
-                accept="image/*,application/pdf"
-                onChange={(e) => {
-                  setFile(e.target.files?.[0] || null);
-                  setStep(2);
-                }}
-              />
-            </div>
-
-            {/* Submit (big green) */}
+            {/* Single Submit button (screenshot upload removed) */}
             <button
               className="w-full py-3 rounded bg-emerald-600 text-white text-lg font-semibold disabled:opacity-60"
               onClick={submitRequest}
@@ -429,24 +471,6 @@ export default function PrepAccessOverlay({ examId, email }) {
             >
               Submit
             </button>
-
-            {/* Optional timers text if the user clicked the links */}
-            {(upiLeft > 0 || waLeft > 0) && (
-              <div className="text-[12px] text-gray-700 mt-2">
-                {upiLeft > 0 && (
-                  <div className="mb-1">
-                    After paying, <b>return to this tab</b> to upload the receipt.
-                    Auto-focus in ~{upiLeft}s.
-                  </div>
-                )}
-                {waLeft > 0 && (
-                  <div>
-                    After sending the screenshot on WhatsApp, <b>come back here</b>.
-                    We’ll bring you back in ~{waLeft}s.
-                  </div>
-                )}
-              </div>
-            )}
 
             {/* Close = only hide panel; veil stays */}
             <button className="w-full mt-2 py-2 rounded border bg-white" onClick={closeForToday}>
