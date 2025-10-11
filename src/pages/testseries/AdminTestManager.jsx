@@ -12,8 +12,8 @@ export default function AdminTestManager() {
   const [msg, setMsg] = useState("");
   const [results, setResults] = useState([]);
 
-  // ✅ absolute API base (do NOT pass this through getJSON/absUrl)
-  const API = "https://law-network-api.onrender.com/api";
+  // ✅ Correct absolute API base for your server
+  const API = "https://law-network-server.onrender.com/api";
 
   const fetchJSON = async (url, opts) => {
     const res = await fetch(url, opts);
