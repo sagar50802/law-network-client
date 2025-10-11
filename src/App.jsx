@@ -5,7 +5,6 @@ import { useEffect } from "react";
 import Navbar from "./components/layout/Navbar";
 import AdminRoute from "./components/common/AdminRoute.jsx";
 
-// static imports (pages)
 import HomePage from "./pages/HomePage.jsx";
 import ArticlesPage from "./pages/ArticlesPage.jsx";
 import NewsPage from "./pages/NewsPage.jsx";
@@ -15,47 +14,30 @@ import NotebookPage from "./pages/NotebookPage.jsx";
 import AdminDashboard from "./pages/AdminDashboard.jsx";
 import AdminLogin from "./pages/AdminLogin.jsx";
 
-// admin editor for consultancy (component page)
 import AdminConsultancyEditor from "./components/Admin/AdminConsultancyEditor.jsx";
 
-// ✅ NEW: plagiarism page
 import Plagiarism from "./pages/Plagiarism.jsx";
-
-// ✅ NEW: Scholar Space page
 import ScholarPage from "./pages/ScholarPage.jsx";
-
-// ✅ NEW: PDF Demo page (for GridFS testing)
 import PdfDemo from "./pages/PdfDemo.jsx";
 
-// ✅ NEW: Preparation pages (user & admin)
 import PrepList from "./pages/prep/PrepList.jsx";
 import PrepWizard from "./pages/prep/PrepWizard.jsx";
 import AdminPrepPanel from "./pages/prep/AdminPrepPanel.jsx";
-
-// ✅ Admin overlay editor
 import PrepOverlayEditor from "./pages/prep/PrepOverlayEditor.jsx";
-
-// ✅ Prep access control admin page
 import PrepAccessAdmin from "./pages/admin/PrepAccessAdmin.jsx";
 
-// ✅ NEW: Test Series pages (Step 4 integration)
 import TestDashboard from "./pages/testseries/TestDashboard.jsx";
 import TestIntro from "./pages/testseries/TestIntro.jsx";
 import TestPlayer from "./pages/testseries/TestPlayer.jsx";
 import ResultScreen from "./pages/testseries/ResultScreen.jsx";
 import AdminTestImporter from "./pages/testseries/AdminTestImporter.jsx";
-
-// ✅ NEW: Admin results + manager pages
 import AdminTestResults from "./pages/testseries/AdminTestResults.jsx";
+
+// ✅ NEW: Admin Test Manager page
 import AdminTestManager from "./pages/testseries/AdminTestManager.jsx";
 
-// ✅ Admin-only component wrapper
 import IfOwnerOnly from "./components/common/IfOwnerOnly.jsx";
-
-/* 🔤 Global UI styles */
 import "./styles/ui.css";
-
-/* -------------------- Local helpers/components -------------------- */
 
 function NotFound() {
   return (
@@ -99,13 +81,10 @@ function RouteWithCode({ Comp }) {
   const { code } = useParams();
   return <Comp code={code} />;
 }
-
 function RouteWithResultId({ Comp }) {
   const { id } = useParams();
   return <Comp id={id} />;
 }
-
-/* ------------------------------- App ------------------------------- */
 
 export default function App() {
   return (
@@ -125,15 +104,13 @@ export default function App() {
             <Route path="/videos" element={<VideosPage />} />
             <Route path="/podcasts" element={<PodcastsPage />} />
             <Route path="/notebook" element={<NotebookPage />} />
-
             <Route path="/scholar" element={<ScholarPage />} />
             <Route path="/plagiarism" element={<Plagiarism />} />
             <Route path="/pdfdemo" element={<PdfDemo />} />
 
-            {/* ✅ Exam Preparation */}
+            {/* Prep */}
             <Route path="/prep" element={<PrepList />} />
             <Route path="/prep/:examId" element={<PrepWizard />} />
-
             <Route
               path="/admin/prep"
               element={
@@ -142,7 +119,6 @@ export default function App() {
                 </AdminRoute>
               }
             />
-
             <Route
               path="/admin/prep-overlay"
               element={
@@ -159,7 +135,6 @@ export default function App() {
                 </AdminRoute>
               }
             />
-
             <Route
               path="/admin/prep-access"
               element={
@@ -169,13 +144,13 @@ export default function App() {
               }
             />
 
-            {/* ✅ Test Series */}
+            {/* Test Series */}
             <Route path="/tests" element={<TestDashboard />} />
             <Route path="/tests/:code" element={<RouteWithCode Comp={TestIntro} />} />
             <Route path="/tests/:code/play" element={<RouteWithCode Comp={TestPlayer} />} />
             <Route path="/tests/result/:id" element={<RouteWithResultId Comp={ResultScreen} />} />
 
-            {/* ✅ Admin Test Importer */}
+            {/* Admin: Import tests */}
             <Route
               path="/owner/tests/import"
               element={
@@ -185,7 +160,7 @@ export default function App() {
               }
             />
 
-            {/* ✅ Admin Results */}
+            {/* Admin: Results page (kept) */}
             <Route
               path="/owner/tests/results"
               element={
@@ -195,7 +170,7 @@ export default function App() {
               }
             />
 
-            {/* ✅ Admin Test Manager */}
+            {/* ✅ Admin: Tests Manager (delete from UI) */}
             <Route
               path="/owner/tests"
               element={
@@ -205,7 +180,7 @@ export default function App() {
               }
             />
 
-            {/* ✅ Admin core pages */}
+            {/* Admin (existing) */}
             <Route path="/admin/login" element={<AdminLogin />} />
             <Route
               path="/admin/dashboard"
