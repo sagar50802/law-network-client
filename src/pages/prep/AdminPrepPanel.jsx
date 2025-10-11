@@ -1,4 +1,3 @@
-// client/src/pages/prep/AdminPrepPanel.jsx
 import { useEffect, useRef, useState } from "react";
 import { getJSON, delJSON, buildUrl } from "../../utils/api";
 
@@ -177,7 +176,7 @@ function ExamEditor({ examId }) {
   });
   const [overlayLoading, setOverlayLoading] = useState(false);
 
-  // ── PAYMENT & PROOF (NEW: state + load + save) ──
+  // ── PAYMENT & PROOF (NEW) ──
   const [pay, setPay] = useState({
     upiId: "",
     upiName: "",
@@ -292,10 +291,10 @@ function ExamEditor({ examId }) {
       showOnDay:  modeForServer === "planDayTime" ? Number(showOnDay || 1) : undefined,
       showAtLocal:modeForServer === "planDayTime" ? (showAtLocal || "09:00") : undefined,
 
-      // send payment in BOTH shapes so whichever your server expects will persist
-      ...payment,           // flat
-      payment,              // root.payment
-      overlay: { payment }, // overlay.payment (most readers look here)
+      // send payment in ALL shapes
+      ...payment,             // flat
+      payment,                // root.payment
+      overlay: { payment },   // overlay.payment
     };
 
     // drop undefined
@@ -556,7 +555,7 @@ function ExamEditor({ examId }) {
           </div>
         )}
 
-        {/* Payment & Proof (this is what powers the green buttons) */}
+        {/* Payment & Proof */}
         <div className="border-t mt-4 pt-4">
           <div className="font-medium mb-2">Payment &amp; Proof</div>
           <div className="grid md:grid-cols-2 gap-3">
