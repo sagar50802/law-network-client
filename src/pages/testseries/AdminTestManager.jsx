@@ -1,4 +1,3 @@
-// client/src/pages/testseries/AdminTestManager.jsx
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
 
@@ -12,8 +11,8 @@ export default function AdminTestManager() {
   const [msg, setMsg] = useState("");
   const [results, setResults] = useState([]);
 
-  // ✅ Use the API service that actually responds to /api/ping
-  const API = "https://law-network-api.onrender.com/api";
+  // 👈 Use the ACTUAL running API host
+  const API = "https://law-network-server.onrender.com/api";
 
   const fetchJSON = async (url, opts) => {
     const res = await fetch(url, opts);
@@ -22,7 +21,7 @@ export default function AdminTestManager() {
     return data;
   };
 
-  /* ---------- Load tests + papers ---------- */
+  // ---------- Load tests + papers ----------
   useEffect(() => {
     (async () => {
       try {
@@ -40,7 +39,7 @@ export default function AdminTestManager() {
     })();
   }, []);
 
-  /* ---------- Load results when tab opens ---------- */
+  // ---------- Load results when tab opens ----------
   useEffect(() => {
     if (tab !== "results") return;
     (async () => {
@@ -53,7 +52,7 @@ export default function AdminTestManager() {
     })();
   }, [tab]);
 
-  /* ---------- Filters ---------- */
+  // ---------- Filters ----------
   const filteredTests = useMemo(() => {
     const needle = q.trim().toLowerCase();
     return rows
@@ -79,7 +78,7 @@ export default function AdminTestManager() {
     );
   }, [results, q]);
 
-  /* ---------- Actions ---------- */
+  // ---------- Actions ----------
   async function handleDelete(code) {
     if (!code) return;
     const ownerKey = localStorage.getItem("ownerKey") || "";
