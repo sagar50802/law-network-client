@@ -1,43 +1,53 @@
+// client/src/pages/testseries/AdminTestManager.jsx
 import { useEffect, useMemo, useState } from "react";
 import { Link } from "react-router-dom";
-import { getJSON } from "../../utils/api";
+
+// We won't change your api.js; for admin we hard-fix the backend base here:
+const FIXED_API = "https://law-network-server.onrender.com/api";
 
 export default function AdminTestManager() {
-  const [tab, setTab] = useState("tests");
+  const [tab, setTab] = useState("tests"); // "tests" | "results"
+
+  // tests/papers state
   const [rows, setRows] = useState([]);
   const [papers, setPapers] = useState([]);
   const [paperSel, setPaperSel] = useState("");
   const [q, setQ] = useState("");
   const [loading, setLoading] = useState(true);
   const [msg, setMsg] = useState("");
+
+  // results state
   const [results, setResults] = useState([]);
 
-  const FIXED_API = "https://lawnetwork-api.onrender.com/api";
-
-  /* ---------- Load tests + papers ---------- */
+  /* ---------- Load tests + papers (from fixed API) ---------- */
   useEffect(() => {
     (async () => {
       try {
         const [pRes, tRes] = await Promise.all([
-          getJSON(FIXED_API + "/testseries/papers"),
-          getJSON(FIXED_API + "/testseries/tests"),
+          fetch(`${FIXED_API}/testseries/papers`).then((r) => r.json()),
+          fetch(`${FIXED_API}/testseries/tests`).then((r) => r.json()),
         ]);
-        setPapers(pRes?.papers || []);
-        setRows(tRes?.tests || []);
+        if (!pRes?.success) throw new Error(pRes?.message || "Failed papers");
+        if (!tRes?.success) throw new Error(tRes?.message || "Failed tests");
+
+        setPapers(pRes.papers || []);
+        setRows(tRes.tests || []);
       } catch (e) {
-        setMsg(e?.message || "Failed to load tests");
+        setMsg(e?.message || "Failed to fetch");
       } finally {
         setLoading(false);
       }
     })();
   }, []);
 
-  /* ---------- Load results when tab opens ---------- */
+  /* ---------- Load results when tab opens (from fixed API) ---------- */
   useEffect(() => {
     if (tab !== "results") return;
     (async () => {
       try {
-        const r = await getJSON(FIXED_API + "/testseries/results");
+        const r = await fetch(`${FIXED_API}/testseries/results`, {
+          headers: { "X-Owner-Key": localStorage.getItem("ownerKey") || "" },
+        }).then((x) => x.json());
         setResults(r?.results || []);
       } catch {
         setResults([]);
@@ -71,19 +81,20 @@ export default function AdminTestManager() {
     );
   }, [results, q]);
 
-  /* ---------- Actions ---------- */
+  /* ---------- Actions (use fixed API so CORS is OK) ---------- */
   async function handleDelete(code) {
     if (!code) return;
     const ownerKey = localStorage.getItem("ownerKey") || "";
     if (!confirm(`Delete test "${code}"? This cannot be undone.`)) return;
+
     try {
       const res = await fetch(`${FIXED_API}/testseries/${encodeURIComponent(code)}`, {
         method: "DELETE",
         headers: { "X-Owner-Key": ownerKey },
       });
-      const data = await res.json();
-      if (!res.ok || !data.success)
-        throw new Error(data.message || "Delete failed");
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.success)
+        throw new Error(data?.message || `Delete failed (${res.status})`);
       setRows((r) => r.filter((t) => t.code !== code));
       flash(`✅ Deleted ${code}`);
     } catch (e) {
@@ -95,14 +106,16 @@ export default function AdminTestManager() {
     if (!paper) return;
     const ownerKey = localStorage.getItem("ownerKey") || "";
     if (!confirm(`⚠️ Delete ALL tests under "${paper}"?`)) return;
+
     try {
       const res = await fetch(
         `${FIXED_API}/testseries/paper/${encodeURIComponent(paper)}`,
         { method: "DELETE", headers: { "X-Owner-Key": ownerKey } }
       );
-      const data = await res.json();
-      if (!res.ok || !data.success)
-        throw new Error(data.message || "Delete failed");
+      const data = await res.json().catch(() => ({}));
+      if (!res.ok || !data?.success)
+        throw new Error(data?.message || `Delete failed (${res.status})`);
+
       setRows((r) => r.filter((t) => t.paper !== paper));
       setPapers((ps) => ps.filter((p) => p.paper !== paper));
       setPaperSel("");
@@ -138,6 +151,7 @@ export default function AdminTestManager() {
         ))}
       </div>
 
+      {/* Flash Message */}
       {msg && (
         <div className="mb-4 text-sm px-3 py-2 rounded-lg bg-emerald-50 text-emerald-700 border border-emerald-200">
           {msg}
