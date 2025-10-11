@@ -106,14 +106,7 @@ export default function AdminPrepPanel() {
       <div className="flex items-center gap-3 mb-4">
         <h1 className="text-2xl font-bold">Admin Prep Panel</h1>
         <div className="flex-1" />
-        {/* ✅ quick access to Overlay Editor */}
-        <a
-          href="/admin/prep-overlay"
-          className="px-3 py-1.5 rounded bg-black text-white hover:opacity-90"
-          title="Open Overlay Editor"
-        >
-          Overlay Editor
-        </a>
+        {/* Removed the separate Overlay Editor button to avoid confusion */}
       </div>
 
       <div className="rounded-xl border bg-white p-4 mb-6">
@@ -184,15 +177,24 @@ function ExamEditor({ examId }) {
   const [busy, setBusy] = useState(false);
   const formRef = useRef(null);
 
-  // ── OVERLAY STATE (Day & Time schedule; does not affect templates logic) ──
+  // ── OVERLAY STATE (single place: price, schedule, payment) ──
   const [overlay, setOverlay] = useState({
     price: 0,
     trialDays: 3,
-    mode: "planDayTime",  // "planDayTime" | "afterN" | "fixed" | "never"
-    showOnDay: 1,         // used when mode = planDayTime
-    showAtLocal: "09:00", // HH:mm, used when mode = planDayTime
-    daysAfterStart: 3,    // used when mode = afterN
-    fixedAt: ""           // ISO string (datetime-local) used when mode = fixed
+
+    // schedule
+    mode: "planDayTime",   // "planDayTime" | "afterN" | "fixed" | "never"
+    showOnDay: 1,
+    showAtLocal: "09:00",
+    daysAfterStart: 0,
+    fixedAt: "",           // datetime-local
+    tz: "Asia/Kolkata",
+
+    // payment
+    upiId: "",
+    upiName: "",
+    whatsappNumber: "",
+    whatsappText: "",
   });
   const [overlayLoading, setOverlayLoading] = useState(false);
 
@@ -207,57 +209,125 @@ function ExamEditor({ examId }) {
     load(true);
   }, [examId]);
 
-  // Fetch overlay config (price, trialDays, overlay fields)
+  // Fetch overlay/payment config (tries overlay-config, falls back to meta)
   useEffect(() => {
     let ignore = false;
+
+    async function applyFromMeta(j) {
+      const price = typeof j?.price === "number" ? j.price : overlay.price;
+      const trialDays = typeof j?.trialDays === "number" ? j.trialDays : overlay.trialDays;
+
+      // schedule
+      const ov = j?.overlay || {};
+      const m =
+        ov.mode ||
+        (ov.overlayMode === "afterN" ? "afterN" :
+         ov.overlayMode === "fixed"  ? "fixed"  :
+         ov.mode) || overlay.mode;
+
+      // payment sources (overlay.payment > payment > overlayUI)
+      const pay = (ov?.payment || j?.payment || j?.overlayUI || {});
+      let wa = String(pay.whatsappNumber || "").trim();
+      if (!wa && pay.whatsappLink) {
+        const m2 = String(pay.whatsappLink).match(/wa\.me\/(\+?\d+)/i);
+        if (m2) wa = m2[1];
+      }
+
+      if (!ignore) {
+        setOverlay((o) => ({
+          ...o,
+          price,
+          trialDays,
+          mode: m || o.mode,
+          showOnDay: Number(ov?.showOnDay ?? o.showOnDay),
+          showAtLocal: ov?.showAtLocal || o.showAtLocal,
+          daysAfterStart: Number(ov?.daysAfterStart ?? ov?.offsetDays ?? o.daysAfterStart),
+          fixedAt: ov?.fixedAt ? new Date(ov.fixedAt).toISOString().slice(0, 16) : "",
+          tz: ov?.tz || o.tz,
+
+          upiId: String(pay.upiId || "").trim(),
+          upiName: String(pay.upiName || "").trim(),
+          whatsappNumber: wa,
+          whatsappText: String(pay.whatsappText || "").trim(),
+        }));
+      }
+    }
+
     (async () => {
       setOverlayLoading(true);
       try {
-        const r = await getJSON(
-          `/api/prep/exams/${encodeURIComponent(examId)}/overlay-config?_=${Date.now()}`
+        // Try overlay-config (if your server exposes it as GET)
+        const r1 = await fetch(
+          buildUrl(`/api/prep/exams/${encodeURIComponent(examId)}/overlay-config?_=${Date.now()}`),
+          { credentials: "include" }
         );
-        if (ignore) return;
-        const ov = r?.overlay || {};
-        setOverlay((o) => ({
-          ...o,
-          // read from overlay object primarily; fallback to top-level if present
-          price: typeof ov?.price === "number" ? ov.price : (typeof r?.price === "number" ? r.price : o.price),
-          trialDays: typeof ov?.trialDays === "number" ? ov.trialDays : (typeof r?.trialDays === "number" ? r.trialDays : o.trialDays),
-          mode: ov?.mode || o.mode,
-          showOnDay: typeof ov?.showOnDay === "number" ? ov.showOnDay : o.showOnDay,
-          showAtLocal: ov?.showAtLocal || o.showAtLocal,
-          daysAfterStart: typeof ov?.daysAfterStart === "number" ? ov.daysAfterStart : o.daysAfterStart,
-          fixedAt: ov?.fixedAt || ""
-        }));
+        if (r1.ok) {
+          const j1 = await r1.json();
+          if (j1) await applyFromMeta(j1);
+          setOverlayLoading(false);
+          return;
+        }
+      } catch { /* fall back */ }
+
+      try {
+        // Fallback to meta (official route in your server)
+        const j = await getJSON(`/api/prep/exams/${encodeURIComponent(examId)}/meta?_=${Date.now()}`);
+        await applyFromMeta(j);
       } catch (e) {
-        console.warn("overlay-config GET failed:", e);
+        console.warn("overlay/meta load failed:", e);
       } finally {
         setOverlayLoading(false);
       }
     })();
+
     return () => { ignore = true; };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [examId]);
 
-  // ✅ JSON PATCH helper for overlay config (matches server)
+  // ✅ JSON PATCH helper for overlay + payment
   async function saveOverlayJSON({
     price,
     trialDays,
-    overlayMode,
+    mode,               // 'planDayTime' | 'afterN' | 'fixed' | 'never'
     showOnDay,
     showAtLocal,
+    tz,
     daysAfterStart,
     fixedAt,
+
+    upiId,
+    upiName,
+    whatsappNumber,
+    whatsappText,
   }) {
     const ownerKey = localStorage.getItem("ownerKey") || "";
-    const body = JSON.stringify({
+
+    // Map UI → API
+    const apiMode =
+      mode === "never" ? "never" :
+      mode === "afterN" ? "offset-days" :
+      mode === "fixed" ? "fixed-date" :
+      "planDayTime";
+
+    const body = {
       price,
       trialDays,
-      mode: overlayMode,      // 'planDayTime' | 'afterN' | 'fixed' | 'never'
-      showOnDay,
-      showAtLocal,            // 'HH:mm'
-      offsetDays: daysAfterStart,
-      fixedAt,
-    });
+      mode: apiMode,
+      offsetDays: apiMode === "offset-days" ? Number(daysAfterStart || 0) : undefined,
+      fixedAt: apiMode === "fixed-date" && fixedAt ? new Date(fixedAt).toISOString() : undefined,
+      showOnDay: apiMode === "planDayTime" ? Number(showOnDay || 1) : undefined,
+      showAtLocal: apiMode === "planDayTime" ? (showAtLocal || "09:00") : undefined,
+      tz: apiMode === "planDayTime" ? (tz || "Asia/Kolkata") : undefined,
+
+      // flat payment fields (server accepts these)
+      upiId: (upiId || "").trim(),
+      upiName: (upiName || "").trim(),
+      whatsappNumber: (whatsappNumber || "").trim(),
+      whatsappText: (whatsappText || "").trim(),
+    };
+
+    // remove undefined
+    Object.keys(body).forEach((k) => body[k] === undefined && delete body[k]);
 
     const r = await fetch(
       buildUrl(`/api/prep/exams/${encodeURIComponent(examId)}/overlay-config`),
@@ -268,25 +338,35 @@ function ExamEditor({ examId }) {
           "X-Owner-Key": ownerKey,
         },
         credentials: "include",
-        body,
+        body: JSON.stringify(body),
       }
     );
 
-    if (!r.ok) throw new Error(`Save overlay failed: ${r.status}`);
+    if (!r.ok) {
+      const t = await r.text();
+      throw new Error(`Save overlay failed: ${r.status} ${t || ""}`);
+    }
   }
 
-  // Wire Save button → JSON PATCH of the Day & Time plan
+  // Wire Save button → JSON PATCH of schedule + payment
   async function handleSaveOverlay() {
     try {
       setOverlayLoading(true);
       await saveOverlayJSON({
         price: Number(overlay.price) || 0,
         trialDays: Number(overlay.trialDays) || 0,
-        overlayMode: overlay.mode,                 // respect current select value
+
+        mode: overlay.mode,
         showOnDay: Math.max(1, Number(overlay.showOnDay) || 1),
         showAtLocal: overlay.showAtLocal || "09:00",
+        tz: overlay.tz || "Asia/Kolkata",
         daysAfterStart: Number(overlay.daysAfterStart) || 0,
         fixedAt: overlay.fixedAt || null,
+
+        upiId: overlay.upiId,
+        upiName: overlay.upiName,
+        whatsappNumber: overlay.whatsappNumber,
+        whatsappText: overlay.whatsappText,
       });
       alert("Overlay saved");
     } catch (e) {
@@ -432,29 +512,21 @@ function ExamEditor({ examId }) {
 
   return (
     <>
-      {/* ── Access & Overlay (new card; minimal safe) ─────────────────────── */}
+      {/* ── Access & Overlay (single tab, includes payment) ───────────────── */}
       <section className="rounded-xl border bg-white p-4 mb-6">
         <div className="flex items-center justify-between mb-3">
           <h2 className="text-xl font-semibold">Access &amp; Overlay</h2>
-          <div className="flex items-center gap-2">
-            <a
-              href="/admin/prep-overlay"
-              className="px-3 py-2 rounded bg-black text-white hover:opacity-90"
-              title="Open Overlay Editor"
-            >
-              Overlay Editor
-            </a>
-            <button
-              type="button"
-              onClick={handleSaveOverlay}
-              className="px-3 py-2 rounded border bg-white"
-              disabled={overlayLoading}
-            >
-              {overlayLoading ? "Saving…" : "Save Overlay"}
-            </button>
-          </div>
+          <button
+            type="button"
+            onClick={handleSaveOverlay}
+            className="px-3 py-2 rounded border bg-white"
+            disabled={overlayLoading}
+          >
+            {overlayLoading ? "Saving…" : "Save Overlay"}
+          </button>
         </div>
 
+        {/* Price / Trial / Mode */}
         <div className="grid md:grid-cols-3 gap-3">
           <div>
             <label className="block text-sm font-medium mb-1">Course Price (₹)</label>
@@ -489,9 +561,9 @@ function ExamEditor({ examId }) {
           </div>
         </div>
 
-        {/* Day & Time fields (only when planDayTime) */}
+        {/* Day & Time fields (planDayTime) */}
         {overlay.mode === "planDayTime" && (
-          <div className="grid md:grid-cols-3 gap-3 mt-3">
+          <div className="grid md:grid-cols-4 gap-3 mt-3">
             <div>
               <label className="block text-sm font-medium mb-1">Show on Day</label>
               <input
@@ -510,6 +582,15 @@ function ExamEditor({ examId }) {
                 className="w-full border rounded px-3 py-2"
                 value={overlay.showAtLocal}
                 onChange={(e) => setOverlay((o) => ({ ...o, showAtLocal: e.target.value }))}
+              />
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium mb-1">Admin Timezone (IANA)</label>
+              <input
+                className="w-full border rounded px-3 py-2"
+                value={overlay.tz}
+                onChange={(e) => setOverlay((o) => ({ ...o, tz: e.target.value }))}
+                placeholder="Asia/Kolkata"
               />
             </div>
           </div>
@@ -546,6 +627,49 @@ function ExamEditor({ examId }) {
             </div>
           </div>
         )}
+
+        {/* Payment & Proof (UPI + WhatsApp) */}
+        <div className="border-t pt-3 mt-3">
+          <div className="font-medium mb-2">Payment &amp; Proof</div>
+          <div className="grid md:grid-cols-4 gap-3">
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium mb-1">UPI ID</label>
+              <input
+                className="w-full border rounded px-3 py-2"
+                value={overlay.upiId}
+                onChange={(e) => setOverlay((o) => ({ ...o, upiId: e.target.value }))}
+                placeholder="your-upi@bank"
+              />
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium mb-1">UPI Name (optional)</label>
+              <input
+                className="w-full border rounded px-3 py-2"
+                value={overlay.upiName}
+                onChange={(e) => setOverlay((o) => ({ ...o, upiName: e.target.value }))}
+                placeholder="Law Network"
+              />
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium mb-1">WhatsApp Number</label>
+              <input
+                className="w-full border rounded px-3 py-2"
+                value={overlay.whatsappNumber}
+                onChange={(e) => setOverlay((o) => ({ ...o, whatsappNumber: e.target.value }))}
+                placeholder="919XXXXXXXXX or +91…"
+              />
+            </div>
+            <div className="md:col-span-2">
+              <label className="block text-sm font-medium mb-1">Default WhatsApp Text (optional)</label>
+              <input
+                className="w-full border rounded px-3 py-2"
+                value={overlay.whatsappText}
+                onChange={(e) => setOverlay((o) => ({ ...o, whatsappText: e.target.value }))}
+                placeholder={`Hello, I paid for "${examId}" (₹${overlay.price}).`}
+              />
+            </div>
+          </div>
+        </div>
       </section>
       {/* ──────────────────────────────────────────────────────────────────── */}
 
@@ -602,7 +726,6 @@ function ExamEditor({ examId }) {
             <div>
               <label className="block text-sm font-medium mb-1">PDF</label>
               <input name="pdf" type="file" accept="application/pdf" className="w-full" />
-              {/* NEW: small hint that ties to the OCR checkbox below */}
               <div className="text-xs text-gray-500 mt-1">
                 <label htmlFor="extractOCR" className="cursor-pointer">
                   <span className="underline">Auto-OCR from PDF</span> (toggle below)
