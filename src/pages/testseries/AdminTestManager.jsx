@@ -13,7 +13,7 @@ export default function AdminTestManager() {
   const [results, setResults] = useState([]);
 
   // ✅ hard-fixed working API base (do not change)
-  const API = "https://law-network-server.onrender.com/api";
+  const API = import.meta.env.VITE_API_BASE || "/api";
   async function fetchJSON(url, opts) {
     const res = await fetch(url, opts);
     const data = await res.json().catch(() => ({}));
