@@ -90,8 +90,9 @@ export default function PrepAccessOverlay({ examId, email }) {
       const qs = new URLSearchParams({ examId, email: email || "" });
       const r = await getJSON(`/api/prep/access/status?${qs.toString()}`);
       const { exam, access, overlay } = r || {};
+      const overlayNever = r?.exam?.overlay?.mode === "never"; // ← A)
 
-      // brand-new user → auto trial → re-fetch
+      // brand-new user → auto trial → re-fetch  (A)
       if (access?.status === "none" && email) {
         await postJSON("/api/prep/access/start-trial", { examId, email });
         return fetchStatus();
@@ -140,6 +141,13 @@ export default function PrepAccessOverlay({ examId, email }) {
             if (todayDay >= wantDay && now >= tgt && notDismissed) { mode = "purchase"; show = true; }
           } catch {}
         }
+      }
+
+      // (B) Guard: if admin set NEVER, do not show (unless already waiting)
+      if (overlayNever && !hasWaitingGate) {
+        mode = "";
+        show = false;
+        waiting = false;
       }
 
       const effectiveShow = !!show && !!mode;
@@ -252,6 +260,33 @@ export default function PrepAccessOverlay({ examId, email }) {
   const waText = (pay.whatsappText || `Hello, I paid for "${pay.courseName}" (₹${amount}).`).trim();
   const waLink = waNum ? `https://wa.me/${waNum}?text=${encodeURIComponent(waText)}` : "";
 
+  /* -------------------------- approval poller (C) -------------------------- */
+  async function pollApprovalLoop(emailVal) {
+    let stop = false;
+    const loop = async () => {
+      if (stop) return;
+      try {
+        const qs = new URLSearchParams({ examId, email: emailVal });
+        const j = await getJSON(`/api/prep/access/request/status?${qs.toString()}`);
+        const st = j?.status;
+        if (st === "approved") {
+          localStorage.removeItem(ks.wait);
+          stop = true;
+          await fetchStatus();
+          return;
+        }
+        if (st === "rejected") {
+          stop = true;
+          setState(s => ({ ...s, mode: "", show: false, waiting: false }));
+          alert("Your request was rejected. Please contact support.");
+          return;
+        }
+      } catch {}
+      setTimeout(loop, 5000);
+    };
+    loop();
+  }
+
   // ----------------------- actions -------------------------------
   async function submitRequest() {
     if (!state.mode || state.mode === "waiting") return;
@@ -286,8 +321,10 @@ export default function PrepAccessOverlay({ examId, email }) {
         localStorage.removeItem(ks.wait);
         await fetchStatus();
       } else {
+        // (D) waiting + start poll
         localStorage.setItem(ks.wait, "1");
         setState(s => ({ ...s, mode: "waiting", show: true, waiting: true }));
+        pollApprovalLoop(emailVal);
       }
     } catch (e) {
       console.error(e);
@@ -319,7 +356,6 @@ export default function PrepAccessOverlay({ examId, email }) {
     localStorage.setItem(ks.upiStart, String(now));
     setStep(0);
 
-    // On Android, UPI apps handle the scheme. On desktop, nothing will happen.
     try {
       window.location.href = upiLink;
     } catch {}
@@ -370,6 +406,14 @@ export default function PrepAccessOverlay({ examId, email }) {
         <div className="w-full h-full flex items-center justify-center p-4">
           <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-5">
             <div className="text-lg font-semibold mb-3">{title}</div>
+
+            {/* (E) tiny spinner while waiting */}
+            {state.mode === "waiting" && (
+              <div className="flex items-center gap-2 mb-3 text-emerald-700">
+                <div className="w-3 h-3 rounded-full border-2 border-emerald-600 border-t-transparent animate-spin" />
+                <span>Waiting for admin approval…</span>
+              </div>
+            )}
 
             {adminHint && (
               <div className="text-[12px] text-amber-800 bg-amber-50 border border-amber-200 rounded p-2 mb-3">
@@ -463,7 +507,7 @@ export default function PrepAccessOverlay({ examId, email }) {
               onFocus={() => setStep(s => Math.max(s, 2))}
             />
 
-            {/* Single Submit button (screenshot upload removed) */}
+            {/* Single Submit button */}
             <button
               className="w-full py-3 rounded bg-emerald-600 text-white text-lg font-semibold disabled:opacity-60"
               onClick={submitRequest}
