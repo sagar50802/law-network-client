@@ -84,13 +84,31 @@ export default function PrepAccessOverlay({ examId, email }) {
   async function fetchStatus() {
     if (!examId) return;
 
-    const hasWaitingGate = !!localStorage.getItem(ks.wait);
+    // make mutable so we can clear it if server hard-disables overlay
+    let hasWaitingGate = !!localStorage.getItem(ks.wait);
 
     try {
       const qs = new URLSearchParams({ examId, email: email || "" });
       const r = await getJSON(`/api/prep/access/status?${qs.toString()}`);
       const { exam, access, overlay } = r || {};
       const overlayNever = r?.exam?.overlay?.mode === "never";
+
+      // ✅ HARD DISABLE path: server told us to stop showing overlay
+      if (overlay?.hardDisabled) {
+        localStorage.removeItem(ks.wait);
+        hasWaitingGate = false;
+        setState(s => ({
+          ...s,
+          loading: false,
+          show: false,
+          mode: "",
+          waiting: false,
+          exam: exam || {},
+          access: access || {},
+          overlay: overlay || {},
+        }));
+        return;
+      }
 
       // brand-new user → auto trial → re-fetch
       if (access?.status === "none" && email) {
@@ -122,7 +140,7 @@ export default function PrepAccessOverlay({ examId, email }) {
         else if (waiting) { mode = "waiting"; show = true; }
       }
 
-      // ✅ hard guard: if admin set NEVER, don't show (unless already waiting)
+      // hard guard: if admin set NEVER, don't show (unless already waiting)
       if (overlayNever && !hasWaitingGate) {
         mode = "";
         show = false;
@@ -320,9 +338,16 @@ export default function PrepAccessOverlay({ examId, email }) {
         localStorage.removeItem(ks.wait);
         await fetchStatus();
       } else {
+        // Immediately flip to "waiting", keep veil up and show spinner text
         localStorage.setItem(ks.wait, "1");
-        setState(s => ({ ...s, mode: "waiting", show: true, waiting: true }));
-        pollApprovalLoop(emailVal); // start polling
+        setState(s => ({
+          ...s,
+          mode: "waiting",
+          show: true,
+          waiting: true
+        }));
+        // start polling so we flip to active quickly after admin approves
+        pollApprovalLoop(emailVal);
       }
     } catch (e) {
       console.error(e);
