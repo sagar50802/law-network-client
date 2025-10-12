@@ -90,9 +90,9 @@ export default function PrepAccessOverlay({ examId, email }) {
       const qs = new URLSearchParams({ examId, email: email || "" });
       const r = await getJSON(`/api/prep/access/status?${qs.toString()}`);
       const { exam, access, overlay } = r || {};
-      const overlayNever = r?.exam?.overlay?.mode === "never"; // ← A)
+      const overlayNever = r?.exam?.overlay?.mode === "never";
 
-      // brand-new user → auto trial → re-fetch  (A)
+      // brand-new user → auto trial → re-fetch
       if (access?.status === "none" && email) {
         await postJSON("/api/prep/access/start-trial", { examId, email });
         return fetchStatus();
@@ -122,6 +122,13 @@ export default function PrepAccessOverlay({ examId, email }) {
         else if (waiting) { mode = "waiting"; show = true; }
       }
 
+      // ✅ hard guard: if admin set NEVER, don't show (unless already waiting)
+      if (overlayNever && !hasWaitingGate) {
+        mode = "";
+        show = false;
+        waiting = false;
+      }
+
       if (!show) {
         const plan = access?.overlayPlan;
         if (plan?.mode === "planDayTime") {
@@ -141,13 +148,6 @@ export default function PrepAccessOverlay({ examId, email }) {
             if (todayDay >= wantDay && now >= tgt && notDismissed) { mode = "purchase"; show = true; }
           } catch {}
         }
-      }
-
-      // (B) Guard: if admin set NEVER, do not show (unless already waiting)
-      if (overlayNever && !hasWaitingGate) {
-        mode = "";
-        show = false;
-        waiting = false;
       }
 
       const effectiveShow = !!show && !!mode;
@@ -260,7 +260,7 @@ export default function PrepAccessOverlay({ examId, email }) {
   const waText = (pay.whatsappText || `Hello, I paid for "${pay.courseName}" (₹${amount}).`).trim();
   const waLink = waNum ? `https://wa.me/${waNum}?text=${encodeURIComponent(waText)}` : "";
 
-  /* -------------------------- approval poller (C) -------------------------- */
+  // ----------------------- actions -------------------------------
   async function pollApprovalLoop(emailVal) {
     let stop = false;
     const loop = async () => {
@@ -287,7 +287,6 @@ export default function PrepAccessOverlay({ examId, email }) {
     loop();
   }
 
-  // ----------------------- actions -------------------------------
   async function submitRequest() {
     if (!state.mode || state.mode === "waiting") return;
     const emailVal = (emailField || "").trim();
@@ -321,10 +320,9 @@ export default function PrepAccessOverlay({ examId, email }) {
         localStorage.removeItem(ks.wait);
         await fetchStatus();
       } else {
-        // (D) waiting + start poll
         localStorage.setItem(ks.wait, "1");
         setState(s => ({ ...s, mode: "waiting", show: true, waiting: true }));
-        pollApprovalLoop(emailVal);
+        pollApprovalLoop(emailVal); // start polling
       }
     } catch (e) {
       console.error(e);
@@ -343,22 +341,15 @@ export default function PrepAccessOverlay({ examId, email }) {
     setPanelHidden(true);
   }
 
-  // Copy helper for desktop UPI fallback
-  function copy(text) {
-    try { navigator.clipboard?.writeText(text); } catch {}
-  }
+  function copy(text) { try { navigator.clipboard?.writeText(text); } catch {} }
 
-  // Deep-link handlers (start timers + open)
   const handleUPIClick = () => {
     if (!upiLink) return;
     const now = Date.now();
     setUpiStartTs(now);
     localStorage.setItem(ks.upiStart, String(now));
     setStep(0);
-
-    try {
-      window.location.href = upiLink;
-    } catch {}
+    try { window.location.href = upiLink; } catch {}
   };
 
   const handleWAClick = () => {
@@ -407,7 +398,6 @@ export default function PrepAccessOverlay({ examId, email }) {
           <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-5">
             <div className="text-lg font-semibold mb-3">{title}</div>
 
-            {/* (E) tiny spinner while waiting */}
             {state.mode === "waiting" && (
               <div className="flex items-center gap-2 mb-3 text-emerald-700">
                 <div className="w-3 h-3 rounded-full border-2 border-emerald-600 border-t-transparent animate-spin" />
