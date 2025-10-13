@@ -11,6 +11,14 @@ import { getJSON, postJSON } from "../../utils/api";
  * - Submit flips to "Waiting for approval" and polls until approved/rejected
  * - Works with server/routes/prep.js provided earlier
  */
+
+// defensive JSON parser (prevents “Unexpected end of JSON input” on empty/HTML)
+async function safeJSON(res) {
+  const ct = (res.headers.get("content-type") || "").toLowerCase();
+  if (!ct.includes("application/json")) return {};
+  try { return await res.json(); } catch { return {}; }
+}
+
 export default function PrepAccessOverlay({ examId, email }) {
   /* ----------------------- localStorage keys ----------------------- */
   const ks = useMemo(() => {
@@ -201,38 +209,84 @@ export default function PrepAccessOverlay({ examId, email }) {
     window.open(pay.waLink, "_blank", "noopener,noreferrer");
   };
 
-  async function submit() {
-    if (!state.show || state.mode === "waiting") return;
-    const e = String(emailField || "").trim();
-    if (!e || !e.includes("@")) { alert("Please enter a valid email."); return; }
+  // >>> Robust submit with defensive JSON + fast polling <<<
+  async function submitRequest() {
+    if (!state.mode || state.mode === "waiting") return;
+
+    const emailVal = (emailField || "").trim();
+    if (!emailVal) { alert("Please enter your email."); return; }
 
     const fd = new FormData();
     fd.append("examId", examId);
-    fd.append("email", e);
-    fd.append("intent", state.mode === "restart" ? "restart" : "purchase");
-    if (nameField) fd.append("name", nameField);
+    fd.append("email", emailVal);
+    fd.append("intent", state.mode === "purchase" ? "purchase" : "restart");
+    if (nameField)  fd.append("name",  nameField);
     if (phoneField) fd.append("phone", phoneField);
 
-    localStorage.setItem("userEmail", e);
+    const note = [
+      nameField ? `name=${nameField}` : "",
+      phoneField ? `phone=${phoneField}` : "",
+      upiStartTs ? `upi_clicked=1` : "",
+      waStartTs ? `wa_clicked=1` : ""
+    ].filter(Boolean).join("; ");
+    if (note) fd.append("note", note);
+
+    localStorage.setItem("userEmail", emailVal);
 
     setSubmitting(true);
     try {
-      const res = await fetch("/api/prep/access/request", { method: "POST", body: fd, credentials: "include" });
-      const j = await res.json();
-      if (!res.ok || j?.success === false) throw new Error(j?.error || j?.message || `HTTP ${res.status}`);
+      const res = await fetch("/api/prep/access/request", {
+        method: "POST",
+        body: fd,
+        credentials: "include"
+      });
 
-      // If admin enabled auto-grant, server returns approved:true — refresh
+      // ← DO NOT blindly call res.json(); it may be empty
+      const j = await safeJSON(res);
+
+      if (!res.ok || j?.success === false) {
+        const msg = j?.error || j?.message || `Request failed (${res.status})`;
+        alert(msg);
+        return;
+      }
+
+      // If the server auto-approved, reflect immediately
       if (j?.approved) {
         localStorage.removeItem(ks.wait);
         await fetchStatus();
         return;
       }
 
-      // Otherwise flip to waiting and poll
+      // Otherwise: immediately flip to "Waiting…" and poll quickly
       localStorage.setItem(ks.wait, "1");
-      setState(s => ({ ...s, mode: "waiting", waiting: true, show: true }));
+      setState(s => ({ ...s, mode: "waiting", show: true, waiting: true }));
+
+      // Fast-poll for up to ~15s to unlock super fast, then back off
+      const t0 = Date.now();
+      const fastPoll = async () => {
+        const qs = new URLSearchParams({ examId, email: emailVal });
+        try {
+          const status = await getJSON(`/api/prep/access/status?${qs.toString()}`);
+          const a = status?.access?.status || "none";
+          if (a === "active") {
+            localStorage.removeItem(ks.wait);
+            await fetchStatus();
+            return; // stop
+          }
+        } catch {/* ignore network hiccups */}
+
+        if (Date.now() - t0 < 15000) {
+          setTimeout(fastPoll, 1000);  // 1s polling for the first 15s
+        } else {
+          // continue slower so we still update if admin approves later
+          setTimeout(fastPoll, 5000);
+        }
+      };
+      fastPoll();
     } catch (e) {
-      alert(e.message || "Failed to submit");
+      // Even on parse/network issues, move to "Waiting…" so the user isn’t stuck
+      localStorage.setItem(ks.wait, "1");
+      setState(s => ({ ...s, mode: "waiting", show: true, waiting: true }));
     } finally {
       setSubmitting(false);
     }
@@ -334,7 +388,7 @@ export default function PrepAccessOverlay({ examId, email }) {
           {/* Submit */}
           <button
             className="w-full py-3 rounded bg-emerald-600 text-white text-lg font-semibold disabled:opacity-60"
-            onClick={state.mode === "waiting" ? undefined : submit}
+            onClick={state.mode === "waiting" ? undefined : submitRequest}
             disabled={submitDisabled}
           >
             {state.mode === "waiting" ? "Waiting…" : "Submit"}
