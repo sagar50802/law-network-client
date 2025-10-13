@@ -9,14 +9,17 @@ import { getJSON, postJSON } from "../../utils/api";
  * - UPI deep link + WhatsApp proof buttons
  * - Name / Phone / Email fields
  * - Submit flips to "Waiting for approval" and polls until approved/rejected
- * - Works with server/routes/prep.js provided earlier
  */
 
 // defensive JSON parser (prevents “Unexpected end of JSON input” on empty/HTML)
 async function safeJSON(res) {
-  const ct = (res.headers.get("content-type") || "").toLowerCase();
-  if (!ct.includes("application/json")) return {};
-  try { return await res.json(); } catch { return {}; }
+  try {
+    const ct = (res.headers.get("content-type") || "").toLowerCase();
+    if (!ct.includes("application/json")) return {};
+    return await res.json();
+  } catch {
+    return {};
+  }
 }
 
 export default function PrepAccessOverlay({ examId, email }) {
@@ -52,7 +55,7 @@ export default function PrepAccessOverlay({ examId, email }) {
   const [upiLeft, setUpiLeft] = useState(0);
   const [waStartTs, setWaStartTs] = useState(() => Number(localStorage.getItem(ks.waStart) || 0));
   const [waLeft, setWaLeft] = useState(0);
-  const UPI_SECONDS = 104; // keep UX matching screenshot
+  const UPI_SECONDS = 104;
   const WA_SECONDS = 168;
 
   useEffect(() => {
@@ -75,13 +78,13 @@ export default function PrepAccessOverlay({ examId, email }) {
   async function fetchStatus() {
     if (!examId) return;
 
-    let keepWaiting = !!localStorage.getItem(ks.wait);
+    const keepWaiting = !!localStorage.getItem(ks.wait);
     try {
       const qs = new URLSearchParams({ examId, email: email || "" });
       const r = await getJSON(`/api/prep/access/status?${qs.toString()}`);
       const { exam, access, overlay } = r || {};
 
-      // If brand-new user (no record) & email exists — start trial and refetch
+      // brand-new user → start trial and refetch
       if (access?.status === "none" && email) {
         await postJSON("/api/prep/access/start-trial", { examId, email });
         return fetchStatus();
@@ -163,7 +166,6 @@ export default function PrepAccessOverlay({ examId, email }) {
 
   /* ----------------------- payment links --------------------------- */
   function buildPayMeta() {
-    // Prefer values from /access/status payload (server)
     const pay = state?.overlay?.payment
       || state?.exam?.overlay?.payment
       || state?.exam?.payment
@@ -179,10 +181,7 @@ export default function PrepAccessOverlay({ examId, email }) {
     const waText = (pay.whatsappText || `Hello, I paid for "${courseName}" (₹${priceINR}).`).trim();
 
     const upiLink = upiId
-      ? `upi://pay?pa=${encodeURIComponent(upiId)}`
-        + (upiName ? `&pn=${encodeURIComponent(upiName)}` : "")
-        + (priceINR ? `&am=${encodeURIComponent(priceINR)}` : "")
-        + `&cu=INR&tn=${encodeURIComponent(`Payment for ${courseName}`)}`
+      ? `upi://pay?pa=${encodeURIComponent(upiId)}${upiName ? `&pn=${encodeURIComponent(upiName)}` : ""}${priceINR ? `&am=${encodeURIComponent(priceINR)}` : ""}&cu=INR&tn=${encodeURIComponent(`Payment for ${courseName}`)}`
       : "";
 
     const waLink = wa ? `https://wa.me/${wa}?text=${encodeURIComponent(waText)}` : "";
@@ -209,7 +208,7 @@ export default function PrepAccessOverlay({ examId, email }) {
     window.open(pay.waLink, "_blank", "noopener,noreferrer");
   };
 
-  // >>> Robust submit with defensive JSON + fast polling <<<
+  // Robust submit with defensive JSON + fast polling
   async function submitRequest() {
     if (!state.mode || state.mode === "waiting") return;
 
@@ -223,13 +222,13 @@ export default function PrepAccessOverlay({ examId, email }) {
     if (nameField)  fd.append("name",  nameField);
     if (phoneField) fd.append("phone", phoneField);
 
-    const note = [
-      nameField ? `name=${nameField}` : "",
-      phoneField ? `phone=${phoneField}` : "",
-      upiStartTs ? `upi_clicked=1` : "",
-      waStartTs ? `wa_clicked=1` : ""
-    ].filter(Boolean).join("; ");
-    if (note) fd.append("note", note);
+    // Optional admin note
+    const noteBits = [];
+    if (nameField)  noteBits.push(`name=${nameField}`);
+    if (phoneField) noteBits.push(`phone=${phoneField}`);
+    if (upiStartTs) noteBits.push("upi_clicked=1");
+    if (waStartTs)  noteBits.push("wa_clicked=1");
+    if (noteBits.length) fd.append("note", noteBits.join("; "));
 
     localStorage.setItem("userEmail", emailVal);
 
@@ -238,10 +237,10 @@ export default function PrepAccessOverlay({ examId, email }) {
       const res = await fetch("/api/prep/access/request", {
         method: "POST",
         body: fd,
-        credentials: "include"
+        credentials: "include",
       });
 
-      // ← DO NOT blindly call res.json(); it may be empty
+      // Do NOT assume JSON; avoid the “Unexpected end of JSON input” popup
       const j = await safeJSON(res);
 
       if (!res.ok || j?.success === false) {
@@ -250,18 +249,18 @@ export default function PrepAccessOverlay({ examId, email }) {
         return;
       }
 
-      // If the server auto-approved, reflect immediately
+      // Auto-grant path
       if (j?.approved) {
         localStorage.removeItem(ks.wait);
         await fetchStatus();
         return;
       }
 
-      // Otherwise: immediately flip to "Waiting…" and poll quickly
+      // Show “Waiting…” immediately
       localStorage.setItem(ks.wait, "1");
       setState(s => ({ ...s, mode: "waiting", show: true, waiting: true }));
 
-      // Fast-poll for up to ~15s to unlock super fast, then back off
+      // Fast-poll for the first ~15s, then back off
       const t0 = Date.now();
       const fastPoll = async () => {
         const qs = new URLSearchParams({ examId, email: emailVal });
@@ -271,20 +270,15 @@ export default function PrepAccessOverlay({ examId, email }) {
           if (a === "active") {
             localStorage.removeItem(ks.wait);
             await fetchStatus();
-            return; // stop
+            return;
           }
-        } catch {/* ignore network hiccups */}
+        } catch {}
 
-        if (Date.now() - t0 < 15000) {
-          setTimeout(fastPoll, 1000);  // 1s polling for the first 15s
-        } else {
-          // continue slower so we still update if admin approves later
-          setTimeout(fastPoll, 5000);
-        }
+        setTimeout(fastPoll, Date.now() - t0 < 15000 ? 1000 : 5000);
       };
       fastPoll();
-    } catch (e) {
-      // Even on parse/network issues, move to "Waiting…" so the user isn’t stuck
+    } catch {
+      // Even on parse/network issues, move to Waiting so the user isn’t stuck
       localStorage.setItem(ks.wait, "1");
       setState(s => ({ ...s, mode: "waiting", show: true, waiting: true }));
     } finally {
