@@ -1,600 +1,176 @@
 // src/components/Prep/PrepAccessOverlay.jsx
 import { useEffect, useMemo, useState } from "react";
-import { getJSON, postJSON } from "../../utils/api";
+
+async function getJSON(url, opts={}) {
+  const r = await fetch(url, { credentials:"include", ...opts });
+  const ct = (r.headers.get("content-type")||"").toLowerCase();
+  const j = ct.includes("application/json") ? await r.json() : null;
+  if (!r.ok) throw new Error(j?.error || `HTTP ${r.status}`);
+  return j;
+}
+async function postJSON(url, body) {
+  const r = await fetch(url, {
+    method:"POST",
+    headers:{ "Content-Type":"application/json" },
+    body: JSON.stringify(body||{}),
+    credentials:"include"
+  });
+  const j = await r.json();
+  if (!r.ok || j?.success === false) throw new Error(j?.error || j?.message || `HTTP ${r.status}`);
+  return j;
+}
 
 export default function PrepAccessOverlay({ examId, email }) {
-  // ----------------------- localStorage keys -----------------------
   const ks = useMemo(() => {
     const e = String(examId || "").trim();
     const u = String(email || "").trim() || "anon";
     return {
       wait: `overlayWaiting:${e}:${u}`,
-      dismiss: (hhmm = "09:00", day = 1) => `overlayDismiss:${e}:${day}:${hhmm}`,
-      upiStart: `overlayUPIStart:${e}:${u}`,
-      waStart: `overlayWAStart:${e}:${u}`,
+      dismiss: (hhmm="09:00", day=1) => `overlayDismiss:${e}:${day}:${hhmm}`,
     };
   }, [examId, email]);
 
-  // ----------------------- component state ------------------------
   const [state, setState] = useState({
-    loading: true,
-    show: !!(examId && localStorage.getItem(ks.wait)),
-    mode: localStorage.getItem(ks.wait) ? "waiting" : "",
-    exam: {},
-    access: {},
-    overlay: {},
-    waiting: !!localStorage.getItem(ks.wait),
+    loading: true, show: false, mode: "", waiting: false,
+    exam: {}, access: {}, overlay: {},
   });
-
-  // Payment/meta (from /meta to support all server shapes)
-  const [payMeta, setPayMeta] = useState(null);
-
   const [submitting, setSubmitting] = useState(false);
-  const [panelHidden, setPanelHidden] = useState(false);
+  const [nameField, setName] = useState("");
+  const [phoneField, setPhone] = useState("");
+  const [emailField, setEmail] = useState(localStorage.getItem("userEmail") || email || "");
 
-  // Minimal user inputs (order: name → phone → email)
-  const [emailField, setEmailField] = useState(
-    localStorage.getItem("userEmail") || (email || "")
-  );
-  const [nameField, setNameField] = useState("");
-  const [phoneField, setPhoneField] = useState("");
+  const mustWait = !!localStorage.getItem(ks.wait);
 
-  // Progress tracker (0=Pay, 1=Proof, 2=Submit)
-  const [step, setStep] = useState(0);
-
-  // ----------------------- timers for return flows -----------------
-  const [upiStartTs, setUpiStartTs] = useState(() => Number(localStorage.getItem(ks.upiStart) || 0));
-  const [upiLeft, setUpiLeft] = useState(0);
-  const [waStartTs, setWaStartTs] = useState(() => Number(localStorage.getItem(ks.waStart) || 0));
-  const [waLeft, setWaLeft] = useState(0);
-
-  const UPI_SECONDS = 120;   // 2 minutes
-  const WA_SECONDS  = 180;   // 3 minutes
-
-  useEffect(() => {
-    if (!upiStartTs) return;
-    const tick = () => {
-      const left = Math.max(0, UPI_SECONDS - Math.floor((Date.now() - upiStartTs) / 1000));
-      setUpiLeft(left);
-      if (left <= 0) { try { window.focus(); } catch {} setStep(s => Math.max(s, 1)); }
-    };
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
-  }, [upiStartTs]);
-
-  useEffect(() => {
-    if (!waStartTs) return;
-    const tick = () => {
-      const left = Math.max(0, WA_SECONDS - Math.floor((Date.now() - waStartTs) / 1000));
-      setWaLeft(left);
-      if (left <= 0) { try { window.focus(); } catch {} setStep(s => Math.max(s, 2)); }
-    };
-    tick();
-    const id = setInterval(tick, 1000);
-    return () => clearInterval(id);
-  }, [waStartTs]);
-
-  // ----------------------- utilities -------------------------------
-  const price = Number(state.exam?.price || 0);
-  const courseName = state.exam?.name || String(examId || "").toUpperCase();
-  const isAndroid = /Android/i.test(navigator.userAgent);
-
-  // ----------------------- core fetch ------------------------------
   async function fetchStatus() {
     if (!examId) return;
+    const qs = new URLSearchParams({ examId, email: email || "" });
+    const r = await getJSON(`/api/prep/access/status?${qs.toString()}`);
+    const { exam, access, overlay } = r || {};
 
-    // make mutable so we can clear it if server hard-disables overlay
-    let hasWaitingGate = !!localStorage.getItem(ks.wait);
-
-    try {
-      const qs = new URLSearchParams({ examId, email: email || "" });
-      const r = await getJSON(`/api/prep/access/status?${qs.toString()}`);
-      const { exam, access, overlay } = r || {};
-
-      // === A) EARLY RETURN when admin has set overlay.mode === "never"
-      if (exam?.overlay?.mode === "never") {
-        localStorage.removeItem(ks.wait);
-        hasWaitingGate = false;
-        setState({
-          loading: false,
-          show: false,
-          mode: "",
-          exam: exam || {},
-          access: access || {},
-          overlay: overlay || {},
-          waiting: false,
-        });
-        return;
-      }
-
-      // ✅ HARD DISABLE path (server flag) — keep your existing behavior
-      if (overlay?.hardDisabled) {
-        localStorage.removeItem(ks.wait);
-        hasWaitingGate = false;
-        setState(s => ({
-          ...s,
-          loading: false,
-          show: false,
-          mode: "",
-          waiting: false,
-          exam: exam || {},
-          access: access || {},
-          overlay: overlay || {},
-        }));
-        return;
-      }
-
-      // brand-new user → auto trial → re-fetch
-      if (access?.status === "none" && email) {
-        await postJSON("/api/prep/access/start-trial", { examId, email });
-        return fetchStatus();
-      }
-
-      // try to read todayDay (best-effort)
-      let todayDay = 1;
-      try {
-        const meta = await getJSON(`/api/prep/user/summary?${qs.toString()}`);
-        todayDay = Number(meta?.todayDay || 1);
-      } catch {}
-
-      // === C) TRIAL GUARD: hide overlay if still inside trial window
-      const trialDays = Number(r?.access?.trialDays || r?.exam?.trialDays || 3);
-      const isInTrial = (r?.access?.status === "trial") && (todayDay <= trialDays);
-      if (isInTrial) {
-        localStorage.removeItem(ks.wait);
-        hasWaitingGate = false;
-        setState({
-          loading: false,
-          show: false,
-          mode: "",
-          exam: exam || {},
-          access: access || {},
-          overlay: overlay || {},
-          waiting: false,
-        });
-        return;
-      }
-
-      // --------- decide overlay ---------
-      let mode = "";
-      let show = false;
-      let waiting = !!access?.pending;
-      const overlayNever = r?.exam?.overlay?.mode === "never";
-      const isPlanDayTime = access?.overlayPlan?.mode === "planDayTime";
-
-      if (hasWaitingGate) { mode = "waiting"; show = true; waiting = true; }
-
-      if (!show && overlay?.show && overlay?.mode) { mode = overlay.mode; show = true; }
-      else if (!show && access?.overlayForce) { mode = access.forceMode === "restart" ? "restart" : "purchase"; show = true; }
-
-      if (!show && !isPlanDayTime) {
-        if (access?.status === "trial" && access?.trialEnded) { mode = "purchase"; show = true; }
-        else if (access?.status === "active" && access?.canRestart) { mode = "restart"; show = true; }
-        else if (waiting) { mode = "waiting"; show = true; }
-      }
-
-      // hard guard (again): if admin set NEVER, don't show (unless already waiting)
-      if (overlayNever && !hasWaitingGate) {
-        mode = "";
-        show = false;
-        waiting = false;
-      }
-
-      if (!show) {
-        const plan = access?.overlayPlan;
-        if (plan?.mode === "planDayTime") {
-          try {
-            const wantDay = Number(plan.showOnDay || 1);
-            const hhmm = String(plan.showAtLocal || "09:00");
-            const [hh, mm] = hhmm.split(":").map(n => parseInt(n, 10));
-            const now = new Date();
-            const tgt = new Date(now);
-            tgt.setHours(hh || 0, mm || 0, 0, 0);
-            const notDismissed = (() => {
-              const k = ks.dismiss(hhmm, wantDay);
-              const v = localStorage.getItem(k);
-              const todayKey = new Date().toISOString().slice(0, 10);
-              return v !== todayKey;
-            })();
-            if (todayDay >= wantDay && now >= tgt && notDismissed) { mode = "purchase"; show = true; }
-          } catch {}
-        }
-      }
-
-      const effectiveShow = !!show && !!mode;
-      const isWaitingNow = mode === "waiting";
-      if (isWaitingNow) localStorage.setItem(ks.wait, "1");
-      else if (access?.status === "active" && !waiting) localStorage.removeItem(ks.wait);
-
-      setState({
-        loading: false,
-        show: effectiveShow || hasWaitingGate,
-        mode: mode || (hasWaitingGate ? "waiting" : ""),
-        exam: exam || {},
-        access: access || {},
-        overlay: overlay || {},
-        waiting: isWaitingNow || hasWaitingGate,
-      });
-
-      if (effectiveShow) setPanelHidden(false);
-      if (!emailField && email) setEmailField(email);
-    } catch {
-      setState(s => ({
-        ...s,
-        loading: false,
-        show: s.show || !!localStorage.getItem(ks.wait),
-        mode: s.mode || (localStorage.getItem(ks.wait) ? "waiting" : "")
-      }));
+    // brand new user → start trial once
+    if (access?.status === "none" && email) {
+      await postJSON("/api/prep/access/start-trial", { examId, email });
+      return fetchStatus();
     }
+
+    let show = false, mode = "";
+    if (overlay?.show && overlay?.mode) { show=true; mode=overlay.mode; }
+    if (mustWait) { show=true; mode="waiting"; }
+
+    setState({
+      loading: false, show, mode, waiting: mode==="waiting",
+      exam: exam||{}, access: access||{}, overlay: overlay||{},
+    });
   }
 
-  useEffect(() => { fetchStatus(); /* eslint-disable-next-line */ }, [examId, email]);
-  useEffect(() => { const t = setInterval(fetchStatus, 60_000); return () => clearInterval(t); /* eslint-disable-next-line */ }, [examId, email]);
+  useEffect(()=>{ fetchStatus().catch(()=>setState(s=>({ ...s, loading:false }))); /* eslint-disable-next-line */ }, [examId, email]);
 
-  // Fetch /meta for payment (works regardless of server shape)
-  useEffect(() => {
-    if (!examId) return;
-    (async () => {
-      try {
-        const j = await getJSON(`/api/prep/exams/${encodeURIComponent(examId)}/meta?_=${Date.now()}`);
-        const ov = j?.overlay || {};
-        const src = ov?.payment || j?.payment || j?.overlayUI || {};
-        let wa = String(src.whatsappNumber || "").trim();
-        if (!wa && src.whatsappLink) {
-          const m = String(src.whatsappLink).match(/wa\.me\/(\+?\d+)/i);
-          if (m) wa = m[1];
-        }
-        setPayMeta({
-          upiId: String(src.upiId || "").trim(),
-          upiName: String(src.upiName || "").trim(),
-          whatsappNumber: wa,
-          whatsappText: String(src.whatsappText || "").trim(),
-          priceINR: Number(j?.price ?? ov?.price ?? 0),
-          courseName: j?.name || examId,
-        });
-      } catch {
-        setPayMeta(null);
-      }
-    })();
-  }, [examId]);
-
-  // --- helpers -----------------------------------------------------
-  function pick(obj, path, def = "") {
-    try { return path.split(".").reduce((a, k) => a?.[k], obj) ?? def; } catch { return def; }
-  }
-  const overlayPay = pick(state, "overlay.payment", null) || pick(state, "exam.overlay.payment", null);
-  const examPay     = pick(state, "exam.payment", null);
-  const overlayUI   = pick(state, "exam.overlayUI", null);
-
-  // Build payment links (status payloads first)
-  let pay = {
-    courseName: overlayPay?.courseName || state?.exam?.name || examId,
-    priceINR: Number(overlayPay?.priceINR ?? state?.exam?.price ?? overlayUI?.priceINR ?? 0),
-    upiId: overlayPay?.upiId || examPay?.upiId || overlayUI?.upiId || "",
-    upiName: overlayPay?.upiName || overlayUI?.upiName || "",
-    whatsappNumber: (() => {
-      const a = overlayPay?.whatsappNumber || examPay?.waPhone || "";
-      if (a) return a;
-      const link = overlayUI?.whatsappLink || "";
-      const m = link?.match?.(/wa\.me\/(\+?\d+)/i);
-      return m ? m[1] : "";
-    })(),
-    whatsappText: overlayPay?.whatsappText || examPay?.waText || "",
-  };
-
-  // Fold in /meta (wins last)
-  if (payMeta) {
-    pay = {
-      ...pay,
-      courseName: pay.courseName || payMeta.courseName || examId,
-      priceINR: (Number(pay.priceINR) || Number(payMeta.priceINR) || 0),
-      upiId: pay.upiId || payMeta.upiId || "",
-      upiName: pay.upiName || payMeta.upiName || "",
-      whatsappNumber: pay.whatsappNumber || payMeta.whatsappNumber || "",
-      whatsappText: pay.whatsappText || payMeta.whatsappText || "",
-    };
-  }
-
-  // Normalize WA number
-  let waNum = (pay.whatsappNumber || "").replace(/[^\d+]/g, "");
-  if (waNum.startsWith("+")) waNum = waNum.slice(1);
-  if (/^\d{10}$/.test(waNum)) waNum = "91" + waNum; // assume India if 10 digits
-
+  // build payment
+  const pay = state?.overlay?.payment || {};
   const amount = Number(pay.priceINR || 0);
-  const upiLink = pay.upiId
-    ? `upi://pay?pa=${encodeURIComponent(pay.upiId)}`
-      + (pay.upiName ? `&pn=${encodeURIComponent(pay.upiName)}` : "")
-      + (amount > 0 ? `&am=${encodeURIComponent(amount)}` : "")
-      + `&cu=INR&tn=${encodeURIComponent(`Payment for ${pay.courseName}`)}`
+  const courseName = state.exam?.name || examId;
+  const isAndroid = /Android/i.test(navigator.userAgent);
+
+  const upiId = pay.upiId || "";
+  const upiName = pay.upiName || "";
+  let wa = String(pay.whatsappNumber || "").replace(/[^\d+]/g, "");
+  if (wa.startsWith("+")) wa = wa.slice(1);
+  if (/^\d{10}$/.test(wa)) wa = "91" + wa;
+
+  const upiLink = upiId
+    ? `upi://pay?pa=${encodeURIComponent(upiId)}${upiName ? `&pn=${encodeURIComponent(upiName)}`:""}${amount?`&am=${encodeURIComponent(amount)}`:""}&cu=INR&tn=${encodeURIComponent(`Payment for ${courseName}`)}`
     : "";
+  const waText = (pay.whatsappText || `Hello, I paid for "${courseName}" (₹${amount}).`).trim();
+  const waLink = wa ? `https://wa.me/${wa}?text=${encodeURIComponent(waText)}` : "";
 
-  const waText = (pay.whatsappText || `Hello, I paid for "${pay.courseName}" (₹${amount}).`).trim();
-  const waLink = waNum ? `https://wa.me/${waNum}?text=${encodeURIComponent(waText)}` : "";
-
-  // ----------------------- actions -------------------------------
-  async function pollApprovalLoop(emailVal) {
-    let stop = false;
-    const loop = async () => {
-      if (stop) return;
-      try {
-        const qs = new URLSearchParams({ examId, email: emailVal });
-        const j = await getJSON(`/api/prep/access/request/status?${qs.toString()}`);
-        const st = j?.status;
-        if (st === "approved") {
-          localStorage.removeItem(ks.wait);
-          stop = true;
-          await fetchStatus();
-          return;
-        }
-        if (st === "rejected") {
-          stop = true;
-          setState(s => ({ ...s, mode: "", show: false, waiting: false }));
-          alert("Your request was rejected. Please contact support.");
-          return;
-        }
-      } catch {}
-      setTimeout(loop, 5000);
-    };
-    loop();
-  }
-
-  async function submitRequest() {
-    if (!state.mode || state.mode === "waiting") return;
-    const emailVal = (emailField || "").trim();
-    if (!emailVal) { alert("Please enter your email."); return; }
+  async function submit() {
+    if (!state.show || state.mode === "waiting") return;
+    if (!emailField || !emailField.includes("@")) { alert("Enter a valid email."); return; }
 
     const fd = new FormData();
     fd.append("examId", examId);
-    fd.append("email", emailVal);
-    fd.append("intent", state.mode === "purchase" ? "purchase" : "restart");
-    if (nameField)  fd.append("name",  nameField);
-    if (phoneField) fd.append("phone", phoneField);
-
-    const note = [
-      nameField ? `name=${nameField}` : "",
-      phoneField ? `phone=${phoneField}` : "",
-      upiStartTs ? `upi_clicked=1` : "",
-      waStartTs ? `wa_clicked=1` : ""
-    ].filter(Boolean).join("; ");
-    if (note) fd.append("note", note);
-
-    localStorage.setItem("userEmail", emailVal);
+    fd.append("email", emailField.trim());
+    fd.append("intent", state.mode === "restart" ? "restart" : "purchase");
+    fd.append("name", nameField||"");
+    fd.append("phone", phoneField||"");
 
     setSubmitting(true);
     try {
-      const res = await fetch("/api/prep/access/request", { method: "POST", body: fd });
-      const ct = (res.headers.get("content-type") || "").toLowerCase();
-      const j = ct.includes("application/json") ? await res.json() : {};
-      if (!res.ok || j?.success === false) {
-        const msg = j?.error || j?.message || `Request failed (${res.status})`;
-        alert(msg);
-        return;
-      }
-
-      // If auto-approved, reflect immediately
-      if (j?.approved) {
-        localStorage.removeItem(ks.wait);
-        await fetchStatus();
-        return;
-      }
-
-      // === B) Immediately flip to "waiting" and poll faster for a short burst
-      localStorage.setItem(ks.wait, "1");
-      setState(s => ({ ...s, mode: "waiting", show: true, waiting: true }));
-
-      // Fast poll every 3s for up to 120s to reduce user wait
-      const start = Date.now();
-      const fast = setInterval(async () => {
-        try {
-          const qs = new URLSearchParams({ examId, email: emailVal });
-          const st = await getJSON(`/api/prep/access/status?${qs.toString()}`);
-          const a = st?.access?.status || "none";
-          if (a === "active") {
-            clearInterval(fast);
-            localStorage.removeItem(ks.wait);
-            await fetchStatus();
-            return;
-          }
-        } catch {}
-        if (Date.now() - start > 120000) clearInterval(fast);
-      }, 3000);
-
-      // Keep your existing long poll (public poller)
-      pollApprovalLoop(emailVal);
+      const res = await fetch("/api/prep/access/request", { method:"POST", body: fd, credentials:"include" });
+      const j = await res.json();
+      if (!res.ok || j?.success === false) throw new Error(j?.error || j?.message || `HTTP ${res.status}`);
+      // flip to waiting immediately:
+      localStorage.setItem(ks.wait,"1");
+      setState(s => ({ ...s, show:true, waiting:true, mode:"waiting" }));
+      localStorage.setItem("userEmail", emailField.trim());
     } catch (e) {
-      console.error(e);
-      alert("Failed to submit");
+      alert(e.message || "Failed to submit");
     } finally {
       setSubmitting(false);
     }
   }
 
-  // Hide only the panel (veil remains)
-  function closeForToday() {
-    const plan = state.access?.overlayPlan;
-    const hhmm = String(plan?.showAtLocal || "09:00");
-    const wantDay = Number(plan?.showOnDay || 1);
-    localStorage.setItem(ks.dismiss(hhmm, wantDay), new Date().toISOString().slice(0, 10));
-    setPanelHidden(true);
-  }
+  function copyUPI(){ try{ navigator.clipboard?.writeText(upiId); }catch{} }
 
-  function copy(text) { try { navigator.clipboard?.writeText(text); } catch {} }
-
-  const handleUPIClick = () => {
-    if (!upiLink) return;
-    const now = Date.now();
-    setUpiStartTs(now);
-    localStorage.setItem(ks.upiStart, String(now));
-    setStep(0);
-    try { window.location.href = upiLink; } catch {}
-  };
-
-  const handleWAClick = () => {
-    if (!waLink) return;
-    const now = Date.now();
-    setWaStartTs(now);
-    localStorage.setItem(ks.waStart, String(now));
-    setStep(s => Math.max(s, 1));
-    window.open(waLink, "_blank", "noopener,noreferrer");
-  };
-
-  // ----------------------- render -------------------------------
-  const mustVeil = state.show || (state.loading && !!localStorage.getItem(ks.wait));
-  if (!mustVeil) return null;
-
-  const title =
-    state.mode === "purchase" ? `Start / Restart — ${courseName}`
-    : state.mode === "restart" ? `Start / Restart — ${courseName}`
-    : `Waiting for approval`;
-
-  const submitDisabled = submitting || state.mode === "waiting" || !(emailField && emailField.trim());
-
-  const adminMissing = !pay.upiId || !waNum;
-  const adminHint = adminMissing
-    ? `Admin hasn’t set ${!pay.upiId ? "UPI ID" : ""}${!pay.upiId && !waNum ? " & " : ""}${!waNum ? "WhatsApp number" : ""} in Access & Overlay.`
-    : "";
-
-  const StepBadge = ({ idx, label }) => (
-    <div className="flex items-center gap-2">
-      <div
-        className={`w-6 h-6 rounded-full flex items-center justify-center text-xs font-semibold
-          ${step >= idx ? "bg-emerald-600 text-white" : "bg-gray-200 text-gray-700"}`}
-      >
-        {idx + 1}
-      </div>
-      <div className={`text-xs ${step >= idx ? "text-emerald-700" : "text-gray-600"}`}>{label}</div>
-    </div>
-  );
+  // hide everything if no overlay
+  const mustShow = state.loading ? mustWait : state.show || mustWait;
+  if (!mustShow) return null;
 
   return (
-    <div className="fixed inset-0 z-[99999] bg-black/60 backdrop-blur-sm" aria-hidden>
-      {state.loading && state.waiting && null}
+    <div className="fixed inset-0 z-[99999] bg-black/60 backdrop-blur-sm">
+      <div className="w-full h-full flex items-center justify-center p-4">
+        <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-5">
+          <div className="text-lg font-semibold mb-1">
+            {state.mode === "waiting" ? "Waiting for approval" : "Start / Restart — "}{courseName || ""}
+          </div>
+          {state.mode === "waiting" && (
+            <div className="text-sm text-emerald-700 mb-2">⟳ Waiting for admin approval…</div>
+          )}
 
-      {!panelHidden && !state.loading && (
-        <div className="w-full h-full flex items-center justify-center p-4">
-          <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-5">
-            <div className="text-lg font-semibold mb-3">{title}</div>
-
-            {state.mode === "waiting" && (
-              <div className="flex items-center gap-2 mb-3 text-emerald-700">
-                <div className="w-3 h-3 rounded-full border-2 border-emerald-600 border-t-transparent animate-spin" />
-                <span>Waiting for admin approval…</span>
-              </div>
-            )}
-
-            {adminHint && (
-              <div className="text-[12px] text-amber-800 bg-amber-50 border border-amber-200 rounded p-2 mb-3">
-                {adminHint}
-                <div className="mt-1 opacity-70">
-                  Resolved: UPI <code>{pay.upiId || "—"}</code> • WhatsApp <code>{waNum || "—"}</code>
-                </div>
-              </div>
-            )}
-
-            {/* Step tracker */}
-            <div className="mb-3">
-              <div className="flex items-center justify-between">
-                <StepBadge idx={0} label="Pay via UPI" />
-                <div className="flex-1 h-px bg-gray-200 mx-2" />
-                <StepBadge idx={1} label="Send Proof" />
-                <div className="flex-1 h-px bg-gray-200 mx-2" />
-                <StepBadge idx={2} label="Submit" />
-              </div>
-            </div>
-
-            {/* Big action buttons */}
-            <div className="grid grid-cols-1 gap-2 mb-3">
-              <button
-                className={`w-full py-3 rounded text-white text-lg font-semibold ${upiLink ? "bg-emerald-600" : "bg-gray-300 cursor-not-allowed"}`}
-                onClick={handleUPIClick}
-                disabled={!upiLink}
-              >
-                Pay via UPI
-              </button>
-
-              <button
-                className={`w-full py-3 rounded text-lg font-semibold border ${waLink ? "bg-white" : "bg-gray-100 cursor-not-allowed"}`}
-                onClick={handleWAClick}
-                disabled={!waLink}
-              >
-                Send Proof on WhatsApp
-              </button>
-            </div>
-
-            {/* Desktop UPI fallback/help */}
-            {!isAndroid && upiLink && (
-              <div className="text-[12px] text-gray-600 mb-3">
-                Tip: UPI deep links open in mobile UPI apps (Android). On desktop, copy UPI ID{" "}
-                <code className="bg-gray-100 px-1 rounded">{pay.upiId}</code>{" "}
-                and pay from your phone.{" "}
-                <button className="underline" onClick={() => copy(pay.upiId)}>Copy</button>
-              </div>
-            )}
-
-            {/* Timers / guidance banners */}
-            {(upiLeft > 0 || waLeft > 0) && (
-              <div className="text-[12px] text-gray-700 mb-3">
-                {upiLeft > 0 && (
-                  <div className="mb-1">
-                    After paying, <b>return to this tab</b> to finish. Auto-focus in ~{upiLeft}s.
-                  </div>
-                )}
-                {waLeft > 0 && (
-                  <div>
-                    After sending the screenshot on WhatsApp, <b>come back here</b>. We’ll bring you back in ~{waLeft}s.
-                  </div>
-                )}
-              </div>
-            )}
-
-            {/* Inputs (Name → Phone → Email) */}
-            <input
-              type="text"
-              placeholder="Name"
-              className="w-full border rounded px-3 py-2 mb-2"
-              value={nameField}
-              onChange={(e) => setNameField(e.target.value)}
-            />
-
-            <input
-              type="tel"
-              placeholder="Phone Number"
-              className="w-full border rounded px-3 py-2 mb-2"
-              value={phoneField}
-              onChange={(e) => setPhoneField(e.target.value)}
-            />
-
-            <input
-              type="email"
-              required
-              placeholder="Email"
-              className="w-full border rounded px-3 py-2 mb-3"
-              value={emailField}
-              onChange={(e) => setEmailField(e.target.value)}
-              onFocus={() => setStep(s => Math.max(s, 2))}
-            />
-
-            {/* Single Submit button */}
+          {/* action buttons */}
+          <div className="grid gap-2 mb-3">
             <button
-              className="w-full py-3 rounded bg-emerald-600 text-white text-lg font-semibold disabled:opacity-60"
-              onClick={submitRequest}
-              disabled={submitDisabled}
+              className={`w-full py-3 rounded text-white text-lg font-semibold ${upiLink ? "bg-emerald-600" : "bg-gray-300 cursor-not-allowed"}`}
+              onClick={()=>{ if (upiLink) window.location.href=upiLink; }}
+              disabled={!upiLink}
             >
-              Submit
+              Pay via UPI
             </button>
+            <a
+              className={`w-full py-3 rounded text-lg font-semibold border text-center ${waLink ? "bg-white" : "bg-gray-100 pointer-events-none"}`}
+              href={waLink || "#"} target="_blank" rel="noreferrer"
+            >
+              Send Proof on WhatsApp
+            </a>
+          </div>
 
-            {/* Close = only hide panel; veil stays */}
-            <button className="w-full mt-2 py-2 rounded border bg-white" onClick={closeForToday}>
-              Close
-            </button>
-
-            <div className="text-[11px] text-gray-500 mt-3">
-              After approval, your schedule starts again from Day 1 with the original release timings.
+          {!isAndroid && upiLink && (
+            <div className="text-[12px] text-gray-600 mb-3">
+              Tip: On desktop, copy UPI ID <code className="bg-gray-100 px-1 rounded">{upiId||"—"}</code>{" "}
+              and pay from your phone. <button className="underline" onClick={copyUPI}>Copy</button>
             </div>
+          )}
+
+          <input className="w-full border rounded px-3 py-2 mb-2" placeholder="Name"
+                 value={nameField} onChange={e=>setName(e.target.value)} />
+          <input className="w-full border rounded px-3 py-2 mb-2" placeholder="Phone Number"
+                 value={phoneField} onChange={e=>setPhone(e.target.value)} />
+          <input className="w-full border rounded px-3 py-2 mb-3" type="email" placeholder="Email"
+                 value={emailField} onChange={e=>setEmail(e.target.value)} />
+
+          <button
+            className="w-full py-3 rounded bg-emerald-600 text-white text-lg font-semibold disabled:opacity-60"
+            onClick={submit}
+            disabled={submitting || state.mode==="waiting" || !emailField}
+          >
+            {state.mode==="waiting" ? "Waiting…" : "Submit"}
+          </button>
+
+          <div className="text-[11px] text-gray-500 mt-3">
+            After approval, your schedule starts again from Day 1 with the original release timings.
           </div>
         </div>
-      )}
+      </div>
     </div>
   );
 }
