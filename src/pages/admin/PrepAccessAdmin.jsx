@@ -1,3 +1,4 @@
+// src/pages/admin/PrepAccessAdmin.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
 
 /* --- helpers that ALWAYS send X-Owner-Key --- */
@@ -6,7 +7,7 @@ const OWNER_KEY = import.meta.env.VITE_OWNER_KEY || "";
 async function getSecureJSON(url) {
   const r = await fetch(url, {
     headers: {
-      "Accept": "application/json",
+      Accept: "application/json",
       "X-Owner-Key": OWNER_KEY,
     },
     credentials: "include",
@@ -23,7 +24,7 @@ async function postSecureJSON(url, body) {
     method: "POST",
     headers: {
       "Content-Type": "application/json",
-      "Accept": "application/json",
+      Accept: "application/json",
       "X-Owner-Key": OWNER_KEY,
     },
     body: JSON.stringify(body || {}),
@@ -41,7 +42,7 @@ async function patchSecureJSON(url, body) {
     method: "PATCH",
     headers: {
       "Content-Type": "application/json",
-      "Accept": "application/json",
+      Accept: "application/json",
       "X-Owner-Key": OWNER_KEY,
     },
     body: JSON.stringify(body || {}),
@@ -79,13 +80,14 @@ export default function PrepAccessAdmin() {
   }, [status, examId]);
 
   async function load() {
-    setLoading(true); setErr("");
+    setLoading(true);
+    setErr("");
     try {
       const j = await getSecureJSON(`/api/prep/access/requests?${qs}`);
       let list = j?.items || [];
       if (emailFilter.trim()) {
         const e = emailFilter.trim().toLowerCase();
-        list = list.filter(x => (x.userEmail || "").toLowerCase().includes(e));
+        list = list.filter((x) => (x.userEmail || "").toLowerCase().includes(e));
       }
       setItems(list);
       setLast(new Date());
@@ -98,18 +100,26 @@ export default function PrepAccessAdmin() {
   }
 
   // Load requests whenever filters change
-  useEffect(() => { load(); /* eslint-disable-next-line */ }, [qs, emailFilter]);
+  useEffect(() => {
+    load();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [qs, emailFilter]);
 
   // Read auto-approval flag whenever examId changes
   useEffect(() => {
-    if (!examId) { setAutoGrant(false); return; }
+    if (!examId) {
+      setAutoGrant(false);
+      return;
+    }
     (async () => {
       try {
         setAutoGrantLoading(true);
-        const meta = await getSecureJSON(`/api/prep/exams/${encodeURIComponent(examId)}/meta`);
+        const meta = await getSecureJSON(
+          `/api/prep/exams/${encodeURIComponent(examId)}/meta`
+        );
         setAutoGrant(!!meta?.autoGrantRestart);
-      } catch (e) {
-        // keep quiet; user will still be able to fetch requests
+      } catch {
+        // ignore; list can still load
       } finally {
         setAutoGrantLoading(false);
       }
@@ -118,15 +128,23 @@ export default function PrepAccessAdmin() {
 
   // Auto-poll every 10s while viewing "pending"
   useEffect(() => {
-    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
+    if (pollRef.current) {
+      clearInterval(pollRef.current);
+      pollRef.current = null;
+    }
     if (status === "pending") pollRef.current = setInterval(load, 10000);
-    return () => { if (pollRef.current) clearInterval(pollRef.current); };
+    return () => {
+      if (pollRef.current) clearInterval(pollRef.current);
+    };
   }, [status, qs, emailFilter]);
 
   async function approve(id, grant = true) {
     if (!id) return;
     try {
-      await postSecureJSON("/api/prep/access/admin/approve", { requestId: id, approve: grant });
+      await postSecureJSON("/api/prep/access/admin/approve", {
+        requestId: id,
+        approve: grant,
+      });
       await load();
     } catch (e) {
       alert(e.message || "Approve failed");
@@ -135,7 +153,10 @@ export default function PrepAccessAdmin() {
 
   async function revokeRow(x) {
     try {
-      await postSecureJSON("/api/prep/access/admin/revoke", { examId: x.examId, email: x.userEmail });
+      await postSecureJSON("/api/prep/access/admin/revoke", {
+        examId: x.examId,
+        email: x.userEmail,
+      });
       await load();
     } catch (e) {
       alert(e.message || "Revoke failed");
@@ -143,12 +164,16 @@ export default function PrepAccessAdmin() {
   }
 
   async function toggleAutoGrant(nextVal) {
-    if (!examId) { alert("Enter an examId first."); return; }
+    if (!examId) {
+      alert("Enter an examId first.");
+      return;
+    }
     try {
       setAutoGrantLoading(true);
-      await patchSecureJSON(`/api/prep/exams/${encodeURIComponent(examId)}/overlay-config`, {
-        autoGrantRestart: !!nextVal,
-      });
+      await patchSecureJSON(
+        `/api/prep/exams/${encodeURIComponent(examId)}/overlay-config`,
+        { autoGrantRestart: !!nextVal }
+      );
       setAutoGrant(!!nextVal);
     } catch (e) {
       alert(e.message || "Failed to update auto-approval");
@@ -186,17 +211,23 @@ export default function PrepAccessAdmin() {
           value={emailFilter}
           onChange={(e) => setEmailFilter(e.target.value)}
         />
-        <button className="px-3 py-1 border rounded" onClick={load}>Refresh</button>
+        <button className="px-3 py-1 border rounded" onClick={load}>
+          Refresh
+        </button>
 
         <div className="ml-auto flex items-center gap-2">
-          <label className="text-sm text-gray-700">Auto-approve restarts/purchases</label>
+          <label className="text-sm text-gray-700">
+            Auto-approve restarts/purchases
+          </label>
           <button
-            className={`px-3 py-1 rounded ${autoGrant ? "bg-emerald-600 text-white" : "bg-gray-200"}`}
+            className={`px-3 py-1 rounded ${
+              autoGrant ? "bg-emerald-600 text-white" : "bg-gray-200"
+            }`}
             onClick={() => toggleAutoGrant(!autoGrant)}
             disabled={!examId || autoGrantLoading}
             title="When ON, new requests for this exam are immediately approved"
           >
-            {autoGrantLoading ? "Saving…" : (autoGrant ? "ON" : "OFF")}
+            {autoGrantLoading ? "Saving…" : autoGrant ? "ON" : "OFF"}
           </button>
         </div>
 
@@ -234,12 +265,32 @@ export default function PrepAccessAdmin() {
                 </div>
 
                 <div className="text-xs text-gray-700 mt-1">
-                  <div><b>Email:</b> {x.userEmail}</div>
-                  {nm ? <div><b>Name:</b> {nm}</div> : null}
-                  {ph ? <div><b>Phone:</b> {ph}</div> : null}
-                  <div><b>Price:</b> ₹{x.priceAt ?? 0}</div>
-                  {x.meta?.planLabel ? <div><b>Plan:</b> {x.meta.planLabel}</div> : null}
-                  {x.note ? <div className="mt-1"><b>Note:</b> {x.note}</div> : null}
+                  <div>
+                    <b>Email:</b> {x.userEmail}
+                  </div>
+                  {nm ? (
+                    <div>
+                      <b>Name:</b> {nm}
+                    </div>
+                  ) : null}
+                  {ph ? (
+                    <div>
+                      <b>Phone:</b> {ph}
+                    </div>
+                  ) : null}
+                  <div>
+                    <b>Price:</b> ₹{x.priceAt ?? 0}
+                  </div>
+                  {x.meta?.planLabel ? (
+                    <div>
+                      <b>Plan:</b> {x.meta.planLabel}
+                    </div>
+                  ) : null}
+                  {x.note ? (
+                    <div className="mt-1">
+                      <b>Note:</b> {x.note}
+                    </div>
+                  ) : null}
                 </div>
 
                 {x.screenshotUrl && (
