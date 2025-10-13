@@ -91,9 +91,24 @@ export default function PrepAccessOverlay({ examId, email }) {
       const qs = new URLSearchParams({ examId, email: email || "" });
       const r = await getJSON(`/api/prep/access/status?${qs.toString()}`);
       const { exam, access, overlay } = r || {};
-      const overlayNever = r?.exam?.overlay?.mode === "never";
 
-      // ✅ HARD DISABLE path: server told us to stop showing overlay
+      // === A) EARLY RETURN when admin has set overlay.mode === "never"
+      if (exam?.overlay?.mode === "never") {
+        localStorage.removeItem(ks.wait);
+        hasWaitingGate = false;
+        setState({
+          loading: false,
+          show: false,
+          mode: "",
+          exam: exam || {},
+          access: access || {},
+          overlay: overlay || {},
+          waiting: false,
+        });
+        return;
+      }
+
+      // ✅ HARD DISABLE path (server flag) — keep your existing behavior
       if (overlay?.hardDisabled) {
         localStorage.removeItem(ks.wait);
         hasWaitingGate = false;
@@ -123,10 +138,29 @@ export default function PrepAccessOverlay({ examId, email }) {
         todayDay = Number(meta?.todayDay || 1);
       } catch {}
 
+      // === C) TRIAL GUARD: hide overlay if still inside trial window
+      const trialDays = Number(r?.access?.trialDays || r?.exam?.trialDays || 3);
+      const isInTrial = (r?.access?.status === "trial") && (todayDay <= trialDays);
+      if (isInTrial) {
+        localStorage.removeItem(ks.wait);
+        hasWaitingGate = false;
+        setState({
+          loading: false,
+          show: false,
+          mode: "",
+          exam: exam || {},
+          access: access || {},
+          overlay: overlay || {},
+          waiting: false,
+        });
+        return;
+      }
+
       // --------- decide overlay ---------
       let mode = "";
       let show = false;
       let waiting = !!access?.pending;
+      const overlayNever = r?.exam?.overlay?.mode === "never";
       const isPlanDayTime = access?.overlayPlan?.mode === "planDayTime";
 
       if (hasWaitingGate) { mode = "waiting"; show = true; waiting = true; }
@@ -140,7 +174,7 @@ export default function PrepAccessOverlay({ examId, email }) {
         else if (waiting) { mode = "waiting"; show = true; }
       }
 
-      // hard guard: if admin set NEVER, don't show (unless already waiting)
+      // hard guard (again): if admin set NEVER, don't show (unless already waiting)
       if (overlayNever && !hasWaitingGate) {
         mode = "";
         show = false;
@@ -314,6 +348,9 @@ export default function PrepAccessOverlay({ examId, email }) {
     fd.append("examId", examId);
     fd.append("email", emailVal);
     fd.append("intent", state.mode === "purchase" ? "purchase" : "restart");
+    if (nameField)  fd.append("name",  nameField);
+    if (phoneField) fd.append("phone", phoneField);
+
     const note = [
       nameField ? `name=${nameField}` : "",
       phoneField ? `phone=${phoneField}` : "",
@@ -334,21 +371,37 @@ export default function PrepAccessOverlay({ examId, email }) {
         alert(msg);
         return;
       }
+
+      // If auto-approved, reflect immediately
       if (j?.approved) {
         localStorage.removeItem(ks.wait);
         await fetchStatus();
-      } else {
-        // Immediately flip to "waiting", keep veil up and show spinner text
-        localStorage.setItem(ks.wait, "1");
-        setState(s => ({
-          ...s,
-          mode: "waiting",
-          show: true,
-          waiting: true
-        }));
-        // start polling so we flip to active quickly after admin approves
-        pollApprovalLoop(emailVal);
+        return;
       }
+
+      // === B) Immediately flip to "waiting" and poll faster for a short burst
+      localStorage.setItem(ks.wait, "1");
+      setState(s => ({ ...s, mode: "waiting", show: true, waiting: true }));
+
+      // Fast poll every 3s for up to 120s to reduce user wait
+      const start = Date.now();
+      const fast = setInterval(async () => {
+        try {
+          const qs = new URLSearchParams({ examId, email: emailVal });
+          const st = await getJSON(`/api/prep/access/status?${qs.toString()}`);
+          const a = st?.access?.status || "none";
+          if (a === "active") {
+            clearInterval(fast);
+            localStorage.removeItem(ks.wait);
+            await fetchStatus();
+            return;
+          }
+        } catch {}
+        if (Date.now() - start > 120000) clearInterval(fast);
+      }, 3000);
+
+      // Keep your existing long poll (public poller)
+      pollApprovalLoop(emailVal);
     } catch (e) {
       console.error(e);
       alert("Failed to submit");
