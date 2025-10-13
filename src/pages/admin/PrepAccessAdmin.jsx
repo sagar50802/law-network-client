@@ -1,25 +1,20 @@
-// src/pages/admin/PrepAccessAdmin.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
 
-/* =========================================================================
-   Admin Access Panel (final)
-   - Lists requests (pending / approved / rejected) with filters
-   - View screenshot / metadata
-   - Approve & grant, Reject, Revoke (with X-Owner-Key header)
-   - Shows exam overlay config (trialDays, overlay mode, offsetDays, price)
-   - Toggle "Auto-grant" per exam (uses PATCH /exams/:examId/overlay-config)
-   ========================================================================= */
+/* --- helpers that ALWAYS send X-Owner-Key --- */
+const OWNER_KEY = import.meta.env.VITE_OWNER_KEY || "";
 
-const OWNER = import.meta.env.VITE_OWNER_KEY || "";
-
-/* ------------ tiny fetch helpers that ALWAYS send X-Owner-Key ------------ */
 async function getSecureJSON(url) {
   const r = await fetch(url, {
-    headers: { "Accept": "application/json", "X-Owner-Key": OWNER },
+    headers: {
+      "Accept": "application/json",
+      "X-Owner-Key": OWNER_KEY,
+    },
     credentials: "include",
   });
   const j = await r.json().catch(() => ({}));
-  if (!r.ok || j?.success === false) throw new Error(j?.error || j?.message || `GET ${url} failed (${r.status})`);
+  if (!r.ok || j?.success === false) {
+    throw new Error(j?.error || j?.message || `GET ${url} failed (${r.status})`);
+  }
   return j;
 }
 
@@ -27,13 +22,17 @@ async function postSecureJSON(url, body) {
   const r = await fetch(url, {
     method: "POST",
     headers: {
-      "Content-Type": "application/json", "Accept": "application/json", "X-Owner-Key": OWNER,
+      "Content-Type": "application/json",
+      "Accept": "application/json",
+      "X-Owner-Key": OWNER_KEY,
     },
     body: JSON.stringify(body || {}),
     credentials: "include",
   });
   const j = await r.json().catch(() => ({}));
-  if (!r.ok || j?.success === false) throw new Error(j?.error || j?.message || `POST ${url} failed (${r.status})`);
+  if (!r.ok || j?.success === false) {
+    throw new Error(j?.error || j?.message || `POST ${url} failed (${r.status})`);
+  }
   return j;
 }
 
@@ -41,17 +40,22 @@ async function patchSecureJSON(url, body) {
   const r = await fetch(url, {
     method: "PATCH",
     headers: {
-      "Content-Type": "application/json", "Accept": "application/json", "X-Owner-Key": OWNER,
+      "Content-Type": "application/json",
+      "Accept": "application/json",
+      "X-Owner-Key": OWNER_KEY,
     },
     body: JSON.stringify(body || {}),
     credentials: "include",
   });
   const j = await r.json().catch(() => ({}));
-  if (!r.ok || j?.success === false) throw new Error(j?.error || j?.message || `PATCH ${url} failed (${r.status})`);
+  if (!r.ok || j?.success === false) {
+    throw new Error(j?.error || j?.message || `PATCH ${url} failed (${r.status})`);
+  }
   return j;
 }
 
-/* ---------------------------------- UI ---------------------------------- */
+/* ------------------------------- Component ------------------------------- */
+
 export default function PrepAccessAdmin() {
   const [items, setItems] = useState([]);
   const [examId, setExamId] = useState("");
@@ -61,10 +65,9 @@ export default function PrepAccessAdmin() {
   const [err, setErr] = useState("");
   const [last, setLast] = useState(null);
 
-  // exam meta (overlay + payment + price/trial/autoGrant)
-  const [meta, setMeta] = useState(null);
-  const [metaLoading, setMetaLoading] = useState(false);
-  const [metaErr, setMetaErr] = useState("");
+  // Auto-approval toggle (reads/writes exam.autoGrantRestart)
+  const [autoGrant, setAutoGrant] = useState(false);
+  const [autoGrantLoading, setAutoGrantLoading] = useState(false);
 
   const pollRef = useRef(null);
 
@@ -94,24 +97,26 @@ export default function PrepAccessAdmin() {
     }
   }
 
-  async function loadMeta() {
-    if (!examId.trim()) { setMeta(null); setMetaErr(""); return; }
-    setMetaLoading(true); setMetaErr("");
-    try {
-      const j = await getSecureJSON(`/api/prep/exams/${encodeURIComponent(examId.trim())}/meta?_=${Date.now()}`);
-      setMeta(j || null);
-    } catch (e) {
-      setMeta(null);
-      setMetaErr(e.message || "Failed to load overlay meta");
-    } finally {
-      setMetaLoading(false);
-    }
-  }
+  // Load requests whenever filters change
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [qs, emailFilter]);
 
-  useEffect(() => { load(); }, [qs, emailFilter]);
-  useEffect(() => { loadMeta(); }, [examId]);
+  // Read auto-approval flag whenever examId changes
+  useEffect(() => {
+    if (!examId) { setAutoGrant(false); return; }
+    (async () => {
+      try {
+        setAutoGrantLoading(true);
+        const meta = await getSecureJSON(`/api/prep/exams/${encodeURIComponent(examId)}/meta`);
+        setAutoGrant(!!meta?.autoGrantRestart);
+      } catch (e) {
+        // keep quiet; user will still be able to fetch requests
+      } finally {
+        setAutoGrantLoading(false);
+      }
+    })();
+  }, [examId]);
 
-  // Auto-poll every 10s when viewing "pending"
+  // Auto-poll every 10s while viewing "pending"
   useEffect(() => {
     if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
     if (status === "pending") pollRef.current = setInterval(load, 10000);
@@ -138,25 +143,25 @@ export default function PrepAccessAdmin() {
   }
 
   async function toggleAutoGrant(nextVal) {
-    if (!examId.trim()) return;
+    if (!examId) { alert("Enter an examId first."); return; }
     try {
-      await patchSecureJSON(
-        `/api/prep/exams/${encodeURIComponent(examId.trim())}/overlay-config`,
-        { autoGrantRestart: !!nextVal }
-      );
-      await loadMeta();
-      // on next user submission, server will auto-approve when enabled
+      setAutoGrantLoading(true);
+      await patchSecureJSON(`/api/prep/exams/${encodeURIComponent(examId)}/overlay-config`, {
+        autoGrantRestart: !!nextVal,
+      });
+      setAutoGrant(!!nextVal);
     } catch (e) {
-      alert(e.message || "Failed to toggle auto-grant");
+      alert(e.message || "Failed to update auto-approval");
+    } finally {
+      setAutoGrantLoading(false);
     }
   }
 
-  /* ------------------------------- render ------------------------------- */
   return (
     <div className="max-w-5xl mx-auto p-4">
       <div className="text-lg font-semibold mb-3">Prep • Access Requests</div>
 
-      {/* Filters */}
+      {/* Controls */}
       <div className="flex flex-wrap gap-2 items-center mb-3">
         <select
           className="border px-2 py-1 rounded"
@@ -183,111 +188,61 @@ export default function PrepAccessAdmin() {
         />
         <button className="px-3 py-1 border rounded" onClick={load}>Refresh</button>
 
-        <div className="text-xs text-gray-600 ml-auto">
+        <div className="ml-auto flex items-center gap-2">
+          <label className="text-sm text-gray-700">Auto-approve restarts/purchases</label>
+          <button
+            className={`px-3 py-1 rounded ${autoGrant ? "bg-emerald-600 text-white" : "bg-gray-200"}`}
+            onClick={() => toggleAutoGrant(!autoGrant)}
+            disabled={!examId || autoGrantLoading}
+            title="When ON, new requests for this exam are immediately approved"
+          >
+            {autoGrantLoading ? "Saving…" : (autoGrant ? "ON" : "OFF")}
+          </button>
+        </div>
+
+        <div className="text-xs text-gray-600">
           {loading ? "Loading…" : last ? `Last update: ${last.toLocaleTimeString()}` : ""}
         </div>
       </div>
 
-      {/* Meta box for current examId */}
-      {examId ? (
-        <div className="border rounded p-3 mb-4">
-          <div className="flex items-center justify-between">
-            <div className="font-medium text-sm">Exam settings — <span className="font-mono">{examId}</span></div>
-            {metaLoading && <div className="text-xs text-gray-500">Loading…</div>}
-          </div>
-
-          {metaErr && (
-            <div className="text-xs text-rose-700 bg-rose-50 border border-rose-200 rounded p-2 mt-2">
-              {metaErr}
-            </div>
-          )}
-
-          {meta && (
-            <div className="mt-2 grid gap-2 text-sm">
-              <div className="text-gray-700">
-                <div><b>Name:</b> {meta?.name || "—"}</div>
-                <div><b>Price:</b> ₹{Number(meta?.price ?? 0)}</div>
-                <div><b>Trial days:</b> {Number(meta?.trialDays ?? 0)}</div>
-              </div>
-
-              <div className="text-gray-700">
-                <div><b>Overlay mode:</b> {String(meta?.overlay?.mode || "—")}</div>
-                {meta?.overlay?.mode === "fixed-date" && (
-                  <div><b>Fixed at:</b> {meta?.overlay?.fixedAt ? new Date(meta.overlay.fixedAt).toLocaleString() : "—"}</div>
-                )}
-                {meta?.overlay?.mode === "offset-days" && (
-                  <div><b>After N days (per user):</b> {Number(meta?.overlay?.offsetDays ?? 0)}</div>
-                )}
-                {meta?.overlay?.mode === "planDayTime" && (
-                  <div>
-                    <div><b>Show on day:</b> {Number(meta?.overlay?.showOnDay ?? 1)}</div>
-                    <div><b>Show at (local):</b> {String(meta?.overlay?.showAtLocal || "09:00")}</div>
-                    <div><b>Time zone:</b> {String(meta?.overlay?.tz || "Asia/Kolkata")}</div>
-                  </div>
-                )}
-              </div>
-
-              <div className="text-gray-700">
-                <div><b>Auto-grant:</b> {meta?.autoGrantRestart ? "ON" : "OFF"}</div>
-                <div className="mt-1 flex gap-2">
-                  {!meta?.autoGrantRestart ? (
-                    <button className="px-3 py-1 rounded bg-emerald-600 text-white"
-                            onClick={() => toggleAutoGrant(true)}>Enable Auto-grant</button>
-                  ) : (
-                    <button className="px-3 py-1 rounded bg-rose-600 text-white"
-                            onClick={() => toggleAutoGrant(false)}>Disable Auto-grant</button>
-                  )}
-                </div>
-              </div>
-
-              <div className="text-[12px] text-gray-600">
-                Tip: With <b>After N days (per user)</b>, the user sees the payment overlay
-                immediately after trial ends (e.g., trial=2 ⇒ overlay on day 3).
-                If trial=0 and N=0, overlay shows on Day 1.
-              </div>
-            </div>
-          )}
-        </div>
-      ) : null}
-
-      {/* Error banner for requests list */}
       {err && (
         <div className="text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded p-2 mb-3">
           {err}
           <div className="opacity-70 mt-1">
-            Ensure <code>X-Owner-Key</code> is configured in your environment as <code>VITE_OWNER_KEY</code>.
+            Make sure <code>X-Owner-Key</code> is set as <code>VITE_OWNER_KEY</code>.
           </div>
         </div>
       )}
 
-      {/* Requests table/cards */}
+      {/* List */}
       {!items.length && !loading ? (
-        <div className="text-sm text-gray-600">No {status} requests{examId ? ` for ${examId}` : ""}.</div>
+        <div className="text-sm text-gray-600">No {status} requests.</div>
       ) : (
         <div className="grid gap-3">
           {items.map((x) => {
             const nm = x?.meta?.name || "";
             const ph = x?.meta?.phone || "";
-            const plan = x?.meta?.planLabel ? ` • Plan: ${x.meta.planLabel}` : "";
-            const when = x?.createdAt ? new Date(x.createdAt).toLocaleString() : "";
             return (
               <div key={x._id} className="border rounded p-3">
                 <div className="flex items-center justify-between">
                   <div className="text-sm font-medium">
                     {String(x.intent || "").toUpperCase()} • {x.examId}
                   </div>
-                  <div className="text-xs text-gray-500">{when}</div>
+                  <div className="text-xs text-gray-500">
+                    {new Date(x.createdAt).toLocaleString()}
+                  </div>
                 </div>
 
                 <div className="text-xs text-gray-700 mt-1">
                   <div><b>Email:</b> {x.userEmail}</div>
                   {nm ? <div><b>Name:</b> {nm}</div> : null}
                   {ph ? <div><b>Phone:</b> {ph}</div> : null}
-                  <div><b>Price:</b> ₹{x.priceAt ?? 0}{plan}</div>
+                  <div><b>Price:</b> ₹{x.priceAt ?? 0}</div>
+                  {x.meta?.planLabel ? <div><b>Plan:</b> {x.meta.planLabel}</div> : null}
                   {x.note ? <div className="mt-1"><b>Note:</b> {x.note}</div> : null}
                 </div>
 
-                {x.screenshotUrl ? (
+                {x.screenshotUrl && (
                   <div className="mt-2">
                     <a
                       href={x.screenshotUrl}
@@ -298,8 +253,6 @@ export default function PrepAccessAdmin() {
                       View Screenshot
                     </a>
                   </div>
-                ) : (
-                  <div className="mt-2 text-[11px] text-gray-500">No screenshot</div>
                 )}
 
                 <div className="mt-3 flex flex-wrap gap-2">
