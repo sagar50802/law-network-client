@@ -1,5 +1,3 @@
-
-  
 /**
  * Central API helpers for frontend
  * Used across Article, Consultancy, Video, Podcast, PDF, Banner, QR, etc.
@@ -18,8 +16,27 @@ const RAW_BASE = String(
   "http://localhost:5000"
 ).replace(/\/+$/, ""); // strip trailing slash
 
-// If RAW_BASE already ends with /api keep it, else append /api once.
-const API_BASE = RAW_BASE.endsWith("/api") ? RAW_BASE : `${RAW_BASE}/api`;
+/* ──────────────────────────────────────────────────────────────
+   AUTO-FALLBACK for two-app Render setup (no env changes needed)
+   If no env points to the API and we’re on *.onrender.com with
+   a “-client” subdomain, auto-target the sibling server origin.
+   This only runs when RAW_BASE is still localhost (i.e., unset).
+   ────────────────────────────────────────────────────────────── */
+let AUTO_BASE = RAW_BASE;
+try {
+  if (
+    typeof window !== "undefined" &&
+    /^http:\/\/localhost(?::\d+)?$/.test(RAW_BASE) &&
+    /\.onrender\.com$/i.test(window.location.hostname) &&
+    /-client\./i.test(window.location.hostname)
+  ) {
+    const serverHost = window.location.hostname.replace(/-client\./i, ".");
+    AUTO_BASE = `https://${serverHost}`;
+  }
+} catch { /* no-op */ }
+
+// If base already ends with /api keep it, else append /api once.
+const API_BASE = AUTO_BASE.endsWith("/api") ? AUTO_BASE : `${AUTO_BASE}/api`;
 
 // Backend origin without /api (for legacy /uploads/*)
 const API_ORIGIN = API_BASE.slice(0, -4);
