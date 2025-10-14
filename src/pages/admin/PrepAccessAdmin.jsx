@@ -6,10 +6,7 @@ const OWNER_KEY = import.meta.env.VITE_OWNER_KEY || "";
 
 async function getSecureJSON(url) {
   const r = await fetch(url, {
-    headers: {
-      Accept: "application/json",
-      "X-Owner-Key": OWNER_KEY,
-    },
+    headers: { Accept: "application/json", "X-Owner-Key": OWNER_KEY },
     credentials: "include",
   });
   const j = await r.json().catch(() => ({}));
@@ -18,7 +15,6 @@ async function getSecureJSON(url) {
   }
   return j;
 }
-
 async function postSecureJSON(url, body) {
   const r = await fetch(url, {
     method: "POST",
@@ -36,7 +32,6 @@ async function postSecureJSON(url, body) {
   }
   return j;
 }
-
 async function patchSecureJSON(url, body) {
   const r = await fetch(url, {
     method: "PATCH",
@@ -72,8 +67,7 @@ export default function PrepAccessAdmin() {
 
   const pollRef = useRef(null);
 
-  // Build querystring. IMPORTANT: if status==="all" we DO NOT send a status filter,
-  // because the server only understands pending/approved/rejected.
+  // Build querystring. If status==="all" we DO NOT include status → server returns all.
   const qs = useMemo(() => {
     const q = new URLSearchParams();
     if (status && status !== "all") q.set("status", status);
@@ -81,6 +75,7 @@ export default function PrepAccessAdmin() {
     return q.toString();
   }, [status, examId]);
 
+  /* ------------------------------- Load list ------------------------------- */
   async function load() {
     setLoading(true);
     setErr("");
@@ -101,13 +96,12 @@ export default function PrepAccessAdmin() {
     }
   }
 
-  // Load requests whenever filters change
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [qs, emailFilter]);
 
-  // Read auto-approval flag whenever examId changes
+  /* ------------------------------- Read auto-approve flag ------------------------------- */
   useEffect(() => {
     if (!examId) {
       setAutoGrant(false);
@@ -128,7 +122,7 @@ export default function PrepAccessAdmin() {
     })();
   }, [examId]);
 
-  // Auto-poll every 10s while viewing "pending"
+  /* ------------------------------- Poll pending ------------------------------- */
   useEffect(() => {
     if (pollRef.current) {
       clearInterval(pollRef.current);
@@ -138,8 +132,10 @@ export default function PrepAccessAdmin() {
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
     };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, qs, emailFilter]);
 
+  /* ------------------------------- Actions ------------------------------- */
   async function approve(id, grant = true) {
     if (!id) return;
     try {
@@ -186,6 +182,7 @@ export default function PrepAccessAdmin() {
 
   const statusLabel = status === "all" ? "" : status;
 
+  /* ------------------------------- UI ------------------------------- */
   return (
     <div className="max-w-5xl mx-auto p-4">
       <div className="text-lg font-semibold mb-3">Prep • Access Requests</div>
@@ -272,32 +269,12 @@ export default function PrepAccessAdmin() {
                 </div>
 
                 <div className="text-xs text-gray-700 mt-1">
-                  <div>
-                    <b>Email:</b> {x.userEmail}
-                  </div>
-                  {nm ? (
-                    <div>
-                      <b>Name:</b> {nm}
-                    </div>
-                  ) : null}
-                  {ph ? (
-                    <div>
-                      <b>Phone:</b> {ph}
-                    </div>
-                  ) : null}
-                  <div>
-                    <b>Price:</b> ₹{x.priceAt ?? 0}
-                  </div>
-                  {x.meta?.planLabel ? (
-                    <div>
-                      <b>Plan:</b> {x.meta.planLabel}
-                    </div>
-                  ) : null}
-                  {x.note ? (
-                    <div className="mt-1">
-                      <b>Note:</b> {x.note}
-                    </div>
-                  ) : null}
+                  <div><b>Email:</b> {x.userEmail}</div>
+                  {nm ? <div><b>Name:</b> {nm}</div> : null}
+                  {ph ? <div><b>Phone:</b> {ph}</div> : null}
+                  <div><b>Price:</b> ₹{x.priceAt ?? 0}</div>
+                  {x.meta?.planLabel ? <div><b>Plan:</b> {x.meta.planLabel}</div> : null}
+                  {x.note ? <div className="mt-1"><b>Note:</b> {x.note}</div> : null}
                 </div>
 
                 {x.screenshotUrl && (
@@ -314,7 +291,7 @@ export default function PrepAccessAdmin() {
                 )}
 
                 <div className="mt-3 flex flex-wrap gap-2">
-                  {/* Show Approve/Reject buttons only for pending rows, even in "All" view */}
+                  {/* Only show Approve/Reject for pending rows (even in “All” view) */}
                   {x.status === "pending" && (
                     <>
                       <button
