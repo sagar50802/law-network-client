@@ -1,13 +1,11 @@
 // src/pages/admin/PrepAccessAdmin.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
-import { buildUrl } from "../../utils/api"; // ✔ use the shared API base resolver
 
 /* --- helpers that ALWAYS send X-Owner-Key --- */
-const OWNER_KEY = import.meta.env.VITE_OWNER_KEY || localStorage.getItem("ownerKey") || "";
+const OWNER_KEY = import.meta.env.VITE_OWNER_KEY || "";
 
-// fetch helpers that route via buildUrl() so we never end up on the wrong origin
 async function getSecureJSON(url) {
-  const r = await fetch(buildUrl(url), {
+  const r = await fetch(url, {
     headers: { Accept: "application/json", "X-Owner-Key": OWNER_KEY },
     credentials: "include",
   });
@@ -18,13 +16,9 @@ async function getSecureJSON(url) {
   return j;
 }
 async function postSecureJSON(url, body) {
-  const r = await fetch(buildUrl(url), {
+  const r = await fetch(url, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      "X-Owner-Key": OWNER_KEY,
-    },
+    headers: { "Content-Type": "application/json", Accept: "application/json", "X-Owner-Key": OWNER_KEY },
     body: JSON.stringify(body || {}),
     credentials: "include",
   });
@@ -35,13 +29,9 @@ async function postSecureJSON(url, body) {
   return j;
 }
 async function patchSecureJSON(url, body) {
-  const r = await fetch(buildUrl(url), {
+  const r = await fetch(url, {
     method: "PATCH",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      "X-Owner-Key": OWNER_KEY,
-    },
+    headers: { "Content-Type": "application/json", Accept: "application/json", "X-Owner-Key": OWNER_KEY },
     body: JSON.stringify(body || {}),
     credentials: "include",
   });
@@ -53,6 +43,7 @@ async function patchSecureJSON(url, body) {
 }
 
 /* ------------------------------- Component ------------------------------- */
+
 export default function PrepAccessAdmin() {
   const [items, setItems] = useState([]);
   const [examId, setExamId] = useState("");
@@ -68,10 +59,10 @@ export default function PrepAccessAdmin() {
 
   const pollRef = useRef(null);
 
-  // If status==="all" we do NOT send status → server returns all.
+  // ✅ Always include status (including "all") so the server does not default to "pending"
   const qs = useMemo(() => {
     const q = new URLSearchParams();
-    if (status && status !== "all") q.set("status", status);
+    q.set("status", status || "pending");
     if (examId) q.set("examId", examId.trim());
     return q.toString();
   }, [status, examId]);
@@ -81,11 +72,11 @@ export default function PrepAccessAdmin() {
     setLoading(true);
     setErr("");
     try {
-      const j = await getSecureJSON(`/prep/access/requests?${qs}`);
+      const j = await getSecureJSON(`/api/prep/access/requests?${qs}`);
       let list = j?.items || [];
       if (emailFilter.trim()) {
         const e = emailFilter.trim().toLowerCase();
-        list = list.filter(x => (x.userEmail || "").toLowerCase().includes(e));
+        list = list.filter((x) => (x.userEmail || "").toLowerCase().includes(e));
       }
       setItems(list);
       setLast(new Date());
@@ -111,7 +102,7 @@ export default function PrepAccessAdmin() {
     (async () => {
       try {
         setAutoGrantLoading(true);
-        const meta = await getSecureJSON(`/prep/exams/${encodeURIComponent(examId)}/meta`);
+        const meta = await getSecureJSON(`/api/prep/exams/${encodeURIComponent(examId)}/meta`);
         setAutoGrant(!!meta?.autoGrantRestart);
       } catch {
         // ignore; list can still load
@@ -138,7 +129,7 @@ export default function PrepAccessAdmin() {
   async function approve(id, grant = true) {
     if (!id) return;
     try {
-      await postSecureJSON("/prep/access/admin/approve", { requestId: id, approve: grant });
+      await postSecureJSON("/api/prep/access/admin/approve", { requestId: id, approve: grant });
       await load();
     } catch (e) {
       alert(e.message || "Approve failed");
@@ -147,7 +138,7 @@ export default function PrepAccessAdmin() {
 
   async function revokeRow(x) {
     try {
-      await postSecureJSON("/prep/access/admin/revoke", { examId: x.examId, email: x.userEmail });
+      await postSecureJSON("/api/prep/access/admin/revoke", { examId: x.examId, email: x.userEmail });
       await load();
     } catch (e) {
       alert(e.message || "Revoke failed");
@@ -161,7 +152,7 @@ export default function PrepAccessAdmin() {
     }
     try {
       setAutoGrantLoading(true);
-      await patchSecureJSON(`/prep/exams/${encodeURIComponent(examId)}/overlay-config`, {
+      await patchSecureJSON(`/api/prep/exams/${encodeURIComponent(examId)}/overlay-config`, {
         autoGrantRestart: !!nextVal,
       });
       setAutoGrant(!!nextVal);
@@ -217,7 +208,7 @@ export default function PrepAccessAdmin() {
             disabled={!examId || autoGrantLoading}
             title="When ON, new requests for this exam are immediately approved"
           >
-            {autoGrantLoading ? "Saving…" : (autoGrant ? "ON" : "OFF")}
+            {autoGrantLoading ? "Saving…" : autoGrant ? "ON" : "OFF"}
           </button>
         </div>
 
@@ -251,9 +242,7 @@ export default function PrepAccessAdmin() {
                   <div className="text-sm font-medium">
                     {String(x.intent || "").toUpperCase()} • {x.examId}
                   </div>
-                  <div className="text-xs text-gray-500">
-                    {new Date(x.createdAt).toLocaleString()}
-                  </div>
+                  <div className="text-xs text-gray-500">{new Date(x.createdAt).toLocaleString()}</div>
                 </div>
 
                 <div className="text-xs text-gray-700 mt-1">
