@@ -10,47 +10,31 @@ async function getSecureJSON(url) {
     credentials: "include",
   });
   const j = await r.json().catch(() => ({}));
-  if (!r.ok || j?.success === false) {
-    throw new Error(j?.error || j?.message || `GET ${url} failed (${r.status})`);
-  }
+  if (!r.ok || j?.success === false) throw new Error(j?.error || j?.message || `GET ${url} failed (${r.status})`);
   return j;
 }
 async function postSecureJSON(url, body) {
   const r = await fetch(url, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      "X-Owner-Key": OWNER_KEY,
-    },
+    headers: { "Content-Type": "application/json", Accept: "application/json", "X-Owner-Key": OWNER_KEY },
     body: JSON.stringify(body || {}),
     credentials: "include",
   });
   const j = await r.json().catch(() => ({}));
-  if (!r.ok || j?.success === false) {
-    throw new Error(j?.error || j?.message || `POST ${url} failed (${r.status})`);
-  }
+  if (!r.ok || j?.success === false) throw new Error(j?.error || j?.message || `POST ${url} failed (${r.status})`);
   return j;
 }
 async function patchSecureJSON(url, body) {
   const r = await fetch(url, {
     method: "PATCH",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      "X-Owner-Key": OWNER_KEY,
-    },
+    headers: { "Content-Type": "application/json", Accept: "application/json", "X-Owner-Key": OWNER_KEY },
     body: JSON.stringify(body || {}),
     credentials: "include",
   });
   const j = await r.json().catch(() => ({}));
-  if (!r.ok || j?.success === false) {
-    throw new Error(j?.error || j?.message || `PATCH ${url} failed (${r.status})`);
-  }
+  if (!r.ok || j?.success === false) throw new Error(j?.error || j?.message || `PATCH ${url} failed (${r.status})`);
   return j;
 }
-
-/* ------------------------------- Component ------------------------------- */
 
 export default function PrepAccessAdmin() {
   const [items, setItems] = useState([]);
@@ -61,88 +45,70 @@ export default function PrepAccessAdmin() {
   const [err, setErr] = useState("");
   const [last, setLast] = useState(null);
 
-  // Auto-approval toggle (reads/writes exam.autoGrantRestart)
   const [autoGrant, setAutoGrant] = useState(false);
   const [autoGrantLoading, setAutoGrantLoading] = useState(false);
 
+  const [dbg, setDbg] = useState(null); // debug counters (when ?debug=1)
   const pollRef = useRef(null);
 
-  // Build querystring. If status==="all" we DO NOT include status → server returns all.
+  const hasDebug = typeof window !== "undefined" && /[?&]debug=1\b/.test(window.location.search || "");
+
+  // Build querystring. If status==="all" don't send status → server returns all.
   const qs = useMemo(() => {
     const q = new URLSearchParams();
     if (status && status !== "all") q.set("status", status);
     if (examId) q.set("examId", examId.trim());
+    if (hasDebug) q.set("debug", "1");
     return q.toString();
-  }, [status, examId]);
+  }, [status, examId, hasDebug]);
 
-  /* ------------------------------- Load list ------------------------------- */
   async function load() {
-    setLoading(true);
-    setErr("");
+    setLoading(true); setErr("");
     try {
       const j = await getSecureJSON(`/api/prep/access/requests?${qs}`);
       let list = j?.items || [];
       if (emailFilter.trim()) {
         const e = emailFilter.trim().toLowerCase();
-        list = list.filter((x) => (x.userEmail || "").toLowerCase().includes(e));
+        list = list.filter(x => (x.userEmail || "").toLowerCase().includes(e));
       }
       setItems(list);
+      setDbg(j?.debug || null);
       setLast(new Date());
     } catch (e) {
       setErr(e.message || "Failed to load requests");
       setItems([]);
+      setDbg(null);
     } finally {
       setLoading(false);
     }
   }
 
-  useEffect(() => {
-    load();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [qs, emailFilter]);
+  useEffect(() => { load(); /* eslint-disable-next-line */ }, [qs, emailFilter]);
 
-  /* ------------------------------- Read auto-approve flag ------------------------------- */
   useEffect(() => {
-    if (!examId) {
-      setAutoGrant(false);
-      return;
-    }
+    if (!examId) { setAutoGrant(false); return; }
     (async () => {
       try {
         setAutoGrantLoading(true);
-        const meta = await getSecureJSON(
-          `/api/prep/exams/${encodeURIComponent(examId)}/meta`
-        );
+        const meta = await getSecureJSON(`/api/prep/exams/${encodeURIComponent(examId)}/meta`);
         setAutoGrant(!!meta?.autoGrantRestart);
       } catch {
-        // ignore; list can still load
       } finally {
         setAutoGrantLoading(false);
       }
     })();
   }, [examId]);
 
-  /* ------------------------------- Poll pending ------------------------------- */
   useEffect(() => {
-    if (pollRef.current) {
-      clearInterval(pollRef.current);
-      pollRef.current = null;
-    }
+    if (pollRef.current) { clearInterval(pollRef.current); pollRef.current = null; }
     if (status === "pending") pollRef.current = setInterval(load, 10000);
-    return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    return () => { if (pollRef.current) clearInterval(pollRef.current); };
   }, [status, qs, emailFilter]);
 
-  /* ------------------------------- Actions ------------------------------- */
   async function approve(id, grant = true) {
     if (!id) return;
     try {
-      await postSecureJSON("/api/prep/access/admin/approve", {
-        requestId: id,
-        approve: grant,
-      });
+      await postSecureJSON("/api/prep/access/admin/approve", { requestId: id, approve: grant });
       await load();
     } catch (e) {
       alert(e.message || "Approve failed");
@@ -151,10 +117,7 @@ export default function PrepAccessAdmin() {
 
   async function revokeRow(x) {
     try {
-      await postSecureJSON("/api/prep/access/admin/revoke", {
-        examId: x.examId,
-        email: x.userEmail,
-      });
+      await postSecureJSON("/api/prep/access/admin/revoke", { examId: x.examId, email: x.userEmail });
       await load();
     } catch (e) {
       alert(e.message || "Revoke failed");
@@ -162,16 +125,12 @@ export default function PrepAccessAdmin() {
   }
 
   async function toggleAutoGrant(nextVal) {
-    if (!examId) {
-      alert("Enter an examId first.");
-      return;
-    }
+    if (!examId) { alert("Enter an examId first."); return; }
     try {
       setAutoGrantLoading(true);
-      await patchSecureJSON(
-        `/api/prep/exams/${encodeURIComponent(examId)}/overlay-config`,
-        { autoGrantRestart: !!nextVal }
-      );
+      await patchSecureJSON(`/api/prep/exams/${encodeURIComponent(examId)}/overlay-config`, {
+        autoGrantRestart: !!nextVal,
+      });
       setAutoGrant(!!nextVal);
     } catch (e) {
       alert(e.message || "Failed to update auto-approval");
@@ -182,12 +141,10 @@ export default function PrepAccessAdmin() {
 
   const statusLabel = status === "all" ? "" : status;
 
-  /* ------------------------------- UI ------------------------------- */
   return (
     <div className="max-w-5xl mx-auto p-4">
       <div className="text-lg font-semibold mb-3">Prep • Access Requests</div>
 
-      {/* Controls */}
       <div className="flex flex-wrap gap-2 items-center mb-3">
         <select
           className="border px-2 py-1 rounded"
@@ -201,35 +158,21 @@ export default function PrepAccessAdmin() {
           <option value="all">All</option>
         </select>
 
-        <input
-          className="border px-2 py-1 rounded w-48"
-          placeholder="Filter by examId"
-          value={examId}
-          onChange={(e) => setExamId(e.target.value)}
-        />
-        <input
-          className="border px-2 py-1 rounded w-56"
-          placeholder="Filter by email"
-          value={emailFilter}
-          onChange={(e) => setEmailFilter(e.target.value)}
-        />
-        <button className="px-3 py-1 border rounded" onClick={load}>
-          Refresh
-        </button>
+        <input className="border px-2 py-1 rounded w-48" placeholder="Filter by examId"
+               value={examId} onChange={(e) => setExamId(e.target.value)} />
+        <input className="border px-2 py-1 rounded w-56" placeholder="Filter by email"
+               value={emailFilter} onChange={(e) => setEmailFilter(e.target.value)} />
+        <button className="px-3 py-1 border rounded" onClick={load}>Refresh</button>
 
         <div className="ml-auto flex items-center gap-2">
-          <label className="text-sm text-gray-700">
-            Auto-approve restarts/purchases
-          </label>
+          <label className="text-sm text-gray-700">Auto-approve restarts/purchases</label>
           <button
-            className={`px-3 py-1 rounded ${
-              autoGrant ? "bg-emerald-600 text-white" : "bg-gray-200"
-            }`}
+            className={`px-3 py-1 rounded ${autoGrant ? "bg-emerald-600 text-white" : "bg-gray-200"}`}
             onClick={() => toggleAutoGrant(!autoGrant)}
             disabled={!examId || autoGrantLoading}
             title="When ON, new requests for this exam are immediately approved"
           >
-            {autoGrantLoading ? "Saving…" : autoGrant ? "ON" : "OFF"}
+            {autoGrantLoading ? "Saving…" : (autoGrant ? "ON" : "OFF")}
           </button>
         </div>
 
@@ -237,6 +180,14 @@ export default function PrepAccessAdmin() {
           {loading ? "Loading…" : last ? `Last update: ${last.toLocaleTimeString()}` : ""}
         </div>
       </div>
+
+      {hasDebug && dbg && (
+        <div className="text-xs text-gray-700 mb-3">
+          <span className="px-2 py-1 bg-gray-100 rounded border">
+            debug • total:{dbg.total} • pending:{dbg.pending} • approved:{dbg.approved} • rejected:{dbg.rejected}
+          </span>
+        </div>
+      )}
 
       {err && (
         <div className="text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded p-2 mb-3">
@@ -247,7 +198,6 @@ export default function PrepAccessAdmin() {
         </div>
       )}
 
-      {/* List */}
       {!items.length && !loading ? (
         <div className="text-sm text-gray-600">
           {statusLabel ? `No ${statusLabel} requests.` : "No requests."}
@@ -279,19 +229,13 @@ export default function PrepAccessAdmin() {
 
                 {x.screenshotUrl && (
                   <div className="mt-2">
-                    <a
-                      href={x.screenshotUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-xs underline text-blue-600"
-                    >
+                    <a href={x.screenshotUrl} target="_blank" rel="noreferrer" className="text-xs underline text-blue-600">
                       View Screenshot
                     </a>
                   </div>
                 )}
 
                 <div className="mt-3 flex flex-wrap gap-2">
-                  {/* Only show Approve/Reject for pending rows (even in “All” view) */}
                   {x.status === "pending" && (
                     <>
                       <button
