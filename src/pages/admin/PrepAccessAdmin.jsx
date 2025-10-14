@@ -61,7 +61,7 @@ export default function PrepAccessAdmin() {
   const [items, setItems] = useState([]);
   const [examId, setExamId] = useState("");
   const [emailFilter, setEmailFilter] = useState("");
-  const [status, setStatus] = useState("pending"); // pending | approved | rejected
+  const [status, setStatus] = useState("pending"); // pending | approved | rejected | all
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
   const [last, setLast] = useState(null);
@@ -72,9 +72,11 @@ export default function PrepAccessAdmin() {
 
   const pollRef = useRef(null);
 
+  // Build querystring. IMPORTANT: if status==="all" we DO NOT send a status filter,
+  // because the server only understands pending/approved/rejected.
   const qs = useMemo(() => {
     const q = new URLSearchParams();
-    if (status) q.set("status", status);
+    if (status && status !== "all") q.set("status", status);
     if (examId) q.set("examId", examId.trim());
     return q.toString();
   }, [status, examId]);
@@ -182,6 +184,8 @@ export default function PrepAccessAdmin() {
     }
   }
 
+  const statusLabel = status === "all" ? "" : status;
+
   return (
     <div className="max-w-5xl mx-auto p-4">
       <div className="text-lg font-semibold mb-3">Prep • Access Requests</div>
@@ -197,6 +201,7 @@ export default function PrepAccessAdmin() {
           <option value="pending">Pending</option>
           <option value="approved">Approved</option>
           <option value="rejected">Rejected</option>
+          <option value="all">All</option>
         </select>
 
         <input
@@ -247,7 +252,9 @@ export default function PrepAccessAdmin() {
 
       {/* List */}
       {!items.length && !loading ? (
-        <div className="text-sm text-gray-600">No {status} requests.</div>
+        <div className="text-sm text-gray-600">
+          {statusLabel ? `No ${statusLabel} requests.` : "No requests."}
+        </div>
       ) : (
         <div className="grid gap-3">
           {items.map((x) => {
@@ -307,7 +314,8 @@ export default function PrepAccessAdmin() {
                 )}
 
                 <div className="mt-3 flex flex-wrap gap-2">
-                  {status === "pending" && (
+                  {/* Show Approve/Reject buttons only for pending rows, even in "All" view */}
+                  {x.status === "pending" && (
                     <>
                       <button
                         className="px-3 py-1 rounded bg-emerald-600 text-white"
