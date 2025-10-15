@@ -261,7 +261,8 @@ export default function PrepAccessOverlay({ examId, email }) {
         note: note || undefined,
       };
 
-      const j = await postJSON("/prep/access/request", payload); // utils/api builds /api + JSON headers
+      const j = await postJSON("/api/prep/access/request", payload);
+
 
       if (j?.approved) {
         // auto-granted
