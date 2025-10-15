@@ -241,10 +241,9 @@ export default function PrepAccessOverlay({ examId, email }) {
 
     const fd = new FormData();
     fd.append("examId", examId);
-    // ✅ server expects userEmail field name
-    fd.append("userEmail", emailVal);
-    // ✅ server expects 'start' | 'restart' (not 'purchase')
-    fd.append("intent", intentMode === "purchase" ? "start" : "restart");
+    fd.append("email", emailVal);          // keep for status lookups
+    fd.append("userEmail", emailVal);      // REQUIRED by /api/prep/access/request
+    fd.append("intent", intentMode === "purchase" ? "start" : "restart"); // server expects 'start'|'restart'
     if (nameField)  fd.append("name",  nameField);
     if (phoneField) fd.append("phone", phoneField);
 
