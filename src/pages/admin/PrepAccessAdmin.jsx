@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 /* --- helpers that ALWAYS send X-Owner-Key --- */
-/* Prefer the runtime “ownerKey” stored by the app, fallback to VITE_OWNER_KEY */
+/* Prefer the runtime ownerKey (like the rest of the app), fallback to VITE_OWNER_KEY */
 const RUNTIME_OWNER =
   (typeof window !== "undefined" && localStorage.getItem("ownerKey")) || "";
 const OWNER_KEY = RUNTIME_OWNER || (import.meta.env.VITE_OWNER_KEY || "");
@@ -70,7 +70,7 @@ export default function PrepAccessAdmin() {
 
   const pollRef = useRef(null);
 
-  // Always include status (including "all") so server doesn’t default to pending.
+  // Always include status (including "all") so the server doesn’t default to pending
   const qs = useMemo(() => {
     const q = new URLSearchParams();
     q.set("status", status || "pending");
@@ -78,7 +78,6 @@ export default function PrepAccessAdmin() {
     return q.toString();
   }, [status, examId]);
 
-  /* ------------------------------- Load list ------------------------------- */
   async function load() {
     setLoading(true);
     setErr("");
@@ -87,9 +86,7 @@ export default function PrepAccessAdmin() {
       let list = j?.items || [];
       if (emailFilter.trim()) {
         const e = emailFilter.trim().toLowerCase();
-        list = list.filter((x) =>
-          (x.userEmail || "").toLowerCase().includes(e)
-        );
+        list = list.filter((x) => (x.userEmail || "").toLowerCase().includes(e));
       }
       setItems(list);
       setLast(new Date());
@@ -106,7 +103,7 @@ export default function PrepAccessAdmin() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [qs, emailFilter]);
 
-  /* ------------------------------- Read auto-approve flag ------------------------------- */
+  // Read auto-approval flag whenever examId changes
   useEffect(() => {
     if (!examId) {
       setAutoGrant(false);
@@ -127,7 +124,7 @@ export default function PrepAccessAdmin() {
     })();
   }, [examId]);
 
-  /* ------------------------------- Poll pending ------------------------------- */
+  // Auto-poll every 10s while viewing "pending"
   useEffect(() => {
     if (pollRef.current) {
       clearInterval(pollRef.current);
@@ -140,7 +137,6 @@ export default function PrepAccessAdmin() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, qs, emailFilter]);
 
-  /* ------------------------------- Actions ------------------------------- */
   async function approve(id, grant = true) {
     if (!id) return;
     try {
@@ -187,7 +183,6 @@ export default function PrepAccessAdmin() {
 
   const statusLabel = status === "all" ? "" : status;
 
-  /* ------------------------------- UI ------------------------------- */
   return (
     <div className="max-w-5xl mx-auto p-4">
       <div className="text-lg font-semibold mb-3">Prep • Access Requests</div>
@@ -247,7 +242,7 @@ export default function PrepAccessAdmin() {
         <div className="text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded p-2 mb-3">
           {err}
           <div className="opacity-70 mt-1">
-            Make sure <code>X-Owner-Key</code> is set in <code>localStorage.ownerKey</code> (or via <code>VITE_OWNER_KEY</code>).
+            Make sure <code>X-Owner-Key</code> is set in this browser (Firefox).
           </div>
         </div>
       )}
@@ -274,12 +269,32 @@ export default function PrepAccessAdmin() {
                 </div>
 
                 <div className="text-xs text-gray-700 mt-1">
-                  <div><b>Email:</b> {x.userEmail}</div>
-                  {nm ? <div><b>Name:</b> {nm}</div> : null}
-                  {ph ? <div><b>Phone:</b> {ph}</div> : null}
-                  <div><b>Price:</b> ₹{x.priceAt ?? 0}</div>
-                  {x.meta?.planLabel ? <div><b>Plan:</b> {x.meta.planLabel}</div> : null}
-                  {x.note ? <div className="mt-1"><b>Note:</b> {x.note}</div> : null}
+                  <div>
+                    <b>Email:</b> {x.userEmail}
+                  </div>
+                  {nm ? (
+                    <div>
+                      <b>Name:</b> {nm}
+                    </div>
+                  ) : null}
+                  {ph ? (
+                    <div>
+                      <b>Phone:</b> {ph}
+                    </div>
+                  ) : null}
+                  <div>
+                    <b>Price:</b> ₹{x.priceAt ?? 0}
+                  </div>
+                  {x.meta?.planLabel ? (
+                    <div>
+                      <b>Plan:</b> {x.meta.planLabel}
+                    </div>
+                  ) : null}
+                  {x.note ? (
+                    <div className="mt-1">
+                      <b>Note:</b> {x.note}
+                    </div>
+                  ) : null}
                 </div>
 
                 {x.screenshotUrl && (
