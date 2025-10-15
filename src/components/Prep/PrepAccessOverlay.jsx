@@ -1,8 +1,8 @@
 // src/components/Prep/PrepAccessOverlay.jsx
 import { useEffect, useMemo, useState } from "react";
-import { getJSON, postJSON } from "../../utils/api";
+import { getJSON } from "../../utils/api";
 
-// defensive JSON parser (kept in case you ever need it again)
+// defensive JSON parser (prevents “Unexpected end of JSON input” on empty/HTML)
 async function safeJSON(res) {
   try {
     const ct = (res.headers.get("content-type") || "").toLowerCase();
@@ -85,7 +85,12 @@ export default function PrepAccessOverlay({ examId, email }) {
 
       // brand-new user → start trial and refetch
       if (access?.status === "none" && email) {
-        await postJSON("/api/prep/access/start-trial", { examId, email });
+        await fetch("/api/prep/access/start-trial", {
+          method: "POST",
+          headers: { "Content-Type": "application/json" },
+          body: JSON.stringify({ examId, email }),
+          credentials: "include",
+        });
         return fetchStatus();
       }
 
@@ -229,13 +234,23 @@ export default function PrepAccessOverlay({ examId, email }) {
     window.open(pay.waLink, "_blank", "noopener,noreferrer");
   };
 
-  // ✔ FIX: send JSON with required fields (userEmail + correct intent)
+  // Robust submit with defensive JSON + fast polling
   async function submitRequest() {
     if (state.mode === "waiting") return;
 
+    // if server didn't compute a mode, default to purchase
     const intentMode = state.mode || "purchase";
+
     const emailVal = (emailField || "").trim();
     if (!emailVal) { alert("Please enter your email."); return; }
+
+    const fd = new FormData();
+    fd.append("examId", examId);
+    fd.append("email", emailVal);          // keep for status lookups
+    fd.append("userEmail", emailVal);      // REQUIRED by /api/prep/access/request
+    fd.append("intent", intentMode === "purchase" ? "start" : "restart"); // server expects 'start'
+    if (nameField)  fd.append("name",  nameField);
+    if (phoneField) fd.append("phone", phoneField);
 
     // Optional admin note
     const noteBits = [];
@@ -243,40 +258,47 @@ export default function PrepAccessOverlay({ examId, email }) {
     if (phoneField) noteBits.push(`phone=${phoneField}`);
     if (upiStartTs) noteBits.push("upi_clicked=1");
     if (waStartTs)  noteBits.push("wa_clicked=1");
-    const note = noteBits.join("; ");
+    if (noteBits.length) fd.append("note", noteBits.join("; "));
 
     localStorage.setItem("userEmail", emailVal);
+
     setSubmitting(true);
-
     try {
-      const payload = {
-        examId,
-        // keep plain 'email' for your polling endpoints
-        email: emailVal,
-        // REQUIRED by /api/prep/access/request
-        userEmail: emailVal,
-        // server expects 'start' for a purchase
-        intent: intentMode === "purchase" ? "start" : "restart",
-        meta: { name: nameField || undefined, phone: phoneField || undefined },
-        note: note || undefined,
-      };
+      const res = await fetch("/api/prep/access/request", {
+        method: "POST",
+        body: fd,
+        credentials: "include",
+      });
 
-      const j = await postJSON("/api/prep/access/request", payload);
+      // Show helpful error text if server crashed
+      if (!res.ok) {
+        const txt = await res.text().catch(() => "");
+        alert(`/api/prep/access/request ${res.status}${txt ? `\n\n${txt}` : ""}`);
+        return;
+      }
 
+      const j = await safeJSON(res);
 
+      if (!res.ok || j?.success === false) {
+        const msg = j?.error || j?.message || `Request failed (${res.status})`;
+        alert(msg);
+        return;
+      }
+
+      // Auto-grant path
       if (j?.approved) {
-        // auto-granted
         localStorage.removeItem(ks.wait);
         localStorage.removeItem(ks.waitAt);
         await fetchStatus();
         return;
       }
 
-      // show waiting and begin fast/then slow poll
+      // Show “Waiting…” immediately
       localStorage.setItem(ks.wait, "1");
       localStorage.setItem(ks.waitAt, String(Date.now()));
       setState(s => ({ ...s, mode: "waiting", show: true, waiting: true }));
 
+      // Fast-poll for ~15s, then back off (server may grant quickly)
       const t0 = Date.now();
       const fastPoll = async () => {
         const qs = new URLSearchParams({ examId, email: emailVal });
@@ -294,7 +316,7 @@ export default function PrepAccessOverlay({ examId, email }) {
       };
       fastPoll();
     } catch (e) {
-      alert(e?.message || "Could not submit right now. Please try again.");
+      alert("Could not submit right now. Please try again.");
       localStorage.removeItem(ks.wait);
       localStorage.removeItem(ks.waitAt);
       setState(s => ({ ...s, waiting: false, mode: "", show: true }));
