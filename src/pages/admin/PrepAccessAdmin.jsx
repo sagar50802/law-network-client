@@ -2,9 +2,8 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 /* --- helpers that ALWAYS send X-Owner-Key --- */
-/* Prefer the runtime ownerKey (like the rest of the app), fallback to VITE_OWNER_KEY */
-const RUNTIME_OWNER =
-  (typeof window !== "undefined" && localStorage.getItem("ownerKey")) || "";
+// Prefer the runtime “ownerKey” (like the rest of the app), fallback to VITE_OWNER_KEY.
+const RUNTIME_OWNER = (typeof window !== "undefined" && localStorage.getItem("ownerKey")) || "";
 const OWNER_KEY = RUNTIME_OWNER || (import.meta.env.VITE_OWNER_KEY || "");
 
 async function getSecureJSON(url) {
@@ -21,11 +20,7 @@ async function getSecureJSON(url) {
 async function postSecureJSON(url, body) {
   const r = await fetch(url, {
     method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      "X-Owner-Key": OWNER_KEY,
-    },
+    headers: { "Content-Type": "application/json", Accept: "application/json", "X-Owner-Key": OWNER_KEY },
     body: JSON.stringify(body || {}),
     credentials: "include",
   });
@@ -38,11 +33,7 @@ async function postSecureJSON(url, body) {
 async function patchSecureJSON(url, body) {
   const r = await fetch(url, {
     method: "PATCH",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      "X-Owner-Key": OWNER_KEY,
-    },
+    headers: { "Content-Type": "application/json", Accept: "application/json", "X-Owner-Key": OWNER_KEY },
     body: JSON.stringify(body || {}),
     credentials: "include",
   });
@@ -54,7 +45,6 @@ async function patchSecureJSON(url, body) {
 }
 
 /* ------------------------------- Component ------------------------------- */
-
 export default function PrepAccessAdmin() {
   const [items, setItems] = useState([]);
   const [examId, setExamId] = useState("");
@@ -70,7 +60,7 @@ export default function PrepAccessAdmin() {
 
   const pollRef = useRef(null);
 
-  // Always include status (including "all") so the server doesn’t default to pending
+  // Always include status (including "all") so server doesn’t default to pending.
   const qs = useMemo(() => {
     const q = new URLSearchParams();
     q.set("status", status || "pending");
@@ -112,9 +102,7 @@ export default function PrepAccessAdmin() {
     (async () => {
       try {
         setAutoGrantLoading(true);
-        const meta = await getSecureJSON(
-          `/api/prep/exams/${encodeURIComponent(examId)}/meta`
-        );
+        const meta = await getSecureJSON(`/api/prep/exams/${encodeURIComponent(examId)}/meta`);
         setAutoGrant(!!meta?.autoGrantRestart);
       } catch {
         // ignore; list can still load
@@ -140,10 +128,7 @@ export default function PrepAccessAdmin() {
   async function approve(id, grant = true) {
     if (!id) return;
     try {
-      await postSecureJSON("/api/prep/access/admin/approve", {
-        requestId: id,
-        approve: grant,
-      });
+      await postSecureJSON("/api/prep/access/admin/approve", { requestId: id, approve: grant });
       await load();
     } catch (e) {
       alert(e.message || "Approve failed");
@@ -152,10 +137,7 @@ export default function PrepAccessAdmin() {
 
   async function revokeRow(x) {
     try {
-      await postSecureJSON("/api/prep/access/admin/revoke", {
-        examId: x.examId,
-        email: x.userEmail,
-      });
+      await postSecureJSON("/api/prep/access/admin/revoke", { examId: x.examId, email: x.userEmail });
       await load();
     } catch (e) {
       alert(e.message || "Revoke failed");
@@ -169,10 +151,9 @@ export default function PrepAccessAdmin() {
     }
     try {
       setAutoGrantLoading(true);
-      await patchSecureJSON(
-        `/api/prep/exams/${encodeURIComponent(examId)}/overlay-config`,
-        { autoGrantRestart: !!nextVal }
-      );
+      await patchSecureJSON(`/api/prep/exams/${encodeURIComponent(examId)}/overlay-config`, {
+        autoGrantRestart: !!nextVal,
+      });
       setAutoGrant(!!nextVal);
     } catch (e) {
       alert(e.message || "Failed to update auto-approval");
@@ -218,13 +199,9 @@ export default function PrepAccessAdmin() {
         </button>
 
         <div className="ml-auto flex items-center gap-2">
-          <label className="text-sm text-gray-700">
-            Auto-approve restarts/purchases
-          </label>
+          <label className="text-sm text-gray-700">Auto-approve restarts/purchases</label>
           <button
-            className={`px-3 py-1 rounded ${
-              autoGrant ? "bg-emerald-600 text-white" : "bg-gray-200"
-            }`}
+            className={`px-3 py-1 rounded ${autoGrant ? "bg-emerald-600 text-white" : "bg-gray-200"}`}
             onClick={() => toggleAutoGrant(!autoGrant)}
             disabled={!examId || autoGrantLoading}
             title="When ON, new requests for this exam are immediately approved"
@@ -242,7 +219,7 @@ export default function PrepAccessAdmin() {
         <div className="text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded p-2 mb-3">
           {err}
           <div className="opacity-70 mt-1">
-            Make sure <code>X-Owner-Key</code> is set in this browser (Firefox).
+            Make sure <code>X-Owner-Key</code> is set as <code>VITE_OWNER_KEY</code>.
           </div>
         </div>
       )}
@@ -263,55 +240,28 @@ export default function PrepAccessAdmin() {
                   <div className="text-sm font-medium">
                     {String(x.intent || "").toUpperCase()} • {x.examId}
                   </div>
-                  <div className="text-xs text-gray-500">
-                    {new Date(x.createdAt).toLocaleString()}
-                  </div>
+                  <div className="text-xs text-gray-500">{new Date(x.createdAt).toLocaleString()}</div>
                 </div>
 
                 <div className="text-xs text-gray-700 mt-1">
-                  <div>
-                    <b>Email:</b> {x.userEmail}
-                  </div>
-                  {nm ? (
-                    <div>
-                      <b>Name:</b> {nm}
-                    </div>
-                  ) : null}
-                  {ph ? (
-                    <div>
-                      <b>Phone:</b> {ph}
-                    </div>
-                  ) : null}
-                  <div>
-                    <b>Price:</b> ₹{x.priceAt ?? 0}
-                  </div>
-                  {x.meta?.planLabel ? (
-                    <div>
-                      <b>Plan:</b> {x.meta.planLabel}
-                    </div>
-                  ) : null}
-                  {x.note ? (
-                    <div className="mt-1">
-                      <b>Note:</b> {x.note}
-                    </div>
-                  ) : null}
+                  <div><b>Email:</b> {x.userEmail}</div>
+                  {nm ? <div><b>Name:</b> {nm}</div> : null}
+                  {ph ? <div><b>Phone:</b> {ph}</div> : null}
+                  <div><b>Price:</b> ₹{x.priceAt ?? 0}</div>
+                  {x.meta?.planLabel ? <div><b>Plan:</b> {x.meta.planLabel}</div> : null}
+                  {x.note ? <div className="mt-1"><b>Note:</b> {x.note}</div> : null}
                 </div>
 
                 {x.screenshotUrl && (
                   <div className="mt-2">
-                    <a
-                      href={x.screenshotUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-xs underline text-blue-600"
-                    >
+                    <a href={x.screenshotUrl} target="_blank" rel="noreferrer" className="text-xs underline text-blue-600">
                       View Screenshot
                     </a>
                   </div>
                 )}
 
                 <div className="mt-3 flex flex-wrap gap-2">
-                  {/* Only show Approve/Reject for pending rows */}
+                  {/* Only show Approve/Reject for pending rows (even in “All” view) */}
                   {x.status === "pending" && (
                     <>
                       <button
