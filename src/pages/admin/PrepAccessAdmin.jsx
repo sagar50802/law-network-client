@@ -2,7 +2,10 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 /* --- helpers that ALWAYS send X-Owner-Key --- */
-const OWNER_KEY = import.meta.env.VITE_OWNER_KEY || "";
+// Prefer the runtime “ownerKey” (like the rest of the app), fallback to VITE_OWNER_KEY.
+const RUNTIME_OWNER =
+  (typeof window !== "undefined" && localStorage.getItem("ownerKey")) || "";
+const OWNER_KEY = RUNTIME_OWNER || (import.meta.env.VITE_OWNER_KEY || "");
 
 async function getSecureJSON(url) {
   const r = await fetch(url, {
@@ -18,7 +21,11 @@ async function getSecureJSON(url) {
 async function postSecureJSON(url, body) {
   const r = await fetch(url, {
     method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json", "X-Owner-Key": OWNER_KEY },
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      "X-Owner-Key": OWNER_KEY,
+    },
     body: JSON.stringify(body || {}),
     credentials: "include",
   });
@@ -31,7 +38,11 @@ async function postSecureJSON(url, body) {
 async function patchSecureJSON(url, body) {
   const r = await fetch(url, {
     method: "PATCH",
-    headers: { "Content-Type": "application/json", Accept: "application/json", "X-Owner-Key": OWNER_KEY },
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      "X-Owner-Key": OWNER_KEY,
+    },
     body: JSON.stringify(body || {}),
     credentials: "include",
   });
@@ -102,7 +113,9 @@ export default function PrepAccessAdmin() {
     (async () => {
       try {
         setAutoGrantLoading(true);
-        const meta = await getSecureJSON(`/api/prep/exams/${encodeURIComponent(examId)}/meta`);
+        const meta = await getSecureJSON(
+          `/api/prep/exams/${encodeURIComponent(examId)}/meta`
+        );
         setAutoGrant(!!meta?.autoGrantRestart);
       } catch {
         // ignore; list can still load
@@ -129,7 +142,10 @@ export default function PrepAccessAdmin() {
   async function approve(id, grant = true) {
     if (!id) return;
     try {
-      await postSecureJSON("/api/prep/access/admin/approve", { requestId: id, approve: grant });
+      await postSecureJSON("/api/prep/access/admin/approve", {
+        requestId: id,
+        approve: grant,
+      });
       await load();
     } catch (e) {
       alert(e.message || "Approve failed");
@@ -138,7 +154,10 @@ export default function PrepAccessAdmin() {
 
   async function revokeRow(x) {
     try {
-      await postSecureJSON("/api/prep/access/admin/revoke", { examId: x.examId, email: x.userEmail });
+      await postSecureJSON("/api/prep/access/admin/revoke", {
+        examId: x.examId,
+        email: x.userEmail,
+      });
       await load();
     } catch (e) {
       alert(e.message || "Revoke failed");
@@ -152,9 +171,10 @@ export default function PrepAccessAdmin() {
     }
     try {
       setAutoGrantLoading(true);
-      await patchSecureJSON(`/api/prep/exams/${encodeURIComponent(examId)}/overlay-config`, {
-        autoGrantRestart: !!nextVal,
-      });
+      await patchSecureJSON(
+        `/api/prep/exams/${encodeURIComponent(examId)}/overlay-config`,
+        { autoGrantRestart: !!nextVal }
+      );
       setAutoGrant(!!nextVal);
     } catch (e) {
       alert(e.message || "Failed to update auto-approval");
@@ -201,9 +221,13 @@ export default function PrepAccessAdmin() {
         </button>
 
         <div className="ml-auto flex items-center gap-2">
-          <label className="text-sm text-gray-700">Auto-approve restarts/purchases</label>
+          <label className="text-sm text-gray-700">
+            Auto-approve restarts/purchases
+          </label>
           <button
-            className={`px-3 py-1 rounded ${autoGrant ? "bg-emerald-600 text-white" : "bg-gray-200"}`}
+            className={`px-3 py-1 rounded ${
+              autoGrant ? "bg-emerald-600 text-white" : "bg-gray-200"
+            }`}
             onClick={() => toggleAutoGrant(!autoGrant)}
             disabled={!examId || autoGrantLoading}
             title="When ON, new requests for this exam are immediately approved"
@@ -242,7 +266,9 @@ export default function PrepAccessAdmin() {
                   <div className="text-sm font-medium">
                     {String(x.intent || "").toUpperCase()} • {x.examId}
                   </div>
-                  <div className="text-xs text-gray-500">{new Date(x.createdAt).toLocaleString()}</div>
+                  <div className="text-xs text-gray-500">
+                    {new Date(x.createdAt).toLocaleString()}
+                  </div>
                 </div>
 
                 <div className="text-xs text-gray-700 mt-1">
