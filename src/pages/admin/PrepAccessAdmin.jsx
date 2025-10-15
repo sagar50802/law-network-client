@@ -2,7 +2,7 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 
 /* --- helpers that ALWAYS send X-Owner-Key --- */
-/* Prefer the runtime ownerKey (same as the rest of the app), then fall back to VITE_OWNER_KEY. */
+/* Prefer the runtime “ownerKey” stored by the app, fallback to VITE_OWNER_KEY */
 const RUNTIME_OWNER =
   (typeof window !== "undefined" && localStorage.getItem("ownerKey")) || "";
 const OWNER_KEY = RUNTIME_OWNER || (import.meta.env.VITE_OWNER_KEY || "");
@@ -70,7 +70,7 @@ export default function PrepAccessAdmin() {
 
   const pollRef = useRef(null);
 
-  // Always include status (including "all") so the server does not default to "pending"
+  // Always include status (including "all") so server doesn’t default to pending.
   const qs = useMemo(() => {
     const q = new URLSearchParams();
     q.set("status", status || "pending");
@@ -87,7 +87,9 @@ export default function PrepAccessAdmin() {
       let list = j?.items || [];
       if (emailFilter.trim()) {
         const e = emailFilter.trim().toLowerCase();
-        list = list.filter((x) => (x.userEmail || "").toLowerCase().includes(e));
+        list = list.filter((x) =>
+          (x.userEmail || "").toLowerCase().includes(e)
+        );
       }
       setItems(list);
       setLast(new Date());
@@ -245,7 +247,7 @@ export default function PrepAccessAdmin() {
         <div className="text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded p-2 mb-3">
           {err}
           <div className="opacity-70 mt-1">
-            Make sure <code>X-Owner-Key</code> is set in <code>localStorage.ownerKey</code> (or via <code>VITE_OWNER_KEY</code> at build time).
+            Make sure <code>X-Owner-Key</code> is set in <code>localStorage.ownerKey</code> (or via <code>VITE_OWNER_KEY</code>).
           </div>
         </div>
       )}
@@ -294,7 +296,7 @@ export default function PrepAccessAdmin() {
                 )}
 
                 <div className="mt-3 flex flex-wrap gap-2">
-                  {/* Only show Approve/Reject for pending rows (even in “All” view) */}
+                  {/* Only show Approve/Reject for pending rows */}
                   {x.status === "pending" && (
                     <>
                       <button
