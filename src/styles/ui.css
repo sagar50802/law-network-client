@@ -145,3 +145,149 @@ body{ background:var(--bg); }
   background: #fffbe7; padding: 12px; border-radius: 10px;
   line-height: 1.55;
 }
+
+/* ========================================================================== */
+/* =======================  PARCHMENT THEME (SCOPED)  ======================= */
+/* ========================================================================== */
+
+/* === Parchment Theme Tokens (light yellow) =============================== */
+:root {
+  --paper-bg: #fff7e6;         /* light warm parchment */
+  --paper-edge: #f1e1c6;       /* border tone */
+  --ink-900: #2c2a26;
+  --ink-700: #5b544a;
+  --accent-ink: #2a4a7a;       /* buttons/links */
+  --accent-emerald: #2e7d6a;   /* success */
+  --accent-amber: #c27a10;     /* warning */
+  --accent-rose: #b8565a;      /* danger */
+  --chip-parch: #faecd0;
+  --chip-parch-text: #6b5d40;
+
+  --pill-bg: #fff2c2;
+  --pill-ring: #f5d98f;
+
+  --shadow-soft: 0 6px 30px rgba(108, 82, 38, 0.12);
+  --shadow-card: 0 10px 40px rgba(0,0,0,0.08);
+}
+
+/* Page gradient (subtle) */
+.theme-parchment {
+  background: radial-gradient(1200px 600px at 25% -10%, #fff9e9 0%, #fff2cc 35%, #fff7e6 55%, #fffdf6 100%);
+}
+
+/* Paper card look */
+.theme-parchment .paper {
+  background: var(--paper-bg);
+  border: 1px solid var(--paper-edge);
+  box-shadow: var(--shadow-card);
+  border-radius: 18px;
+}
+
+.theme-parchment .paper-soft {
+  background: linear-gradient(#fffaf0, #fff6e0);
+  border: 1px solid #f0e2c9;
+  border-radius: 16px;
+  box-shadow: var(--shadow-soft);
+}
+
+/* Text coloring */
+.theme-parchment .ink-900 { color: var(--ink-900); }
+.theme-parchment .ink-700 { color: var(--ink-700); }
+
+/* Milestone “pill” buttons */
+.theme-parchment .pill {
+  background: var(--pill-bg);
+  border: 1px solid var(--pill-ring);
+  border-radius: 999px;
+  padding: 8px 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 3px 12px rgba(199, 150, 54, 0.15);
+}
+.theme-parchment .pill-lock { opacity: .55; filter: grayscale(.2); }
+
+/* Glowing connector line between milestones */
+.theme-parchment .connector {
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #f3d38a 0%, #9fd7be 60%, #8bb4ec 100%);
+  opacity: .35;
+}
+.theme-parchment .connector.on {
+  opacity: 1;
+  animation: shimmer 2s linear infinite;
+}
+@keyframes shimmer {
+  0% { filter: saturate(1) brightness(.95); }
+  50% { filter: saturate(1.2) brightness(1.15); }
+  100% { filter: saturate(1) brightness(.95); }
+}
+
+/* Primary button (ink on parchment) — scoped so it WON’T replace your global .btn-primary */
+.theme-parchment .btn-primary {
+  background: linear-gradient(180deg, #4a6fb8, #375c9e);
+  color: #fff;
+  border-radius: 12px;
+  padding: 10px 16px;
+  box-shadow: 0 8px 24px rgba(55, 92, 158, 0.25);
+  border: none;
+}
+.theme-parchment .btn-primary:disabled {
+  background: #cfc7b3; color: #fff; cursor: not-allowed;
+}
+
+/* Secondary (paper) */
+.theme-parchment .btn-paper {
+  background: #fff7e6;
+  border: 1px solid #efd9a9;
+  border-radius: 12px;
+  padding: 10px 16px;
+}
+
+/* Inputs on paper */
+.theme-parchment .input-paper {
+  background: #fffdf6;
+  border: 1px solid #ead7b1;
+  border-radius: 14px;
+  padding: 12px 14px;
+  outline: none;
+}
+.theme-parchment .input-paper:focus {
+  border-color: #d9b878;
+  box-shadow: 0 0 0 4px rgba(217, 184, 120, .25);
+}
+
+/* “Card section” titles */
+.theme-parchment .section-title {
+  font-weight: 800;
+  letter-spacing: .3px;
+  color: var(--ink-900);
+}
+
+/* Right rail cards */
+.theme-parchment .rail-card {
+  background: linear-gradient(#fffaf0, #fff6e0);
+  border: 1px solid #f0e2c9;
+  border-radius: 18px;
+  padding: 16px;
+  box-shadow: var(--shadow-soft);
+}
+
+/* End ceremony modal paper */
+.theme-parchment .modal-paper {
+  background: linear-gradient(#fffaf0 0%, #fff3d9 100%);
+  border: 1px solid #efd9a9;
+  border-radius: 22px;
+  box-shadow: 0 30px 80px rgba(0,0,0,.18);
+}
+
+/* Tiny badge used in preview (does not conflict with your existing .badge) */
+.theme-parchment .badge-chip {
+  background: var(--chip-parch);
+  color: var(--chip-parch-text);
+  border: 1px solid #efd9a9;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 12px;
+}
