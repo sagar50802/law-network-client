@@ -39,6 +39,11 @@ import AdminTestManager from "./pages/testseries/AdminTestManager.jsx";
 import IfOwnerOnly from "./components/common/IfOwnerOnly.jsx";
 import "./styles/ui.css";
 
+/* ✅ NEW: Research Navigation (User) */
+import ResearchNav from "./components/ResearchNav/ResearchNav.jsx";
+/* ✅ NEW: Research Admin Panel */
+import ResearchAdminPanel from "./components/ResearchNavAdmin/AdminPanel.jsx";
+
 function NotFound() {
   return (
     <div className="flex flex-col items-center justify-center py-24 text-center">
@@ -98,6 +103,7 @@ export default function App() {
 
         <div className="animate-fadeIn">
           <Routes>
+            {/* Public */}
             <Route path="/" element={<HomePage />} />
             <Route path="/articles" element={<ArticlesPage />} />
             <Route path="/news" element={<NewsPage />} />
@@ -107,6 +113,9 @@ export default function App() {
             <Route path="/scholar" element={<ScholarPage />} />
             <Route path="/plagiarism" element={<Plagiarism />} />
             <Route path="/pdfdemo" element={<PdfDemo />} />
+
+            {/* ✅ NEW: Research Navigation (User Journey) */}
+            <Route path="/research-nav" element={<ResearchNav />} />
 
             {/* Prep */}
             <Route path="/prep" element={<PrepList />} />
@@ -199,6 +208,17 @@ export default function App() {
               }
             />
 
+            {/* ✅ NEW: Research Admin Panel */}
+            <Route
+              path="/admin/research"
+              element={
+                <AdminRoute>
+                  <ResearchAdminPanel />
+                </AdminRoute>
+              }
+            />
+
+            {/* 404 */}
             <Route path="*" element={<NotFound />} />
           </Routes>
         </div>
