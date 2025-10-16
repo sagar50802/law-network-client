@@ -1,8 +1,7 @@
-// src/components/Prep/PrepAccessOverlay.jsx
 import { useEffect, useMemo, useState } from "react";
-import { getJSON, upload, postJSON } from "../../utils/api";
+import { getJSON, postJSON, upload } from "../../utils/api";
 
-// defensive JSON parser (kept for safety in case we ever parse raw fetches)
+// defensive JSON parser (prevents “Unexpected end of JSON input” on empty/HTML)
 async function safeJSON(res) {
   try {
     const ct = (res.headers.get("content-type") || "").toLowerCase();
@@ -19,9 +18,9 @@ export default function PrepAccessOverlay({ examId, email }) {
     const e = String(examId || "").trim();
     const u = String(email || "").trim() || "anon";
     return {
-      wait: `overlayWaiting:${e}:${u}`,
-      waitAt: `overlayWaiting:${e}:${u}:at`,
-      upiStart: `overlayUPIStart:${e}:${u}`,
+      wait: `overlayWaiting:${e}:${u}`,                       // flip to waiting
+      waitAt: `overlayWaiting:${e}:${u}:at`,                 // when waiting started
+      upiStart: `overlayUPIStart:${e}:${u}`,                 // timers
       waStart: `overlayWAStart:${e}:${u}`,
     };
   }, [examId, email]);
@@ -30,7 +29,7 @@ export default function PrepAccessOverlay({ examId, email }) {
   const [state, setState] = useState({
     loading: true,
     show: !!(examId && localStorage.getItem(ks.wait)),
-    mode: localStorage.getItem(ks.wait) ? "waiting" : "", // purchase | restart | waiting
+    mode: localStorage.getItem(ks.wait) ? "waiting" : "",     // purchase | restart | waiting
     exam: {},
     access: {},
     overlay: {},
@@ -80,13 +79,12 @@ export default function PrepAccessOverlay({ examId, email }) {
     const keepWaiting = !!localStorage.getItem(ks.wait);
     try {
       const qs = new URLSearchParams({ examId, email: email || "" });
-      // NOTE: getJSON goes to backend thanks to utils/api buildUrl
-      const r = await getJSON(`/api/prep/access/status?${qs.toString()}`);
+      const r = await getJSON(`/prep/access/status?${qs.toString()}`);
       const { exam, access, overlay } = r || {};
 
-      // brand-new user → start trial and refetch (use postJSON to hit backend)
+      // brand-new user → start trial and refetch
       if (access?.status === "none" && email) {
-        await postJSON("/api/prep/access/start-trial", { examId, email });
+        await postJSON("/prep/access/start-trial", { examId, email });
         return fetchStatus();
       }
 
@@ -143,7 +141,7 @@ export default function PrepAccessOverlay({ examId, email }) {
       if (stop) return;
       try {
         const qs = new URLSearchParams({ examId, email: emailField });
-        const j = await getJSON(`/api/prep/access/request/status?${qs.toString()}`);
+        const j = await getJSON(`/prep/access/request/status?${qs.toString()}`);
 
         if (j?.status === "approved") {
           localStorage.removeItem(ks.wait);
@@ -230,7 +228,7 @@ export default function PrepAccessOverlay({ examId, email }) {
     window.open(pay.waLink, "_blank", "noopener,noreferrer");
   };
 
-  // Robust submit with FormData -> BACKEND (via utils.upload)
+  // Robust submit with defensive JSON + fast polling
   async function submitRequest() {
     if (state.mode === "waiting") return;
 
@@ -243,8 +241,8 @@ export default function PrepAccessOverlay({ examId, email }) {
     const fd = new FormData();
     fd.append("examId", examId);
     fd.append("email", emailVal);          // keep for status lookups
-    fd.append("userEmail", emailVal);      // server stores this as requester
-    fd.append("intent", intentMode === "purchase" ? "start" : "restart");
+    fd.append("userEmail", emailVal);      // server expects userEmail in the document
+    fd.append("intent", intentMode === "purchase" ? "purchase" : "restart"); // <<< intent value
     if (nameField)  fd.append("name",  nameField);
     if (phoneField) fd.append("phone", phoneField);
 
@@ -260,11 +258,11 @@ export default function PrepAccessOverlay({ examId, email }) {
 
     setSubmitting(true);
     try {
-      // ⬇️ THIS is the key change: use upload() so the request goes to the backend origin.
-      const j = await upload("/api/prep/access/request", fd);
+      // Use API helper so request goes to backend origin (not the client SPA)
+      const j = await upload("/prep/access/request", fd);
 
       if (!j?.success) {
-        const msg = j?.error || j?.message || "Request failed";
+        const msg = j?.error || j?.message || `Request failed`;
         alert(msg);
         return;
       }
@@ -287,7 +285,7 @@ export default function PrepAccessOverlay({ examId, email }) {
       const fastPoll = async () => {
         const qs = new URLSearchParams({ examId, email: emailVal });
         try {
-          const status = await getJSON(`/api/prep/access/status?${qs.toString()}`);
+          const status = await getJSON(`/prep/access/status?${qs.toString()}`);
           const a = status?.access?.status || "none";
           if (a === "active") {
             localStorage.removeItem(ks.wait);
