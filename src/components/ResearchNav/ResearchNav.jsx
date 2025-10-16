@@ -28,17 +28,21 @@ const LS_KEY = "researchnav:draft:v1";
 function computeStepsState(form) {
   const steps = MILESTONES.map((s) => {
     if (s.id === "payment") {
-      const tlOk = MILESTONES.find(m => m.id === "timeline").required.every(r => !!form[r]);
+      const tlOk = MILESTONES.find((m) => m.id === "timeline").required.every((r) => !!form[r]);
       return { ...s, status: tlOk ? "in_progress" : "locked" };
     }
     if (s.id === "done") return { ...s, status: "locked" };
-    const ok = (s.required || []).every(r => !!form[r]);
-    return { ...s, status: ok ? "completed" : (s.required.some(r => form[r]) ? "in_progress" : "locked") };
+    const ok = (s.required || []).every((r) => !!form[r]);
+    return {
+      ...s,
+      status: ok ? "completed" : s.required.some((r) => form[r]) ? "in_progress" : "locked",
+    };
   });
   return steps;
 }
+
 function pctFromSteps(steps) {
-  const num = steps.filter(s => s.status === "completed").length;
+  const num = steps.filter((s) => s.status === "completed").length;
   return Math.round((num / (MILESTONES.length - 1)) * 100);
 }
 
@@ -73,7 +77,7 @@ function MilestoneBar({ steps, onJump }) {
 /* ------------------------ Stage Summary (after steps) ---------------------- */
 function StageSummaryPopup({ open, onClose, form, steps }) {
   if (!open) return null;
-  const completed = steps.filter(s => s.status === "completed").map(s => s.label);
+  const completed = steps.filter((s) => s.status === "completed").map((s) => s.label);
   return (
     <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm grid place-items-center p-4">
       <motion.div
@@ -111,13 +115,19 @@ function StageSummaryPopup({ open, onClose, form, steps }) {
             </div>
             <div className="paper p-3">
               <div className="ink-700">Refs</div>
-              <div className="font-mono whitespace-pre-wrap">{form.lit || <em className="ink-700">Add references</em>}</div>
+              <div className="font-mono whitespace-pre-wrap">
+                {form.lit || <em className="ink-700">Add references</em>}
+              </div>
             </div>
           </div>
 
           <div className="flex justify-end gap-2 pt-2">
-            <button onClick={onClose} className="btn-paper">Close</button>
-            <button onClick={onClose} className="btn-primary">Continue →</button>
+            <button onClick={onClose} className="btn-paper">
+              Close
+            </button>
+            <button onClick={onClose} className="btn-primary">
+              Continue →
+            </button>
           </div>
         </div>
       </motion.div>
@@ -137,8 +147,13 @@ function EndCeremony({ open, onClose, paymentVerified, onVerifyPayment }) {
       >
         <div className="p-6 text-center space-y-4">
           <div className="text-4xl">🎉</div>
-          <h3 className="text-2xl section-title">Congratulations! Your proposal is now with the Controller.</h3>
-          <p className="ink-700">The journey timeline is complete. Preview your draft; full PDF unlocks after payment verification.</p>
+          <h3 className="text-2xl section-title">
+            Congratulations! Your proposal is now with the Controller.
+          </h3>
+          <p className="ink-700">
+            The journey timeline is complete. Preview your draft; full PDF unlocks after payment
+            verification.
+          </p>
           <div className="flex items-center justify-center gap-3 pt-2 flex-wrap">
             <button className="btn-paper">Preview PDF (1 page)</button>
             <button
@@ -149,11 +164,15 @@ function EndCeremony({ open, onClose, paymentVerified, onVerifyPayment }) {
               Download Full PDF
             </button>
             {!paymentVerified && (
-              <button onClick={onVerifyPayment} className="btn-primary">I’ve Paid → Verify</button>
+              <button onClick={onVerifyPayment} className="btn-primary">
+                I’ve Paid → Verify
+              </button>
             )}
           </div>
           <div className="pt-2">
-            <button onClick={onClose} className="underline text-sm ink-700">Close</button>
+            <button onClick={onClose} className="underline text-sm ink-700">
+              Close
+            </button>
           </div>
         </div>
       </motion.div>
@@ -171,10 +190,28 @@ function RightRail({ form }) {
           <span className="badge-chip">auto-save</span>
         </div>
         <div className="text-sm space-y-1">
-          <div><span className="ink-700">Topic:</span> <span className="font-medium ink-900">{form.title || <em className="ink-700">—</em>}</span></div>
-          <div><span className="ink-700">Literature:</span> <span className="ink-900 whitespace-pre-wrap">{form.lit || <em className="ink-700">Add references</em>}</span></div>
-          <div><span className="ink-700">Method:</span> <span className="ink-900">{form.method || <em className="ink-700">—</em>}</span></div>
-          <div><span className="ink-700">Timeline:</span> <span className="ink-900">{form.start && form.end ? `${form.start} → ${form.end}` : <em className="ink-700">—</em>}</span></div>
+          <div>
+            <span className="ink-700">Topic:</span>{" "}
+            <span className="font-medium ink-900">
+              {form.title || <em className="ink-700">—</em>}
+            </span>
+          </div>
+          <div>
+            <span className="ink-700">Literature:</span>{" "}
+            <span className="ink-900 whitespace-pre-wrap">
+              {form.lit || <em className="ink-700">Add references</em>}
+            </span>
+          </div>
+          <div>
+            <span className="ink-700">Method:</span>{" "}
+            <span className="ink-900">{form.method || <em className="ink-700">—</em>}</span>
+          </div>
+          <div>
+            <span className="ink-700">Timeline:</span>{" "}
+            <span className="ink-900">
+              {form.start && form.end ? `${form.start} → ${form.end}` : <em className="ink-700">—</em>}
+            </span>
+          </div>
         </div>
       </div>
 
@@ -192,8 +229,11 @@ function RightRail({ form }) {
 
 /* ---------------------------- Step Form (Center) --------------------------- */
 function StepForm({ stepId, form, setForm, onStageSummary, onFinish }) {
-  const required = useMemo(() => (MILESTONES.find(m => m.id === stepId)?.required) || [], [stepId]);
-  const isValid = required.every(k => !!form[k]);
+  const required = useMemo(
+    () => MILESTONES.find((m) => m.id === stepId)?.required || [],
+    [stepId]
+  );
+  const isValid = required.every((k) => !!form[k]);
 
   useEffect(() => {
     localStorage.setItem(LS_KEY, JSON.stringify(form));
@@ -202,18 +242,14 @@ function StepForm({ stepId, form, setForm, onStageSummary, onFinish }) {
   function Input({ label, name, type = "text", placeholder }) {
     const props = {
       value: form[name] || "",
-      onChange: e => setForm(f => ({ ...f, [name]: e.target.value })),
+      onChange: (e) => setForm((f) => ({ ...f, [name]: e.target.value })),
       className: "input-paper w-full",
       placeholder,
     };
     return (
       <label className="block">
         <div className="text-sm ink-700 mb-1">{label}</div>
-        {type === "textarea" ? (
-          <textarea rows={6} {...props} />
-        ) : (
-          <input type={type} {...props} />
-        )}
+        {type === "textarea" ? <textarea rows={6} {...props} /> : <input type={type} {...props} />}
       </label>
     );
   }
@@ -223,16 +259,25 @@ function StepForm({ stepId, form, setForm, onStageSummary, onFinish }) {
       <div className="flex items-center justify-between mb-4">
         <h2 className="text-xl section-title capitalize">{stepId}</h2>
         {isValid ? (
-          <span className="text-sm" style={{ color: "var(--accent-emerald)" }}>✓ Complete</span>
+          <span className="text-sm" style={{ color: "var(--accent-emerald)" }}>
+            ✓ Complete
+          </span>
         ) : (
-          <span className="text-sm" style={{ color: "var(--accent-amber)" }}>Complete required fields</span>
+          <span className="text-sm" style={{ color: "var(--accent-amber)" }}>
+            Complete required fields
+          </span>
         )}
       </div>
 
       {stepId === "topic" && (
         <div className="grid gap-4">
           <Input label="Proposed Title" name="title" placeholder="e.g., Constitutions & Data Mining" />
-          <Input label="Notes (optional)" name="notes" type="textarea" placeholder="Add problem statement / objectives…" />
+          <Input
+            label="Notes (optional)"
+            name="notes"
+            type="textarea"
+            placeholder="Add problem statement / objectives…"
+          />
         </div>
       )}
 
@@ -262,7 +307,11 @@ function StepForm({ stepId, form, setForm, onStageSummary, onFinish }) {
             Complete payment to enable full PDF download after submission.
           </div>
           <div className="flex items-center gap-3">
-            <button type="button" className="btn-primary" onClick={() => setForm(f => ({ ...f, paymentVerified: true }))}>
+            <button
+              type="button"
+              className="btn-primary"
+              onClick={() => setForm((f) => ({ ...f, paymentVerified: true }))}
+            >
               Mock: Mark as Paid
             </button>
             <span className={`text-sm ${form.paymentVerified ? "ink-900" : "ink-700"}`}>
@@ -277,9 +326,13 @@ function StepForm({ stepId, form, setForm, onStageSummary, onFinish }) {
       )}
 
       <div className="flex items-center justify-between mt-6">
-        <button type="button" onClick={onStageSummary} className="btn-paper">Stage Summary</button>
+        <button type="button" onClick={onStageSummary} className="btn-paper">
+          Stage Summary
+        </button>
         {stepId === "done" ? (
-          <button type="button" onClick={onFinish} className="btn-primary">Submit → Finish</button>
+          <button type="button" onClick={onFinish} className="btn-primary">
+            Submit → Finish
+          </button>
         ) : (
           <button
             type="button"
@@ -299,8 +352,11 @@ function StepForm({ stepId, form, setForm, onStageSummary, onFinish }) {
 /* ------------------------------- Main Shell -------------------------------- */
 export default function ResearchNav() {
   const [form, setForm] = useState(() => {
-    try { return { ...INITIAL, ...(JSON.parse(localStorage.getItem(LS_KEY) || "{}")) }; }
-    catch { return INITIAL; }
+    try {
+      return { ...INITIAL, ...(JSON.parse(localStorage.getItem(LS_KEY) || "{}")) };
+    } catch {
+      return INITIAL;
+    }
   });
   const steps = useMemo(() => computeStepsState(form), [form]);
   const [currentId, setCurrentId] = useState("topic");
@@ -310,17 +366,20 @@ export default function ResearchNav() {
   const percent = pctFromSteps(steps);
 
   const goToNext = () => {
-    const order = MILESTONES.map(s => s.id);
+    const order = MILESTONES.map((s) => s.id);
     const idx = order.indexOf(currentId);
-    const currReq = (MILESTONES.find(m => m.id === currentId)?.required) || [];
-    const valid = currReq.every(k => !!form[k]);
-    if (!valid) { setShowSummary(true); return; }
+    const currReq = MILESTONES.find((m) => m.id === currentId)?.required || [];
+    const valid = currReq.every((k) => !!form[k]);
+    if (!valid) {
+      setShowSummary(true);
+      return;
+    }
     const nextId = order[Math.min(idx + 1, order.length - 1)];
     setCurrentId(nextId);
   };
 
   const onJump = (id) => {
-    const st = steps.find(s => s.id === id);
+    const st = steps.find((s) => s.id === id);
     if (st?.status === "locked") return;
     setCurrentId(id);
   };
@@ -329,7 +388,7 @@ export default function ResearchNav() {
     setShowEnd(true);
   };
 
-  const curr = steps.find(s => s.id === currentId);
+  const curr = steps.find((s) => s.id === currentId);
 
   return (
     <div className="min-h-screen theme-parchment">
@@ -361,7 +420,10 @@ export default function ResearchNav() {
                 stepId={curr?.id}
                 form={form}
                 setForm={setForm}
-                onStageSummary={() => { setShowSummary(true); if (curr?.id !== "done") goToNext(); }}
+                onStageSummary={() => {
+                  setShowSummary(true);
+                  if (curr?.id !== "done") goToNext();
+                }}
                 onFinish={onFinish}
               />
             </motion.div>
@@ -374,5 +436,18 @@ export default function ResearchNav() {
       </main>
 
       {/* Popups */}
-      <StageSummaryPopup open={showSummary} onClose={() => setShowSummary(false)} form={form} steps={steps} />
-      <EndCeremony open={showEnd} onClose={() => setShowEnd(false)} paymentVerified={!!form.paymentVerified}
+      <StageSummaryPopup
+        open={showSummary}
+        onClose={() => setShowSummary(false)}
+        form={form}
+        steps={steps}
+      />
+      <EndCeremony
+        open={showEnd}
+        onClose={() => setShowEnd(false)}
+        paymentVerified={!!form.paymentVerified}
+        onVerifyPayment={() => setForm((f) => ({ ...f, paymentVerified: true }))}
+      />
+    </div>
+  );
+}
