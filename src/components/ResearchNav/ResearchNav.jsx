@@ -225,16 +225,13 @@ function WaterTrack({ gates, activeId, onClick }) {
   );
 }
 
-/* ───────────────────── Route Summary (Google-Maps-style) ─────────────────────
-   Shows "Now / Then / Later" with ETA & progress. It only indicates names,
-   never reveals the content of future steps (keeps your strict gating).
-------------------------------------------------------------------------------- */
+/* ───────────────────── Route Summary (Google-Maps-style) ───────────────────── */
 function RouteSummary({ activeId, gates, onRecenter }) {
   const order = gates.map(g => g.id);
   const idx = order.indexOf(activeId);
 
   const completed = gates.filter(g => g.state === "completed");
-  const nextSteps = gates.slice(idx + 1); // may include locked ones (indication only)
+  const nextSteps = gates.slice(idx + 1); // indication only
 
   const remainingMin = nextSteps.reduce((sum, s) => sum + (STEPS.find(x=>x.id===s.id)?.etaMin || 0), 0);
   const remainingCount = nextSteps.filter(s => s.id !== "done").length;
@@ -247,9 +244,7 @@ function RouteSummary({ activeId, gates, onRecenter }) {
          style={{ background: PALETTE.paper, border: `1px solid ${PALETTE.border}` }}>
       <div className="flex items-center justify-between">
         <div className="font-semibold" style={{ color: PALETTE.ink }}>Route Summary</div>
-        <div className="text-xs" style={{ color: PALETTE.inkSoft }}>
-          {completed.length} done
-        </div>
+        <div className="text-xs" style={{ color: PALETTE.inkSoft }}>{completed.length} done</div>
       </div>
 
       {/* Now */}
@@ -281,7 +276,7 @@ function RouteSummary({ activeId, gates, onRecenter }) {
         </div>
       </div>
 
-      {/* Later (list) */}
+      {/* Later */}
       <div className="flex items-start gap-3 opacity-70">
         <div className="mt-1 text-lg">🧭</div>
         <div className="flex-1">
@@ -292,7 +287,7 @@ function RouteSummary({ activeId, gates, onRecenter }) {
         </div>
       </div>
 
-      {/* Mini distance/ETA pill row */}
+      {/* Mini ETA row */}
       <div className="flex items-center gap-3 text-xs pt-1" style={{ color: PALETTE.inkSoft }}>
         <div className="px-2 py-1 rounded-full border" style={{ borderColor: PALETTE.border }}>
           {remainingMin || 1} min
@@ -341,9 +336,19 @@ function BottomPill({ activeId, gates, onRecenter }) {
   );
 }
 
-/* ─────────────────────── Glass A4 Live Preview (flip) ─────────────────────── */
-function GlassA4({ front, back }) {
+/* ─────────────────────── Glass A4 Live Preview (flip + turn) ─────────────────────── */
+function GlassA4({ front, back, turnSignal }) {
   const [flip, setFlip] = useState(false);
+  const [turnFlash, setTurnFlash] = useState(0);
+
+  // one-shot right→left page turn whenever turnSignal bumps
+  useEffect(() => {
+    if (!turnSignal) return;
+    setTurnFlash(Date.now());
+    const t = setTimeout(() => setTurnFlash(0), 750);
+    return () => clearTimeout(t);
+  }, [turnSignal]);
+
   return (
     <div className="flex flex-col items-center">
       <div className="relative [perspective:1400px]">
@@ -355,16 +360,38 @@ function GlassA4({ front, back }) {
             flip ? "[transform:rotateY(180deg)]" : ""
           ].join(" ")}
         >
-          <div className="absolute inset-0 rounded-[18px] border backdrop-blur-xl shadow-[0_30px_70px_rgba(0,0,0,.10)] [backface-visibility:hidden]"
+          {/* Front */}
+          <div className="absolute inset-0 rounded-[18px] border backdrop-blur-xl shadow-[0_30px_70px_rgba(0,0,0,.10)] [backface-visibility:hidden] overflow-hidden"
                style={{ background: "rgba(255,255,255,.42)", borderColor: PALETTE.border }}>
-            {front}
+            <div className="absolute inset-0 overflow-auto p-6 sm:p-8">
+              {front}
+            </div>
             <div className="pointer-events-none absolute inset-0 rounded-[18px] bg-gradient-to-br from-white/40 via-transparent to-white/10" />
           </div>
-          <div className="absolute inset-0 rounded-[18px] border backdrop-blur-xl shadow-[0_30px_70px_rgba(0,0,0,.10)] [transform:rotateY(180deg)] [backface-visibility:hidden]"
+
+          {/* Back */}
+          <div className="absolute inset-0 rounded-[18px] border backdrop-blur-xl shadow-[0_30px_70px_rgba(0,0,0,.10)] [transform:rotateY(180deg)] [backface-visibility:hidden] overflow-hidden"
                style={{ background: "rgba(255,255,255,.42)", borderColor: PALETTE.border }}>
-            {back}
+            <div className="absolute inset-0 overflow-auto p-6 sm:p-8">
+              {back}
+            </div>
             <div className="pointer-events-none absolute inset-0 rounded-[18px] bg-gradient-to-br from-white/40 via-transparent to-white/10" />
           </div>
+
+          {/* One-shot page turn overlay (right → left) */}
+          {turnFlash ? (
+            <div className="absolute inset-0 pointer-events-none [transform-style:preserve-3d]">
+              <div className="absolute inset-0 origin-right rounded-[18px] bg-white/80 shadow-[0_30px_70px_rgba(0,0,0,.15)] pageTurnR" />
+              <style>{`
+                @keyframes pageTurnR {
+                  0%   { transform: rotateY(0deg);   opacity: .95; }
+                  60%  { transform: rotateY(-140deg); opacity: .8; }
+                  100% { transform: rotateY(-180deg); opacity: 0; }
+                }
+                .pageTurnR { animation: pageTurnR .7s ease-in forwards; }
+              `}</style>
+            </div>
+          ) : null}
         </div>
       </div>
       <button
@@ -378,7 +405,7 @@ function GlassA4({ front, back }) {
   );
 }
 
-function LivePreview({ form }) {
+function LivePreview({ form, turnSignal }) {
   const text =
 `Topic: ${form.title || "—"}
 Literature: ${form.lit || "—"}
@@ -394,7 +421,7 @@ Timeline: ${form.start && form.end ? `${form.start} → ${form.end}` : "—"}`;
   };
 
   const Front = (
-    <div className="p-6 sm:p-8" style={{ color: PALETTE.ink }}>
+    <div style={{ color: PALETTE.ink }}>
       <div className="text-lg font-semibold mb-3">Live Preview</div>
       <div className="rounded-[12px] p-3 sm:p-4 whitespace-pre-wrap text-[13.5px] leading-6" style={box}>
         {typed}
@@ -405,14 +432,14 @@ Timeline: ${form.start && form.end ? `${form.start} → ${form.end}` : "—"}`;
   );
 
   const Back = (
-    <div className="p-6 sm:p-8" style={{ color: PALETTE.ink }}>
+    <div style={{ color: PALETTE.ink }}>
       <div className="text-lg font-semibold mb-3">Notes</div>
       <div className="text-sm" style={{ color: PALETTE.inkSoft, whiteSpace: "pre-wrap" }}>{form.notes || "—"}</div>
       <div className="mt-4 text-xs" style={{ color: PALETTE.inkSoft }}>Tools: {form.tools || "—"}</div>
     </div>
   );
 
-  return <GlassA4 front={Front} back={Back} />;
+  return <GlassA4 front={Front} back={Back} turnSignal={turnSignal} />;
 }
 
 /* ───────────────────────── Preview toggle wrapper (mobile) ───────────────────────── */
@@ -697,6 +724,7 @@ export default function ResearchNav() {
   const [active, setActive] = useState("idea");
   const [showSummary, setShowSummary] = useState(false);
   const [showEnd, setShowEnd] = useState(false);
+  const [turnSignal, setTurnSignal] = useState(0); // 🔔 triggers page-turn animation
 
   const progress = pct(gates);
   const order = STEPS.map(s => s.id);
@@ -713,10 +741,13 @@ export default function ResearchNav() {
     const ok = need.every(k => !!form[k]);
     if (!ok) { setShowSummary(true); return; }
     const idx = order.indexOf(active);
-    setActive(order[Math.min(idx+1, order.length-1)]);
+    const nxt = order[Math.min(idx+1, order.length-1)];
+    setActive(nxt);
+    // 🔔 animate A4 right→left page turn
+    setTurnSignal((n) => n + 1);
   };
 
-  const recenter = () => setActive(prev => prev); // no-op for now; kept for future map sync
+  const recenter = () => setActive(prev => prev); // reserved for future “map” sync
 
   return (
     <div className="min-h-screen">
@@ -776,13 +807,12 @@ export default function ResearchNav() {
           </AnimatePresence>
         </div>
 
-        {/* Right column: Preview + Route Summary */}
-        <div className="xl:col-span-4 space-y-4">
+        {/* Right column: Preview + Route Summary (NO OVERLAP; STICKY, SCROLLABLE) */}
+        <div className="xl:col-span-4 space-y-4 xl:sticky xl:top-20 h-auto xl:h-[calc(100vh-120px)] xl:overflow-auto">
           <PreviewPanel>
-            <LivePreview form={form} />
+            <LivePreview form={form} turnSignal={turnSignal} />
           </PreviewPanel>
 
-          {/* NEW: Google-Maps style route summary */}
           <RouteSummary activeId={active} gates={gates} onRecenter={recenter} />
         </div>
       </main>
