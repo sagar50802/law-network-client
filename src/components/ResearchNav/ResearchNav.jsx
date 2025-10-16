@@ -99,11 +99,9 @@ function StudioBackdrop() {
   );
 }
 
-/* ─────────────────────────── Vertical “Water” Track ───────────────────────────
-   STRICT: only CURRENT step card visible; future steps not shown (just a hint).
-------------------------------------------------------------------------------- */
+/* ─────────────────────────── Vertical “Water” Track ─────────────────────────── */
 function WaterTrack({ gates, activeId, onClick }) {
-  const visible = gates.filter(s => s.state !== "locked"); // current + previous
+  const visible = gates.filter(s => s.state !== "locked");
   const H = (visible.length + 1) * 140;
 
   const pathD =
@@ -118,7 +116,6 @@ function WaterTrack({ gates, activeId, onClick }) {
       style={{ background: "#fff2da", border: `1px solid ${PALETTE.border}` }}
     >
       <div className="grid grid-cols-[48px_1fr] gap-4">
-        {/* Rail */}
         <div className="relative">
           <svg width="48" height={H} viewBox={`0 0 48 ${H}`} className="block">
             <path d={pathD} stroke="#eadbb6" strokeWidth="11" strokeLinecap="round" />
@@ -142,7 +139,6 @@ function WaterTrack({ gates, activeId, onClick }) {
             <circle cx="22" cy={visible.length*140+4} r="3.5" fill="#d8caa8" opacity=".6" />
           </svg>
 
-          {/* Nodes */}
           <div className="absolute top-0 left-1/2 -translate-x-1/2 w-0 h-0">
             {visible.map((s, i) => {
               const top = i * 140 + 12;
@@ -167,7 +163,6 @@ function WaterTrack({ gates, activeId, onClick }) {
           </div>
         </div>
 
-        {/* Only the current visible card */}
         <div className="relative">
           {visible.slice(-1).map((s) => {
             const active = s.id === activeId;
@@ -197,7 +192,6 @@ function WaterTrack({ gates, activeId, onClick }) {
                   </div>
                 </div>
 
-                {/* Ghost arrow hint (does NOT reveal the next title) */}
                 <div className="pl-2 mt-6">
                   <div className="inline-flex items-center gap-2 text-[#8f8164] text-sm opacity-55">
                     <span className="h-2 w-2 rounded-full bg-[#d8caa8] animate-ping" />
@@ -231,7 +225,7 @@ function RouteSummary({ activeId, gates, onRecenter }) {
   const idx = order.indexOf(activeId);
 
   const completed = gates.filter(g => g.state === "completed");
-  const nextSteps = gates.slice(idx + 1); // indication only
+  theconst nextSteps = gates.slice(idx + 1);
 
   const remainingMin = nextSteps.reduce((sum, s) => sum + (STEPS.find(x=>x.id===s.id)?.etaMin || 0), 0);
   const remainingCount = nextSteps.filter(s => s.id !== "done").length;
@@ -247,7 +241,6 @@ function RouteSummary({ activeId, gates, onRecenter }) {
         <div className="text-xs" style={{ color: PALETTE.inkSoft }}>{completed.length} done</div>
       </div>
 
-      {/* Now */}
       <div className="flex items-start gap-3">
         <div className="mt-1 text-lg">🧭</div>
         <div className="flex-1">
@@ -265,7 +258,6 @@ function RouteSummary({ activeId, gates, onRecenter }) {
         </button>
       </div>
 
-      {/* Then */}
       <div className="flex items-start gap-3 opacity-90">
         <div className="mt-1 text-lg">➡️</div>
         <div className="flex-1">
@@ -276,7 +268,6 @@ function RouteSummary({ activeId, gates, onRecenter }) {
         </div>
       </div>
 
-      {/* Later */}
       <div className="flex items-start gap-3 opacity-70">
         <div className="mt-1 text-lg">🧭</div>
         <div className="flex-1">
@@ -287,7 +278,6 @@ function RouteSummary({ activeId, gates, onRecenter }) {
         </div>
       </div>
 
-      {/* Mini ETA row */}
       <div className="flex items-center gap-3 text-xs pt-1" style={{ color: PALETTE.inkSoft }}>
         <div className="px-2 py-1 rounded-full border" style={{ borderColor: PALETTE.border }}>
           {remainingMin || 1} min
@@ -341,7 +331,6 @@ function GlassA4({ front, back, turnSignal }) {
   const [flip, setFlip] = useState(false);
   const [turnFlash, setTurnFlash] = useState(0);
 
-  // one-shot right→left page turn whenever turnSignal bumps
   useEffect(() => {
     if (!turnSignal) return;
     setTurnFlash(Date.now());
@@ -378,7 +367,7 @@ function GlassA4({ front, back, turnSignal }) {
             <div className="pointer-events-none absolute inset-0 rounded-[18px] bg-gradient-to-br from-white/40 via-transparent to-white/10" />
           </div>
 
-          {/* One-shot page turn overlay (right → left) */}
+          {/* One-shot right→left turn overlay */}
           {turnFlash ? (
             <div className="absolute inset-0 pointer-events-none [transform-style:preserve-3d]">
               <div className="absolute inset-0 origin-right rounded-[18px] bg-white/80 shadow-[0_30px_70px_rgba(0,0,0,.15)] pageTurnR" />
@@ -523,7 +512,6 @@ function StepForm({ id, form, setForm, onSummary, onFinish }) {
                style={{ background: "rgba(255,255,255,.55)", border: `1px solid ${PALETTE.border}` }}>
             <div className="text-base font-semibold mb-2" style={{ color: PALETTE.inkSoft }}>Payment</div>
             <div className="grid sm:grid-cols-[120px_1fr] gap-4 items-center">
-              {/* QR slot */}
               <div className="h-[120px] w-[120px] rounded-lg bg-white grid place-items-center"
                    style={{ border: `1px solid ${PALETTE.border}`, boxShadow: "inset 0 0 0 1px rgba(255,255,255,.6)" }}>
                 <div className="text-[10px]" style={{ color: PALETTE.inkSoft }}>QR</div>
@@ -607,44 +595,97 @@ function StepForm({ id, form, setForm, onSummary, onFinish }) {
 }
 
 /* ─────────────────────── Stage Summary & End Ceremony ─────────────────────── */
+/* UPDATED: close button, Esc-to-close, backdrop click to close, sticky header */
 function SummaryPopup({ open, onClose, form, gates }) {
+  const modalRef = useRef(null);
+
+  useEffect(() => {
+    if (!open) return;
+    const onKey = (e) => { if (e.key === "Escape") onClose(); };
+    window.addEventListener("keydown", onKey);
+    return () => window.removeEventListener("keydown", onKey);
+  }, [open, onClose]);
+
   if (!open) return null;
   const list = gates.filter(s=>s.state==="completed").map(s=>s.label).join(", ") || "—";
+
+  const handleBackdrop = (e) => {
+    // Close only if the click is outside the modal content
+    if (modalRef.current && !modalRef.current.contains(e.target)) onClose();
+  };
+
   return (
-    <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm grid place-items-center p-4">
+    <div
+      className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm grid place-items-center p-4"
+      onMouseDown={handleBackdrop}
+    >
       <motion.div
+        ref={modalRef}
         initial={{ scale: .96, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
-        className="w-full max-w-xl rounded-2xl shadow-2xl p-6"
+        className="w-full max-w-3xl rounded-2xl shadow-2xl overflow-hidden"
         style={{ background: PALETTE.paper, border: `1px solid ${PALETTE.border}` }}
       >
-        <h3 className="text-xl font-bold" style={{ color: PALETTE.ink }}>Stage Summary</h3>
-        <div className="text-sm mt-1 mb-4" style={{ color: PALETTE.inkSoft }}>
-          Completed: <span className="font-medium" style={{ color: PALETTE.ink }}>{list}</span>
-        </div>
-
-        <div className="grid grid-cols-2 gap-3 text-sm">
-          <div className="rounded-xl p-3" style={{ border: `1px solid ${PALETTE.border}`, background: "#ffffffb8" }}>
-            <div style={{ color: PALETTE.inkSoft }}>Idea</div>
-            <div className="font-medium" style={{ color: PALETTE.ink }}>{form.title || "—"}</div>
-          </div>
-          <div className="rounded-xl p-3" style={{ border: `1px solid ${PALETTE.border}`, background: "#ffffffb8" }}>
-            <div style={{ color: PALETTE.inkSoft }}>Method</div>
-            <div className="font-medium" style={{ color: PALETTE.ink }}>{form.method || "—"}</div>
-          </div>
-          <div className="rounded-xl p-3" style={{ border: `1px solid ${PALETTE.border}`, background: "#ffffffb8" }}>
-            <div style={{ color: PALETTE.inkSoft }}>Timeline</div>
-            <div className="font-medium" style={{ color: PALETTE.ink }}>
-              {form.start && form.end ? `${form.start} → ${form.end}` : "—"}
+        {/* Sticky header with title + close */}
+        <div className="flex items-center justify-between px-5 py-3 sticky top-0 z-10"
+             style={{ background: "#fff7e6f2", borderBottom: `1px solid ${PALETTE.border}` }}>
+          <div>
+            <h3 className="text-xl font-bold" style={{ color: PALETTE.ink }}>Stage Summary</h3>
+            <div className="text-sm" style={{ color: PALETTE.inkSoft }}>
+              Completed: <span className="font-medium" style={{ color: PALETTE.ink }}>{list}</span>
             </div>
           </div>
-          <div className="rounded-xl p-3" style={{ border: `1px solid ${PALETTE.border}`, background: "#ffffffb8" }}>
-            <div style={{ color: PALETTE.inkSoft }}>Refs</div>
-            <div className="font-mono whitespace-pre-wrap" style={{ color: PALETTE.ink }}>{form.lit || "—"}</div>
+          <button
+            onClick={onClose}
+            aria-label="Close"
+            className="h-9 w-9 rounded-full grid place-items-center text-xl leading-none hover:bg-black/5"
+            title="Close (Esc)"
+          >
+            ×
+          </button>
+        </div>
+
+        {/* Scrollable content */}
+        <div className="p-5 max-h-[70vh] overflow-auto">
+          <div className="grid grid-cols-1 md:grid-cols-2 gap-3 text-sm">
+            <div className="rounded-xl p-3" style={{ border: `1px solid ${PALETTE.border}`, background: "#ffffffb8" }}>
+              <div className="font-semibold mb-1" style={{ color: PALETTE.inkSoft }}>Idea</div>
+              <div className="font-medium whitespace-pre-wrap" style={{ color: PALETTE.ink }}>
+                {form.title || "—"}
+              </div>
+              <div className="text-xs mt-2" style={{ color: PALETTE.inkSoft }}>
+                {form.notes || "—"}
+              </div>
+            </div>
+
+            <div className="rounded-xl p-3" style={{ border: `1px solid ${PALETTE.border}`, background: "#ffffffb8" }}>
+              <div className="font-semibold mb-1" style={{ color: PALETTE.inkSoft }}>Method</div>
+              <div className="font-medium whitespace-pre-wrap" style={{ color: PALETTE.ink }}>
+                {form.method || "—"}
+              </div>
+              <div className="text-xs mt-2" style={{ color: PALETTE.inkSoft }}>
+                Tools: {form.tools || "—"}
+              </div>
+            </div>
+
+            <div className="rounded-xl p-3" style={{ border: `1px solid ${PALETTE.border}`, background: "#ffffffb8" }}>
+              <div className="font-semibold mb-1" style={{ color: PALETTE.inkSoft }}>Timeline</div>
+              <div className="font-medium" style={{ color: PALETTE.ink }}>
+                {form.start && form.end ? `${form.start} → ${form.end}` : "—"}
+              </div>
+            </div>
+
+            <div className="rounded-xl p-3" style={{ border: `1px solid ${PALETTE.border}`, background: "#ffffffb8" }}>
+              <div className="font-semibold mb-1" style={{ color: PALETTE.inkSoft }}>Refs</div>
+              <div className="font-mono whitespace-pre-wrap" style={{ color: PALETTE.ink }}>
+                {form.lit || "—"}
+              </div>
+            </div>
           </div>
         </div>
 
-        <div className="flex justify-end gap-2 mt-5">
+        {/* Footer actions */}
+        <div className="flex justify-end gap-2 px-5 py-3" style={{ borderTop: `1px solid ${PALETTE.border}` }}>
           <button
             className="px-4 py-2 rounded-lg"
             style={{ border: `1px solid ${PALETTE.border}`, background: "#ffffffb3" }}
@@ -724,7 +765,7 @@ export default function ResearchNav() {
   const [active, setActive] = useState("idea");
   const [showSummary, setShowSummary] = useState(false);
   const [showEnd, setShowEnd] = useState(false);
-  const [turnSignal, setTurnSignal] = useState(0); // 🔔 triggers page-turn animation
+  const [turnSignal, setTurnSignal] = useState(0);
 
   const progress = pct(gates);
   const order = STEPS.map(s => s.id);
@@ -743,17 +784,15 @@ export default function ResearchNav() {
     const idx = order.indexOf(active);
     const nxt = order[Math.min(idx+1, order.length-1)];
     setActive(nxt);
-    // 🔔 animate A4 right→left page turn
     setTurnSignal((n) => n + 1);
   };
 
-  const recenter = () => setActive(prev => prev); // reserved for future “map” sync
+  const recenter = () => setActive(prev => prev);
 
   return (
     <div className="min-h-screen">
       <StudioBackdrop />
 
-      {/* Top bar */}
       <header className="sticky top-0 z-20 bg-white/65 backdrop-blur border-b" style={{ borderColor: PALETTE.border }}>
         <div className="max-w-6xl mx-auto p-4">
           <div className="flex items-center justify-between">
@@ -763,9 +802,7 @@ export default function ResearchNav() {
         </div>
       </header>
 
-      {/* Body */}
       <main className="mx-auto w-full max-w-6xl px-4 sm:px-6 py-4 grid grid-cols-1 xl:grid-cols-12 gap-6">
-        {/* Track */}
         <div className="xl:col-span-3">
           <WaterTrack gates={gates} activeId={active} onClick={jump} />
           <div className="mt-4">
@@ -786,7 +823,6 @@ export default function ResearchNav() {
           </div>
         </div>
 
-        {/* Editor */}
         <div className="xl:col-span-5">
           <AnimatePresence mode="wait">
             <motion.div
@@ -807,17 +843,15 @@ export default function ResearchNav() {
           </AnimatePresence>
         </div>
 
-        {/* Right column: Preview + Route Summary (NO OVERLAP; STICKY, SCROLLABLE) */}
+        {/* Sticky, scrollable right side */}
         <div className="xl:col-span-4 space-y-4 xl:sticky xl:top-20 h-auto xl:h-[calc(100vh-120px)] xl:overflow-auto">
           <PreviewPanel>
             <LivePreview form={form} turnSignal={turnSignal} />
           </PreviewPanel>
-
           <RouteSummary activeId={active} gates={gates} onRecenter={recenter} />
         </div>
       </main>
 
-      {/* Overlays */}
       <SummaryPopup open={showSummary} onClose={() => setShowSummary(false)} form={form} gates={gates} />
       <EndCeremony
         open={showEnd}
@@ -826,7 +860,6 @@ export default function ResearchNav() {
         onVerifyPayment={() => setForm(f => ({ ...f, paymentVerified: true }))}
       />
 
-      {/* Bottom sticky mini nav pill */}
       <BottomPill activeId={active} gates={gates} onRecenter={recenter} />
     </div>
   );
