@@ -75,6 +75,9 @@ export default function Navbar() {
           <a href="/plagiarism" className="hover:text-blue-600">Plagiarism</a>
           <a href="/scholar" className="hover:text-blue-600">Scholar Space</a>
 
+          {/* ✅ NEW: Research Journey (User) */}
+          <a href="/research-nav" className="hover:text-blue-600">Research Journey</a>
+
           {/* ✅ Owner-only links (admin view) */}
           {isOwner() && (
             <>
@@ -85,6 +88,8 @@ export default function Navbar() {
               {/* ✅ NEW: Manage + Import */}
               <a href="/owner/tests" className="text-blue-600 underline">Manage Tests</a>
               <a href="/owner/tests/import" className="text-blue-600 underline">Import Tests</a>
+              {/* ✅ NEW: Research Admin (mirrored milestones) */}
+              <a href="/admin/research" className="text-blue-600 underline">Research Admin</a>
               <button
                 className="ml-2 text-xs border px-2 py-1 rounded"
                 onClick={() => {
@@ -118,6 +123,9 @@ export default function Navbar() {
           <a href="/plagiarism">Plagiarism</a>
           <a href="/scholar">Scholar Space</a>
 
+          {/* ✅ NEW: Research Journey (User, mobile) */}
+          <a href="/research-nav">Research Journey</a>
+
           {/* ✅ Owner-only mobile links */}
           {isOwner() && (
             <>
@@ -127,6 +135,8 @@ export default function Navbar() {
               {/* ✅ NEW: Manage + Import (mobile) */}
               <a href="/owner/tests" className="underline">Manage Tests</a>
               <a href="/owner/tests/import" className="underline">Import Tests</a>
+              {/* ✅ NEW: Research Admin (mobile) */}
+              <a href="/admin/research" className="underline">Research Admin</a>
               <button
                 className="text-left text-xs border px-2 py-1 rounded w-fit"
                 onClick={() => {
