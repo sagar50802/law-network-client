@@ -4,11 +4,11 @@ import { AnimatePresence, motion } from "framer-motion";
 
 /* ───────────────────────────── Milestones ───────────────────────────── */
 const STEPS = [
-  { id: "idea",      label: "Idea",       icon: "💡", need: ["title"] },
-  { id: "review",    label: "Review",     icon: "🔎", need: ["lit"] },
-  { id: "method",    label: "Method",     icon: "🧪", need: ["method"] },
-  { id: "payment",   label: "Payment",    icon: "💳", need: [] },
-  { id: "done",      label: "Submission", icon: "🏁", need: [] },
+  { id: "idea",      label: "Idea",       icon: "💡", need: ["title"],     etaMin: 6 },
+  { id: "review",    label: "Review",     icon: "🔎", need: ["lit"],       etaMin: 10 },
+  { id: "method",    label: "Method",     icon: "🧪", need: ["method"],   etaMin: 12 },
+  { id: "payment",   label: "Payment",    icon: "💳", need: [],           etaMin: 3  },
+  { id: "done",      label: "Submission", icon: "🏁", need: [],           etaMin: 0  },
 ];
 
 const INITIAL = {
@@ -100,12 +100,11 @@ function StudioBackdrop() {
 }
 
 /* ─────────────────────────── Vertical “Water” Track ───────────────────────────
-   STRICT: shows only the CURRENT step card; future steps are NOT rendered.
-   A tiny ghost pebble + arrow hints continuation without revealing content.
+   STRICT: only CURRENT step card visible; future steps not shown (just a hint).
 ------------------------------------------------------------------------------- */
 function WaterTrack({ gates, activeId, onClick }) {
-  const visible = gates.filter(s => s.state !== "locked"); // current + all previous
-  const H = (visible.length + 1) * 140; // +1 so the ghost hint sits below
+  const visible = gates.filter(s => s.state !== "locked"); // current + previous
+  const H = (visible.length + 1) * 140;
 
   const pathD =
     `M22 12 ` +
@@ -140,7 +139,6 @@ function WaterTrack({ gates, activeId, onClick }) {
             {visible.map((_, i) => (
               <circle key={i} cx="22" cy={i*140+12} r="4.5" fill="#86dbff" className="animate-glisten" />
             ))}
-            {/* Ghost hint pebble (next continues…) */}
             <circle cx="22" cy={visible.length*140+4} r="3.5" fill="#d8caa8" opacity=".6" />
           </svg>
 
@@ -212,7 +210,6 @@ function WaterTrack({ gates, activeId, onClick }) {
         </div>
       </div>
 
-      {/* animation css scoped */}
       <style>{`
         @keyframes dash { to { stroke-dashoffset: -36; } }
         .animate-dash { animation: dash 1.15s linear infinite; stroke-dashoffset: 0; }
@@ -228,6 +225,122 @@ function WaterTrack({ gates, activeId, onClick }) {
   );
 }
 
+/* ───────────────────── Route Summary (Google-Maps-style) ─────────────────────
+   Shows "Now / Then / Later" with ETA & progress. It only indicates names,
+   never reveals the content of future steps (keeps your strict gating).
+------------------------------------------------------------------------------- */
+function RouteSummary({ activeId, gates, onRecenter }) {
+  const order = gates.map(g => g.id);
+  const idx = order.indexOf(activeId);
+
+  const completed = gates.filter(g => g.state === "completed");
+  const nextSteps = gates.slice(idx + 1); // may include locked ones (indication only)
+
+  const remainingMin = nextSteps.reduce((sum, s) => sum + (STEPS.find(x=>x.id===s.id)?.etaMin || 0), 0);
+  const remainingCount = nextSteps.filter(s => s.id !== "done").length;
+
+  const eta = new Date(Date.now() + remainingMin * 60 * 1000);
+  const etaStr = eta.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+
+  return (
+    <div className="rounded-2xl p-4 shadow-sm space-y-3"
+         style={{ background: PALETTE.paper, border: `1px solid ${PALETTE.border}` }}>
+      <div className="flex items-center justify-between">
+        <div className="font-semibold" style={{ color: PALETTE.ink }}>Route Summary</div>
+        <div className="text-xs" style={{ color: PALETTE.inkSoft }}>
+          {completed.length} done
+        </div>
+      </div>
+
+      {/* Now */}
+      <div className="flex items-start gap-3">
+        <div className="mt-1 text-lg">🧭</div>
+        <div className="flex-1">
+          <div className="text-sm font-semibold" style={{ color: PALETTE.ink }}>Now</div>
+          <div className="text-sm" style={{ color: PALETTE.inkSoft }}>
+            {STEPS.find(s=>s.id===activeId)?.label}
+          </div>
+        </div>
+        <button
+          className="text-xs px-2 py-1 rounded border"
+          style={{ borderColor: PALETTE.blueSoft, background: "#e9f4ff", color: "#246aa8" }}
+          onClick={onRecenter}
+        >
+          Re-centre
+        </button>
+      </div>
+
+      {/* Then */}
+      <div className="flex items-start gap-3 opacity-90">
+        <div className="mt-1 text-lg">➡️</div>
+        <div className="flex-1">
+          <div className="text-sm font-semibold" style={{ color: PALETTE.ink }}>Then</div>
+          <div className="text-sm" style={{ color: PALETTE.inkSoft }}>
+            {nextSteps[0]?.id ? STEPS.find(s=>s.id===nextSteps[0].id)?.label : "—"}
+          </div>
+        </div>
+      </div>
+
+      {/* Later (list) */}
+      <div className="flex items-start gap-3 opacity-70">
+        <div className="mt-1 text-lg">🧭</div>
+        <div className="flex-1">
+          <div className="text-sm font-semibold" style={{ color: PALETTE.ink }}>Later</div>
+          <div className="text-sm" style={{ color: PALETTE.inkSoft }}>
+            {nextSteps.slice(1).map(s => STEPS.find(x=>x.id===s.id)?.label).filter(Boolean).join(" → ") || "—"}
+          </div>
+        </div>
+      </div>
+
+      {/* Mini distance/ETA pill row */}
+      <div className="flex items-center gap-3 text-xs pt-1" style={{ color: PALETTE.inkSoft }}>
+        <div className="px-2 py-1 rounded-full border" style={{ borderColor: PALETTE.border }}>
+          {remainingMin || 1} min
+        </div>
+        <div className="px-2 py-1 rounded-full border" style={{ borderColor: PALETTE.border }}>
+          {remainingCount} steps
+        </div>
+        <div className="px-2 py-1 rounded-full border" style={{ borderColor: PALETTE.border }}>
+          ETA {etaStr}
+        </div>
+      </div>
+    </div>
+  );
+}
+
+/* ───────────── Bottom Sticky Mini-Nav (like Google Maps drive pill) ───────────── */
+function BottomPill({ activeId, gates, onRecenter }) {
+  const order = gates.map(g => g.id);
+  const idx = order.indexOf(activeId);
+  const nextSteps = gates.slice(idx + 1);
+  const remainingMin = nextSteps.reduce((sum, s) => sum + (STEPS.find(x=>x.id===s.id)?.etaMin || 0), 0);
+  const remainingCount = nextSteps.filter(s => s.id !== "done").length;
+
+  if (!gates.length) return null;
+
+  return (
+    <div className="fixed left-1/2 -translate-x-1/2 bottom-3 z-30">
+      <div
+        className="flex items-center gap-4 px-4 py-2 rounded-2xl shadow-[0_12px_40px_rgba(0,0,0,.18)] text-white"
+        style={{ background: "#0f172a" }}
+      >
+        <div className="text-sm font-semibold flex items-center gap-2">
+          <span className="inline-block w-2 h-2 rounded-full bg-[#22c55e]" />
+          {remainingMin || 1} min
+        </div>
+        <div className="text-xs opacity-80">· {remainingCount} steps to go</div>
+        <button
+          className="ml-2 text-xs px-2 py-1 rounded bg-white/10 border border-white/20"
+          onClick={onRecenter}
+          title="Jump to current step"
+        >
+          Re-centre
+        </button>
+      </div>
+    </div>
+  );
+}
+
 /* ─────────────────────── Glass A4 Live Preview (flip) ─────────────────────── */
 function GlassA4({ front, back }) {
   const [flip, setFlip] = useState(false);
@@ -236,8 +349,8 @@ function GlassA4({ front, back }) {
       <div className="relative [perspective:1400px]">
         <div
           className={[
-            "relative w-full max-w-[560px]", // fits its grid column
-            "aspect-[210/297]",              // A4 ratio
+            "relative w-full max-w-[560px]",
+            "aspect-[210/297]",
             "[transform-style:preserve-3d] transition-transform duration-700",
             flip ? "[transform:rotateY(180deg)]" : ""
           ].join(" ")}
@@ -589,7 +702,6 @@ export default function ResearchNav() {
   const order = STEPS.map(s => s.id);
   const current = gates.find(s => s.id === active);
 
-  // jump allowed only to visible (current/past)
   const jump = (id) => {
     const visible = gates.filter(s => s.state !== "locked").map(s => s.id);
     if (!visible.includes(id)) return;
@@ -603,6 +715,8 @@ export default function ResearchNav() {
     const idx = order.indexOf(active);
     setActive(order[Math.min(idx+1, order.length-1)]);
   };
+
+  const recenter = () => setActive(prev => prev); // no-op for now; kept for future map sync
 
   return (
     <div className="min-h-screen">
@@ -618,13 +732,12 @@ export default function ResearchNav() {
         </div>
       </header>
 
-      {/* Body (NO overlap; 3 columns on xl, stacked on mobile) */}
+      {/* Body */}
       <main className="mx-auto w-full max-w-6xl px-4 sm:px-6 py-4 grid grid-cols-1 xl:grid-cols-12 gap-6">
         {/* Track */}
         <div className="xl:col-span-3">
           <WaterTrack gates={gates} activeId={active} onClick={jump} />
           <div className="mt-4">
-            {/* Mentor / Recommended cards */}
             <div className="grid gap-3">
               <div className="rounded-xl p-3 text-sm shadow-sm"
                    style={{ background: "#f2ffe7", border: `1px solid ${PALETTE.border}` }}>
@@ -663,11 +776,14 @@ export default function ResearchNav() {
           </AnimatePresence>
         </div>
 
-        {/* Preview (never overlaps) */}
-        <div className="xl:col-span-4">
+        {/* Right column: Preview + Route Summary */}
+        <div className="xl:col-span-4 space-y-4">
           <PreviewPanel>
             <LivePreview form={form} />
           </PreviewPanel>
+
+          {/* NEW: Google-Maps style route summary */}
+          <RouteSummary activeId={active} gates={gates} onRecenter={recenter} />
         </div>
       </main>
 
@@ -679,6 +795,9 @@ export default function ResearchNav() {
         paymentVerified={!!form.paymentVerified}
         onVerifyPayment={() => setForm(f => ({ ...f, paymentVerified: true }))}
       />
+
+      {/* Bottom sticky mini nav pill */}
+      <BottomPill activeId={active} gates={gates} onRecenter={recenter} />
     </div>
   );
 }
