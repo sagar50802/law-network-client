@@ -38,7 +38,6 @@ const LS_KEY = "researchnav:soft3d:strict";
 
 /* ─────────────────────────── Gating / Progress ─────────────────────────── */
 function gate(form) {
-  // lock all future steps; payment opens only after method is complete
   const out = [];
   let lock = false;
   for (const s of STEPS) {
@@ -48,13 +47,13 @@ function gate(form) {
     out.push({ ...s, state: ok ? "completed" : "in_progress" });
     if (!ok) lock = true;
   }
-  // allow Payment only after Method complete
   const mOK = (STEPS.find(x=>x.id==="method").need || []).every(k => !!form[k]);
   const pay = out.find(x=>x.id==="payment");
   if (pay) pay.state = mOK ? "in_progress" : "locked";
   return out;
 }
-const pct = (g) => Math.round((g.filter(s => s.id !== "done" && s.state === "completed").length / (STEPS.length - 1)) * 100);
+const pct = (g) =>
+  Math.round((g.filter(s => s.id !== "done" && s.state === "completed").length / (STEPS.length - 1)) * 100);
 
 /* ───────────────────────────── Typewriter hook ───────────────────────────── */
 function useTypewriter(text, speed = 16) {
@@ -106,7 +105,7 @@ function StudioBackdrop() {
 ------------------------------------------------------------------------------- */
 function WaterTrack({ gates, activeId, onClick }) {
   const visible = gates.filter(s => s.state !== "locked"); // current + all previous
-  const H = (visible.length + 1) * 140; // +1 so the ghost hint pebble sits below
+  const H = (visible.length + 1) * 140; // +1 so the ghost hint sits below
 
   const pathD =
     `M22 12 ` +
@@ -237,8 +236,8 @@ function GlassA4({ front, back }) {
       <div className="relative [perspective:1400px]">
         <div
           className={[
-            "relative w-[min(92vw,760px)]",
-            "aspect-[210/297]",
+            "relative w-full max-w-[560px]", // fits its grid column
+            "aspect-[210/297]",              // A4 ratio
             "[transform-style:preserve-3d] transition-transform duration-700",
             flip ? "[transform:rotateY(180deg)]" : ""
           ].join(" ")}
@@ -303,13 +302,29 @@ Timeline: ${form.start && form.end ? `${form.start} → ${form.end}` : "—"}`;
   return <GlassA4 front={Front} back={Back} />;
 }
 
-/* ───────────────────────── Step Editor (strict gating) ───────────────────────
-   Shows ONLY current step form. Next button is disabled until valid.
-------------------------------------------------------------------------------- */
+/* ───────────────────────── Preview toggle wrapper (mobile) ───────────────────────── */
+function PreviewPanel({ children }) {
+  const [open, setOpen] = useState(true);
+  return (
+    <div className="w-full">
+      <div className="flex items-center justify-between mb-2 xl:hidden">
+        <h4 className="font-semibold" style={{ color: PALETTE.ink }}>Live Preview</h4>
+        <button
+          className="text-xs px-2 py-1 rounded border"
+          style={{ borderColor: PALETTE.border, background: "#ffffffb3", color: PALETTE.ink }}
+          onClick={() => setOpen(o => !o)}
+        >
+          {open ? "Hide" : "Show"}
+        </button>
+      </div>
+      <div className={`${open ? "block" : "hidden"} xl:block`}>{children}</div>
+    </div>
+  );
+}
+
+/* ───────────────────────── Step Editor (strict gating) ─────────────────────── */
 function StepForm({ id, form, setForm, onSummary, onFinish }) {
-  const need = useMemo(() => {
-    const s = STEPS.find(x => x.id === id); return (s?.need)||[];
-  }, [id]);
+  const need = useMemo(() => (STEPS.find(x => x.id === id)?.need) || [], [id]);
   const valid = need.every(k => !!form[k]);
 
   useEffect(() => { localStorage.setItem(LS_KEY, JSON.stringify(form)); }, [form]);
@@ -321,7 +336,11 @@ function StepForm({ id, form, setForm, onSummary, onFinish }) {
       className: "w-full rounded-xl border px-3 py-2 focus:outline-none focus:ring-2",
       placeholder
     };
-    const style = { borderColor: PALETTE.border, background: "#ffffffcc", boxShadow: "inset 0 0 0 1px rgba(255,255,255,.4)" };
+    const style = {
+      borderColor: PALETTE.border,
+      background: "#ffffffcc",
+      boxShadow: "inset 0 0 0 1px rgba(255,255,255,.4)",
+    };
     return (
       <label className="block">
         <div className="text-sm mb-1" style={{ color: PALETTE.inkSoft }}>{label}</div>
@@ -409,25 +428,36 @@ function StepForm({ id, form, setForm, onSummary, onFinish }) {
           </div>
         </div>
       )}
-      {id === "done" && <div className="text-sm" style={{ color: PALETTE.inkSoft }}>All steps complete. Submit to finish.</div>}
+      {id === "done" && (
+        <div className="text-sm" style={{ color: PALETTE.inkSoft }}>
+          All steps complete. Submit to finish the journey.
+        </div>
+      )}
 
       <div className="flex items-center justify-between mt-6">
-        <button className="px-4 py-2 rounded-lg"
-                style={{ border: `1px solid ${PALETTE.border}`, background: "#ffffffb3" }}
-                onClick={onSummary}>
+        <button
+          className="px-4 py-2 rounded-lg"
+          style={{ border: `1px solid ${PALETTE.border}`, background: "#ffffffb3" }}
+          onClick={onSummary}
+        >
           Stage Summary
         </button>
         {id === "done" ? (
-          <button className="px-4 py-2 rounded-lg text-white" style={{ background: PALETTE.blue }}
-                  onClick={onFinish}>
+          <button
+            className="px-4 py-2 rounded-lg text-white"
+            style={{ background: PALETTE.blue }}
+            onClick={onFinish}
+          >
             Submit → Finish
           </button>
         ) : (
-          <button className="px-4 py-2 rounded-lg text-white disabled:opacity-60"
-                  style={{ background: PALETTE.blue }}
-                  disabled={!valid}
-                  title={!valid ? "Complete current step first" : ""}
-                  onClick={onSummary}>
+          <button
+            className="px-4 py-2 rounded-lg text-white disabled:opacity-60"
+            style={{ background: PALETTE.blue }}
+            disabled={!valid}
+            title={!valid ? "Complete current step first" : ""}
+            onClick={onSummary}
+          >
             Next
           </button>
         )}
@@ -442,13 +472,17 @@ function SummaryPopup({ open, onClose, form, gates }) {
   const list = gates.filter(s=>s.state==="completed").map(s=>s.label).join(", ") || "—";
   return (
     <div className="fixed inset-0 z-50 bg-black/40 backdrop-blur-sm grid place-items-center p-4">
-      <motion.div initial={{ scale: .96, opacity: 0 }} animate={{ scale: 1, opacity: 1 }}
+      <motion.div
+        initial={{ scale: .96, opacity: 0 }}
+        animate={{ scale: 1, opacity: 1 }}
         className="w-full max-w-xl rounded-2xl shadow-2xl p-6"
-        style={{ background: PALETTE.paper, border: `1px solid ${PALETTE.border}` }}>
+        style={{ background: PALETTE.paper, border: `1px solid ${PALETTE.border}` }}
+      >
         <h3 className="text-xl font-bold" style={{ color: PALETTE.ink }}>Stage Summary</h3>
         <div className="text-sm mt-1 mb-4" style={{ color: PALETTE.inkSoft }}>
           Completed: <span className="font-medium" style={{ color: PALETTE.ink }}>{list}</span>
         </div>
+
         <div className="grid grid-cols-2 gap-3 text-sm">
           <div className="rounded-xl p-3" style={{ border: `1px solid ${PALETTE.border}`, background: "#ffffffb8" }}>
             <div style={{ color: PALETTE.inkSoft }}>Idea</div>
@@ -469,21 +503,38 @@ function SummaryPopup({ open, onClose, form, gates }) {
             <div className="font-mono whitespace-pre-wrap" style={{ color: PALETTE.ink }}>{form.lit || "—"}</div>
           </div>
         </div>
+
         <div className="flex justify-end gap-2 mt-5">
-          <button className="px-4 py-2 rounded-lg" style={{ border: `1px solid ${PALETTE.border}`, background: "#ffffffb3" }} onClick={onClose}>Close</button>
-          <button className="px-4 py-2 rounded-lg text-white" style={{ background: PALETTE.blue }} onClick={onClose}>Continue →</button>
+          <button
+            className="px-4 py-2 rounded-lg"
+            style={{ border: `1px solid ${PALETTE.border}`, background: "#ffffffb3" }}
+            onClick={onClose}
+          >
+            Close
+          </button>
+          <button
+            className="px-4 py-2 rounded-lg text-white"
+            style={{ background: PALETTE.blue }}
+            onClick={onClose}
+          >
+            Continue →
+          </button>
         </div>
       </motion.div>
     </div>
   );
 }
+
 function EndCeremony({ open, onClose, paymentVerified, onVerifyPayment }) {
   if (!open) return null;
   return (
     <div className="fixed inset-0 z-50 bg-black/50 backdrop-blur grid place-items-center p-4">
-      <motion.div initial={{ y: 18, opacity: 0 }} animate={{ y: 0, opacity: 1 }}
+      <motion.div
+        initial={{ y: 18, opacity: 0 }}
+        animate={{ y: 0, opacity: 1 }}
         className="w-full max-w-xl rounded-2xl shadow-2xl p-6 text-center"
-        style={{ background: PALETTE.paper, border: `1px solid ${PALETTE.border}` }}>
+        style={{ background: PALETTE.paper, border: `1px solid ${PALETTE.border}` }}
+      >
         <div className="text-4xl">🎓</div>
         <h3 className="text-xl font-bold mt-2" style={{ color: PALETTE.ink }}>
           Congratulations! Your proposal is now with the Controller.
@@ -492,46 +543,33 @@ function EndCeremony({ open, onClose, paymentVerified, onVerifyPayment }) {
           Preview is available; full PDF unlocks after payment verification.
         </p>
         <div className="flex items-center justify-center gap-3 mt-4 flex-wrap">
-          <button className="px-4 py-2 rounded-lg" style={{ border: `1px solid ${PALETTE.border}`, background: "#ffffffb3" }}>
+          <button
+            className="px-4 py-2 rounded-lg"
+            style={{ border: `1px solid ${PALETTE.border}`, background: "#ffffffb3" }}
+          >
             Preview PDF (1 page)
           </button>
-          <button disabled={!paymentVerified}
+          <button
+            disabled={!paymentVerified}
             className={`px-4 py-2 rounded-lg text-white ${!paymentVerified ? "opacity-60 cursor-not-allowed" : ""}`}
-            style={{ background: PALETTE.mint }}>
+            style={{ background: PALETTE.mint }}
+          >
             Download Full PDF
           </button>
           {!paymentVerified && (
-            <button className="px-4 py-2 rounded-lg text-white" style={{ background: PALETTE.blue }} onClick={onVerifyPayment}>
+            <button
+              className="px-4 py-2 rounded-lg text-white"
+              style={{ background: PALETTE.blue }}
+              onClick={onVerifyPayment}
+            >
               I’ve Paid → Verify
             </button>
           )}
         </div>
-        <button onClick={onClose} className="underline text-sm mt-3" style={{ color: PALETTE.inkSoft }}>Close</button>
+        <button onClick={onClose} className="underline text-sm mt-3" style={{ color: PALETTE.inkSoft }}>
+          Close
+        </button>
       </motion.div>
-    </div>
-  );
-}
-
-/* ────────────────────────────── Map / 3D Navigation Slots ──────────────────────────────
-   Optional: wire these to Mapbox GL JS / Google Maps / deck.gl if you decide.
-   The UI renders a clean placeholder panel; if window.mapboxgl is present,
-   you can initialize a map into #rnav-map inside MapPanel.
----------------------------------------------------------------------------------------- */
-function MapPanel() {
-  useEffect(() => {
-    // Progressive enhancement (no new deps forced):
-    // if (window.mapboxgl) { init mapbox here with 3D style / routes / street view plugin }
-  }, []);
-  return (
-    <div className="rounded-2xl p-4 shadow-sm"
-      style={{ background: PALETTE.paper, border: `1px solid ${PALETTE.border}` }}>
-      <div className="text-sm mb-2 font-semibold" style={{ color: PALETTE.ink }}>Research Journey Map</div>
-      <div id="rnav-map" className="w-full h-56 rounded-xl bg-gradient-to-br from-[#e6f2ff] to-[#f0f7ff] grid place-items-center border"
-           style={{ borderColor: PALETTE.blueSoft }}>
-        <div className="text-xs" style={{ color: PALETTE.inkSoft }}>
-          3D tiles / Street View / Routes / Distance Matrix (enable via Mapbox/Google)
-        </div>
-      </div>
     </div>
   );
 }
@@ -580,13 +618,13 @@ export default function ResearchNav() {
         </div>
       </header>
 
-      {/* Body */}
-      <main className="max-w-6xl mx-auto p-4 sm:p-6 grid lg:grid-cols-12 gap-6">
-        {/* Track (only current visible) */}
-        <div className="lg:col-span-4">
+      {/* Body (NO overlap; 3 columns on xl, stacked on mobile) */}
+      <main className="mx-auto w-full max-w-6xl px-4 sm:px-6 py-4 grid grid-cols-1 xl:grid-cols-12 gap-6">
+        {/* Track */}
+        <div className="xl:col-span-3">
           <WaterTrack gates={gates} activeId={active} onClick={jump} />
           <div className="mt-4">
-            {/* Mentor tip / Recommended reading cards (static deco to match mock) */}
+            {/* Mentor / Recommended cards */}
             <div className="grid gap-3">
               <div className="rounded-xl p-3 text-sm shadow-sm"
                    style={{ background: "#f2ffe7", border: `1px solid ${PALETTE.border}` }}>
@@ -604,8 +642,8 @@ export default function ResearchNav() {
           </div>
         </div>
 
-        {/* Editor (ONLY current step form rendered) */}
-        <div className="lg:col-span-4">
+        {/* Editor */}
+        <div className="xl:col-span-5">
           <AnimatePresence mode="wait">
             <motion.div
               key={current?.id}
@@ -625,10 +663,11 @@ export default function ResearchNav() {
           </AnimatePresence>
         </div>
 
-        {/* A4 Live Preview + optional map panel for your “Photorealistic 3D Maps” brief */}
-        <div className="lg:col-span-4 space-y-4">
-          <LivePreview form={form} />
-          <MapPanel />
+        {/* Preview (never overlaps) */}
+        <div className="xl:col-span-4">
+          <PreviewPanel>
+            <LivePreview form={form} />
+          </PreviewPanel>
         </div>
       </main>
 
