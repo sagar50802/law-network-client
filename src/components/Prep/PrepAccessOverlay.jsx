@@ -229,7 +229,8 @@ export default function PrepAccessOverlay({ examId, email }) {
     fd.append("examId", examId);
     fd.append("email", emailVal);          // used by server + status lookups
     fd.append("userEmail", emailVal);      // harmless extra; some handlers use this name
-    fd.append("intent", intentMode === "purchase" ? "start" : "restart");
+    // IMPORTANT: must be "purchase" or "restart" (NOT "start")
+    fd.append("intent", intentMode === "purchase" ? "purchase" : "restart");
     if (nameField)  fd.append("name",  nameField);
     if (phoneField) fd.append("phone", phoneField);
 
