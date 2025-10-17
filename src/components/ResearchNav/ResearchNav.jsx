@@ -27,7 +27,7 @@ const PALETTE = {
   paper: "#fff7e6",
   card: "#fffaf0",
   border: "#ead7b5",
-  ink: "#212a3a",
+  ink: "#0b1220",
   inkSoft: "#6e634c",
   blue: "#4fb5ff",
   blueSoft: "#bfe3ff",
@@ -370,42 +370,60 @@ function BottomPill({ activeId, gates, onRecenter }) {
   );
 }
 
-/* ─────────────── Glass A4 Live Preview (flip; sticky container) ─────────────── */
+/* ─────────────── Glass A4 Live Preview (flip; polished) ─────────────── */
 function GlassA4({ front, back }) {
   const [flip, setFlip] = useState(false);
   return (
-    <div className="flex flex-col items-center">
-      <div className="relative [perspective:1400px]">
+    <div className="relative w-full flex flex-col items-center">
+      <div className="relative [perspective:1800px] w-full flex justify-center">
         <div
           className={[
-            "relative w-full max-w-[560px]",
-            "aspect-[210/297]",
-            "[transform-style:preserve-3d] transition-transform duration-700",
+            "relative w-[92%] sm:w-[560px] aspect-[210/297]",
+            "rounded-[20px] shadow-2xl border overflow-hidden transition-transform duration-[900ms]",
+            "[transform-style:preserve-3d]",
             flip ? "[transform:rotateY(180deg)]" : "",
           ].join(" ")}
+          style={{ borderColor: PALETTE.border }}
         >
+          {/* Front */}
           <div
-            className="absolute inset-0 rounded-[18px] border backdrop-blur-xl shadow-[0_30px_70px_rgba(0,0,0,.10)] [backface-visibility:hidden]"
-            style={{ background: "rgba(255,255,255,.42)", borderColor: PALETTE.border }}
+            className="absolute inset-0 p-6 sm:p-8 [backface-visibility:hidden]"
+            style={{
+              background:
+                "linear-gradient(180deg,rgba(255,255,255,.85),rgba(255,255,255,.55))",
+              color: PALETTE.ink,
+            }}
           >
             {front}
-            <div className="pointer-events-none absolute inset-0 rounded-[18px] bg-gradient-to-br from-white/40 via-transparent to-white/10" />
+            <div className="absolute inset-0 pointer-events-none rounded-[20px] border border-white/50" />
           </div>
+
+          {/* Back */}
           <div
-            className="absolute inset-0 rounded-[18px] border backdrop-blur-xl shadow-[0_30px_70px_rgba(0,0,0,.10)] [transform:rotateY(180deg)] [backface-visibility:hidden]"
-            style={{ background: "rgba(255,255,255,.42)", borderColor: PALETTE.border }}
+            className="absolute inset-0 p-6 sm:p-8 [transform:rotateY(180deg)] [backface-visibility:hidden]"
+            style={{
+              background:
+                "linear-gradient(180deg,rgba(250,248,243,.9),rgba(250,248,243,.6))",
+              color: PALETTE.ink,
+            }}
           >
             {back}
-            <div className="pointer-events-none absolute inset-0 rounded-[18px] bg-gradient-to-br from-white/40 via-transparent to-white/10" />
+            <div className="absolute inset-0 pointer-events-none rounded-[20px] border border-white/50" />
           </div>
         </div>
       </div>
+
       <button
-        className="mt-3 px-3 py-1.5 rounded-md text-white shadow"
-        style={{ background: PALETTE.blue }}
+        className="mt-4 px-4 py-2 rounded-md text-white font-semibold shadow-lg"
+        style={{
+          background: PALETTE.blue,
+          position: "absolute",
+          bottom: "-3rem",
+          right: "10%",
+        }}
         onClick={() => setFlip(v => !v)}
       >
-        {flip ? "Turn to Front" : "Flip Page"}
+        {flip ? "Show Front" : "Flip Page"}
       </button>
     </div>
   );
@@ -413,41 +431,34 @@ function GlassA4({ front, back }) {
 
 function LivePreview({ form }) {
   const text =
-`Topic: ${form.title || "—"}
-Literature: ${form.lit || "—"}
-Method: ${form.method || "—"}
-Timeline: ${form.start && form.end ? `${form.start} → ${form.end}` : "—"}`;
-  const typed = useTypewriter(text, 14);
+    `📘 Topic: ${form.title || "—"}\n\n` +
+    `📚 Literature: ${form.lit || "—"}\n\n` +
+    `🧪 Method: ${form.method || "—"}\n\n` +
+    `🕒 Timeline: ${
+      form.start && form.end ? `${form.start} → ${form.end}` : "—"
+    }\n\n` +
+    (form.notes ? `📝 Notes: ${form.notes}` : "");
 
-  const box = {
-    fontFamily:
-      `'ui-monospace', ui-monospace, SFMono-Regular, Menlo, Monaco, "Courier New", monospace`,
-    textShadow: "0 1px 0 rgba(255,255,255,.25)",
-    background: "linear-gradient(180deg,rgba(255,255,255,.55),rgba(255,255,255,.25))",
-    border: `1px solid ${PALETTE.border}`,
-  };
+  const typed = useTypewriter(text, 10);
 
   const Front = (
-    <div className="p-6 sm:p-8" style={{ color: PALETTE.ink }}>
-      <div className="text-lg font-semibold mb-3">Live Preview</div>
-      <div className="rounded-[12px] p-3 sm:p-4 whitespace-pre-wrap text-[13.5px] leading-6" style={box}>
+    <div className="leading-relaxed whitespace-pre-wrap text-[15px]">
+      <div className="text-lg font-semibold mb-2">Live Preview</div>
+      <div className="bg-white/60 rounded-lg p-4 border border-[#e0d8b6] shadow-inner">
         {typed}
-        <span className="inline-block w-3 h-4 align-baseline ml-1" style={{ background: PALETTE.ink }} />
+        <span className="animate-pulse ml-1">|</span>
       </div>
-      <div className="mt-4 text-xs" style={{ color: PALETTE.inkSoft }}>
-        Auto-writing simulates pen on glass.
-      </div>
+      <p className="text-xs text-gray-500 mt-2 italic">
+        Auto-writing on virtual glass paper ✍️
+      </p>
     </div>
   );
 
   const Back = (
-    <div className="p-6 sm:p-8" style={{ color: PALETTE.ink }}>
-      <div className="text-lg font-semibold mb-3">Notes</div>
-      <div className="text-sm" style={{ color: PALETTE.inkSoft, whiteSpace: "pre-wrap" }}>
-        {form.notes || "—"}
-      </div>
-      <div className="mt-4 text-xs" style={{ color: PALETTE.inkSoft }}>
-        Tools: {form.tools || "—"}
+    <div className="leading-relaxed whitespace-pre-wrap text-[15px]">
+      <div className="text-lg font-semibold mb-2">Additional Notes</div>
+      <div className="bg-white/60 rounded-lg p-4 border border-[#e0d8b6] shadow-inner">
+        {form.tools || "No additional notes."}
       </div>
     </div>
   );
@@ -804,7 +815,7 @@ export default function ResearchNav() {
     setActive(order[Math.min(idx + 1, order.length - 1)]);
   };
 
-  const recenter = () => setActive(prev => prev); // no-op for now
+  const recenter = () => setActive(prev => prev); // no-op (kept for consistency)
 
   return (
     <div className="min-h-screen">
