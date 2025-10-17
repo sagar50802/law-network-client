@@ -1,21 +1,31 @@
+// src/pages/admin/PrepAccessAdmin.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
-import { apiBase } from "../../utils/api"; // <- single source of truth for backend origin
+
+/* ----------------------------------------------------------------------------
+   Backend base URL (no apiBase import required)
+   -------------------------------------------------------------------------- */
+const BACKEND =
+  (import.meta.env && (import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_API_BASE)) ||
+  (typeof window !== "undefined" ? window.location.origin : "");
+
+// join BACKEND + path safely; keep absolute URLs intact
+function abs(url) {
+  try {
+    // If already absolute (http/https), use as-is
+    new URL(url);
+    return url;
+  } catch {
+    // Relative path → prefix with BACKEND
+    const base = (BACKEND || "").replace(/\/+$/, "");
+    const path = url.startsWith("/") ? url : `/${url}`;
+    return `${base}${path}`;
+  }
+}
 
 /* --- helpers that ALWAYS send X-Owner-Key to the backend origin --- */
 const RUNTIME_OWNER =
   (typeof window !== "undefined" && localStorage.getItem("ownerKey")) || "";
 const OWNER_KEY = RUNTIME_OWNER || (import.meta.env.VITE_OWNER_KEY || "");
-
-// build absolute URL against backend (so we never hit the client origin by mistake)
-function abs(url) {
-  const base = apiBase(); // your helper should return something like "https://<server>/api"
-  if (!base) return url;  // fallback to relative if helper already injects base
-  // If caller already passed an absolute URL, keep it
-  try { new URL(url); return url; } catch {}
-  // If caller passed a path like "/api/xyz", strip the leading slash before joining
-  const path = url.startsWith("/") ? url.slice(1) : url;
-  return `${base.replace(/\/+$/,"")}/${path}`;
-}
 
 async function getSecureJSON(url) {
   const r = await fetch(abs(url), {
@@ -28,10 +38,15 @@ async function getSecureJSON(url) {
   }
   return j;
 }
+
 async function postSecureJSON(url, body) {
   const r = await fetch(abs(url), {
     method: "POST",
-    headers: { "Content-Type": "application/json", Accept: "application/json", "X-Owner-Key": OWNER_KEY },
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      "X-Owner-Key": OWNER_KEY,
+    },
     body: JSON.stringify(body || {}),
     credentials: "include",
   });
@@ -41,10 +56,15 @@ async function postSecureJSON(url, body) {
   }
   return j;
 }
+
 async function patchSecureJSON(url, body) {
   const r = await fetch(abs(url), {
     method: "PATCH",
-    headers: { "Content-Type": "application/json", Accept: "application/json", "X-Owner-Key": OWNER_KEY },
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      "X-Owner-Key": OWNER_KEY,
+    },
     body: JSON.stringify(body || {}),
     credentials: "include",
   });
@@ -113,7 +133,9 @@ export default function PrepAccessAdmin() {
     (async () => {
       try {
         setAutoGrantLoading(true);
-        const meta = await getSecureJSON(`/api/prep/exams/${encodeURIComponent(examId)}/meta`);
+        const meta = await getSecureJSON(
+          `/api/prep/exams/${encodeURIComponent(examId)}/meta`
+        );
         setAutoGrant(!!meta?.autoGrantRestart);
       } catch {
         // ignore; list can still load
@@ -139,7 +161,10 @@ export default function PrepAccessAdmin() {
   async function approve(id, grant = true) {
     if (!id) return;
     try {
-      await postSecureJSON("/api/prep/access/admin/approve", { requestId: id, approve: grant });
+      await postSecureJSON("/api/prep/access/admin/approve", {
+        requestId: id,
+        approve: grant,
+      });
       await load();
     } catch (e) {
       alert(e.message || "Approve failed");
@@ -148,7 +173,10 @@ export default function PrepAccessAdmin() {
 
   async function revokeRow(x) {
     try {
-      await postSecureJSON("/api/prep/access/admin/revoke", { examId: x.examId, email: x.userEmail });
+      await postSecureJSON("/api/prep/access/admin/revoke", {
+        examId: x.examId,
+        email: x.userEmail,
+      });
       await load();
     } catch (e) {
       alert(e.message || "Revoke failed");
@@ -162,9 +190,10 @@ export default function PrepAccessAdmin() {
     }
     try {
       setAutoGrantLoading(true);
-      await patchSecureJSON(`/api/prep/exams/${encodeURIComponent(examId)}/overlay-config`, {
-        autoGrantRestart: !!nextVal,
-      });
+      await patchSecureJSON(
+        `/api/prep/exams/${encodeURIComponent(examId)}/overlay-config`,
+        { autoGrantRestart: !!nextVal }
+      );
       setAutoGrant(!!nextVal);
     } catch (e) {
       alert(e.message || "Failed to update auto-approval");
@@ -173,12 +202,15 @@ export default function PrepAccessAdmin() {
     }
   }
 
-  // quick local debug (talks to your new debug endpoints)
+  // quick local debug (talks to your debug endpoints)
   async function pingDebug() {
     try {
       const a = await getSecureJSON("/api/prep/access/requests-debug");
       alert(
-        `counts: ${JSON.stringify(a.counts)}\nlatest: ${a.latest?.map(x => `${x.userEmail} ${x.examId} ${x.status}`).join("\n") || "none"}`
+        `counts: ${JSON.stringify(a.counts)}\nlatest:\n${
+          a.latest?.map((x) => `${x.userEmail} ${x.examId} ${x.status}`).join("\n") ||
+          "none"
+        }`
       );
     } catch (e) {
       alert(e.message);
@@ -222,9 +254,13 @@ export default function PrepAccessAdmin() {
         </button>
 
         <div className="ml-auto flex items-center gap-2">
-          <label className="text-sm text-gray-700">Auto-approve restarts/purchases</label>
+          <label className="text-sm text-gray-700">
+            Auto-approve restarts/purchases
+          </label>
           <button
-            className={`px-3 py-1 rounded ${autoGrant ? "bg-emerald-600 text-white" : "bg-gray-200"}`}
+            className={`px-3 py-1 rounded ${
+              autoGrant ? "bg-emerald-600 text-white" : "bg-gray-200"
+            }`}
             onClick={() => toggleAutoGrant(!autoGrant)}
             disabled={!examId || autoGrantLoading}
             title="When ON, new requests for this exam are immediately approved"
@@ -233,12 +269,20 @@ export default function PrepAccessAdmin() {
           </button>
         </div>
 
-        <button className="px-3 py-1 border rounded ml-2" onClick={pingDebug} title="Check server has rows">
+        <button
+          className="px-3 py-1 border rounded ml-2"
+          onClick={pingDebug}
+          title="Check server has rows"
+        >
           Debug
         </button>
 
         <div className="text-xs text-gray-600">
-          {loading ? "Loading…" : last ? `Last update: ${last.toLocaleTimeString()}` : ""}
+          {loading
+            ? "Loading…"
+            : last
+            ? `Last update: ${last.toLocaleTimeString()}`
+            : ""}
         </div>
       </div>
 
@@ -267,21 +311,48 @@ export default function PrepAccessAdmin() {
                   <div className="text-sm font-medium">
                     {String(x.intent || "").toUpperCase()} • {x.examId}
                   </div>
-                  <div className="text-xs text-gray-500">{new Date(x.createdAt).toLocaleString()}</div>
+                  <div className="text-xs text-gray-500">
+                    {new Date(x.createdAt).toLocaleString()}
+                  </div>
                 </div>
 
                 <div className="text-xs text-gray-700 mt-1">
-                  <div><b>Email:</b> {x.userEmail}</div>
-                  {nm ? <div><b>Name:</b> {nm}</div> : null}
-                  {ph ? <div><b>Phone:</b> {ph}</div> : null}
-                  <div><b>Price:</b> ₹{x.priceAt ?? 0}</div>
-                  {x.meta?.planLabel ? <div><b>Plan:</b> {x.meta.planLabel}</div> : null}
-                  {x.note ? <div className="mt-1"><b>Note:</b> {x.note}</div> : null}
+                  <div>
+                    <b>Email:</b> {x.userEmail}
+                  </div>
+                  {nm ? (
+                    <div>
+                      <b>Name:</b> {nm}
+                    </div>
+                  ) : null}
+                  {ph ? (
+                    <div>
+                      <b>Phone:</b> {ph}
+                    </div>
+                  ) : null}
+                  <div>
+                    <b>Price:</b> ₹{x.priceAt ?? 0}
+                  </div>
+                  {x.meta?.planLabel ? (
+                    <div>
+                      <b>Plan:</b> {x.meta.planLabel}
+                    </div>
+                  ) : null}
+                  {x.note ? (
+                    <div className="mt-1">
+                      <b>Note:</b> {x.note}
+                    </div>
+                  ) : null}
                 </div>
 
                 {x.screenshotUrl && (
                   <div className="mt-2">
-                    <a href={x.screenshotUrl} target="_blank" rel="noreferrer" className="text-xs underline text-blue-600">
+                    <a
+                      href={x.screenshotUrl}
+                      target="_blank"
+                      rel="noreferrer"
+                      className="text-xs underline text-blue-600"
+                    >
                       View Screenshot
                     </a>
                   </div>
