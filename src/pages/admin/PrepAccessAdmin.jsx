@@ -1,13 +1,24 @@
-// src/pages/admin/PrepAccessAdmin.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
+import { apiBase } from "../../utils/api"; // <- single source of truth for backend origin
 
-/* --- helpers that ALWAYS send X-Owner-Key --- */
-// Prefer the runtime “ownerKey” (like the rest of the app), fallback to VITE_OWNER_KEY.
-const RUNTIME_OWNER = (typeof window !== "undefined" && localStorage.getItem("ownerKey")) || "";
+/* --- helpers that ALWAYS send X-Owner-Key to the backend origin --- */
+const RUNTIME_OWNER =
+  (typeof window !== "undefined" && localStorage.getItem("ownerKey")) || "";
 const OWNER_KEY = RUNTIME_OWNER || (import.meta.env.VITE_OWNER_KEY || "");
 
+// build absolute URL against backend (so we never hit the client origin by mistake)
+function abs(url) {
+  const base = apiBase(); // your helper should return something like "https://<server>/api"
+  if (!base) return url;  // fallback to relative if helper already injects base
+  // If caller already passed an absolute URL, keep it
+  try { new URL(url); return url; } catch {}
+  // If caller passed a path like "/api/xyz", strip the leading slash before joining
+  const path = url.startsWith("/") ? url.slice(1) : url;
+  return `${base.replace(/\/+$/,"")}/${path}`;
+}
+
 async function getSecureJSON(url) {
-  const r = await fetch(url, {
+  const r = await fetch(abs(url), {
     headers: { Accept: "application/json", "X-Owner-Key": OWNER_KEY },
     credentials: "include",
   });
@@ -18,7 +29,7 @@ async function getSecureJSON(url) {
   return j;
 }
 async function postSecureJSON(url, body) {
-  const r = await fetch(url, {
+  const r = await fetch(abs(url), {
     method: "POST",
     headers: { "Content-Type": "application/json", Accept: "application/json", "X-Owner-Key": OWNER_KEY },
     body: JSON.stringify(body || {}),
@@ -31,7 +42,7 @@ async function postSecureJSON(url, body) {
   return j;
 }
 async function patchSecureJSON(url, body) {
-  const r = await fetch(url, {
+  const r = await fetch(abs(url), {
     method: "PATCH",
     headers: { "Content-Type": "application/json", Accept: "application/json", "X-Owner-Key": OWNER_KEY },
     body: JSON.stringify(body || {}),
@@ -162,6 +173,18 @@ export default function PrepAccessAdmin() {
     }
   }
 
+  // quick local debug (talks to your new debug endpoints)
+  async function pingDebug() {
+    try {
+      const a = await getSecureJSON("/api/prep/access/requests-debug");
+      alert(
+        `counts: ${JSON.stringify(a.counts)}\nlatest: ${a.latest?.map(x => `${x.userEmail} ${x.examId} ${x.status}`).join("\n") || "none"}`
+      );
+    } catch (e) {
+      alert(e.message);
+    }
+  }
+
   const statusLabel = status === "all" ? "" : status;
 
   return (
@@ -209,6 +232,10 @@ export default function PrepAccessAdmin() {
             {autoGrantLoading ? "Saving…" : autoGrant ? "ON" : "OFF"}
           </button>
         </div>
+
+        <button className="px-3 py-1 border rounded ml-2" onClick={pingDebug} title="Check server has rows">
+          Debug
+        </button>
 
         <div className="text-xs text-gray-600">
           {loading ? "Loading…" : last ? `Last update: ${last.toLocaleTimeString()}` : ""}
@@ -261,7 +288,6 @@ export default function PrepAccessAdmin() {
                 )}
 
                 <div className="mt-3 flex flex-wrap gap-2">
-                  {/* Only show Approve/Reject for pending rows (even in “All” view) */}
                   {x.status === "pending" && (
                     <>
                       <button
