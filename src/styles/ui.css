@@ -170,12 +170,12 @@ body{ background:var(--bg); }
   --shadow-card: 0 10px 40px rgba(0,0,0,0.08);
 }
 
-/* Page gradient (subtle) */
+/* Subtle parchment gradient background */
 .theme-parchment {
   background: radial-gradient(1200px 600px at 25% -10%, #fff9e9 0%, #fff2cc 35%, #fff7e6 55%, #fffdf6 100%);
 }
 
-/* Paper card look */
+/* Paper cards */
 .theme-parchment .paper {
   background: var(--paper-bg);
   border: 1px solid var(--paper-edge);
@@ -190,7 +190,7 @@ body{ background:var(--bg); }
   box-shadow: var(--shadow-soft);
 }
 
-/* Text coloring */
+/* Typography on parchment */
 .theme-parchment .ink-900 { color: var(--ink-900); }
 .theme-parchment .ink-700 { color: var(--ink-700); }
 
@@ -224,7 +224,7 @@ body{ background:var(--bg); }
   100% { filter: saturate(1) brightness(.95); }
 }
 
-/* Primary button (ink on parchment) — scoped so it WON’T replace your global .btn-primary */
+/* Primary parchment button (scoped) */
 .theme-parchment .btn-primary {
   background: linear-gradient(180deg, #4a6fb8, #375c9e);
   color: #fff;
@@ -237,7 +237,7 @@ body{ background:var(--bg); }
   background: #cfc7b3; color: #fff; cursor: not-allowed;
 }
 
-/* Secondary (paper) */
+/* Paper-style secondary */
 .theme-parchment .btn-paper {
   background: #fff7e6;
   border: 1px solid #efd9a9;
@@ -245,7 +245,7 @@ body{ background:var(--bg); }
   padding: 10px 16px;
 }
 
-/* Inputs on paper */
+/* Inputs */
 .theme-parchment .input-paper {
   background: #fffdf6;
   border: 1px solid #ead7b1;
@@ -258,7 +258,7 @@ body{ background:var(--bg); }
   box-shadow: 0 0 0 4px rgba(217, 184, 120, .25);
 }
 
-/* “Card section” titles */
+/* Section titles */
 .theme-parchment .section-title {
   font-weight: 800;
   letter-spacing: .3px;
@@ -282,7 +282,7 @@ body{ background:var(--bg); }
   box-shadow: 0 30px 80px rgba(0,0,0,.18);
 }
 
-/* Tiny badge used in preview (does not conflict with your existing .badge) */
+/* Tiny badge used in preview */
 .theme-parchment .badge-chip {
   background: var(--chip-parch);
   color: var(--chip-parch-text);
