@@ -97,15 +97,21 @@ function StudioBackdrop() {
             "linear-gradient(180deg,#053532 0%, #085a54 50%, #0b2f2d 100%)",
         }}
       />
+      {/* diagonal shimmer reflection */}
       <div
-        className="absolute inset-0 opacity-[.12]"
+        className="absolute inset-0 opacity-[.12] animate-[shimmer_6s_linear_infinite]"
         style={{
           backgroundImage:
-            "radial-gradient(#00ffc8 1px, transparent 1px), radial-gradient(#00ffc8 1px, transparent 1px)",
-          backgroundSize: "8px 8px, 12px 12px",
-          backgroundPosition: "0 0, 3px 3px",
+            "linear-gradient(135deg, rgba(0,255,217,.15) 0%, transparent 40%, rgba(0,255,217,.15) 80%)",
+          backgroundSize: "200% 200%",
         }}
       />
+      <style>{`
+        @keyframes shimmer {
+          0% { background-position: 0% 0%; }
+          100% { background-position: 200% 200%; }
+        }
+      `}</style>
     </div>
   );
 }
@@ -125,36 +131,52 @@ function WaterTrack({ gates, activeId, onClick }) {
 
   return (
     <div
-      className="rounded-[26px] px-4 py-5 shadow-[0_30px_80px_rgba(0,0,0,.35)]"
+      className="rounded-[26px] px-4 py-5 shadow-[0_30px_80px_rgba(0,0,0,.35)] relative overflow-hidden"
       style={{
         background: PALETTE.card,
         border: `1px solid ${PALETTE.border}`,
       }}
     >
-      <div className="grid grid-cols-[48px_1fr] gap-4">
+      {/* water surface shimmer (diagonal) */}
+      <div className="absolute inset-0 opacity-[.08] animate-[wave_8s_linear_infinite] bg-[linear-gradient(120deg,rgba(0,255,217,.3)_0%,transparent_40%,rgba(0,255,217,.3)_80%)] bg-[length:200%_200%]" />
+      <div className="grid grid-cols-[48px_1fr] gap-4 relative z-10">
         {/* Rail */}
         <div className="relative">
           <svg width="48" height={H} viewBox={`0 0 48 ${H}`} className="block">
+            <defs>
+              <linearGradient id="liq" x1="0" y1="0" x2="0" y2="1">
+                <stop offset="0%" stopColor="#00ffd9" />
+                <stop offset="100%" stopColor="#3fe2bf" />
+              </linearGradient>
+              {/* subtle glow for the water path */}
+              <filter id="glow">
+                <feGaussianBlur stdDeviation="3" result="blur" />
+                <feMerge>
+                  <feMergeNode in="blur" />
+                  <feMergeNode in="SourceGraphic" />
+                </feMerge>
+              </filter>
+            </defs>
+
+            {/* dark pipe underlay */}
             <path
               d={pathD}
               stroke="#144945"
               strokeWidth="11"
               strokeLinecap="round"
             />
-            <defs>
-              <linearGradient id="liq" x1="0" y1="0" x2="0" y2="1">
-                <stop offset="0%" stopColor="#00ffd9" />
-                <stop offset="100%" stopColor="#3fe2bf" />
-              </linearGradient>
-            </defs>
+            {/* glowing, flowing water */}
             <path
               d={pathD}
               stroke="url(#liq)"
               strokeWidth="5"
               strokeLinecap="round"
               className="animate-dash"
-              strokeDasharray="18 18"
+              strokeDasharray="28 28"
+              filter="url(#glow)"
             />
+
+            {/* bubbles at each node */}
             {visible.map((_, i) => (
               <circle
                 key={i}
@@ -162,7 +184,7 @@ function WaterTrack({ gates, activeId, onClick }) {
                 cy={i * 140 + 12}
                 r="6"
                 fill="#3fe2bf"
-                className="animate-glisten"
+                className="animate-bubble"
               />
             ))}
             <circle
@@ -206,7 +228,7 @@ function WaterTrack({ gates, activeId, onClick }) {
           </div>
         </div>
 
-        {/* Current visible card */}
+        {/* Current visible card (unchanged layout/logic) */}
         <div className="relative">
           {visible.slice(-1).map((s) => {
             const active = s.id === activeId;
@@ -251,101 +273,30 @@ function WaterTrack({ gates, activeId, onClick }) {
           })}
         </div>
       </div>
+
       <style>{`
-        @keyframes dash { to { stroke-dashoffset: -36; } }
-        .animate-dash { animation: dash 1.15s linear infinite; stroke-dashoffset: 0; }
-        @keyframes glisten { 0%,100% { opacity:.85; filter: drop-shadow(0 0 6px rgba(0,255,217,.9)); }
-                              50% { opacity:1;  filter: drop-shadow(0 0 15px rgba(0,255,217,.95)); } }
-        .animate-glisten { animation: glisten 2s ease-in-out infinite; }
-        @keyframes ripple { 0%{box-shadow:0 0 0 0 rgba(0,255,217,.40);}
-                            70%{box-shadow:0 0 0 14px rgba(0,255,217,0);}
-                            100%{box-shadow:0 0 0 0 rgba(0,255,217,0);} }
+        @keyframes dash { to { stroke-dashoffset: -56; } }
+        .animate-dash { animation: dash 2.2s linear infinite; stroke-dashoffset: 0; }
+
+        @keyframes bubble {
+          0% { transform: translateY(0); opacity: .9; }
+          100% { transform: translateY(-30px); opacity: 0; }
+        }
+        .animate-bubble { animation: bubble 3s ease-in-out infinite; }
+
+        @keyframes ripple {
+          0%{box-shadow:0 0 0 0 rgba(0,255,217,.40);}
+          70%{box-shadow:0 0 0 14px rgba(0,255,217,0);}
+          100%{box-shadow:0 0 0 0 rgba(0,255,217,0);}
+        }
         .animate-ripple { animation: ripple 2.6s ease-out infinite; }
+
+        @keyframes wave {
+          0% { background-position: 0% 0%; }
+          100% { background-position: 200% 200%; }
+        }
       `}</style>
     </div>
-  );
-}
-/* ──────────────────────────────── Route Summary ──────────────────────────────── */
-function RouteSummary({ gates, onClose }) {
-  const completed = gates.filter((g) => g.state === "completed");
-  const nextSteps = gates.slice(completed.length);
-  const remainingMin = nextSteps.reduce(
-    (sum, s) => sum + (STEPS.find((x) => x.id === s.id)?.etaMin || 0),
-    0
-  );
-
-  return (
-    <motion.div
-      className="fixed inset-0 flex items-center justify-center bg-black/50 backdrop-blur-sm z-50"
-      initial={{ opacity: 0 }}
-      animate={{ opacity: 1 }}
-      exit={{ opacity: 0 }}
-    >
-      <motion.div
-        className="rounded-2xl shadow-2xl w-[480px] max-w-[90vw] overflow-hidden relative"
-        style={{
-          background: PALETTE.card,
-          border: `1px solid ${PALETTE.border}`,
-          color: PALETTE.ink,
-        }}
-        initial={{ scale: 0.8, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0.8, opacity: 0 }}
-      >
-        <div className="p-5">
-          <h2 className="text-xl font-semibold mb-2 text-[#00ffd9]">
-            Research Journey Summary
-          </h2>
-          <p className="text-sm text-[#c1d6d2] mb-4">
-            You’ve completed <b>{completed.length}</b> of{" "}
-            <b>{STEPS.length - 1}</b> milestones.
-          </p>
-
-          <div className="space-y-2 mb-4 max-h-[240px] overflow-y-auto pr-1">
-            {STEPS.map((s) => {
-              const state = gates.find((g) => g.id === s.id)?.state;
-              const isDone = state === "completed";
-              const isNext = state === "in_progress";
-              return (
-                <div
-                  key={s.id}
-                  className="flex items-center gap-2 text-sm border-b border-[#1e8073]/40 pb-1"
-                >
-                  <span
-                    className={`w-5 h-5 grid place-items-center rounded-full text-xs ${
-                      isDone
-                        ? "bg-[#1bbf8a] text-white"
-                        : isNext
-                        ? "bg-[#033532] text-[#00ffd9] border border-[#00ffd9]"
-                        : "bg-[#022624] text-[#c1d6d2]"
-                    }`}
-                  >
-                    {isDone ? "✓" : isNext ? "→" : ""}
-                  </span>
-                  <span>{s.label}</span>
-                  <span className="ml-auto text-[#93e2d2]/80">
-                    {s.etaMin ? `${s.etaMin} min` : ""}
-                  </span>
-                </div>
-              );
-            })}
-          </div>
-
-          <div className="text-sm text-[#c1d6d2]/90 mb-3">
-            Estimated remaining time:{" "}
-            <b className="text-[#00ffd9]">{remainingMin} min</b>
-          </div>
-
-          <button
-            onClick={onClose}
-            className="absolute top-3 right-3 text-[#c1d6d2] hover:text-[#00ffd9] text-lg"
-            title="Close summary"
-          >
-            ✕
-          </button>
-        </div>
-      </motion.div>
-    </motion.div>
   );
 }
 
@@ -487,6 +438,7 @@ function StepForm({ stepId, form, setForm, onNext }) {
     </motion.div>
   );
 }
+
 /* ──────────────────────────────── Live Preview ──────────────────────────────── */
 function LivePreview({ form }) {
   const txt =
@@ -523,7 +475,7 @@ function SummaryPopup({ open, onClose, form, gates }) {
       animate={{ opacity: 1 }}
     >
       <motion.div
-        className="rounded-2xl p-6 shadow-2xl w-[520px] max-w-[90vw]"
+        className="rounded-2xl p-6 shadow-2xl w-[520px] max-w-[90vw] relative overflow-y-auto max-h-[90vh]"
         style={{
           background: "#033532",
           border: `1px solid ${PALETTE.border}`,
@@ -532,6 +484,13 @@ function SummaryPopup({ open, onClose, form, gates }) {
         initial={{ scale: 0.9, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
       >
+        <button
+          onClick={onClose}
+          className="absolute top-3 right-4 text-[#c1d6d2] hover:text-[#00ffd9] text-xl"
+          title="Close"
+        >
+          ✕
+        </button>
         <h2 className="text-lg font-semibold mb-2 text-[#00ffd9]">
           Progress Summary
         </h2>
@@ -557,9 +516,7 @@ function SummaryPopup({ open, onClose, form, gates }) {
 export default function ResearchNav() {
   const [form, setForm] = useState(() => {
     try {
-      return (
-        JSON.parse(localStorage.getItem("researchnav:soft3d:strict")) || INITIAL
-      );
+      return JSON.parse(localStorage.getItem(LS_KEY)) || INITIAL;
     } catch {
       return INITIAL;
     }
@@ -579,7 +536,7 @@ export default function ResearchNav() {
   };
 
   useEffect(() => {
-    localStorage.setItem("researchnav:soft3d:strict", JSON.stringify(form));
+    localStorage.setItem(LS_KEY, JSON.stringify(form));
   }, [form]);
 
   return (
