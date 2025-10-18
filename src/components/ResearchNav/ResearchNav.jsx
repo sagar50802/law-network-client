@@ -23,7 +23,7 @@ const INITIAL = {
   paymentProofName: "",
 };
 
-/* 🦚 Peacock Theme (unchanged) */
+/* 🦚 Peacock Theme */
 const PALETTE = {
   paper: "#0b2f2d",
   card: "#0f3a38",
@@ -54,7 +54,7 @@ function gate(form) {
     out.push({ ...s, state: ok ? "completed" : "in_progress" });
     if (!ok) lock = true;
   }
-  // Payment unlock rule stays: only after Method is complete
+  // Payment only unlocks once Method is complete
   const mOK = (STEPS.find((x) => x.id === "method").need || []).every(
     (r) => !!form[r]
   );
@@ -87,7 +87,7 @@ function useTypewriter(text, speed = 16) {
   return out;
 }
 
-/* ─────────────────────── Peacock Background (kept) ─────────────────────── */
+/* ─────────────────────── Peacock Background ─────────────────────── */
 function StudioBackdrop() {
   return (
     <div className="fixed inset-0 -z-10 pointer-events-none">
@@ -117,9 +117,9 @@ function StudioBackdrop() {
   );
 }
 
-/* ───────────────────── Domino’s-style tracker (sequential reveal) ───────────────────── */
+/* ───────────────────── Domino’s-style tracker (only completed + current) ───────────────────── */
 function DominoTracker({ gates, activeId, onSelect }) {
-  // Reveal only unlocked steps (completed + current + the next in_progress)
+  // Only show completed + the first in_progress (current). No future steps.
   const visible = gates.filter((s) => s.state !== "locked");
 
   return (
@@ -171,7 +171,7 @@ function DominoTracker({ gates, activeId, onSelect }) {
                 </div>
               </div>
 
-              {/* connector */}
+              {/* connector between visible tiles */}
               {i < visible.length - 1 && (
                 <div
                   className="mx-2 flex-0 w-12 h-1 rounded-full"
@@ -190,7 +190,7 @@ function DominoTracker({ gates, activeId, onSelect }) {
   );
 }
 
-/* ─────────────────────────────── Wizard Modal (closable) ─────────────────────────────── */
+/* ─────────────────────────────── Wizard Modal (closable + scroll-safe) ─────────────────────────────── */
 function WizardModal({ open, onClose, children, title, subtitle, complete }) {
   if (!open) return null;
   return (
@@ -252,7 +252,7 @@ function WizardModal({ open, onClose, children, title, subtitle, complete }) {
   );
 }
 
-/* ─────────────────────────────── Step Form (reused inside wizard) ─────────────────────────────── */
+/* ─────────────────────────────── Step Form (inside wizard) ─────────────────────────────── */
 function StepForm({ stepId, form, setForm, onNext }) {
   const t = STEPS.find((s) => s.id === stepId);
   const tw = useTypewriter(
@@ -361,7 +361,7 @@ function StepForm({ stepId, form, setForm, onNext }) {
   );
 }
 
-/* ─────────────────────────────── Completion Toast (subtle) ─────────────────────────────── */
+/* ─────────────────────────────── Completion Toast ─────────────────────────────── */
 function CompletionToast({ label }) {
   if (!label) return null;
   return (
@@ -404,7 +404,6 @@ export default function ResearchNav() {
   const order = STEPS.map((s) => s.id);
   const progress = pct(gates);
 
-  // util to check current step validity
   const isStepComplete = (stepId) => {
     const st = STEPS.find((s) => s.id === stepId);
     if (!st) return false;
@@ -412,13 +411,11 @@ export default function ResearchNav() {
   };
 
   const handleNext = () => {
-    // Feedback: mark current as completed (UI) when valid
     if (isStepComplete(activeId)) {
       const label = STEPS.find((s) => s.id === activeId)?.label || "";
       setJustCompleted(label);
-      setTimeout(() => setJustCompleted(""), 1800);
+      setTimeout(() => setJustCompleted(""), 1600);
     }
-
     const idx = order.indexOf(activeId);
     if (idx < order.length - 1) {
       setActiveId(order[idx + 1]);
@@ -426,10 +423,10 @@ export default function ResearchNav() {
     }
   };
 
-  // selecting a step from tracker should respect gating (sequential reveal)
   const handleSelectFromTracker = (id) => {
+    // Allow editing completed steps and the current step only (no future)
     const visibleIds = gates.filter((s) => s.state !== "locked").map((s) => s.id);
-    if (!visibleIds.includes(id)) return; // still locked
+    if (!visibleIds.includes(id)) return;
     setActiveId(id);
     setWizardOpen(true);
   };
@@ -445,32 +442,47 @@ export default function ResearchNav() {
     <div className="min-h-screen font-sans relative overflow-x-hidden">
       <StudioBackdrop />
 
-      {/* Header */}
+      {/* Header with modern progress bar */}
       <header
-        className="sticky top-0 z-30 backdrop-blur border-b flex justify-between items-center px-6 py-3"
+        className="sticky top-0 z-30 backdrop-blur border-b px-6 py-3"
         style={{
           background: "rgba(2, 39, 36, 0.7)",
           borderColor: PALETTE.border,
           color: "#00ffd9",
         }}
       >
-        <h1 className="text-lg font-semibold">Research Navigation</h1>
-        <span className="text-sm text-[#9de1d6]">{progress}% Complete</span>
+        <div className="max-w-6xl mx-auto flex items-center justify-between">
+          <h1 className="text-lg font-semibold">Research Navigation</h1>
+          <div className="flex items-center gap-3 text-sm text-[#9de1d6]">
+            <span>{progress}% Complete</span>
+            <div className="w-36 h-2 rounded-full bg-[#0a4d47] overflow-hidden border border-[#1d514e]">
+              <motion.div
+                className="h-full"
+                style={{
+                  background:
+                    "linear-gradient(90deg,#00ffd9 0%, #3fe2bf 100%)",
+                  boxShadow: "0 0 14px rgba(0,255,217,.35)",
+                }}
+                initial={{ width: 0 }}
+                animate={{ width: `${progress}%` }}
+                transition={{ duration: 0.6 }}
+              />
+            </div>
+          </div>
+        </div>
       </header>
 
-      {/* Tracker */}
+      {/* Tracker + helper text */}
       <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6 space-y-6">
         <DominoTracker
           gates={gates}
           activeId={activeId}
           onSelect={handleSelectFromTracker}
         />
-
-        {/* inline helper text */}
         <div className="text-sm text-[#c1d6d2]">
           {current?.icon} <b>{current?.label}</b> —{" "}
           {currentIsComplete
-            ? "Looks good. You can proceed to the next step."
+            ? "Completed ✓ You can still edit before moving on."
             : "Fill the required fields to complete this step."}
         </div>
       </main>
@@ -509,4 +521,4 @@ export default function ResearchNav() {
 
 /* ───────── Components kept but not rendered (no preview/summary UI now) ───────── */
 // LivePreview & SummaryPopup are intentionally not mounted to match your request.
-// They were preserved above in case you want to re-enable them later without code loss.
+// They’re preserved in your repo history if you need to re-enable them later.
