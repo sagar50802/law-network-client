@@ -1,4 +1,3 @@
-// src/pages/admin/PrepAccessAdmin.jsx
 import { useEffect, useMemo, useRef, useState } from "react";
 
 /* ----------------------------------------------------------------------------
@@ -166,6 +165,7 @@ export default function PrepAccessAdmin() {
         approve: grant,
       });
       await load();
+      alert(grant ? "Approved & access granted." : "Request rejected.");
     } catch (e) {
       alert(e.message || "Approve failed");
     }
@@ -178,8 +178,20 @@ export default function PrepAccessAdmin() {
         email: x.userEmail,
       });
       await load();
+      alert("Access revoked.");
     } catch (e) {
       alert(e.message || "Revoke failed");
+    }
+  }
+
+  // NEW: delete a request row (admin cleanup)
+  async function deleteRow(id) {
+    try {
+      await postSecureJSON("/api/prep/access/admin/delete", { requestId: id });
+      await load();
+      alert("Request deleted.");
+    } catch (e) {
+      alert(e.message || "Delete failed");
     }
   }
 
@@ -384,6 +396,15 @@ export default function PrepAccessAdmin() {
                     title="Revoke the user’s existing access for this exam"
                   >
                     Revoke Access
+                  </button>
+
+                  {/* NEW: Delete row */}
+                  <button
+                    className="px-3 py-1 rounded border"
+                    onClick={() => deleteRow(x._id)}
+                    title="Remove this request from the list"
+                  >
+                    Delete Row
                   </button>
                 </div>
               </div>
