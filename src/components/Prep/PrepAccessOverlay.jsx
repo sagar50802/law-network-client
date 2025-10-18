@@ -1,4 +1,3 @@
-// src/components/Prep/PrepAccessOverlay.jsx
 import { useEffect, useMemo, useState } from "react";
 import { getJSON, upload as postForm } from "../../utils/api"; // <-- use helpers
 
@@ -35,7 +34,9 @@ export default function PrepAccessOverlay({ examId, email }) {
   const [submitting, setSubmitting] = useState(false);
   const [nameField, setName] = useState("");
   const [phoneField, setPhone] = useState("");
-  const [emailField, setEmailField] = useState(localStorage.getItem("userEmail") || email || "");
+  const [emailField, setEmailField] = useState(
+    localStorage.getItem("userEmail") || email || ""
+  );
 
   // timers for "return to this tab"
   const [upiStartTs, setUpiStartTs] = useState(() => Number(localStorage.getItem(ks.upiStart) || 0));
@@ -62,6 +63,15 @@ export default function PrepAccessOverlay({ examId, email }) {
   }, [waStartTs]);
 
   /* ----------------------- core fetch ------------------------------ */
+  // Always prefer the email the user typed.
+  function effectiveEmail() {
+    return (
+      (emailField && emailField.trim()) ||
+      (localStorage.getItem("userEmail") || "").trim() ||
+      (email || "").trim()
+    );
+  }
+
   async function fetchStatus() {
     if (!examId) return;
 
@@ -73,8 +83,10 @@ export default function PrepAccessOverlay({ examId, email }) {
     }
 
     const keepWaiting = !!localStorage.getItem(ks.wait);
+    const effEmail = effectiveEmail();
+
     try {
-      const qs = new URLSearchParams({ examId, email: email || "" });
+      const qs = new URLSearchParams({ examId, email: effEmail });
       const r = await getJSON(`/api/prep/access/status?${qs.toString()}`);
       const { exam, access, overlay } = r || {};
 
@@ -100,6 +112,12 @@ export default function PrepAccessOverlay({ examId, email }) {
         }
       }
 
+      // If access is ACTIVE, never keep the overlay up.
+      if (r?.access?.status === "active") {
+        show = false;
+        mode = "";
+      }
+
       if (keepWaiting) { show = true; mode = "waiting"; }
 
       setState(s => ({
@@ -113,17 +131,20 @@ export default function PrepAccessOverlay({ examId, email }) {
         overlay: overlay || {},
       }));
 
-      if (!emailField && email) setEmailField(email);
+      if (!emailField && effEmail) setEmailField(effEmail);
     } catch {
       setState(s => ({ ...s, loading: false }));
     }
   }
 
-  useEffect(() => { fetchStatus(); /* eslint-disable-next-line */ }, [examId, email]);
+  useEffect(() => { fetchStatus(); /* eslint-disable-next-line */ }, [examId, email, emailField]);
 
   // Poll request status when waiting (self-heal back to form; don't unblock content)
   useEffect(() => {
-    if (!state?.waiting || !emailField) return;
+    if (!state?.waiting) return;
+
+    const effEmail = effectiveEmail();
+    if (!effEmail) return;
 
     let stop = false;
     let noneCount = 0;
@@ -131,12 +152,14 @@ export default function PrepAccessOverlay({ examId, email }) {
     const loop = async () => {
       if (stop) return;
       try {
-        const qs = new URLSearchParams({ examId, email: emailField });
+        const qs = new URLSearchParams({ examId, email: effEmail });
         const j = await getJSON(`/api/prep/access/request/status?${qs.toString()}`);
 
         if (j?.status === "approved") {
+          // Clear waiting and immediately hide overlay; then refresh.
           localStorage.removeItem(ks.wait);
           localStorage.removeItem(ks.waitAt);
+          setState(s => ({ ...s, waiting: false, show: false, mode: "" }));
           stop = true;
           await fetchStatus();
           return;
@@ -171,7 +194,7 @@ export default function PrepAccessOverlay({ examId, email }) {
     loop();
     return () => { stop = true; };
     // eslint-disable-next-line
-  }, [state?.waiting, emailField, examId]);
+  }, [state?.waiting, examId]);
 
   /* ----------------------- payment links --------------------------- */
   function buildPayMeta() {
@@ -222,7 +245,7 @@ export default function PrepAccessOverlay({ examId, email }) {
     if (state.mode === "waiting") return;
 
     const intentMode = state.mode || "purchase";
-    const emailVal = (emailField || "").trim();
+    const emailVal = (effectiveEmail() || "").trim();
     if (!emailVal) { alert("Please enter your email."); return; }
 
     const fd = new FormData();
@@ -257,6 +280,7 @@ export default function PrepAccessOverlay({ examId, email }) {
       if (j?.approved) {
         localStorage.removeItem(ks.wait);
         localStorage.removeItem(ks.waitAt);
+        setState(s => ({ ...s, waiting: false, show: false, mode: "" }));
         await fetchStatus();
         return;
       }
@@ -275,6 +299,7 @@ export default function PrepAccessOverlay({ examId, email }) {
           if (a === "active") {
             localStorage.removeItem(ks.wait);
             localStorage.removeItem(ks.waitAt);
+            setState(s => ({ ...s, waiting: false, show: false, mode: "" }));
             await fetchStatus();
             return;
           }
@@ -302,7 +327,7 @@ export default function PrepAccessOverlay({ examId, email }) {
     state.mode === "waiting" ? "Waiting for approval"
       : `Start / Restart — ${pay.courseName}`;
 
-  const submitDisabled = submitting || state.mode === "waiting" || !(emailField && emailField.trim());
+  const submitDisabled = submitting || state.mode === "waiting" || !(effectiveEmail());
 
   return (
     <div className="fixed inset-0 z-[99999] bg-black/60 backdrop-blur-sm">
@@ -383,7 +408,7 @@ export default function PrepAccessOverlay({ examId, email }) {
           <button
             className="w-full py-3 rounded bg-emerald-600 text-white text-lg font-semibold disabled:opacity-60"
             onClick={state.mode === "waiting" ? undefined : submitRequest}
-            disabled={submitDisabled}
+            disabled={submitting || state.mode === "waiting" || !effectiveEmail()}
           >
             {state.mode === "waiting" ? "Waiting…" : "Submit"}
           </button>
