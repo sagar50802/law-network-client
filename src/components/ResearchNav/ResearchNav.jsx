@@ -23,7 +23,7 @@ const INITIAL = {
   paymentProofName: "",
 };
 
-/* 🦚 Updated Peacock Theme */
+/* 🦚 Peacock Theme */
 const PALETTE = {
   paper: "#0b2f2d",
   card: "#0f3a38",
@@ -228,7 +228,7 @@ function WaterTrack({ gates, activeId, onClick }) {
           </div>
         </div>
 
-        {/* Current visible card (unchanged layout/logic) */}
+        {/* Current visible card */}
         <div className="relative">
           {visible.slice(-1).map((s) => {
             const active = s.id === activeId;
@@ -250,16 +250,28 @@ function WaterTrack({ gates, activeId, onClick }) {
                       {STEPS.find((x) => x.id === s.id)?.icon}{" "}
                       {STEPS.find((x) => x.id === s.id)?.label}
                     </div>
+                    {/* This chip text is filled by parent when we flash a completion */}
                     <span
-                      className="text-[11px] rounded-full px-2 py-0.5 border"
+                      id="last-completed-chip"
+                      className="text-[11px] rounded-full px-2 py-0.5 border hidden"
                       style={{
-                        background: active ? "#044c46" : "#0c3d3a",
+                        background: "#044c46",
                         borderColor: PALETTE.border,
-                        color: active ? "#00ffd9" : "#c1d6d2",
+                        color: "#00ffd9",
                       }}
-                    >
-                      {active ? "In progress" : "Ready"}
-                    </span>
+                    />
+                    {!active && (
+                      <span
+                        className="text-[11px] rounded-full px-2 py-0.5 border"
+                        style={{
+                          background: "#0c3d3a",
+                          borderColor: PALETTE.border,
+                          color: "#c1d6d2",
+                        }}
+                      >
+                        Ready
+                      </span>
+                    )}
                   </div>
                 </div>
                 <div className="pl-2 mt-6">
@@ -300,7 +312,7 @@ function WaterTrack({ gates, activeId, onClick }) {
   );
 }
 
-/* ─────────────────────────────── Bottom progress pill ─────────────────────────────── */
+/* ─────────────────────────────── Bottom progress pill (kept but not used) ─────────────────────────────── */
 function BottomPill({ progress, onOpen }) {
   return (
     <motion.div
@@ -322,6 +334,31 @@ function BottomPill({ progress, onOpen }) {
         />
       </div>
       <span className="text-sm">{progress}%</span>
+    </motion.div>
+  );
+}
+
+/* ─────────────────────────────── Completion Toast ─────────────────────────────── */
+function CompletionToast({ label }) {
+  if (!label) return null;
+  return (
+    <motion.div
+      initial={{ y: -10, opacity: 0 }}
+      animate={{ y: 0, opacity: 1 }}
+      exit={{ y: -10, opacity: 0 }}
+      transition={{ type: "spring", stiffness: 350, damping: 26 }}
+      className="fixed top-16 right-6 z-40"
+    >
+      <div
+        className="px-3 py-2 rounded-lg shadow-lg border text-sm"
+        style={{
+          background: "#022f2d",
+          borderColor: "#1d514e",
+          color: "#e5f7f4",
+        }}
+      >
+        ✓ Completed: <span className="font-semibold">{label}</span>
+      </div>
     </motion.div>
   );
 }
@@ -439,7 +476,7 @@ function StepForm({ stepId, form, setForm, onNext }) {
   );
 }
 
-/* ──────────────────────────────── Live Preview ──────────────────────────────── */
+/* ──────────────────────────────── Live Preview (kept, not rendered) ──────────────────────────────── */
 function LivePreview({ form }) {
   const txt =
     `📘  Topic: ${form.title || "—"}\n\n` +
@@ -464,7 +501,7 @@ function LivePreview({ form }) {
   );
 }
 
-/* ──────────────────────────────── Summary Popup ──────────────────────────────── */
+/* ──────────────────────────────── Summary Popup (kept, not rendered) ──────────────────────────────── */
 function SummaryPopup({ open, onClose, form, gates }) {
   if (!open) return null;
   const done = gates.filter((g) => g.state === "completed").length;
@@ -524,12 +561,34 @@ export default function ResearchNav() {
 
   const gates = useMemo(() => gate(form), [form]);
   const [activeId, setActiveId] = useState("idea");
-  const [showSummary, setShowSummary] = useState(false);
+  const [showSummary, setShowSummary] = useState(false); // kept but not used
+  const [justCompleted, setJustCompleted] = useState(""); // toast label
 
   const order = STEPS.map((s) => s.id);
   const progress = pct(gates);
 
+  // helper to check if current step satisfies its needs
+  const isCurrentStepComplete = (stepId) => {
+    const step = STEPS.find((s) => s.id === stepId);
+    if (!step) return false;
+    return (step.need || []).every((key) => !!form[key]);
+    };
+
   const handleNext = () => {
+    // if this step is valid, flash "Completed: {label}"
+    if (isCurrentStepComplete(activeId)) {
+      const label = STEPS.find((s) => s.id === activeId)?.label || "";
+      setJustCompleted(label);
+      // also show a small chip on the current card for a moment
+      const chip = document.getElementById("last-completed-chip");
+      if (chip) {
+        chip.textContent = `Last completed: ${label}`;
+        chip.classList.remove("hidden");
+        setTimeout(() => chip.classList.add("hidden"), 2200);
+      }
+      setTimeout(() => setJustCompleted(""), 2200);
+    }
+
     const idx = order.indexOf(activeId);
     if (idx < order.length - 1) setActiveId(order[idx + 1]);
     else setShowSummary(true);
@@ -568,7 +627,7 @@ export default function ResearchNav() {
         </div>
 
         {/* Middle column: StepForm */}
-        <div className="xl:col-span-5">
+        <div className="xl:col-span-9">
           <AnimatePresence mode="wait">
             <StepForm
               key={activeId}
@@ -579,15 +638,15 @@ export default function ResearchNav() {
             />
           </AnimatePresence>
         </div>
-
-        {/* Right column: LivePreview */}
-        <div className="xl:col-span-4">
-          <LivePreview form={form} />
-        </div>
       </main>
 
-      {/* Floating summary popup */}
+      {/* Completion toast */}
       <AnimatePresence>
+        {justCompleted && <CompletionToast label={justCompleted} />}
+      </AnimatePresence>
+
+      {/* PREVIEW + SUMMARY removed from render per request */}
+      {/* <AnimatePresence>
         {showSummary && (
           <SummaryPopup
             open={showSummary}
@@ -597,9 +656,7 @@ export default function ResearchNav() {
           />
         )}
       </AnimatePresence>
-
-      {/* Bottom pill progress */}
-      <BottomPill progress={progress} onOpen={() => setShowSummary(true)} />
+      <BottomPill progress={progress} onOpen={() => setShowSummary(true)} /> */}
     </div>
   );
 }
