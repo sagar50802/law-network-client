@@ -1,70 +1,57 @@
 // src/components/Prep/PrepAccessOverlay.jsx
 import { useEffect, useMemo, useState } from "react";
-import { getJSON, upload as postForm } from "../../utils/api"; // <-- use helpers
+import { getJSON, upload as postForm } from "../../utils/api";
 
-// defensive JSON parser (kept in case you want it for other places)
-async function safeJSON(res) {
-  try {
-    const ct = (res.headers.get("content-type") || "").toLowerCase();
-    if (!ct.includes("application/json")) return {};
-    return await res.json();
-  } catch {
-    return {};
-  }
-}
-
+/* ------------------------------------------------------------------ */
+/* Component                                                           */
+/* ------------------------------------------------------------------ */
 export default function PrepAccessOverlay({ examId, email }) {
   /* ----------------------- localStorage keys ----------------------- */
   const ks = useMemo(() => {
     const e = String(examId || "").trim();
     const u = String(email || "").trim() || "anon";
     return {
-      wait: `overlayWaiting:${e}:${u}`,            // flip to waiting
-      waitAt: `overlayWaiting:${e}:${u}:at`,       // when waiting started
-      upiStart: `overlayUPIStart:${e}:${u}`,       // timers
-      waStart: `overlayWAStart:${e}:${u}`,
-      approvedAt: `overlayApprovedAt:${e}:${u}`,   // start of 15s "granted" banner
+      wait:     `overlayWaiting:${e}:${u}`,           // "I'm waiting for approval" flag
+      waitAt:   `overlayWaiting:${e}:${u}:at`,        // when waiting started
+      upiStart: `overlayUPIStart:${e}:${u}`,          // UPI click timestamp
+      waStart:  `overlayWAStart:${e}:${u}`,           // WhatsApp click timestamp
+      approvedAt: `overlayApprovedAt:${e}:${u}`,      // when admin approved (for 15s banner)
     };
   }, [examId, email]);
 
   /* ----------------------- component state ------------------------ */
   const [state, setState] = useState({
     loading: true,
+    // if a waiting flag exists on mount, show overlay in "waiting" mode
     show: !!(examId && localStorage.getItem(ks.wait)),
     mode: localStorage.getItem(ks.wait) ? "waiting" : "", // purchase | restart | waiting | granted
+    exam: {},
+    access: {},
+    overlay: {},
   });
+
   const [submitting, setSubmitting] = useState(false);
   const [nameField, setName] = useState("");
   const [phoneField, setPhone] = useState("");
-  const [emailField, setEmailField] = useState(
-    localStorage.getItem("userEmail") || email || ""
-  );
+  const [emailField, setEmailField] = useState(localStorage.getItem("userEmail") || email || "");
 
-  // timers for "return to this tab"
-  const [upiStartTs, setUpiStartTs] = useState(() =>
-    Number(localStorage.getItem(ks.upiStart) || 0)
-  );
+  // quick-timers for deep-link guidance
+  const [upiStartTs, setUpiStartTs] = useState(() => Number(localStorage.getItem(ks.upiStart) || 0));
   const [upiLeft, setUpiLeft] = useState(0);
-  const [waStartTs, setWaStartTs] = useState(() =>
-    Number(localStorage.getItem(ks.waStart) || 0)
-  );
+  const [waStartTs, setWaStartTs] = useState(() => Number(localStorage.getItem(ks.waStart) || 0));
   const [waLeft, setWaLeft] = useState(0);
   const UPI_SECONDS = 104;
-  const WA_SECONDS = 168;
+  const WA_SECONDS  = 168;
 
-  // 15s approval-unlock countdown
-  const [grantStartTs, setGrantStartTs] = useState(() =>
-    Number(localStorage.getItem(ks.approvedAt) || 0)
-  );
-  const [grantLeft, setGrantLeft] = useState(0);
+  // 15s unlock countdown after approval
   const GRANT_SECONDS = 15;
+  const [grantStartTs, setGrantStartTs] = useState(() => Number(localStorage.getItem(ks.approvedAt) || 0));
+  const [grantLeft, setGrantLeft] = useState(0);
 
+  /* ----------------------- helper timers -------------------------- */
   useEffect(() => {
     if (!upiStartTs) return;
-    const tick = () =>
-      setUpiLeft(
-        Math.max(0, UPI_SECONDS - Math.floor((Date.now() - upiStartTs) / 1000))
-      );
+    const tick = () => setUpiLeft(Math.max(0, UPI_SECONDS - Math.floor((Date.now() - upiStartTs) / 1000)));
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
@@ -72,49 +59,31 @@ export default function PrepAccessOverlay({ examId, email }) {
 
   useEffect(() => {
     if (!waStartTs) return;
-    const tick = () =>
-      setWaLeft(
-        Math.max(0, WA_SECONDS - Math.floor((Date.now() - waStartTs) / 1000))
-      );
+    const tick = () => setWaLeft(Math.max(0, WA_SECONDS - Math.floor((Date.now() - waStartTs) / 1000)));
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
   }, [waStartTs]);
 
-  // Handle the 15s "approved" banner; at 0 → clear flags and hard-reload
+  // 15s "Approved" unlock banner + auto-refresh
   useEffect(() => {
-    if (!grantStartTs) return;
+    if (!grantStartTs) { setGrantLeft(0); return; }
     const tick = () => {
-      const left = Math.max(
-        0,
-        GRANT_SECONDS - Math.floor((Date.now() - grantStartTs) / 1000)
-      );
+      const left = Math.max(0, GRANT_SECONDS - Math.floor((Date.now() - grantStartTs) / 1000));
       setGrantLeft(left);
-      if (left === 0) {
-        // Clear all overlay markers and reload so Day 1 starts immediately
+      if (left <= 0) {
+        // countdown finished → clear and hard-refresh to pick up Day-1 reset
+        localStorage.removeItem(ks.approvedAt);
+        // Also ensure any stale waiting flags are gone
         localStorage.removeItem(ks.wait);
         localStorage.removeItem(ks.waitAt);
-        localStorage.removeItem(ks.approvedAt);
-        setState((s) => ({ ...s, show: false, mode: "", waiting: false }));
-        try {
-          window.location.reload();
-        } catch {}
+        try { window.location.reload(); } catch {}
       }
     };
     tick();
-    const id = setInterval(tick, 250);
+    const id = setInterval(tick, 1000);
     return () => clearInterval(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [grantStartTs]);
-
-  /* ----------------------- helpers ------------------------------ */
-  function markApprovedNow() {
-    const now = Date.now();
-    localStorage.setItem(ks.approvedAt, String(now));
-    setGrantStartTs(now);
-    // show the granted banner immediately
-    setState((s) => ({ ...s, show: true, mode: "granted", waiting: false }));
-  }
+  }, [grantStartTs, ks.approvedAt, ks.wait, ks.waitAt]);
 
   /* ----------------------- core fetch ------------------------------ */
   async function fetchStatus() {
@@ -127,98 +96,85 @@ export default function PrepAccessOverlay({ examId, email }) {
       localStorage.removeItem(ks.waitAt);
     }
 
-    const keepWaiting = !!localStorage.getItem(ks.wait);
-
     try {
       const qs = new URLSearchParams({ examId, email: email || "" });
       const r = await getJSON(`/api/prep/access/status?${qs.toString()}`);
       const { exam, access, overlay } = r || {};
 
-      // If the user is active and cannot restart, NEVER show the overlay.
-      if (access?.status === "active" && !access?.canRestart) {
-        if (!localStorage.getItem(ks.approvedAt)) {
-          // Normal hidden state
-          setState((s) => ({
+      // === ABSOLUTE RULE ===
+      // If the user is ACTIVE, never show purchase/restart overlay.
+      // Only show the "granted 15s" banner if it is currently running.
+      if (access?.status === "active") {
+        // purge any "waiting" flags
+        localStorage.removeItem(ks.wait);
+        localStorage.removeItem(ks.waitAt);
+
+        const approvedTs = Number(localStorage.getItem(ks.approvedAt) || 0);
+        if (approvedTs) {
+          // Continue / resume the "approved" countdown across refreshes
+          setGrantStartTs(approvedTs);
+          setState(s => ({
             ...s,
             loading: false,
-            show: false,
-            mode: "",
-            waiting: false,
+            show: true,
+            mode: "granted",
             exam: exam || {},
             access: access || {},
             overlay: overlay || {},
           }));
         } else {
-          // If we are mid "granted" banner, keep showing it until countdown ends.
-          setState((s) => ({
+          // Fully hide overlay when active
+          setState(s => ({
             ...s,
             loading: false,
-            show: true,
-            mode: "granted",
-            waiting: false,
+            show: false,
+            mode: "",
             exam: exam || {},
             access: access || {},
             overlay: overlay || {},
           }));
-          setGrantStartTs(Number(localStorage.getItem(ks.approvedAt)));
         }
         if (!emailField && email) setEmailField(email);
-        return; // stop here
+        return; // IMPORTANT: stop here; do not evaluate overlay rules below
       }
 
-      // Otherwise (trial / active with restart allowed / no access) decide visibility
+      // Otherwise, decide if we should show purchase/restart or waiting
+      const keepWaiting = !!localStorage.getItem(ks.wait);
+
       let mode = "";
       let show = false;
 
-      // Server-preferred decision
+      // Prefer server instruction (if your /status provides overlay.show/mode)
       if (overlay?.show && overlay?.mode) {
         show = true;
-        mode = overlay.mode;
-      }
-
-      // Client-side safety net for "After N days (per user)"
-      if (!show && exam?.overlay?.mode !== "never") {
-        const todayDay = Number(r?.access?.todayDay || 1);
+        mode = overlay.mode; // "purchase" | "restart"
+      } else {
+        // Client-side safety net: show after trial/offset or when restart allowed
+        const todayDay  = Number(r?.access?.todayDay || 1);
         const trialDays = Number(r?.access?.trialDays ?? exam?.trialDays ?? 0);
         const offsetDays = Number(exam?.overlay?.offsetDays ?? 0);
         const threshold = Math.max(trialDays, offsetDays);
-        if (
-          (access?.status === "trial" && todayDay > threshold) ||
-          (access?.status === "active" && access?.canRestart)
-        ) {
+
+        if ((access?.status === "trial" && todayDay > threshold) ||
+            (access?.status === "active" && access?.canRestart)) {
           show = true;
-          mode =
-            access?.status === "active" && access?.canRestart
-              ? "restart"
-              : "purchase";
+          mode = access?.status === "active" && access?.canRestart ? "restart" : "purchase";
         }
+
+        // If no trial/offset configured at all, still allow showing
         if (!show && trialDays === 0 && offsetDays === 0 && todayDay > 0) {
           show = true;
-          mode =
-            access?.status === "active" && access?.canRestart
-              ? "restart"
-              : "purchase";
+          mode = access?.status === "active" && access?.canRestart ? "restart" : "purchase";
         }
       }
 
-      if (keepWaiting) {
-        show = true;
-        mode = "waiting";
-      }
+      if (keepWaiting) { show = true; mode = "waiting"; }
 
-      // If an approval banner is in progress, prefer showing it.
-      if (localStorage.getItem(ks.approvedAt)) {
-        show = true;
-        mode = "granted";
-        setGrantStartTs(Number(localStorage.getItem(ks.approvedAt)));
-      }
-
-      setState((s) => ({
+      setState(s => ({
         ...s,
         loading: false,
         show,
         mode,
-        waiting: mode === "waiting",
         exam: exam || {},
         access: access || {},
         overlay: overlay || {},
@@ -226,18 +182,15 @@ export default function PrepAccessOverlay({ examId, email }) {
 
       if (!emailField && email) setEmailField(email);
     } catch {
-      setState((s) => ({ ...s, loading: false }));
+      setState(s => ({ ...s, loading: false }));
     }
   }
 
-  useEffect(() => {
-    fetchStatus();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [examId, email]);
+  useEffect(() => { fetchStatus(); /* eslint-disable-next-line */ }, [examId, email]);
 
-  // Poll request status when waiting; on approval → show granted banner
+  // Poll request status when waiting → switch to "granted" 15s banner
   useEffect(() => {
-    if (!state?.waiting || !emailField) return;
+    if (state.mode !== "waiting" || !emailField) return;
 
     let stop = false;
     let noneCount = 0;
@@ -246,13 +199,18 @@ export default function PrepAccessOverlay({ examId, email }) {
       if (stop) return;
       try {
         const qs = new URLSearchParams({ examId, email: emailField });
-        const j = await getJSON(
-          `/api/prep/access/request/status?${qs.toString()}`
-        );
+        const j = await getJSON(`/api/prep/access/request/status?${qs.toString()}`);
 
         if (j?.status === "approved") {
-          stop = true;
-          markApprovedNow();
+          // mark "approved" to drive the 15s banner (and persist across refresh)
+          const ts = Date.now();
+          localStorage.setItem(ks.approvedAt, String(ts));
+          localStorage.removeItem(ks.wait);
+          localStorage.removeItem(ks.waitAt);
+          setGrantStartTs(ts);
+          setState(s => ({ ...s, show: true, mode: "granted" }));
+          // also refresh server state (now active) — but we stay in "granted" UI
+          try { await fetchStatus(); } catch {}
           return;
         }
 
@@ -260,7 +218,7 @@ export default function PrepAccessOverlay({ examId, email }) {
           stop = true;
           localStorage.removeItem(ks.wait);
           localStorage.removeItem(ks.waitAt);
-          setState((s) => ({ ...s, show: true, waiting: false, mode: "" }));
+          setState(s => ({ ...s, show: true, mode: "" }));
           alert("Your request was rejected. Please contact support.");
           return;
         }
@@ -271,67 +229,57 @@ export default function PrepAccessOverlay({ examId, email }) {
             stop = true;
             localStorage.removeItem(ks.wait);
             localStorage.removeItem(ks.waitAt);
-            setState((s) => ({ ...s, waiting: false, mode: "", show: true }));
+            setState(s => ({ ...s, show: true, mode: "" }));
             alert("We didn’t find your request. Please submit again.");
             return;
           }
         }
       } catch {
-        // ignore
+        // ignore and continue polling
       }
-      setTimeout(loop, 5000);
+      setTimeout(loop, 3000);
     };
 
     loop();
-    return () => {
-      stop = true;
-    };
+    return () => { stop = true; };
     // eslint-disable-next-line
-  }, [state?.waiting, emailField, examId]);
+  }, [state.mode, emailField, examId]);
 
   /* ----------------------- payment links --------------------------- */
-  function buildPayMeta() {
-    const pay =
-      state?.overlay?.payment ||
-      state?.exam?.overlay?.payment ||
-      state?.exam?.payment ||
-      {};
+  const pay = useMemo(() => {
+    const payObj = state?.overlay?.payment
+      || state?.exam?.overlay?.payment
+      || state?.exam?.payment
+      || {};
 
     const courseName = state?.exam?.name || String(examId || "").toUpperCase();
-    const priceINR = Number(pay.priceINR ?? state?.exam?.price ?? 0);
-    const upiId = String(pay.upiId || "").trim();
-    const upiName = String(pay.upiName || "").trim();
-    let wa = String(pay.whatsappNumber || "").trim().replace(/[^\d+]/g, "");
+    const priceINR = Number(payObj.priceINR ?? state?.exam?.price ?? 0);
+    const upiId = String(payObj.upiId || "").trim();
+    const upiName = String(payObj.upiName || "").trim();
+
+    let wa = String(payObj.whatsappNumber || "").trim().replace(/[^\d+]/g, "");
     if (wa.startsWith("+")) wa = wa.slice(1);
     if (/^\d{10}$/.test(wa)) wa = "91" + wa;
-    const waText = (
-      pay.whatsappText || `Hello, I paid for "${courseName}" (₹${priceINR}).`
-    ).trim();
+    const waText = (payObj.whatsappText || `Hello, I paid for "${courseName}" (₹${priceINR}).`).trim();
 
     const upiLink = upiId
-      ? `upi://pay?pa=${encodeURIComponent(upiId)}${
-          upiName ? `&pn=${encodeURIComponent(upiName)}` : ""
-        }${
-          priceINR ? `&am=${encodeURIComponent(priceINR)}` : ""
-        }&cu=INR&tn=${encodeURIComponent(`Payment for ${courseName}`)}`
+      ? `upi://pay?pa=${encodeURIComponent(upiId)}${upiName ? `&pn=${encodeURIComponent(upiName)}` : ""}${priceINR ? `&am=${encodeURIComponent(priceINR)}` : ""}&cu=INR&tn=${encodeURIComponent(`Payment for ${courseName}`)}`
       : "";
 
     const waLink = wa ? `https://wa.me/${wa}?text=${encodeURIComponent(waText)}` : "";
 
     return { courseName, priceINR, upiId, upiName, upiLink, wa, waLink };
-  }
-  const pay = useMemo(buildPayMeta, [state?.overlay, state?.exam, examId]);
+  }, [state?.overlay, state?.exam, examId]);
+
   const isAndroid = /Android/i.test(navigator.userAgent);
 
-  /* ----------------------- actions ------------------------------- */
+  /* ----------------------- actions -------------------------------- */
   const handleUPI = () => {
     if (!pay.upiLink) return;
     const now = Date.now();
     localStorage.setItem(ks.upiStart, String(now));
     setUpiStartTs(now);
-    try {
-      window.location.href = pay.upiLink;
-    } catch {}
+    try { window.location.href = pay.upiLink; } catch {}
   };
 
   const handleWA = () => {
@@ -342,31 +290,27 @@ export default function PrepAccessOverlay({ examId, email }) {
     window.open(pay.waLink, "_blank", "noopener,noreferrer");
   };
 
-  // Submit request: on auto-grant path, instantly show granted banner
   async function submitRequest() {
     if (state.mode === "waiting" || state.mode === "granted") return;
 
     const intentMode = state.mode || "purchase";
     const emailVal = (emailField || "").trim();
-    if (!emailVal) {
-      alert("Please enter your email.");
-      return;
-    }
+    if (!emailVal) { alert("Please enter your email."); return; }
 
     const fd = new FormData();
     fd.append("examId", examId);
-    fd.append("email", emailVal); // used by server + status lookups
-    fd.append("userEmail", emailVal); // harmless extra; some handlers use this name
-    // IMPORTANT: must be "purchase" or "restart" (NOT "start")
+    fd.append("email", emailVal);
+    fd.append("userEmail", emailVal);
+    // IMPORTANT: must be "purchase" or "restart"
     fd.append("intent", intentMode === "purchase" ? "purchase" : "restart");
-    if (nameField) fd.append("name", nameField);
+    if (nameField)  fd.append("name",  nameField);
     if (phoneField) fd.append("phone", phoneField);
 
     const noteBits = [];
-    if (nameField) noteBits.push(`name=${nameField}`);
+    if (nameField)  noteBits.push(`name=${nameField}`);
     if (phoneField) noteBits.push(`phone=${phoneField}`);
     if (upiStartTs) noteBits.push("upi_clicked=1");
-    if (waStartTs) noteBits.push("wa_clicked=1");
+    if (waStartTs)  noteBits.push("wa_clicked=1");
     if (noteBits.length) fd.append("note", noteBits.join("; "));
 
     localStorage.setItem("userEmail", emailVal);
@@ -380,59 +324,42 @@ export default function PrepAccessOverlay({ examId, email }) {
         return;
       }
 
-      // Auto-grant (server approved instantly)
+      // If server immediately auto-granted, show the 15s banner right away
       if (j?.approved) {
-        markApprovedNow();
+        const ts = Date.now();
+        localStorage.setItem(ks.approvedAt, String(ts));
+        localStorage.removeItem(ks.wait);
+        localStorage.removeItem(ks.waitAt);
+        setGrantStartTs(ts);
+        setState(s => ({ ...s, show: true, mode: "granted" }));
+        try { await fetchStatus(); } catch {}
         return;
       }
 
-      // Show “Waiting…” immediately and start polling
+      // Otherwise enter waiting mode and poll
       localStorage.setItem(ks.wait, "1");
       localStorage.setItem(ks.waitAt, String(Date.now()));
-      setState((s) => ({ ...s, mode: "waiting", show: true, waiting: true }));
-
-      const t0 = Date.now();
-      const fastPoll = async () => {
-        const qs = new URLSearchParams({ examId, email: emailVal });
-        try {
-          // Either endpoint becoming positive should flip us to "granted"
-          const status = await getJSON(`/api/prep/access/status?${qs.toString()}`);
-          const a = status?.access?.status || "none";
-          if (a === "active" && !status?.access?.canRestart) {
-            markApprovedNow();
-            return;
-          }
-        } catch {}
-        setTimeout(fastPoll, Date.now() - t0 < 15000 ? 1000 : 5000);
-      };
-      fastPoll();
+      setState(s => ({ ...s, mode: "waiting", show: true }));
     } catch {
       alert("Could not submit right now. Please try again.");
       localStorage.removeItem(ks.wait);
       localStorage.removeItem(ks.waitAt);
-      setState((s) => ({ ...s, waiting: false, mode: "", show: true }));
+      setState(s => ({ ...s, mode: "", show: true }));
     } finally {
       setSubmitting(false);
     }
   }
 
-  function copy(text) {
-    try {
-      navigator.clipboard?.writeText(text);
-    } catch {}
-  }
+  function copy(text) { try { navigator.clipboard?.writeText(text); } catch {} }
 
   /* ----------------------- render -------------------------------- */
-  // Show overlay if: (1) state.show, or (2) loading but we have a waiting marker
   const mustVeil = state.show || (state.loading && !!localStorage.getItem(ks.wait));
   if (!mustVeil) return null;
 
   const title =
-    state.mode === "waiting"
-      ? "Waiting for approval"
-      : state.mode === "granted"
-      ? "Approval granted"
-      : `Start / Restart — ${pay.courseName}`;
+    state.mode === "waiting" ? "Waiting for approval"
+    : state.mode === "granted" ? `Approved — unlocking in ${grantLeft || GRANT_SECONDS}s`
+    : `Start / Restart — ${pay.courseName}`;
 
   const submitDisabled =
     submitting ||
@@ -446,6 +373,28 @@ export default function PrepAccessOverlay({ examId, email }) {
         <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-5">
           <div className="text-lg font-semibold mb-1">{title}</div>
 
+          {/* Granted (15s) banner */}
+          {state.mode === "granted" && (
+            <div className="text-sm text-emerald-700 mb-3">
+              Your access has been approved. We’ll unlock the content and reset your schedule to
+              <b> Day 1</b> automatically in ~{grantLeft || GRANT_SECONDS}s.
+              <div className="mt-2">
+                <button
+                  className="px-3 py-2 rounded bg-emerald-600 text-white"
+                  onClick={() => {
+                    localStorage.removeItem(ks.approvedAt);
+                    localStorage.removeItem(ks.wait);
+                    localStorage.removeItem(ks.waitAt);
+                    try { window.location.reload(); } catch {}
+                  }}
+                >
+                  Unlock now
+                </button>
+              </div>
+            </div>
+          )}
+
+          {/* Waiting spinner */}
           {state.mode === "waiting" && (
             <div className="text-sm text-emerald-700 mb-2 flex items-center gap-2">
               <div className="w-3 h-3 rounded-full border-2 border-emerald-600 border-t-transparent animate-spin" />
@@ -453,53 +402,38 @@ export default function PrepAccessOverlay({ examId, email }) {
             </div>
           )}
 
-          {state.mode === "granted" && (
-            <div className="text-sm text-emerald-700 mb-3">
-              Access granted! Unlocking your content in{" "}
-              <b>{grantLeft}</b> second{grantLeft === 1 ? "" : "s"}…
-            </div>
-          )}
-
+          {/* Steps (only for purchase/restart form) */}
           {state.mode !== "waiting" && state.mode !== "granted" && (
             <div className="flex items-center justify-between text-xs mb-3">
               <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded-full flex items-center justify-center bg-emerald-600 text-white font-semibold">
-                  1
-                </div>
+                <div className="w-6 h-6 rounded-full flex items-center justify-center bg-emerald-600 text-white font-semibold">1</div>
                 <span>Pay via UPI</span>
               </div>
               <div className="flex-1 h-px bg-gray-200 mx-2" />
               <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded-full flex items-center justify-center bg-gray-200 text-gray-700 font-semibold">
-                  2
-                </div>
+                <div className="w-6 h-6 rounded-full flex items-center justify-center bg-gray-200 text-gray-700 font-semibold">2</div>
                 <span>Send Proof</span>
               </div>
               <div className="flex-1 h-px bg-gray-200 mx-2" />
               <div className="flex items-center gap-2">
-                <div className="w-6 h-6 rounded-full flex items-center justify-center bg-gray-200 text-gray-700 font-semibold">
-                  3
-                </div>
+                <div className="w-6 h-6 rounded-full flex items-center justify-center bg-gray-200 text-gray-700 font-semibold">3</div>
                 <span>Submit</span>
               </div>
             </div>
           )}
 
+          {/* Actions (UPI / WhatsApp) */}
           {state.mode !== "waiting" && state.mode !== "granted" && (
             <div className="grid gap-2 mb-3">
               <button
-                className={`w-full py-3 rounded text-white text-lg font-semibold ${
-                  pay.upiLink ? "bg-emerald-600" : "bg-gray-300 cursor-not-allowed"
-                }`}
+                className={`w-full py-3 rounded text-white text-lg font-semibold ${pay.upiLink ? "bg-emerald-600" : "bg-gray-300 cursor-not-allowed"}`}
                 onClick={handleUPI}
                 disabled={!pay.upiLink}
               >
                 Pay via UPI
               </button>
               <button
-                className={`w-full py-3 rounded text-lg font-semibold border ${
-                  pay.waLink ? "bg-white" : "bg-gray-100 cursor-not-allowed"
-                }`}
+                className={`w-full py-3 rounded text-lg font-semibold border ${pay.waLink ? "bg-white" : "bg-gray-100 cursor-not-allowed"}`}
                 onClick={handleWA}
                 disabled={!pay.waLink}
               >
@@ -508,49 +442,36 @@ export default function PrepAccessOverlay({ examId, email }) {
             </div>
           )}
 
+          {/* Tip */}
           {!isAndroid && pay.upiId && state.mode !== "waiting" && state.mode !== "granted" && (
             <div className="text-[12px] text-gray-600 mb-3">
-              Tip: On desktop, copy UPI ID{" "}
-              <code className="bg-gray-100 px-1 rounded">{pay.upiId}</code>{" "}
-              and pay from your phone.{" "}
-              <button className="underline" onClick={() => copy(pay.upiId)}>
-                Copy
-              </button>
+              Tip: On desktop, copy UPI ID <code className="bg-gray-100 px-1 rounded">{pay.upiId}</code>{" "}
+              and pay from your phone. <button className="underline" onClick={() => copy(pay.upiId)}>Copy</button>
             </div>
           )}
 
-          {(upiLeft > 0 || waLeft > 0) &&
-            state.mode !== "waiting" &&
-            state.mode !== "granted" && (
-              <div className="text-[12px] text-gray-700 mb-3">
-                {upiLeft > 0 && (
-                  <div className="mb-1">
-                    After paying, <b>return to this tab</b> to finish. Auto-focus in ~{upiLeft}
-                    s.
-                  </div>
-                )}
-                {waLeft > 0 && (
-                  <div>
-                    After sending the screenshot on WhatsApp, <b>come back here</b>. We’ll bring you
-                    back in ~{waLeft}s.
-                  </div>
-                )}
-              </div>
-            )}
+          {/* Small timers after deep links */}
+          {(upiLeft > 0 || waLeft > 0) && state.mode !== "waiting" && state.mode !== "granted" && (
+            <div className="text-[12px] text-gray-700 mb-3">
+              {upiLeft > 0 && <div className="mb-1">After paying, <b>return to this tab</b> to finish. Auto-focus in ~{upiLeft}s.</div>}
+              {waLeft > 0 && <div>After sending the screenshot on WhatsApp, <b>come back here</b>. We’ll bring you back in ~{waLeft}s.</div>}
+            </div>
+          )}
 
+          {/* Form (hidden in waiting/granted) */}
           {state.mode !== "waiting" && state.mode !== "granted" && (
             <>
               <input
                 className="w-full border rounded px-3 py-2 mb-2"
                 placeholder="Name"
                 value={nameField}
-                onChange={(e) => setName(e.target.value)}
+                onChange={e=>setName(e.target.value)}
               />
               <input
                 className="w-full border rounded px-3 py-2 mb-2"
                 placeholder="Phone Number"
                 value={phoneField}
-                onChange={(e) => setPhone(e.target.value)}
+                onChange={e=>setPhone(e.target.value)}
               />
               <input
                 className="w-full border rounded px-3 py-2 mb-3"
@@ -558,19 +479,23 @@ export default function PrepAccessOverlay({ examId, email }) {
                 required
                 placeholder="Email"
                 value={emailField}
-                onChange={(e) => setEmailField(e.target.value)}
+                onChange={e=>setEmailField(e.target.value)}
               />
             </>
           )}
 
-          <button
-            className="w-full py-3 rounded bg-emerald-600 text-white text-lg font-semibold disabled:opacity-60"
-            onClick={state.mode === "waiting" || state.mode === "granted" ? undefined : submitRequest}
-            disabled={submitDisabled}
-          >
-            {state.mode === "waiting" ? "Waiting…" : state.mode === "granted" ? `Unlocking… ${grantLeft}s` : "Submit"}
-          </button>
+          {/* Primary button */}
+          {state.mode !== "granted" && (
+            <button
+              className="w-full py-3 rounded bg-emerald-600 text-white text-lg font-semibold disabled:opacity-60"
+              onClick={state.mode === "waiting" ? undefined : submitRequest}
+              disabled={submitDisabled}
+            >
+              {state.mode === "waiting" ? "Waiting…" : "Submit"}
+            </button>
+          )}
 
+          {/* Footer note */}
           <div className="text-[11px] text-gray-500 mt-3">
             After approval, your schedule starts again from Day 1 with the original release timings.
           </div>
