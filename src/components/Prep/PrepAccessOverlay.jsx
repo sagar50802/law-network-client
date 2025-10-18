@@ -2,27 +2,23 @@
 import { useEffect, useMemo, useState } from "react";
 import { getJSON, upload as postForm } from "../../utils/api";
 
-/* ------------------------------------------------------------------ */
-/* Component                                                           */
-/* ------------------------------------------------------------------ */
 export default function PrepAccessOverlay({ examId, email }) {
   /* ----------------------- localStorage keys ----------------------- */
   const ks = useMemo(() => {
     const e = String(examId || "").trim();
     const u = String(email || "").trim() || "anon";
     return {
-      wait:     `overlayWaiting:${e}:${u}`,           // "I'm waiting for approval" flag
-      waitAt:   `overlayWaiting:${e}:${u}:at`,        // when waiting started
-      upiStart: `overlayUPIStart:${e}:${u}`,          // UPI click timestamp
-      waStart:  `overlayWAStart:${e}:${u}`,           // WhatsApp click timestamp
-      approvedAt: `overlayApprovedAt:${e}:${u}`,      // when admin approved (for 15s banner)
+      wait:       `overlayWaiting:${e}:${u}`,         // “waiting for approval”
+      waitAt:     `overlayWaiting:${e}:${u}:at`,
+      upiStart:   `overlayUPIStart:${e}:${u}`,
+      waStart:    `overlayWAStart:${e}:${u}`,
+      approvedAt: `overlayApprovedAt:${e}:${u}`,      // start of 15s unlock banner
     };
   }, [examId, email]);
 
   /* ----------------------- component state ------------------------ */
   const [state, setState] = useState({
     loading: true,
-    // if a waiting flag exists on mount, show overlay in "waiting" mode
     show: !!(examId && localStorage.getItem(ks.wait)),
     mode: localStorage.getItem(ks.wait) ? "waiting" : "", // purchase | restart | waiting | granted
     exam: {},
@@ -35,7 +31,7 @@ export default function PrepAccessOverlay({ examId, email }) {
   const [phoneField, setPhone] = useState("");
   const [emailField, setEmailField] = useState(localStorage.getItem("userEmail") || email || "");
 
-  // quick-timers for deep-link guidance
+  // quick, optional “come back to this tab” timers
   const [upiStartTs, setUpiStartTs] = useState(() => Number(localStorage.getItem(ks.upiStart) || 0));
   const [upiLeft, setUpiLeft] = useState(0);
   const [waStartTs, setWaStartTs] = useState(() => Number(localStorage.getItem(ks.waStart) || 0));
@@ -43,7 +39,7 @@ export default function PrepAccessOverlay({ examId, email }) {
   const UPI_SECONDS = 104;
   const WA_SECONDS  = 168;
 
-  // 15s unlock countdown after approval
+  // 15s unlock after approval (survives refresh)
   const GRANT_SECONDS = 15;
   const [grantStartTs, setGrantStartTs] = useState(() => Number(localStorage.getItem(ks.approvedAt) || 0));
   const [grantLeft, setGrantLeft] = useState(0);
@@ -65,16 +61,15 @@ export default function PrepAccessOverlay({ examId, email }) {
     return () => clearInterval(id);
   }, [waStartTs]);
 
-  // 15s "Approved" unlock banner + auto-refresh
+  // granted banner countdown
   useEffect(() => {
     if (!grantStartTs) { setGrantLeft(0); return; }
     const tick = () => {
       const left = Math.max(0, GRANT_SECONDS - Math.floor((Date.now() - grantStartTs) / 1000));
       setGrantLeft(left);
       if (left <= 0) {
-        // countdown finished → clear and hard-refresh to pick up Day-1 reset
+        // end banner → clear & hard refresh to pick up Day-1 reset
         localStorage.removeItem(ks.approvedAt);
-        // Also ensure any stale waiting flags are gone
         localStorage.removeItem(ks.wait);
         localStorage.removeItem(ks.waitAt);
         try { window.location.reload(); } catch {}
@@ -83,13 +78,13 @@ export default function PrepAccessOverlay({ examId, email }) {
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
-  }, [grantStartTs, ks.approvedAt, ks.wait, ks.waitAt]);
+  }, [grantStartTs, ks]);
 
   /* ----------------------- core fetch ------------------------------ */
   async function fetchStatus() {
     if (!examId) return;
 
-    // If "waiting" marker is very old (>15 min), clear it (avoid permanent stick)
+    // drop a very old “waiting” (15 min)
     const startedAt = Number(localStorage.getItem(ks.waitAt) || 0);
     if (startedAt && Date.now() - startedAt > 15 * 60 * 1000) {
       localStorage.removeItem(ks.wait);
@@ -100,75 +95,56 @@ export default function PrepAccessOverlay({ examId, email }) {
       const qs = new URLSearchParams({ examId, email: email || "" });
       const r = await getJSON(`/api/prep/access/status?${qs.toString()}`);
       const { exam, access, overlay } = r || {};
-
-      // === ABSOLUTE RULE ===
-      // If the user is ACTIVE, never show purchase/restart overlay.
-      // Only show the "granted 15s" banner if it is currently running.
-      if (access?.status === "active") {
-        // purge any "waiting" flags
-        localStorage.removeItem(ks.wait);
-        localStorage.removeItem(ks.waitAt);
-
-        const approvedTs = Number(localStorage.getItem(ks.approvedAt) || 0);
-        if (approvedTs) {
-          // Continue / resume the "approved" countdown across refreshes
-          setGrantStartTs(approvedTs);
-          setState(s => ({
-            ...s,
-            loading: false,
-            show: true,
-            mode: "granted",
-            exam: exam || {},
-            access: access || {},
-            overlay: overlay || {},
-          }));
-        } else {
-          // Fully hide overlay when active
-          setState(s => ({
-            ...s,
-            loading: false,
-            show: false,
-            mode: "",
-            exam: exam || {},
-            access: access || {},
-            overlay: overlay || {},
-          }));
-        }
-        if (!emailField && email) setEmailField(email);
-        return; // IMPORTANT: stop here; do not evaluate overlay rules below
-      }
-
-      // Otherwise, decide if we should show purchase/restart or waiting
       const keepWaiting = !!localStorage.getItem(ks.wait);
+      const approvedTs  = Number(localStorage.getItem(ks.approvedAt) || 0);
 
-      let mode = "";
-      let show = false;
-
-      // Prefer server instruction (if your /status provides overlay.show/mode)
-      if (overlay?.show && overlay?.mode) {
-        show = true;
-        mode = overlay.mode; // "purchase" | "restart"
-      } else {
-        // Client-side safety net: show after trial/offset or when restart allowed
-        const todayDay  = Number(r?.access?.todayDay || 1);
-        const trialDays = Number(r?.access?.trialDays ?? exam?.trialDays ?? 0);
-        const offsetDays = Number(exam?.overlay?.offsetDays ?? 0);
-        const threshold = Math.max(trialDays, offsetDays);
-
-        if ((access?.status === "trial" && todayDay > threshold) ||
-            (access?.status === "active" && access?.canRestart)) {
-          show = true;
-          mode = access?.status === "active" && access?.canRestart ? "restart" : "purchase";
-        }
-
-        // If no trial/offset configured at all, still allow showing
-        if (!show && trialDays === 0 && offsetDays === 0 && todayDay > 0) {
-          show = true;
-          mode = access?.status === "active" && access?.canRestart ? "restart" : "purchase";
-        }
+      // 1) If we’re in a granted countdown, always show that banner
+      if (approvedTs) {
+        setGrantStartTs(approvedTs);
+        setState(s => ({
+          ...s,
+          loading: false,
+          show: true,
+          mode: "granted",
+          exam: exam || {},
+          access: access || {},
+          overlay: overlay || {},
+        }));
+        if (!emailField && email) setEmailField(email);
+        return;
       }
 
+      // 2) Monetization rules
+      //    - active & canRestart=false  → hide overlay
+      //    - active & canRestart=true   → show overlay (restart)
+      //    - NOT active                 → show overlay (purchase)
+      let show = false;
+      let mode = "";
+
+      if (access?.status === "active") {
+        if (access?.canRestart) {
+          show = true;
+          mode = "restart";
+        } else {
+          show = false; // fully unlocked — no overlay
+        }
+      } else {
+        // NOT active → must monetize
+        show = true;
+        // prefer server-provided mode if any
+        mode = overlay?.mode === "restart" || overlay?.mode === "purchase"
+          ? overlay.mode
+          : "purchase";
+      }
+
+      // 3) Waiting overrides everything
       if (keepWaiting) { show = true; mode = "waiting"; }
+
+      // 4) Minor fallback if server overlay config exists but we didn’t match above
+      if (!show && overlay?.show && overlay?.mode) {
+        show = true;
+        mode = overlay.mode;
+      }
 
       setState(s => ({
         ...s,
@@ -188,7 +164,7 @@ export default function PrepAccessOverlay({ examId, email }) {
 
   useEffect(() => { fetchStatus(); /* eslint-disable-next-line */ }, [examId, email]);
 
-  // Poll request status when waiting → switch to "granted" 15s banner
+  // Poll while waiting → flip to granted
   useEffect(() => {
     if (state.mode !== "waiting" || !emailField) return;
 
@@ -202,14 +178,12 @@ export default function PrepAccessOverlay({ examId, email }) {
         const j = await getJSON(`/api/prep/access/request/status?${qs.toString()}`);
 
         if (j?.status === "approved") {
-          // mark "approved" to drive the 15s banner (and persist across refresh)
           const ts = Date.now();
           localStorage.setItem(ks.approvedAt, String(ts));
           localStorage.removeItem(ks.wait);
           localStorage.removeItem(ks.waitAt);
           setGrantStartTs(ts);
           setState(s => ({ ...s, show: true, mode: "granted" }));
-          // also refresh server state (now active) — but we stay in "granted" UI
           try { await fetchStatus(); } catch {}
           return;
         }
@@ -234,9 +208,7 @@ export default function PrepAccessOverlay({ examId, email }) {
             return;
           }
         }
-      } catch {
-        // ignore and continue polling
-      }
+      } catch {}
       setTimeout(loop, 3000);
     };
 
@@ -301,7 +273,6 @@ export default function PrepAccessOverlay({ examId, email }) {
     fd.append("examId", examId);
     fd.append("email", emailVal);
     fd.append("userEmail", emailVal);
-    // IMPORTANT: must be "purchase" or "restart"
     fd.append("intent", intentMode === "purchase" ? "purchase" : "restart");
     if (nameField)  fd.append("name",  nameField);
     if (phoneField) fd.append("phone", phoneField);
@@ -324,7 +295,6 @@ export default function PrepAccessOverlay({ examId, email }) {
         return;
       }
 
-      // If server immediately auto-granted, show the 15s banner right away
       if (j?.approved) {
         const ts = Date.now();
         localStorage.setItem(ks.approvedAt, String(ts));
@@ -336,7 +306,6 @@ export default function PrepAccessOverlay({ examId, email }) {
         return;
       }
 
-      // Otherwise enter waiting mode and poll
       localStorage.setItem(ks.wait, "1");
       localStorage.setItem(ks.waitAt, String(Date.now()));
       setState(s => ({ ...s, mode: "waiting", show: true }));
@@ -373,7 +342,7 @@ export default function PrepAccessOverlay({ examId, email }) {
         <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-5">
           <div className="text-lg font-semibold mb-1">{title}</div>
 
-          {/* Granted (15s) banner */}
+          {/* Granted (15s) */}
           {state.mode === "granted" && (
             <div className="text-sm text-emerald-700 mb-3">
               Your access has been approved. We’ll unlock the content and reset your schedule to
@@ -402,7 +371,7 @@ export default function PrepAccessOverlay({ examId, email }) {
             </div>
           )}
 
-          {/* Steps (only for purchase/restart form) */}
+          {/* Steps */}
           {state.mode !== "waiting" && state.mode !== "granted" && (
             <div className="flex items-center justify-between text-xs mb-3">
               <div className="flex items-center gap-2">
@@ -422,7 +391,7 @@ export default function PrepAccessOverlay({ examId, email }) {
             </div>
           )}
 
-          {/* Actions (UPI / WhatsApp) */}
+          {/* Pay / WhatsApp buttons */}
           {state.mode !== "waiting" && state.mode !== "granted" && (
             <div className="grid gap-2 mb-3">
               <button
@@ -450,7 +419,7 @@ export default function PrepAccessOverlay({ examId, email }) {
             </div>
           )}
 
-          {/* Small timers after deep links */}
+          {/* Small timers */}
           {(upiLeft > 0 || waLeft > 0) && state.mode !== "waiting" && state.mode !== "granted" && (
             <div className="text-[12px] text-gray-700 mb-3">
               {upiLeft > 0 && <div className="mb-1">After paying, <b>return to this tab</b> to finish. Auto-focus in ~{upiLeft}s.</div>}
@@ -489,13 +458,16 @@ export default function PrepAccessOverlay({ examId, email }) {
             <button
               className="w-full py-3 rounded bg-emerald-600 text-white text-lg font-semibold disabled:opacity-60"
               onClick={state.mode === "waiting" ? undefined : submitRequest}
-              disabled={submitDisabled}
+              disabled={
+                submitting ||
+                state.mode === "waiting" ||
+                !(emailField && emailField.trim())
+              }
             >
               {state.mode === "waiting" ? "Waiting…" : "Submit"}
             </button>
           )}
 
-          {/* Footer note */}
           <div className="text-[11px] text-gray-500 mt-3">
             After approval, your schedule starts again from Day 1 with the original release timings.
           </div>
