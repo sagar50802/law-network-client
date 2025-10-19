@@ -22,7 +22,7 @@ import AdminDashboard from "./pages/AdminDashboard.jsx";
 import AdminLogin from "./pages/AdminLogin.jsx";
 import AdminConsultancyEditor from "./components/Admin/AdminConsultancyEditor.jsx";
 
-/* ---------- Research Navigation ---------- */
+/* ---------- Research Navigation (NEW) ---------- */
 import ResearchNav from "./components/ResearchNav/ResearchNav.jsx";
 import LabWizard from "./components/ResearchNav/LabWizard.jsx";
 import ResearchAdminPanel from "./components/ResearchNavAdmin/AdminPanel.jsx";
@@ -117,9 +117,17 @@ export default function App() {
             <Route path="/plagiarism" element={<Plagiarism />} />
             <Route path="/pdfdemo" element={<PdfDemo />} />
 
-            {/* ---------- Research Navigation (Hub + Sub-Wizard) ---------- */}
+            {/* ---------- Research Navigation (Hub + Sub-Wizard + Admin) ---------- */}
             <Route path="/research-nav" element={<ResearchNav />} />
             <Route path="/research-nav/lab" element={<LabWizard />} />
+            <Route
+              path="/admin/research"
+              element={
+                <AdminRoute>
+                  <ResearchAdminPanel />
+                </AdminRoute>
+              }
+            />
 
             {/* ---------- Exam Prep ---------- */}
             <Route path="/prep" element={<PrepList />} />
@@ -204,16 +212,6 @@ export default function App() {
               element={
                 <AdminRoute>
                   <AdminConsultancyEditor />
-                </AdminRoute>
-              }
-            />
-
-            {/* ---------- Research Admin ---------- */}
-            <Route
-              path="/admin/research"
-              element={
-                <AdminRoute>
-                  <ResearchAdminPanel />
                 </AdminRoute>
               }
             />
