@@ -32,18 +32,19 @@ import TestPlayer from "./pages/testseries/TestPlayer.jsx";
 import ResultScreen from "./pages/testseries/ResultScreen.jsx";
 import AdminTestImporter from "./pages/testseries/AdminTestImporter.jsx";
 import AdminTestResults from "./pages/testseries/AdminTestResults.jsx";
-
-// ✅ NEW: Admin Test Manager page
 import AdminTestManager from "./pages/testseries/AdminTestManager.jsx";
 
 import IfOwnerOnly from "./components/common/IfOwnerOnly.jsx";
 import "./styles/ui.css";
 
-/* ✅ NEW: Research Navigation (User) */
+/* ✅ NEW: Research Navigation (Main Hub) */
 import ResearchNav from "./components/ResearchNav/ResearchNav.jsx";
+/* ✅ NEW: Lab Wizard (Sub-Wizard under ResearchNav) */
+import LabWizard from "./components/ResearchNav/LabWizard.jsx";
 /* ✅ NEW: Research Admin Panel */
 import ResearchAdminPanel from "./components/ResearchNavAdmin/AdminPanel.jsx";
 
+/* ---------- Helpers ---------- */
 function NotFound() {
   return (
     <div className="flex flex-col items-center justify-center py-24 text-center">
@@ -91,6 +92,7 @@ function RouteWithResultId({ Comp }) {
   return <Comp id={id} />;
 }
 
+/* ---------- Main ---------- */
 export default function App() {
   return (
     <Router>
@@ -114,8 +116,9 @@ export default function App() {
             <Route path="/plagiarism" element={<Plagiarism />} />
             <Route path="/pdfdemo" element={<PdfDemo />} />
 
-            {/* ✅ NEW: Research Navigation (User Journey) */}
+            {/* ✅ Research Navigation (Hub + Sub-Wizard) */}
             <Route path="/research-nav" element={<ResearchNav />} />
+            <Route path="/research-nav/lab" element={<LabWizard />} />
 
             {/* Prep */}
             <Route path="/prep" element={<PrepList />} />
@@ -169,7 +172,7 @@ export default function App() {
               }
             />
 
-            {/* Admin: Results page (kept) */}
+            {/* Admin: Results page */}
             <Route
               path="/owner/tests/results"
               element={
@@ -179,7 +182,7 @@ export default function App() {
               }
             />
 
-            {/* ✅ Admin: Tests Manager (delete from UI) */}
+            {/* Admin: Tests Manager */}
             <Route
               path="/owner/tests"
               element={
@@ -208,7 +211,7 @@ export default function App() {
               }
             />
 
-            {/* ✅ NEW: Research Admin Panel */}
+            {/* ✅ Research Admin Panel */}
             <Route
               path="/admin/research"
               element={
