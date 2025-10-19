@@ -1,8 +1,8 @@
-// src/components/ResearchNav/ResearchNav.jsx
 import React, { useEffect, useMemo, useRef, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
+import { Link } from "react-router-dom";
 
-/* ───────────────────────────── Milestones ───────────────────────────── */
+/* ---------- Steps ---------- */
 const STEPS = [
   { id: "idea", label: "Idea", icon: "💡", need: ["title"], etaMin: 6 },
   { id: "review", label: "Review", icon: "🔎", need: ["lit"], etaMin: 10 },
@@ -23,21 +23,16 @@ const INITIAL = {
   paymentProofName: "",
 };
 
-/* 🦚 Peacock Theme */
 const PALETTE = {
   paper: "#0b2f2d",
   card: "#0f3a38",
   border: "#1d514e",
   ink: "#f6f8f7",
   inkSoft: "#c1d6d2",
-  blue: "#3fe2bf",
-  blueSoft: "#88f7dd",
-  mint: "#1bbf8a",
 };
-
 const LS_KEY = "researchnav:soft3d:strict";
 
-/* ─────────────────────────── Gating / Progress (unchanged) ─────────────────────────── */
+/* ---------- Helpers ---------- */
 function gate(form) {
   const out = [];
   let lock = false;
@@ -54,7 +49,6 @@ function gate(form) {
     out.push({ ...s, state: ok ? "completed" : "in_progress" });
     if (!ok) lock = true;
   }
-  // Payment only unlocks once Method is complete
   const mOK = (STEPS.find((x) => x.id === "method").need || []).every(
     (r) => !!form[r]
   );
@@ -69,7 +63,6 @@ const pct = (g) =>
       100
   );
 
-/* ───────────────────────── Typewriter hook (unchanged) ───────────────────────── */
 function useTypewriter(text, speed = 16) {
   const [out, setOut] = useState("");
   const t = useRef(null);
@@ -87,7 +80,7 @@ function useTypewriter(text, speed = 16) {
   return out;
 }
 
-/* ─────────────────────── Peacock Background ─────────────────────── */
+/* ---------- Backdrop ---------- */
 function StudioBackdrop() {
   return (
     <div className="fixed inset-0 -z-10 pointer-events-none">
@@ -98,7 +91,6 @@ function StudioBackdrop() {
             "linear-gradient(180deg,#053532 0%, #085a54 50%, #0b2f2d 100%)",
         }}
       />
-      {/* soft diagonal water reflection */}
       <div
         className="absolute inset-0 opacity-[.12] animate-[shimmer_6s_linear_infinite]"
         style={{
@@ -117,11 +109,9 @@ function StudioBackdrop() {
   );
 }
 
-/* ───────────────────── Domino’s-style tracker (only completed + current) ───────────────────── */
+/* ---------- Domino Tracker ---------- */
 function DominoTracker({ gates, activeId, onSelect }) {
-  // Only show completed + the first in_progress (current). No future steps.
   const visible = gates.filter((s) => s.state !== "locked");
-
   return (
     <div
       className="rounded-2xl p-3 border shadow-md overflow-x-auto"
@@ -148,7 +138,6 @@ function DominoTracker({ gates, activeId, onSelect }) {
                 borderColor: PALETTE.border,
                 color: PALETTE.ink,
               }}
-              title={STEPS.find((x) => x.id === s.id)?.label}
             >
               <span
                 className={[
@@ -160,18 +149,14 @@ function DominoTracker({ gates, activeId, onSelect }) {
                     : "text-[#88f7dd] border-[#295e59]",
                 ].join(" ")}
               >
-                {STEPS.find((x) => x.id === s.id)?.icon}
+                {s.icon}
               </span>
               <div className="text-left">
-                <div className="font-semibold">
-                  {STEPS.find((x) => x.id === s.id)?.label}
-                </div>
+                <div className="font-semibold">{s.label}</div>
                 <div className="text-xs opacity-80">
                   {isDone ? "Completed ✓" : isActive ? "In progress" : "Ready"}
                 </div>
               </div>
-
-              {/* connector between visible tiles */}
               {i < visible.length - 1 && (
                 <div
                   className="mx-2 flex-0 w-12 h-1 rounded-full"
@@ -190,7 +175,7 @@ function DominoTracker({ gates, activeId, onSelect }) {
   );
 }
 
-/* ─────────────────────────────── Wizard Modal (closable + scroll-safe) ─────────────────────────────── */
+/* ---------- Wizard Modal ---------- */
 function WizardModal({ open, onClose, children, title, subtitle, complete }) {
   if (!open) return null;
   return (
@@ -202,12 +187,15 @@ function WizardModal({ open, onClose, children, title, subtitle, complete }) {
     >
       <motion.div
         className="w-full max-w-3xl rounded-2xl border shadow-2xl overflow-hidden"
-        style={{ background: PALETTE.card, borderColor: PALETTE.border, color: PALETTE.ink }}
+        style={{
+          background: PALETTE.card,
+          borderColor: PALETTE.border,
+          color: PALETTE.ink,
+        }}
         initial={{ scale: 0.92, opacity: 0 }}
         animate={{ scale: 1, opacity: 1 }}
         exit={{ scale: 0.92, opacity: 0 }}
       >
-        {/* header */}
         <div
           className="flex items-center justify-between px-5 py-3 border-b"
           style={{ borderColor: PALETTE.border, background: "#0b3b38" }}
@@ -225,34 +213,30 @@ function WizardModal({ open, onClose, children, title, subtitle, complete }) {
                   borderColor: PALETTE.border,
                   color: "#00ffd9",
                 }}
-                title="All required fields are filled"
               >
                 Completed ✓
               </span>
             )}
             <button
               onClick={onClose}
-              className="px-3 py-1.5 rounded-md text-sm"
+              className="px-3 py-1.5 rounded-md text-sm border"
               style={{
-                border: `1px solid ${PALETTE.border}`,
+                borderColor: PALETTE.border,
                 background: "#ffffff10",
                 color: PALETTE.ink,
               }}
-              title="Close"
             >
               ✕
             </button>
           </div>
         </div>
-
-        {/* body */}
         <div className="p-5 max-h-[72vh] overflow-y-auto">{children}</div>
       </motion.div>
     </motion.div>
   );
 }
 
-/* ─────────────────────────────── Step Form (inside wizard) ─────────────────────────────── */
+/* ---------- Step Form ---------- */
 function StepForm({ stepId, form, setForm, onNext }) {
   const t = STEPS.find((s) => s.id === stepId);
   const tw = useTypewriter(
@@ -282,15 +266,13 @@ function StepForm({ stepId, form, setForm, onNext }) {
       <div className="mb-3 font-mono text-[#00ffd9]">{tw}</div>
 
       {stepId === "idea" && (
-        <div className="space-y-3">
-          <input
-            name="title"
-            value={form.title}
-            onChange={handleChange}
-            placeholder="Enter your research title"
-            className="w-full px-3 py-2 rounded-lg border bg-[#022f2d] text-[#f6f8f7] border-[#1d514e] focus:outline-none focus:ring-2 focus:ring-[#00ffd9]/50"
-          />
-        </div>
+        <input
+          name="title"
+          value={form.title}
+          onChange={handleChange}
+          placeholder="Enter your research title"
+          className="w-full px-3 py-2 rounded-lg border bg-[#022f2d] text-[#f6f8f7] border-[#1d514e]"
+        />
       )}
 
       {stepId === "review" && (
@@ -300,42 +282,41 @@ function StepForm({ stepId, form, setForm, onNext }) {
           onChange={handleChange}
           rows={6}
           placeholder="Brief literature review or references"
-          className="w-full px-3 py-2 rounded-lg border bg-[#022f2d] text-[#f6f8f7] border-[#1d514e] focus:outline-none focus:ring-2 focus:ring-[#00ffd9]/50"
+          className="w-full px-3 py-2 rounded-lg border bg-[#022f2d] text-[#f6f8f7] border-[#1d514e]"
         />
       )}
 
       {stepId === "method" && (
-        <div className="space-y-3">
+        <>
           <textarea
             name="method"
             value={form.method}
             onChange={handleChange}
             rows={6}
             placeholder="Methodology outline"
-            className="w-full px-3 py-2 rounded-lg border bg-[#022f2d] text-[#f6f8f7] border-[#1d514e] focus:outline-none focus:ring-2 focus:ring-[#00ffd9]/50"
+            className="w-full px-3 py-2 rounded-lg border bg-[#022f2d] text-[#f6f8f7] border-[#1d514e]"
           />
           <input
             name="tools"
             value={form.tools}
             onChange={handleChange}
             placeholder="Tools / software"
-            className="w-full px-3 py-2 rounded-lg border bg-[#022f2d] text-[#f6f8f7] border-[#1d514e] focus:outline-none focus:ring-2 focus:ring-[#00ffd9]/50"
+            className="w-full px-3 py-2 mt-3 rounded-lg border bg-[#022f2d] text-[#f6f8f7] border-[#1d514e]"
           />
-        </div>
+        </>
       )}
 
       {stepId === "payment" && (
         <div className="space-y-3">
-          <div className="flex items-center gap-2">
+          <label className="flex items-center gap-2">
             <input
               type="checkbox"
               name="paymentVerified"
               checked={form.paymentVerified}
               onChange={handleChange}
-              id="paymentVerified"
             />
-            <label htmlFor="paymentVerified">Payment Verified</label>
-          </div>
+            <span>Payment Verified</span>
+          </label>
           <input
             type="file"
             name="paymentProofName"
@@ -348,11 +329,7 @@ function StepForm({ stepId, form, setForm, onNext }) {
       <div className="mt-4 flex justify-end">
         <button
           onClick={onNext}
-          className="px-4 py-2 rounded-lg font-semibold"
-          style={{
-            background: "#00ffd9",
-            color: "#022724",
-          }}
+          className="px-4 py-2 rounded-lg font-semibold bg-[#00ffd9] text-[#022724]"
         >
           Next →
         </button>
@@ -361,7 +338,7 @@ function StepForm({ stepId, form, setForm, onNext }) {
   );
 }
 
-/* ─────────────────────────────── Completion Toast ─────────────────────────────── */
+/* ---------- Completion Toast ---------- */
 function CompletionToast({ label }) {
   if (!label) return null;
   return (
@@ -373,12 +350,8 @@ function CompletionToast({ label }) {
       className="fixed top-16 right-6 z-40"
     >
       <div
-        className="px-3 py-2 rounded-lg shadow-lg border text-sm"
-        style={{
-          background: "#022f2d",
-          borderColor: "#1d514e",
-          color: "#e5f7f4",
-        }}
+        className="px-3 py-2 rounded-lg shadow-lg border text-sm bg-[#022f2d] text-[#e5f7f4]"
+        style={{ borderColor: "#1d514e" }}
       >
         ✓ Completed: <span className="font-semibold">{label}</span>
       </div>
@@ -386,7 +359,7 @@ function CompletionToast({ label }) {
   );
 }
 
-/* ─────────────────────────────── Main Component ─────────────────────────────── */
+/* ---------- Main Component ---------- */
 export default function ResearchNav() {
   const [form, setForm] = useState(() => {
     try {
@@ -404,31 +377,24 @@ export default function ResearchNav() {
   const order = STEPS.map((s) => s.id);
   const progress = pct(gates);
 
-  const isStepComplete = (stepId) => {
-    const st = STEPS.find((s) => s.id === stepId);
-    if (!st) return false;
-    return (st.need || []).every((k) => !!form[k]);
+  const isStepComplete = (id) => {
+    const s = STEPS.find((x) => x.id === id);
+    return s && (s.need || []).every((k) => !!form[k]);
   };
 
   const handleNext = () => {
     if (isStepComplete(activeId)) {
-      const label = STEPS.find((s) => s.id === activeId)?.label || "";
+      const label = STEPS.find((s) => s.id === activeId)?.label;
       setJustCompleted(label);
       setTimeout(() => setJustCompleted(""), 1600);
     }
     const idx = order.indexOf(activeId);
-    if (idx < order.length - 1) {
-      setActiveId(order[idx + 1]);
-      setWizardOpen(true);
-    }
+    if (idx < order.length - 1) setActiveId(order[idx + 1]);
   };
 
   const handleSelectFromTracker = (id) => {
-    // Allow editing completed steps and the current step only (no future)
-    const visibleIds = gates.filter((s) => s.state !== "locked").map((s) => s.id);
-    if (!visibleIds.includes(id)) return;
-    setActiveId(id);
-    setWizardOpen(true);
+    const visible = gates.filter((s) => s.state !== "locked").map((s) => s.id);
+    if (visible.includes(id)) setActiveId(id);
   };
 
   useEffect(() => {
@@ -442,7 +408,7 @@ export default function ResearchNav() {
     <div className="min-h-screen font-sans relative overflow-x-hidden">
       <StudioBackdrop />
 
-      {/* Header with modern progress bar */}
+      {/* Header */}
       <header
         className="sticky top-0 z-30 backdrop-blur border-b px-6 py-3"
         style={{
@@ -453,26 +419,34 @@ export default function ResearchNav() {
       >
         <div className="max-w-6xl mx-auto flex items-center justify-between">
           <h1 className="text-lg font-semibold">Research Navigation</h1>
-          <div className="flex items-center gap-3 text-sm text-[#9de1d6]">
-            <span>{progress}% Complete</span>
-            <div className="w-36 h-2 rounded-full bg-[#0a4d47] overflow-hidden border border-[#1d514e]">
-              <motion.div
-                className="h-full"
-                style={{
-                  background:
-                    "linear-gradient(90deg,#00ffd9 0%, #3fe2bf 100%)",
-                  boxShadow: "0 0 14px rgba(0,255,217,.35)",
-                }}
-                initial={{ width: 0 }}
-                animate={{ width: `${progress}%` }}
-                transition={{ duration: 0.6 }}
-              />
+          <div className="flex items-center gap-4">
+            <div className="flex items-center gap-3 text-sm text-[#9de1d6]">
+              <span>{progress}%</span>
+              <div className="w-36 h-2 rounded-full bg-[#0a4d47] overflow-hidden border border-[#1d514e]">
+                <motion.div
+                  className="h-full"
+                  style={{
+                    background:
+                      "linear-gradient(90deg,#00ffd9 0%, #3fe2bf 100%)",
+                    boxShadow: "0 0 14px rgba(0,255,217,.35)",
+                  }}
+                  animate={{ width: `${progress}%` }}
+                  transition={{ duration: 0.6 }}
+                />
+              </div>
             </div>
+
+            {/* Enter LabWizard button */}
+            <Link
+              to="/research-nav/lab"
+              className="px-3 py-1.5 rounded-lg bg-[#00ffd9] text-[#022724] font-semibold hover:bg-[#1bbf8a] transition"
+            >
+              Enter LabWizard →
+            </Link>
           </div>
         </div>
       </header>
 
-      {/* Tracker + helper text */}
       <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6 space-y-6">
         <DominoTracker
           gates={gates}
@@ -487,7 +461,6 @@ export default function ResearchNav() {
         </div>
       </main>
 
-      {/* Wizard for the active step (closable) */}
       <AnimatePresence>
         {wizardOpen && current && current.id !== "done" && (
           <WizardModal
@@ -511,14 +484,9 @@ export default function ResearchNav() {
         )}
       </AnimatePresence>
 
-      {/* Completion toast */}
       <AnimatePresence>
         {justCompleted && <CompletionToast label={justCompleted} />}
       </AnimatePresence>
     </div>
   );
 }
-
-/* ───────── Components kept but not rendered (no preview/summary UI now) ───────── */
-// LivePreview & SummaryPopup are intentionally not mounted to match your request.
-// They’re preserved in your repo history if you need to re-enable them later.
