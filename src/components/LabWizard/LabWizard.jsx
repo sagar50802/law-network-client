@@ -61,6 +61,19 @@ const writeLS = (k, v) => {
   } catch {}
 };
 
+/* Best-effort user email getter for backend progress pings */
+function getUserEmail() {
+  try {
+    // common places apps store it
+    const fromLS = localStorage.getItem("user:email") || localStorage.getItem("auth:email");
+    if (fromLS) return JSON.parse(fromLS) || fromLS;
+  } catch {}
+  try {
+    if (window.__USER?.email) return window.__USER.email;
+  } catch {}
+  return "anonymous";
+}
+
 /* ───────────────────────────── BACKDROP ───────────────────────────── */
 function PeacockBackdrop() {
   return (
@@ -189,11 +202,40 @@ const emptyProposal = {
   labOption: "", // "self" | "pro"
 };
 
+async function sendProgressPing({ data, step }) {
+  try {
+    const userEmail = getUserEmail();
+    await fetch("/api/labwizard/submit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: userEmail || "anonymous",
+        module: "proposal",
+        data,
+        step,
+        percent: Math.round(((step + 1) / PROPOSAL_STEPS.length) * 100),
+        labOption: data?.labOption || "",
+      }),
+    });
+  } catch (e) {
+    // non-blocking; swallow network errors
+    console.warn("LabWizard progress ping failed:", e?.message || e);
+  }
+}
+
 function ProposalWizard({ onClose }) {
   const [data, setData] = useState(() => readLS("proposal:data", emptyProposal));
   const [step, setStep] = useState(() => readLS("proposal:step", 0));
 
-  const next = () => setStep(s => Math.min(s + 1, PROPOSAL_STEPS.length - 1));
+  const next = async () => {
+    const target = Math.min(step + 1, PROPOSAL_STEPS.length - 1);
+    setStep(target);
+    // Persist to LS first so UI matches what we send
+    writeLS("proposal:step", target);
+    writeLS("proposal:data", data);
+    // Backend progress ping
+    await sendProgressPing({ data, step: target });
+  };
   const prev = () => setStep(s => Math.max(s - 1, 0));
   const go = (n) => setStep(() => n);
 
@@ -216,6 +258,12 @@ function ProposalWizard({ onClose }) {
       : step === 1
       ? !!data.labOption
       : true;
+
+  const handleDone = async () => {
+    // final confirmation ping
+    await sendProgressPing({ data, step });
+    onClose?.();
+  };
 
   return (
     <motion.div
@@ -387,7 +435,7 @@ function ProposalWizard({ onClose }) {
               </button>
             ) : (
               <button
-                onClick={onClose}
+                onClick={handleDone}
                 className="px-4 py-2 rounded-lg font-semibold"
                 style={{ background: THEME.success, color: "white" }}
               >
