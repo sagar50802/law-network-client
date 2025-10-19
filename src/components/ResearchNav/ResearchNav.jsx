@@ -1,492 +1,631 @@
-import React, { useEffect, useMemo, useRef, useState } from "react";
+import React, { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
-import { Link } from "react-router-dom";
+import { useNavigate } from "react-router-dom";
 
-/* ---------- Steps ---------- */
-const STEPS = [
-  { id: "idea", label: "Idea", icon: "💡", need: ["title"], etaMin: 6 },
-  { id: "review", label: "Review", icon: "🔎", need: ["lit"], etaMin: 10 },
-  { id: "method", label: "Method", icon: "🧪", need: ["method"], etaMin: 12 },
-  { id: "payment", label: "Payment", icon: "💳", need: [], etaMin: 3 },
-  { id: "done", label: "Submission", icon: "🏁", need: [], etaMin: 0 },
-];
-
-const INITIAL = {
-  title: "",
-  lit: "",
-  method: "",
-  start: "",
-  end: "",
-  notes: "",
-  tools: "",
-  paymentVerified: false,
-  paymentProofName: "",
-};
-
-const PALETTE = {
-  paper: "#0b2f2d",
+/* ───────────────────────────── THEME (Peacock) ───────────────────────────── */
+const THEME = {
+  pageGrad: "linear-gradient(180deg,#053532 0%, #085a54 50%, #0b2f2d 100%)",
   card: "#0f3a38",
+  paper: "#022f2d",
   border: "#1d514e",
   ink: "#f6f8f7",
   inkSoft: "#c1d6d2",
+  aqua: "#00ffd9",
+  success: "#1bbf8a",
 };
-const LS_KEY = "researchnav:soft3d:strict";
 
-/* ---------- Helpers ---------- */
-function gate(form) {
-  const out = [];
-  let lock = false;
-  for (const s of STEPS) {
-    if (s.id === "done") {
-      out.push({ ...s, state: "locked" });
-      continue;
-    }
-    if (lock) {
-      out.push({ ...s, state: "locked" });
-      continue;
-    }
-    const ok = (s.need || []).every((k) => !!form[k]);
-    out.push({ ...s, state: ok ? "completed" : "in_progress" });
-    if (!ok) lock = true;
+/* ───────────────────────────── DATA / OPTIONS ───────────────────────────── */
+const STREAMS = ["10th", "12th", "UG", "PG", "PhD"];
+
+const GOV_DEPTS = [
+  "Agriculture & Farmers Welfare",
+  "Education (MoE)",
+  "Health & Family Welfare",
+  "Home Affairs",
+  "Law & Justice",
+  "Environment, Forest & Climate Change",
+  "Electronics & IT",
+  "Science & Technology",
+  "Social Justice & Empowerment",
+  "Women & Child Development",
+];
+
+const UGC_SUBJECTS = [
+  "Political Science",
+  "Law / Jurisprudence",
+  "Economics",
+  "Sociology",
+  "Public Administration",
+  "Computer Science",
+  "Management",
+  "History",
+  "Philosophy",
+];
+
+/* ───────────────────────────── LOCAL STORAGE ───────────────────────────── */
+const LS_PREFIX = "labwizard:v1:";
+
+const readLS = (k, fb) => {
+  try {
+    const v = JSON.parse(localStorage.getItem(LS_PREFIX + k));
+    return v ?? fb;
+  } catch {
+    return fb;
   }
-  const mOK = (STEPS.find((x) => x.id === "method").need || []).every(
-    (r) => !!form[r]
-  );
-  const pay = out.find((x) => x.id === "payment");
-  if (pay) pay.state = mOK ? "in_progress" : "locked";
-  return out;
-}
-const pct = (g) =>
-  Math.round(
-    (g.filter((s) => s.id !== "done" && s.state === "completed").length /
-      (STEPS.length - 1)) *
-      100
-  );
+};
+const writeLS = (k, v) => {
+  try {
+    localStorage.setItem(LS_PREFIX + k, JSON.stringify(v));
+  } catch {}
+};
 
-function useTypewriter(text, speed = 16) {
-  const [out, setOut] = useState("");
-  const t = useRef(null);
-  useEffect(() => {
-    if (t.current) clearInterval(t.current);
-    setOut("");
-    let i = 0;
-    t.current = setInterval(() => {
-      setOut(text.slice(0, i));
-      i++;
-      if (i > text.length) clearInterval(t.current);
-    }, Math.max(8, speed));
-    return () => clearInterval(t.current);
-  }, [text, speed]);
-  return out;
+function getUserEmail() {
+  try {
+    const fromLS =
+      localStorage.getItem("user:email") || localStorage.getItem("auth:email");
+    if (fromLS) return JSON.parse(fromLS) || fromLS;
+  } catch {}
+  try {
+    if (window.__USER?.email) return window.__USER.email;
+  } catch {}
+  return "anonymous";
 }
 
-/* ---------- Backdrop ---------- */
-function StudioBackdrop() {
-  return (
-    <div className="fixed inset-0 -z-10 pointer-events-none">
-      <div
-        className="absolute inset-0"
-        style={{
-          background:
-            "linear-gradient(180deg,#053532 0%, #085a54 50%, #0b2f2d 100%)",
-        }}
-      />
-      <div
-        className="absolute inset-0 opacity-[.12] animate-[shimmer_6s_linear_infinite]"
-        style={{
-          backgroundImage:
-            "linear-gradient(135deg, rgba(0,255,217,.15) 0%, transparent 40%, rgba(0,255,217,.15) 80%)",
-          backgroundSize: "200% 200%",
-        }}
-      />
-      <style>{`
-        @keyframes shimmer {
-          0% { background-position: 0% 0%; }
-          100% { background-position: 200% 200%; }
-        }
-      `}</style>
-    </div>
-  );
-}
-
-/* ---------- Domino Tracker ---------- */
-function DominoTracker({ gates, activeId, onSelect }) {
-  const visible = gates.filter((s) => s.state !== "locked");
-  return (
-    <div
-      className="rounded-2xl p-3 border shadow-md overflow-x-auto"
-      style={{ background: PALETTE.card, borderColor: PALETTE.border }}
-    >
-      <div className="flex items-stretch gap-2 min-w-[560px]">
-        {visible.map((s, i) => {
-          const isActive = s.id === activeId;
-          const isDone = s.state === "completed";
-          return (
-            <button
-              key={s.id}
-              onClick={() => onSelect?.(s.id)}
-              className={[
-                "flex-1 flex items-center gap-3 px-4 py-3 rounded-xl border transition-all",
-                isActive
-                  ? "ring-2 ring-[#00ffd9]/50"
-                  : "hover:bg-[#0b403d]/40",
-              ].join(" ")}
-              style={{
-                background: isDone
-                  ? "linear-gradient(180deg,#0a443f,#093a36)"
-                  : "#0c3d3a",
-                borderColor: PALETTE.border,
-                color: PALETTE.ink,
-              }}
-            >
-              <span
-                className={[
-                  "w-8 h-8 grid place-items-center rounded-full text-lg border",
-                  isDone
-                    ? "bg-[#1bbf8a] text-white border-transparent"
-                    : isActive
-                    ? "text-[#00ffd9] border-[#00ffd9]"
-                    : "text-[#88f7dd] border-[#295e59]",
-                ].join(" ")}
-              >
-                {s.icon}
-              </span>
-              <div className="text-left">
-                <div className="font-semibold">{s.label}</div>
-                <div className="text-xs opacity-80">
-                  {isDone ? "Completed ✓" : isActive ? "In progress" : "Ready"}
-                </div>
-              </div>
-              {i < visible.length - 1 && (
-                <div
-                  className="mx-2 flex-0 w-12 h-1 rounded-full"
-                  style={{
-                    background:
-                      "linear-gradient(90deg,#00ffd9 0%, #3fe2bf 100%)",
-                    boxShadow: "0 0 10px rgba(0,255,217,.35)",
-                  }}
-                />
-              )}
-            </button>
-          );
-        })}
-      </div>
-    </div>
-  );
-}
-
-/* ---------- Wizard Modal ---------- */
-function WizardModal({ open, onClose, children, title, subtitle, complete }) {
-  if (!open) return null;
+/* ───────────────────────────── MODULE CARD (Dropdown) ───────────────────────────── */
+function ModuleCard({ title, subtitle, badge, open, onToggle, children, disabled }) {
   return (
     <motion.div
-      className="fixed inset-0 bg-black/60 backdrop-blur-sm z-50 flex items-center justify-center p-4"
+      layout
+      className="rounded-2xl border shadow-lg overflow-hidden"
+      style={{ background: THEME.card, borderColor: THEME.border, color: THEME.ink }}
+      initial={{ opacity: 0, y: 10 }}
+      animate={{ opacity: 1, y: 0 }}
+    >
+      <button
+        onClick={onToggle}
+        disabled={disabled}
+        className="w-full text-left px-5 py-4 flex items-center gap-4 disabled:opacity-60"
+      >
+        <div
+          className="h-10 w-10 rounded-xl grid place-items-center"
+          style={{ background: "#033532", border: `1px solid ${THEME.border}` }}
+        >
+          <span aria-hidden>🧪</span>
+        </div>
+        <div className="flex-1">
+          <div className="flex items-center gap-2">
+            <h3 className="text-lg font-semibold">{title}</h3>
+            {badge && (
+              <span
+                className="text-xs px-2 py-0.5 rounded-full"
+                style={{
+                  background: "#033532",
+                  border: `1px solid ${THEME.border}`,
+                  color: THEME.aqua,
+                }}
+              >
+                {badge}
+              </span>
+            )}
+          </div>
+          {subtitle && <div className="text-sm" style={{ color: THEME.inkSoft }}>{subtitle}</div>}
+        </div>
+        <div
+          className="ml-3 text-sm px-3 py-1 rounded-full"
+          style={{ background: "#033532", border: `1px solid ${THEME.border}`, color: THEME.aqua }}
+        >
+          {open ? "Hide" : "Open"}
+        </div>
+      </button>
+
+      <AnimatePresence initial={false}>
+        {open && (
+          <motion.div
+            key="content"
+            initial={{ height: 0, opacity: 0 }}
+            animate={{ height: "auto", opacity: 1 }}
+            exit={{ height: 0, opacity: 0 }}
+            className="px-5 pb-5"
+          >
+            <div
+              className="rounded-xl p-4"
+              style={{ background: THEME.paper, border: `1px solid ${THEME.border}` }}
+            >
+              {children}
+            </div>
+          </motion.div>
+        )}
+      </AnimatePresence>
+    </motion.div>
+  );
+}
+
+/* ───────────────────────────── PROPOSAL WIZARD (Details → Lab → Preview) ───────────────────────────── */
+
+const PROPOSAL_STEPS = ["Details", "Lab", "Preview"];
+
+const emptyProposal = {
+  name: "",
+  gender: "Male",
+  nationality: "",
+  place: "",
+  university: "",
+  stream: "",
+  researchAreaDept: "",
+  researchAreaSubject: "",
+  title: "",
+  abstract: "",
+  pages: "",
+  labOption: "self", // default selection
+};
+
+async function sendProgressPing({ data, step }) {
+  try {
+    const userEmail = getUserEmail();
+    await fetch("/api/labwizard/submit", {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify({
+        email: userEmail || "anonymous",
+        module: "proposal",
+        data,
+        step,
+        percent: Math.round(((step + 1) / PROPOSAL_STEPS.length) * 100),
+        labOption: data?.labOption || "",
+      }),
+    });
+  } catch {
+    /* non-blocking */
+  }
+}
+
+function ProposalWizard({ onClose }) {
+  const navigate = useNavigate();
+  const [data, setData] = useState(() => readLS("proposal:data", emptyProposal));
+  const [step, setStep] = useState(() => readLS("proposal:step", 0));
+
+  const next = async () => {
+    const target = Math.min(step + 1, PROPOSAL_STEPS.length - 1);
+    setStep(target);
+    writeLS("proposal:step", target);
+    writeLS("proposal:data", data);
+    await sendProgressPing({ data, step: target });
+  };
+
+  const go = (n) => {
+    setStep(() => n);
+    writeLS("proposal:step", n);
+  };
+
+  useEffect(() => { writeLS("proposal:data", data); }, [data]);
+  useEffect(() => { writeLS("proposal:step", step); }, [step]);
+
+  const detailsComplete =
+    data.name &&
+    data.nationality &&
+    data.place &&
+    data.university &&
+    data.stream &&
+    data.researchAreaDept &&
+    data.researchAreaSubject &&
+    data.title &&
+    data.abstract &&
+    data.pages;
+
+  const canNext =
+    step === 0 ? detailsComplete : step === 1 ? !!data.labOption : true;
+
+  const handleDone = async () => {
+    await sendProgressPing({ data, step });
+    // If student chose "Create in Your Lab", send them to the ResearchNav entry screen.
+    if (data.labOption === "self") {
+      navigate("/research-nav");
+    }
+    onClose?.();
+  };
+
+  return (
+    <motion.div
+      className="fixed inset-0 z-50 flex items-center justify-center bg-black/60 backdrop-blur-sm"
       initial={{ opacity: 0 }}
       animate={{ opacity: 1 }}
       exit={{ opacity: 0 }}
     >
       <motion.div
-        className="w-full max-w-3xl rounded-2xl border shadow-2xl overflow-hidden"
-        style={{
-          background: PALETTE.card,
-          borderColor: PALETTE.border,
-          color: PALETTE.ink,
-        }}
-        initial={{ scale: 0.92, opacity: 0 }}
-        animate={{ scale: 1, opacity: 1 }}
-        exit={{ scale: 0.92, opacity: 0 }}
+        className="w-[min(880px,95vw)] rounded-2xl border shadow-2xl overflow-hidden"
+        style={{ background: THEME.card, borderColor: THEME.border, color: THEME.ink }}
+        initial={{ y: 24, scale: 0.98, opacity: 0 }}
+        animate={{ y: 0, scale: 1, opacity: 1 }}
       >
+        {/* Header */}
         <div
-          className="flex items-center justify-between px-5 py-3 border-b"
-          style={{ borderColor: PALETTE.border, background: "#0b3b38" }}
+          className="px-5 py-4 border-b flex items-center justify-between"
+          style={{ borderColor: THEME.border }}
         >
-          <div>
-            <div className="text-lg font-bold">{title}</div>
-            {subtitle && <div className="text-xs opacity-80">{subtitle}</div>}
-          </div>
           <div className="flex items-center gap-3">
-            {complete && (
-              <span
-                className="text-xs rounded-full px-2 py-1 border"
-                style={{
-                  background: "#09463f",
-                  borderColor: PALETTE.border,
-                  color: "#00ffd9",
-                }}
-              >
-                Completed ✓
-              </span>
-            )}
-            <button
-              onClick={onClose}
-              className="px-3 py-1.5 rounded-md text-sm border"
-              style={{
-                borderColor: PALETTE.border,
-                background: "#ffffff10",
-                color: PALETTE.ink,
-              }}
+            <span
+              className="inline-grid place-items-center h-9 w-9 rounded-xl"
+              style={{ background: "#033532", border: `1px solid ${THEME.border}` }}
             >
-              ✕
-            </button>
+              📘
+            </span>
+            <div>
+              <div className="font-semibold">Research Proposal / Synopsis</div>
+              <div className="text-xs" style={{ color: THEME.inkSoft }}>
+                {PROPOSAL_STEPS[step]}
+              </div>
+            </div>
           </div>
+          <button
+            onClick={onClose}
+            className="px-3 py-1.5 rounded-lg text-sm"
+            style={{ background: "#033532", border: `1px solid ${THEME.border}`, color: THEME.aqua }}
+            title="Close"
+          >
+            ✕
+          </button>
         </div>
-        <div className="p-5 max-h-[72vh] overflow-y-auto">{children}</div>
+
+        {/* Body */}
+        <div className="px-5 pb-5 max-h-[70vh] overflow-auto mt-4">
+          <AnimatePresence mode="wait">
+            {step === 0 && (
+              <motion.div
+                key="step1"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                className="grid md:grid-cols-2 gap-4"
+              >
+                <Field label="Full Name" value={data.name} onChange={(v) => setData({ ...data, name: v })} />
+                <Select
+                  label="Gender"
+                  value={data.gender}
+                  onChange={(v) => setData({ ...data, gender: v })}
+                  options={["Male", "Female", "Other"]}
+                />
+                <Field label="Nationality" value={data.nationality} onChange={(v) => setData({ ...data, nationality: v })} />
+                <Field label="Place / City" value={data.place} onChange={(v) => setData({ ...data, place: v })} />
+                <Field label="University / College" value={data.university} onChange={(v) => setData({ ...data, university: v })} />
+                <Select label="Stream" value={data.stream} onChange={(v) => setData({ ...data, stream: v })} options={STREAMS} />
+                <Select
+                  label="Research Area (Govt Dept)"
+                  value={data.researchAreaDept}
+                  onChange={(v) => setData({ ...data, researchAreaDept: v })}
+                  options={GOV_DEPTS}
+                />
+                <Select
+                  label="Research Area (UGC Subject)"
+                  value={data.researchAreaSubject}
+                  onChange={(v) => setData({ ...data, researchAreaSubject: v })}
+                  options={UGC_SUBJECTS}
+                />
+                <div className="md:col-span-2">
+                  <Field label="Research Title" value={data.title} onChange={(v) => setData({ ...data, title: v })} />
+                </div>
+                <div className="md:col-span-2">
+                  <TextArea
+                    label="Abstract / Summary"
+                    rows={5}
+                    value={data.abstract}
+                    onChange={(v) => setData({ ...data, abstract: v })}
+                  />
+                </div>
+                <Field
+                  label="Required Page Count"
+                  type="number"
+                  value={data.pages}
+                  onChange={(v) => setData({ ...data, pages: v })}
+                />
+                <div className="md:col-span-2 text-xs flex items-center gap-2" style={{ color: THEME.inkSoft }}>
+                  <span className="inline-block h-2 w-2 rounded-full" style={{ background: THEME.aqua }} />
+                  Auto-saved locally
+                </div>
+              </motion.div>
+            )}
+
+            {step === 1 && (
+              <motion.div
+                key="step2"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+                className="grid sm:grid-cols-2 gap-4"
+              >
+                <LabOption
+                  title="Create in Your Lab"
+                  desc="Work independently with the wizard and auto-save."
+                  selected={data.labOption === "self"}
+                  onSelect={() => setData({ ...data, labOption: "self" })}
+                />
+                <LabOption
+                  title="Create with Professionals"
+                  desc="Hand off to our experts. Admin will see your details."
+                  selected={data.labOption === "pro"}
+                  onSelect={() => setData({ ...data, labOption: "pro" })}
+                />
+                <div className="sm:col-span-2 text-xs" style={{ color: THEME.inkSoft }}>
+                  Your choice can be changed later. Admin-only visibility is automatically handled on the backend; students never
+                  see admin tools.
+                </div>
+              </motion.div>
+            )}
+
+            {step === 2 && (
+              <motion.div
+                key="step3"
+                initial={{ opacity: 0, y: 8 }}
+                animate={{ opacity: 1, y: 0 }}
+                exit={{ opacity: 0, y: -8 }}
+              >
+                <PreviewCard data={data} onEdit={() => go(0)} />
+              </motion.div>
+            )}
+          </AnimatePresence>
+        </div>
+
+        {/* Footer — NO BACK BUTTON per your request */}
+        <div
+          className="px-5 py-4 border-t flex items-center justify-end gap-3"
+          style={{ borderColor: THEME.border }}
+        >
+          {step < PROPOSAL_STEPS.length - 1 ? (
+            <button
+              onClick={next}
+              disabled={!canNext}
+              className="px-4 py-2 rounded-lg font-semibold disabled:opacity-50"
+              style={{ background: THEME.aqua, color: "#022724" }}
+            >
+              Continue →
+            </button>
+          ) : (
+            <button
+              onClick={handleDone}
+              className="px-4 py-2 rounded-lg font-semibold"
+              style={{ background: THEME.success, color: "white" }}
+            >
+              Done ✓
+            </button>
+          )}
+        </div>
       </motion.div>
     </motion.div>
   );
 }
 
-/* ---------- Step Form ---------- */
-function StepForm({ stepId, form, setForm, onNext }) {
-  const t = STEPS.find((s) => s.id === stepId);
-  const tw = useTypewriter(
-    t
-      ? `Currently on the "${t.label}" stage — please fill the required details below.`
-      : "",
-    20
-  );
-
-  const handleChange = (e) => {
-    const { name, value, type, checked, files } = e.target;
-    if (type === "checkbox") setForm((f) => ({ ...f, [name]: checked }));
-    else if (type === "file")
-      setForm((f) => ({ ...f, [name]: files[0]?.name || "" }));
-    else setForm((f) => ({ ...f, [name]: value }));
-  };
-
+/* Reusable inputs */
+function Field({ label, value, onChange, type = "text" }) {
   return (
-    <div
-      className="rounded-2xl p-5 shadow-lg border"
+    <label className="block">
+      <div className="text-sm mb-1" style={{ color: THEME.inkSoft }}>{label}</div>
+      <input
+        type={type}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2"
+        style={{
+          background: THEME.paper,
+          color: THEME.ink,
+          borderColor: THEME.border,
+          boxShadow: "inset 0 0 0 1px rgba(255,255,255,.05)",
+        }}
+      />
+    </label>
+  );
+}
+function TextArea({ label, value, onChange, rows = 4 }) {
+  return (
+    <label className="block">
+      <div className="text-sm mb-1" style={{ color: THEME.inkSoft }}>{label}</div>
+      <textarea
+        rows={rows}
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2"
+        style={{
+          background: THEME.paper,
+          color: THEME.ink,
+          borderColor: THEME.border,
+          boxShadow: "inset 0 0 0 1px rgba(255,255,255,.05)",
+        }}
+      />
+    </label>
+  );
+}
+function Select({ label, value, onChange, options }) {
+  return (
+    <label className="block">
+      <div className="text-sm mb-1" style={{ color: THEME.inkSoft }}>{label}</div>
+      <select
+        value={value}
+        onChange={(e) => onChange(e.target.value)}
+        className="w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2"
+        style={{ background: THEME.paper, color: THEME.ink, borderColor: THEME.border }}
+      >
+        <option value="" disabled>
+          Select…
+        </option>
+        {options.map((o) => (
+          <option key={o} value={o}>
+            {o}
+          </option>
+        ))}
+      </select>
+    </label>
+  );
+}
+function LabOption({ title, desc, selected, onSelect }) {
+  return (
+    <button
+      onClick={onSelect}
+      className={`text-left rounded-xl p-4 border transition-all ${selected ? "ring-2" : ""}`}
       style={{
-        background: PALETTE.card,
-        borderColor: PALETTE.border,
-        color: PALETTE.ink,
+        background: THEME.paper,
+        borderColor: selected ? THEME.aqua : THEME.border,
+        color: THEME.ink,
       }}
     >
-      <div className="mb-3 font-mono text-[#00ffd9]">{tw}</div>
-
-      {stepId === "idea" && (
-        <input
-          name="title"
-          value={form.title}
-          onChange={handleChange}
-          placeholder="Enter your research title"
-          className="w-full px-3 py-2 rounded-lg border bg-[#022f2d] text-[#f6f8f7] border-[#1d514e]"
-        />
-      )}
-
-      {stepId === "review" && (
-        <textarea
-          name="lit"
-          value={form.lit}
-          onChange={handleChange}
-          rows={6}
-          placeholder="Brief literature review or references"
-          className="w-full px-3 py-2 rounded-lg border bg-[#022f2d] text-[#f6f8f7] border-[#1d514e]"
-        />
-      )}
-
-      {stepId === "method" && (
-        <>
-          <textarea
-            name="method"
-            value={form.method}
-            onChange={handleChange}
-            rows={6}
-            placeholder="Methodology outline"
-            className="w-full px-3 py-2 rounded-lg border bg-[#022f2d] text-[#f6f8f7] border-[#1d514e]"
-          />
-          <input
-            name="tools"
-            value={form.tools}
-            onChange={handleChange}
-            placeholder="Tools / software"
-            className="w-full px-3 py-2 mt-3 rounded-lg border bg-[#022f2d] text-[#f6f8f7] border-[#1d514e]"
-          />
-        </>
-      )}
-
-      {stepId === "payment" && (
-        <div className="space-y-3">
-          <label className="flex items-center gap-2">
-            <input
-              type="checkbox"
-              name="paymentVerified"
-              checked={form.paymentVerified}
-              onChange={handleChange}
-            />
-            <span>Payment Verified</span>
-          </label>
-          <input
-            type="file"
-            name="paymentProofName"
-            onChange={handleChange}
-            className="text-sm text-[#c1d6d2]"
-          />
-        </div>
-      )}
-
-      <div className="mt-4 flex justify-end">
+      <div className="flex items-center justify-between">
+        <div className="font-semibold">{title}</div>
+        {selected && (
+          <span
+            className="text-xs px-2 py-0.5 rounded-full"
+            style={{ background: "#033532", border: `1px solid ${THEME.border}`, color: THEME.aqua }}
+          >
+            Selected
+          </span>
+        )}
+      </div>
+      <div className="text-sm mt-1" style={{ color: THEME.inkSoft }}>
+        {desc}
+      </div>
+    </button>
+  );
+}
+function PreviewCard({ data, onEdit }) {
+  return (
+    <div
+      className="rounded-xl border p-4"
+      style={{ background: THEME.paper, borderColor: THEME.border, color: THEME.ink }}
+    >
+      <div className="flex items-center justify-between mb-2">
+        <div className="font-semibold">Preview</div>
         <button
-          onClick={onNext}
-          className="px-4 py-2 rounded-lg font-semibold bg-[#00ffd9] text-[#022724]"
+          className="text-xs px-2 py-1 rounded border"
+          style={{ background: "#033532", border: `1px solid ${THEME.border}`, color: THEME.aqua }}
+          onClick={onEdit}
         >
-          Next →
+          Edit
         </button>
+      </div>
+
+      <div className="grid md:grid-cols-2 gap-3 text-sm">
+        <KV k="Name" v={data.name} />
+        <KV k="Gender" v={data.gender} />
+        <KV k="Nationality" v={data.nationality} />
+        <KV k="Place" v={data.place} />
+        <KV k="University" v={data.university} />
+        <KV k="Stream" v={data.stream} />
+        <KV k="Govt Dept" v={data.researchAreaDept} />
+        <KV k="UGC Subject" v={data.researchAreaSubject} />
+        <KV k="Title" v={data.title} className="md:col-span-2" />
+        <div className="md:col-span-2">
+          <div className="text-xs" style={{ color: THEME.inkSoft }}>Abstract</div>
+          <div className="font-mono whitespace-pre-wrap">{data.abstract}</div>
+        </div>
+        <KV k="Pages" v={data.pages} />
+        <KV k="Lab Option" v={data.labOption === "pro" ? "Create with Professionals" : "Create in Your Lab"} />
       </div>
     </div>
   );
 }
+const KV = ({ k, v, className }) => (
+  <div className={className}>
+    <div className="text-xs" style={{ color: THEME.inkSoft }}>{k}</div>
+    <div className="font-medium break-words">{v || "—"}</div>
+  </div>
+);
 
-/* ---------- Completion Toast ---------- */
-function CompletionToast({ label }) {
-  if (!label) return null;
+/* ───────────────────────────── MAIN: LAB WIZARD (8 BOXES) ───────────────────────────── */
+
+const MODULES = [
+  { id: "proposal", name: "Research Proposal / Synopsis", emoji: "📘", ready: true },
+  { id: "dissertation", name: "Dissertation", emoji: "📗", ready: false },
+  { id: "phd", name: "PhD Thesis", emoji: "📕", ready: false },
+  { id: "assignment", name: "Assignment & More", emoji: "📝", ready: false },
+  { id: "correction", name: "Correction Service", emoji: "🛠️", ready: false },
+  { id: "publishing", name: "Article Publishing", emoji: "📰", ready: false },
+  { id: "review", name: "Journal Review", emoji: "🔎", ready: false },
+  { id: "legal", name: "Legal Research", emoji: "⚖️", ready: false },
+];
+
+export default function LabWizard() {
+  const [openId, setOpenId] = useState("proposal");
+  const [showProposal, setShowProposal] = useState(false);
+
+  // Progress chip for proposal box (reads LS)
+  const proposalStep = readLS("proposal:step", 0);
+  const proposalPct = Math.round(((proposalStep + 1) / PROPOSAL_STEPS.length) * 100);
+
   return (
-    <motion.div
-      initial={{ y: -10, opacity: 0 }}
-      animate={{ y: 0, opacity: 1 }}
-      exit={{ y: -10, opacity: 0 }}
-      transition={{ type: "spring", stiffness: 350, damping: 26 }}
-      className="fixed top-16 right-6 z-40"
-    >
-      <div
-        className="px-3 py-2 rounded-lg shadow-lg border text-sm bg-[#022f2d] text-[#e5f7f4]"
-        style={{ borderColor: "#1d514e" }}
-      >
-        ✓ Completed: <span className="font-semibold">{label}</span>
+    <div className="min-h-screen relative">
+      {/* Backdrop */}
+      <div className="fixed inset-0 -z-10">
+        <div className="absolute inset-0" style={{ background: THEME.pageGrad }} />
+        <div
+          className="absolute inset-0 opacity-[.12] pointer-events-none"
+          style={{
+            backgroundImage:
+              "radial-gradient(#00ffc8 1px, transparent 1px), radial-gradient(#00ffc8 1px, transparent 1px)",
+            backgroundSize: "8px 8px, 12px 12px",
+            backgroundPosition: "0 0, 3px 3px",
+          }}
+        />
       </div>
-    </motion.div>
-  );
-}
 
-/* ---------- Main Component ---------- */
-export default function ResearchNav() {
-  const [form, setForm] = useState(() => {
-    try {
-      return JSON.parse(localStorage.getItem(LS_KEY)) || INITIAL;
-    } catch {
-      return INITIAL;
-    }
-  });
-
-  const gates = useMemo(() => gate(form), [form]);
-  const [activeId, setActiveId] = useState("idea");
-  const [wizardOpen, setWizardOpen] = useState(true);
-  const [justCompleted, setJustCompleted] = useState("");
-
-  const order = STEPS.map((s) => s.id);
-  const progress = pct(gates);
-
-  const isStepComplete = (id) => {
-    const s = STEPS.find((x) => x.id === id);
-    return s && (s.need || []).every((k) => !!form[k]);
-  };
-
-  const handleNext = () => {
-    if (isStepComplete(activeId)) {
-      const label = STEPS.find((s) => s.id === activeId)?.label;
-      setJustCompleted(label);
-      setTimeout(() => setJustCompleted(""), 1600);
-    }
-    const idx = order.indexOf(activeId);
-    if (idx < order.length - 1) setActiveId(order[idx + 1]);
-  };
-
-  const handleSelectFromTracker = (id) => {
-    const visible = gates.filter((s) => s.state !== "locked").map((s) => s.id);
-    if (visible.includes(id)) setActiveId(id);
-  };
-
-  useEffect(() => {
-    localStorage.setItem(LS_KEY, JSON.stringify(form));
-  }, [form]);
-
-  const current = STEPS.find((s) => s.id === activeId);
-  const currentIsComplete = isStepComplete(activeId);
-
-  return (
-    <div className="min-h-screen font-sans relative overflow-x-hidden">
-      <StudioBackdrop />
-
-      {/* Header */}
+      {/* Top Bar */}
       <header
-        className="sticky top-0 z-30 backdrop-blur border-b px-6 py-3"
-        style={{
-          background: "rgba(2, 39, 36, 0.7)",
-          borderColor: PALETTE.border,
-          color: "#00ffd9",
-        }}
+        className="sticky top-0 z-30 backdrop-blur border-b flex items-center justify-between px-6 py-3"
+        style={{ background: "rgba(2,39,36,.7)", borderColor: THEME.border, color: THEME.aqua }}
       >
-        <div className="max-w-6xl mx-auto flex items-center justify-between">
-          <h1 className="text-lg font-semibold">Research Navigation</h1>
-          <div className="flex items-center gap-4">
-            <div className="flex items-center gap-3 text-sm text-[#9de1d6]">
-              <span>{progress}%</span>
-              <div className="w-36 h-2 rounded-full bg-[#0a4d47] overflow-hidden border border-[#1d514e]">
-                <motion.div
-                  className="h-full"
-                  style={{
-                    background:
-                      "linear-gradient(90deg,#00ffd9 0%, #3fe2bf 100%)",
-                    boxShadow: "0 0 14px rgba(0,255,217,.35)",
-                  }}
-                  animate={{ width: `${progress}%` }}
-                  transition={{ duration: 0.6 }}
-                />
-              </div>
-            </div>
-
-            {/* Enter LabWizard button */}
-            <Link
-              to="/research-nav/lab"
-              className="px-3 py-1.5 rounded-lg bg-[#00ffd9] text-[#022724] font-semibold hover:bg-[#1bbf8a] transition"
-            >
-              Enter LabWizard →
-            </Link>
-          </div>
+        <div className="font-semibold">Lab Wizard</div>
+        <div className="text-xs" style={{ color: THEME.inkSoft }}>
+          Your research journey, one box at a time
         </div>
       </header>
 
-      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-6 space-y-6">
-        <DominoTracker
-          gates={gates}
-          activeId={activeId}
-          onSelect={handleSelectFromTracker}
-        />
-        <div className="text-sm text-[#c1d6d2]">
-          {current?.icon} <b>{current?.label}</b> —{" "}
-          {currentIsComplete
-            ? "Completed ✓ You can still edit before moving on."
-            : "Fill the required fields to complete this step."}
-        </div>
+      {/* Grid */}
+      <main className="max-w-6xl mx-auto px-4 sm:px-6 py-8 grid gap-5">
+        {MODULES.map((m) => (
+          <ModuleCard
+            key={m.id}
+            title={
+              <span className="inline-flex items-center gap-2">
+                <span className="text-lg">{m.emoji}</span> {m.name}
+              </span>
+            }
+            subtitle={m.ready ? "Open to start / continue" : "Coming soon"}
+            badge={m.ready ? undefined : "Soon"}
+            open={openId === m.id}
+            onToggle={() => setOpenId((id) => (id === m.id ? "" : m.id))}
+            disabled={!m.ready}
+          >
+            {m.id === "proposal" ? (
+              <div className="flex flex-col gap-4">
+                <div className="flex items-center gap-2">
+                  <div className="text-sm" style={{ color: THEME.inkSoft }}>Proposal Wizard</div>
+                  <div
+                    className="ml-auto text-xs px-2 py-0.5 rounded-full"
+                    style={{ background: "#033532", border: `1px solid ${THEME.border}`, color: THEME.aqua }}
+                  >
+                    {proposalPct}% complete
+                  </div>
+                </div>
+                <div className="grid sm:grid-cols-[1fr_auto] gap-3">
+                  <div className="text-sm" style={{ color: THEME.inkSoft }}>
+                    Start by filling the common student form. You can edit any step later; we only reveal
+                    the next step after you finish the current one.
+                  </div>
+                  <button
+                    onClick={() => setShowProposal(true)}
+                    className="px-4 py-2 rounded-lg font-semibold"
+                    style={{ background: THEME.aqua, color: "#022724" }}
+                  >
+                    Fill the Form →
+                  </button>
+                </div>
+              </div>
+            ) : (
+              <div className="text-sm" style={{ color: THEME.inkSoft }}>
+                This module is planned. Your current theme and logic will be reused here.
+              </div>
+            )}
+          </ModuleCard>
+        ))}
       </main>
 
-      <AnimatePresence>
-        {wizardOpen && current && current.id !== "done" && (
-          <WizardModal
-            open={wizardOpen}
-            onClose={() => setWizardOpen(false)}
-            title={`${current.icon} ${current.label}`}
-            subtitle={
-              currentIsComplete
-                ? "Completed ✓ — you can still edit before moving on."
-                : "Fill the required fields and click Next."
-            }
-            complete={currentIsComplete}
-          >
-            <StepForm
-              stepId={activeId}
-              form={form}
-              setForm={setForm}
-              onNext={handleNext}
-            />
-          </WizardModal>
-        )}
-      </AnimatePresence>
-
-      <AnimatePresence>
-        {justCompleted && <CompletionToast label={justCompleted} />}
-      </AnimatePresence>
+      {/* Proposal Modal */}
+      <AnimatePresence>{showProposal && <ProposalWizard onClose={() => setShowProposal(false)} />}</AnimatePresence>
     </div>
   );
 }
