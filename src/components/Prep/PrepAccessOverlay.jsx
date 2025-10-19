@@ -86,7 +86,7 @@ export default function PrepAccessOverlay({ examId, email }) {
   async function fetchStatus() {
     if (!examId) return;
 
-    // If "waiting" marker is very old (>15 min), clear it (avoid permanent stick)
+    // Expire very old waiting marker (>15 min)
     const startedAt = Number(localStorage.getItem(ks.waitAt) || 0);
     if (startedAt && Date.now() - startedAt > 15 * 60 * 1000) {
       localStorage.removeItem(ks.wait);
@@ -97,67 +97,39 @@ export default function PrepAccessOverlay({ examId, email }) {
 
     try {
       const qs = new URLSearchParams({ examId, email: email || "" });
+      // *** uses the new server endpoint that *forces* overlay for non-active users
       const r = await getJSON(`/api/prep/access/status?${qs.toString()}`);
       const { exam, access, overlay } = r || {};
 
-      // 1) If ACTIVE -> never show overlay (except finishing an approval countdown)
+      // ACTIVE → hide overlay (unless finishing approval countdown)
       if (access?.status === "active") {
         localStorage.setItem(ks.lastActive, String(Date.now()));
-
-        // If we still have a fresh approved countdown (e.g. after a refresh), show that small modal to finish
         const until = Number(localStorage.getItem(ks.approved) || 0);
         if (until > Date.now()) {
           setState(s => ({
-            ...s,
-            loading: false,
-            show: true,
-            mode: "approved",
-            waiting: false,
-            exam: exam || {},
-            access: access || {},
-            overlay: overlay || {},
+            ...s, loading:false, show:true, mode:"approved", waiting:false,
+            exam: exam || {}, access: access || {}, overlay: overlay || {},
           }));
         } else {
-          // Normal active flow: hide overlay
           localStorage.removeItem(ks.wait);
           localStorage.removeItem(ks.waitAt);
           setState(s => ({
-            ...s,
-            loading: false,
-            show: false,
-            waiting: false,
-            mode: "",
-            exam: exam || {},
-            access: access || {},
-            overlay: overlay || {},
+            ...s, loading:false, show:false, waiting:false, mode:"",
+            exam: exam || {}, access: access || {}, overlay: overlay || {},
           }));
         }
         if (!emailField && email) setEmailField(email);
         return;
       }
 
-      // 2) NOT active -> server tells us to show overlay (hard gate)
+      // NOT ACTIVE → overlay ON (server already decided the mode)
       let show = true;
-      let mode = "";
-
-      if (overlay?.show && overlay?.mode) {
-        show = true;
-        mode = overlay.mode;
-      } else {
-        // fallback (should rarely be used now)
-        const todayDay   = Number(r?.access?.todayDay || 1);
-        const trialDays  = Number(exam?.trialDays ?? 0);
-        const offsetDays = Number(exam?.overlay?.offsetDays ?? 0);
-        const threshold  = Math.max(trialDays, offsetDays);
-        show = todayDay > threshold;
-        mode = show ? "purchase" : "";
-      }
-
+      let mode = overlay?.mode || "purchase";
       if (keepWaiting) { show = true; mode = "waiting"; }
 
       setState(s => ({
         ...s,
-        loading: false,
+        loading:false,
         show,
         mode,
         waiting: mode === "waiting",
@@ -174,7 +146,7 @@ export default function PrepAccessOverlay({ examId, email }) {
 
   useEffect(() => { fetchStatus(); /* eslint-disable-next-line */ }, [examId, email]);
 
-  // Poll request status when waiting (self-heal; don't unblock content)
+  // Poll request status when waiting
   useEffect(() => {
     if (!state?.waiting || !emailField) return;
 
@@ -188,8 +160,7 @@ export default function PrepAccessOverlay({ examId, email }) {
         const j = await getJSON(`/api/prep/access/request/status?${qs.toString()}`);
 
         if (j?.status === "approved") {
-          // Start the 15s approved window
-          const until = Date.now() + APPROVE_SECONDS * 1000;
+          const until = Date.now() + 15 * 1000;
           localStorage.setItem(ks.approved, String(until));
           localStorage.removeItem(ks.wait);
           localStorage.removeItem(ks.waitAt);
@@ -218,9 +189,7 @@ export default function PrepAccessOverlay({ examId, email }) {
             return;
           }
         }
-      } catch {
-        // ignore
-      }
+      } catch {}
       setTimeout(loop, 5000);
     };
 
@@ -308,7 +277,7 @@ export default function PrepAccessOverlay({ examId, email }) {
 
       // Auto-grant path
       if (j?.approved) {
-        const until = Date.now() + APPROVE_SECONDS * 1000;
+        const until = Date.now() + 15 * 1000;
         localStorage.setItem(ks.approved, String(until));
         localStorage.removeItem(ks.wait);
         localStorage.removeItem(ks.waitAt);
@@ -333,9 +302,7 @@ export default function PrepAccessOverlay({ examId, email }) {
   function copy(text) { try { navigator.clipboard?.writeText(text); } catch {} }
 
   function unlockNow(auto = false) {
-    // mark the moment we saw active
     localStorage.setItem(ks.lastActive, String(Date.now()));
-    // finish the "approved" window
     if (auto) {
       localStorage.setItem(ks.approved, "0");
     } else {
@@ -352,7 +319,7 @@ export default function PrepAccessOverlay({ examId, email }) {
 
   const title =
     state.mode === "waiting"  ? "Waiting for approval"
-  : state.mode === "approved" ? `Approved — unlocking in ${approveLeft || APPROVE_SECONDS}s`
+  : state.mode === "approved" ? `Approved — unlocking in ${approveLeft || 15}s`
   : `Start / Restart — ${pay.courseName}`;
 
   const submitDisabled =
@@ -368,7 +335,7 @@ export default function PrepAccessOverlay({ examId, email }) {
           {state.mode === "approved" && (
             <>
               <div className="text-sm text-emerald-700 mb-3">
-                Your access has been approved. We’ll unlock the content and reset your schedule to <b>Day 1</b> automatically in ~{approveLeft || APPROVE_SECONDS}s.
+                Your access has been approved. We’ll unlock the content and reset your schedule to <b>Day 1</b> automatically in ~{approveLeft || 15}s.
               </div>
               <button
                 className="w-full py-3 rounded bg-emerald-600 text-white text-lg font-semibold mb-2"
