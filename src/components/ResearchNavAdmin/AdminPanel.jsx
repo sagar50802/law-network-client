@@ -8,6 +8,8 @@
 //
 // Requirements: React, Tailwind. (Framer Motion optional.)
 // API prefix: /api/research (from Step-2)
+//
+// ✅ Updated with LabWizard admin backend integration (kept original logic/order)
 
 import React, { useEffect, useMemo, useState } from "react";
 
@@ -48,6 +50,29 @@ const API = {
       body: JSON.stringify({ verified }),
     });
     if (!res.ok) throw new Error("Failed to verify payment");
+    return res.json();
+  },
+};
+
+/* ✅ NEW: LabWizard Admin API (added without altering existing research logic) */
+const LAB_API = {
+  async inbox(ownerKey = "") {
+    const res = await fetch("/api/labwizard/admin/inbox", { headers: { "x-owner-key": ownerKey } });
+    if (!res.ok) throw new Error("Failed to load lab inbox");
+    return res.json();
+  },
+  async view(id, ownerKey = "") {
+    const res = await fetch(`/api/labwizard/admin/view/${id}`, { headers: { "x-owner-key": ownerKey } });
+    if (!res.ok) throw new Error("Failed to view lab doc");
+    return res.json();
+  },
+  async updateStatus(id, status, ownerKey = "") {
+    const res = await fetch(`/api/labwizard/admin/status/${id}`, {
+      method: "PATCH",
+      headers: { "Content-Type": "application/json", "x-owner-key": ownerKey },
+      body: JSON.stringify({ status }),
+    });
+    if (!res.ok) throw new Error("Failed to update");
     return res.json();
   },
 };
@@ -125,6 +150,51 @@ function InboxTable({ items = [], onOpen }) {
                 <span className={`px-2 py-1 rounded text-xs ${it.payment?.status === "verified" ? "bg-emerald-50 text-emerald-700 border border-emerald-200" : it.payment?.status === "pending" ? "bg-amber-50 text-amber-700 border border-amber-200" : "bg-gray-50 text-gray-600 border"}`}>{it.payment?.status || "none"}</span>
               </td>
               <td className="py-3 pr-3 text-gray-500">{new Date(it.lastUpdatedAt).toLocaleString()}</td>
+              <td className="py-3">
+                <button onClick={() => onOpen(it._id)} className="px-3 py-1.5 rounded-lg border hover:bg-white">Open</button>
+              </td>
+            </tr>
+          ))}
+        </tbody>
+      </table>
+    </div>
+  );
+}
+
+/* ------------------- LabWizard: Lightweight Admin Table -------------------- */
+function LabInboxTable({ items = [], onOpen }) {
+  return (
+    <div className="overflow-x-auto">
+      <table className="min-w-full text-sm">
+        <thead>
+          <tr className="text-left text-gray-500 border-b">
+            <th className="py-3 pr-3">Email</th>
+            <th className="py-3 pr-3">Module</th>
+            <th className="py-3 pr-3">Percent</th>
+            <th className="py-3 pr-3">Step</th>
+            <th className="py-3 pr-3">Status</th>
+            <th className="py-3 pr-3">Updated</th>
+            <th className="py-3">Action</th>
+          </tr>
+        </thead>
+        <tbody>
+          {items.map((it) => (
+            <tr key={it._id} className="border-b hover:bg-gray-50">
+              <td className="py-3 pr-3">{it.email || "—"}</td>
+              <td className="py-3 pr-3">{it.module || "—"}</td>
+              <td className="py-3 pr-3">
+                <div className="w-36 bg-gray-200 rounded-full h-2">
+                  <div className="bg-indigo-500 h-2 rounded-full" style={{ width: `${it.percent || 0}%` }} />
+                </div>
+                <div className="text-xs text-gray-500 mt-1">{it.percent || 0}%</div>
+              </td>
+              <td className="py-3 pr-3">{typeof it.step === "number" ? it.step : "—"}</td>
+              <td className="py-3 pr-3">
+                <span className="px-2 py-1 rounded text-xs border bg-gray-50 text-gray-700">{it.status || "—"}</span>
+              </td>
+              <td className="py-3 pr-3 text-gray-500">
+                {it.updatedAt ? new Date(it.updatedAt).toLocaleString() : "—"}
+              </td>
               <td className="py-3">
                 <button onClick={() => onOpen(it._id)} className="px-3 py-1.5 rounded-lg border hover:bg-white">Open</button>
               </td>
@@ -220,6 +290,60 @@ function DetailDrawer({ open, onClose, proposal, onUpdateStage, onVerifyPayment 
   );
 }
 
+/* ------------------ LabWizard: Minimal Right Drawer for Items ----------------- */
+function LabDetailDrawer({ open, onClose, doc, onUpdateStatus }) {
+  if (!open || !doc) return null;
+  const { _id, email, module, step, percent, status, data, updatedAt, createdAt } = doc;
+
+  return (
+    <div className="fixed inset-0 z-50 bg-black/40" onClick={onClose}>
+      <aside className="absolute right-0 top-0 bottom-0 w-full max-w-xl bg-white shadow-2xl p-6 overflow-y-auto" onClick={(e) => e.stopPropagation()}>
+        <div className="flex items-start justify-between mb-4">
+          <div>
+            <div className="text-xs text-gray-500">{email}</div>
+            <h3 className="text-lg font-bold">LabWizard • {module || "—"}</h3>
+            <div className="text-sm text-gray-500">Step {typeof step === "number" ? step : "—"} • {percent || 0}%</div>
+          </div>
+          <button onClick={onClose} className="px-3 py-1.5 rounded-lg border">Close</button>
+        </div>
+
+        <section className="space-y-4">
+          <div className="p-4 rounded-xl border bg-gray-50">
+            <div className="flex items-center justify-between">
+              <div className="font-medium">Status</div>
+              <div className="flex items-center gap-2">
+                <select
+                  className="px-2 py-1 rounded-lg border bg-white text-sm"
+                  value={status || ""}
+                  onChange={(e) => onUpdateStatus(_id, e.target.value)}
+                >
+                  <option value="">—</option>
+                  <option value="received">received</option>
+                  <option value="reviewing">reviewing</option>
+                  <option value="in_progress">in_progress</option>
+                  <option value="completed">completed</option>
+                  <option value="archived">archived</option>
+                </select>
+              </div>
+            </div>
+          </div>
+
+          <div className="p-4 rounded-xl border bg-white">
+            <div className="text-sm text-gray-500">Submitted Data</div>
+            <pre className="mt-2 text-xs bg-gray-50 p-3 rounded border overflow-auto max-h-[50vh]">
+{JSON.stringify(data, null, 2)}
+            </pre>
+          </div>
+
+          <div className="text-xs text-gray-500">
+            Created: {createdAt ? new Date(createdAt).toLocaleString() : "—"} • Updated: {updatedAt ? new Date(updatedAt).toLocaleString() : "—"}
+          </div>
+        </section>
+      </aside>
+    </div>
+  );
+}
+
 /* --------------------------------- Main ----------------------------------- */
 export default function ResearchAdminPanel() {
   const [ownerKey, setOwnerKey] = useState("");
@@ -232,6 +356,13 @@ export default function ResearchAdminPanel() {
 
   const [openId, setOpenId] = useState(null);
   const [proposal, setProposal] = useState(null);
+
+  // LabWizard admin state (added non-intrusively)
+  const [labItems, setLabItems] = useState([]);
+  const [labLoading, setLabLoading] = useState(false);
+  const [labError, setLabError] = useState("");
+  const [labOpenId, setLabOpenId] = useState(null);
+  const [labDoc, setLabDoc] = useState(null);
 
   const limit = 20;
   const pages = Math.max(1, Math.ceil(total / limit));
@@ -276,7 +407,37 @@ export default function ResearchAdminPanel() {
     } catch (e) { alert(e.message || "Failed to verify payment"); }
   }
 
+  // LabWizard admin loaders
+  async function loadLabInbox() {
+    setLabLoading(true); setLabError("");
+    try {
+      const r = await LAB_API.inbox(ownerKey);
+      setLabItems(r.items || []);
+    } catch (e) {
+      setLabError(e.message || "Load failed");
+    } finally {
+      setLabLoading(false);
+    }
+  }
+  async function openLabDetail(id) {
+    setLabOpenId(id);
+    try {
+      const r = await LAB_API.view(id, ownerKey);
+      setLabDoc(r.doc || null);
+    } catch {
+      setLabDoc(null);
+    }
+  }
+  async function onUpdateLabStatus(id, status) {
+    try {
+      await LAB_API.updateStatus(id, status, ownerKey);
+      await openLabDetail(id);
+      await loadLabInbox();
+    } catch (e) { alert(e.message || "Failed to update"); }
+  }
+
   useEffect(() => { loadInbox(1); }, []); // initial
+  useEffect(() => { loadLabInbox(); }, []); // load lab inbox once (non-invasive)
 
   return (
     <div className="min-h-screen bg-gradient-to-br from-slate-50 via-white to-indigo-50">
@@ -291,7 +452,8 @@ export default function ResearchAdminPanel() {
         </div>
       </header>
 
-      <main className="max-w-7xl mx-auto p-6">
+      <main className="max-w-7xl mx-auto p-6 space-y-8">
+        {/* Original Research Inbox (unchanged) */}
         <div className="p-4 rounded-2xl bg-white/70 backdrop-blur border shadow-sm">
           {loading ? (
             <div className="py-8 text-center text-gray-500">Loading…</div>
@@ -299,6 +461,10 @@ export default function ResearchAdminPanel() {
             <div className="py-8 text-center text-red-600">{error}</div>
           ) : (
             <>
+              <div className="flex items-center justify-between mb-3">
+                <div className="font-semibold">Research Inbox</div>
+                <div className="text-sm text-gray-500">Total: {total}</div>
+              </div>
               <InboxTable items={items} onOpen={openDetail} />
               <div className="flex items-center justify-between mt-4 text-sm">
                 <div className="text-gray-500">Total: {total}</div>
@@ -311,14 +477,40 @@ export default function ResearchAdminPanel() {
             </>
           )}
         </div>
+
+        {/* NEW: LabWizard Inbox (added, does not affect original flow) */}
+        <div className="p-4 rounded-2xl bg-white/70 backdrop-blur border shadow-sm">
+          <div className="flex items-center justify-between mb-3">
+            <div className="font-semibold">LabWizard Inbox</div>
+            <div className="flex items-center gap-2">
+              <button onClick={loadLabInbox} className="px-3 py-1.5 rounded-lg border">Refresh</button>
+            </div>
+          </div>
+          {labLoading ? (
+            <div className="py-8 text-center text-gray-500">Loading…</div>
+          ) : labError ? (
+            <div className="py-8 text-center text-red-600">{labError}</div>
+          ) : (
+            <LabInboxTable items={labItems} onOpen={openLabDetail} />
+          )}
+        </div>
       </main>
 
+      {/* Existing Research Drawer */}
       <DetailDrawer
         open={!!openId}
         onClose={()=>{ setOpenId(null); setProposal(null); }}
         proposal={proposal}
         onUpdateStage={onUpdateStage}
         onVerifyPayment={onVerifyPayment}
+      />
+
+      {/* NEW LabWizard Drawer */}
+      <LabDetailDrawer
+        open={!!labOpenId}
+        onClose={()=>{ setLabOpenId(null); setLabDoc(null); }}
+        doc={labDoc}
+        onUpdateStatus={onUpdateLabStatus}
       />
     </div>
   );
@@ -328,5 +520,5 @@ export default function ResearchAdminPanel() {
 // import ResearchAdminPanel from "./components/ResearchNavAdmin/AdminPanel";
 // <Route path="/admin/research" element={<ResearchAdminPanel />} />
 //
-// This file is SELF-CONTAINED and only touches /api/research endpoints created in Step-2.
+// This file is SELF-CONTAINED and only touches /api/research and /api/labwizard endpoints.
 // It will not interfere with any existing modules or routes.
