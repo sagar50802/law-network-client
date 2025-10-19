@@ -1,31 +1,40 @@
-// client/src/App.jsx
 import { BrowserRouter as Router, Routes, Route, useLocation, useParams } from "react-router-dom";
 import { useEffect } from "react";
 
 import Navbar from "./components/layout/Navbar";
 import AdminRoute from "./components/common/AdminRoute.jsx";
+import IfOwnerOnly from "./components/common/IfOwnerOnly.jsx";
+import "./styles/ui.css";
 
+/* ---------- Main Pages ---------- */
 import HomePage from "./pages/HomePage.jsx";
 import ArticlesPage from "./pages/ArticlesPage.jsx";
 import NewsPage from "./pages/NewsPage.jsx";
 import VideosPage from "./pages/VideosPage.jsx";
 import PodcastsPage from "./pages/PodcastsPage.jsx";
 import NotebookPage from "./pages/NotebookPage.jsx";
-import AdminDashboard from "./pages/AdminDashboard.jsx";
-import AdminLogin from "./pages/AdminLogin.jsx";
-
-import AdminConsultancyEditor from "./components/Admin/AdminConsultancyEditor.jsx";
-
-import Plagiarism from "./pages/Plagiarism.jsx";
 import ScholarPage from "./pages/ScholarPage.jsx";
 import PdfDemo from "./pages/PdfDemo.jsx";
+import Plagiarism from "./pages/Plagiarism.jsx";
 
+/* ---------- Admin Pages ---------- */
+import AdminDashboard from "./pages/AdminDashboard.jsx";
+import AdminLogin from "./pages/AdminLogin.jsx";
+import AdminConsultancyEditor from "./components/Admin/AdminConsultancyEditor.jsx";
+
+/* ---------- Research Navigation ---------- */
+import ResearchNav from "./components/ResearchNav/ResearchNav.jsx";
+import LabWizard from "./components/ResearchNav/LabWizard.jsx";
+import ResearchAdminPanel from "./components/ResearchNavAdmin/AdminPanel.jsx";
+
+/* ---------- Exam Prep ---------- */
 import PrepList from "./pages/prep/PrepList.jsx";
 import PrepWizard from "./pages/prep/PrepWizard.jsx";
 import AdminPrepPanel from "./pages/prep/AdminPrepPanel.jsx";
 import PrepOverlayEditor from "./pages/prep/PrepOverlayEditor.jsx";
 import PrepAccessAdmin from "./pages/admin/PrepAccessAdmin.jsx";
 
+/* ---------- Test Series ---------- */
 import TestDashboard from "./pages/testseries/TestDashboard.jsx";
 import TestIntro from "./pages/testseries/TestIntro.jsx";
 import TestPlayer from "./pages/testseries/TestPlayer.jsx";
@@ -33,16 +42,6 @@ import ResultScreen from "./pages/testseries/ResultScreen.jsx";
 import AdminTestImporter from "./pages/testseries/AdminTestImporter.jsx";
 import AdminTestResults from "./pages/testseries/AdminTestResults.jsx";
 import AdminTestManager from "./pages/testseries/AdminTestManager.jsx";
-
-import IfOwnerOnly from "./components/common/IfOwnerOnly.jsx";
-import "./styles/ui.css";
-
-/* ✅ NEW: Research Navigation (Main Hub) */
-import ResearchNav from "./components/ResearchNav/ResearchNav.jsx";
-/* ✅ NEW: Lab Wizard (Sub-Wizard under ResearchNav) */
-import LabWizard from "./components/ResearchNav/LabWizard.jsx";
-/* ✅ NEW: Research Admin Panel */
-import ResearchAdminPanel from "./components/ResearchNavAdmin/AdminPanel.jsx";
 
 /* ---------- Helpers ---------- */
 function NotFound() {
@@ -87,6 +86,7 @@ function RouteWithCode({ Comp }) {
   const { code } = useParams();
   return <Comp code={code} />;
 }
+
 function RouteWithResultId({ Comp }) {
   const { id } = useParams();
   return <Comp id={id} />;
@@ -97,6 +97,7 @@ export default function App() {
   return (
     <Router>
       <div className="bg-gradient-to-br from-[#f8fafc] to-[#e6edf5] text-[#0b1220] min-h-screen font-inter antialiased">
+        {/* Sticky Navbar */}
         <nav className="bg-white/70 backdrop-blur-md shadow-md sticky top-0 z-50">
           <Navbar />
         </nav>
@@ -105,7 +106,7 @@ export default function App() {
 
         <div className="animate-fadeIn">
           <Routes>
-            {/* Public */}
+            {/* ---------- Public Pages ---------- */}
             <Route path="/" element={<HomePage />} />
             <Route path="/articles" element={<ArticlesPage />} />
             <Route path="/news" element={<NewsPage />} />
@@ -116,11 +117,11 @@ export default function App() {
             <Route path="/plagiarism" element={<Plagiarism />} />
             <Route path="/pdfdemo" element={<PdfDemo />} />
 
-            {/* ✅ Research Navigation (Hub + Sub-Wizard) */}
+            {/* ---------- Research Navigation (Hub + Sub-Wizard) ---------- */}
             <Route path="/research-nav" element={<ResearchNav />} />
             <Route path="/research-nav/lab" element={<LabWizard />} />
 
-            {/* Prep */}
+            {/* ---------- Exam Prep ---------- */}
             <Route path="/prep" element={<PrepList />} />
             <Route path="/prep/:examId" element={<PrepWizard />} />
             <Route
@@ -156,13 +157,13 @@ export default function App() {
               }
             />
 
-            {/* Test Series */}
+            {/* ---------- Test Series ---------- */}
             <Route path="/tests" element={<TestDashboard />} />
             <Route path="/tests/:code" element={<RouteWithCode Comp={TestIntro} />} />
             <Route path="/tests/:code/play" element={<RouteWithCode Comp={TestPlayer} />} />
             <Route path="/tests/result/:id" element={<RouteWithResultId Comp={ResultScreen} />} />
 
-            {/* Admin: Import tests */}
+            {/* ---------- Admin Test Tools ---------- */}
             <Route
               path="/owner/tests/import"
               element={
@@ -171,8 +172,6 @@ export default function App() {
                 </IfOwnerOnly>
               }
             />
-
-            {/* Admin: Results page */}
             <Route
               path="/owner/tests/results"
               element={
@@ -181,8 +180,6 @@ export default function App() {
                 </IfOwnerOnly>
               }
             />
-
-            {/* Admin: Tests Manager */}
             <Route
               path="/owner/tests"
               element={
@@ -192,7 +189,7 @@ export default function App() {
               }
             />
 
-            {/* Admin (existing) */}
+            {/* ---------- Admin ---------- */}
             <Route path="/admin/login" element={<AdminLogin />} />
             <Route
               path="/admin/dashboard"
@@ -211,7 +208,7 @@ export default function App() {
               }
             />
 
-            {/* ✅ Research Admin Panel */}
+            {/* ---------- Research Admin ---------- */}
             <Route
               path="/admin/research"
               element={
@@ -221,7 +218,7 @@ export default function App() {
               }
             />
 
-            {/* 404 */}
+            {/* ---------- 404 ---------- */}
             <Route path="*" element={<NotFound />} />
           </Routes>
         </div>
