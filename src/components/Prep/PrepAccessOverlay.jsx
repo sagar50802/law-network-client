@@ -1,4 +1,3 @@
-// src/components/Prep/PrepAccessOverlay.jsx
 import { useEffect, useMemo, useState } from "react";
 import { getJSON, upload as postForm } from "../../utils/api";
 
@@ -137,26 +136,23 @@ export default function PrepAccessOverlay({ examId, email }) {
         return;
       }
 
-      // 2) NOT active -> decide by admin settings (or server-provided overlay)
+      // 2) NOT active -> server tells us to show overlay (hard gate)
       let show = true;
       let mode = "";
 
       if (overlay?.show && overlay?.mode) {
-        // server explicit decision
         show = true;
         mode = overlay.mode;
       } else {
-        // client fallback using admin settings
+        // fallback (should rarely be used now)
         const todayDay   = Number(r?.access?.todayDay || 1);
         const trialDays  = Number(exam?.trialDays ?? 0);
         const offsetDays = Number(exam?.overlay?.offsetDays ?? 0);
         const threshold  = Math.max(trialDays, offsetDays);
-        // show when user has crossed the threshold; with 0/0 this shows immediately
         show = todayDay > threshold;
         mode = show ? "purchase" : "";
       }
 
-      // Waiting forces overlay
       if (keepWaiting) { show = true; mode = "waiting"; }
 
       setState(s => ({
@@ -341,19 +337,16 @@ export default function PrepAccessOverlay({ examId, email }) {
     localStorage.setItem(ks.lastActive, String(Date.now()));
     // finish the "approved" window
     if (auto) {
-      // in case the interval tick fired
       localStorage.setItem(ks.approved, "0");
     } else {
       localStorage.removeItem(ks.approved);
     }
     localStorage.removeItem(ks.wait);
     localStorage.removeItem(ks.waitAt);
-    // hard refresh to pick new Day 1 & unlocked content
     try { window.location.reload(); } catch {}
   }
 
   /* ----------------------- render -------------------------------- */
-  // we veil the page if we need to show an overlay state
   const mustVeil = state.show || (state.loading && !!localStorage.getItem(ks.wait));
   if (!mustVeil) return null;
 
