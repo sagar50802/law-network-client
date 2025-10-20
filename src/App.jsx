@@ -26,6 +26,8 @@ import AdminConsultancyEditor from "./components/Admin/AdminConsultancyEditor.js
 import ResearchNav from "./components/ResearchNav/ResearchNav.jsx";
 import LabWizard from "./components/ResearchNav/LabWizard.jsx";
 import ResearchAdminPanel from "./components/ResearchNavAdmin/AdminPanel.jsx";
+/* ✅ NEW: Journey Wizard */
+import ResearchJourneyWizard from "./components/ResearchNav/ResearchJourneyWizard.jsx";
 
 /* ---------- Exam Prep ---------- */
 import PrepList from "./pages/prep/PrepList.jsx";
@@ -120,6 +122,8 @@ export default function App() {
             {/* ---------- Research Navigation (Hub + Sub-Wizard + Admin) ---------- */}
             <Route path="/research-nav" element={<ResearchNav />} />
             <Route path="/research-nav/lab" element={<LabWizard />} />
+            {/* ✅ NEW: Journey Wizard route */}
+            <Route path="/research-nav/journey" element={<ResearchJourneyWizard />} />
             <Route
               path="/admin/research"
               element={
