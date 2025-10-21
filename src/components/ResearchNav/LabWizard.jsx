@@ -1,3 +1,4 @@
+// src/components/ResearchNav/LabWizard.jsx
 import React, { useEffect, useState } from "react";
 import { AnimatePresence, motion } from "framer-motion";
 import { useNavigate } from "react-router-dom";
@@ -73,6 +74,30 @@ function PeacockBackdrop() {
   );
 }
 
+/* ─────────────── TOAST ─────────────── */
+function Toast({ show, text }) {
+  return (
+    <AnimatePresence>
+      {show && (
+        <motion.div
+          initial={{ y: 20, opacity: 0 }}
+          animate={{ y: 0, opacity: 1 }}
+          exit={{ y: 20, opacity: 0 }}
+          transition={{ type: "spring", stiffness: 400, damping: 30 }}
+          className="fixed bottom-6 right-6 z-[60]"
+        >
+          <div
+            className="px-3 py-2 rounded-lg text-sm border shadow-lg"
+            style={{ background: "#033532", borderColor: THEME.border, color: THEME.ink }}
+          >
+            {text}
+          </div>
+        </motion.div>
+      )}
+    </AnimatePresence>
+  );
+}
+
 /* ─────────────── INPUTS ─────────────── */
 function Field({ label, value, onChange, type = "text" }) {
   return (
@@ -85,11 +110,7 @@ function Field({ label, value, onChange, type = "text" }) {
         value={value}
         onChange={(e) => onChange(e.target.value)}
         className="w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2"
-        style={{
-          background: THEME.paper,
-          color: THEME.ink,
-          borderColor: THEME.border,
-        }}
+        style={{ background: THEME.paper, color: THEME.ink, borderColor: THEME.border }}
       />
     </label>
   );
@@ -104,11 +125,7 @@ function Select({ label, value, onChange, options }) {
         value={value}
         onChange={(e) => onChange(e.target.value)}
         className="w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2"
-        style={{
-          background: THEME.paper,
-          color: THEME.ink,
-          borderColor: THEME.border,
-        }}
+        style={{ background: THEME.paper, color: THEME.ink, borderColor: THEME.border }}
       >
         <option value="">Select…</option>
         {options.map((o) => (
@@ -131,35 +148,9 @@ function TextArea({ label, value, onChange, rows = 4 }) {
         value={value}
         onChange={(e) => onChange(e.target.value)}
         className="w-full px-3 py-2 rounded-lg border focus:outline-none focus:ring-2"
-        style={{
-          background: THEME.paper,
-          color: THEME.ink,
-          borderColor: THEME.border,
-        }}
+        style={{ background: THEME.paper, color: THEME.ink, borderColor: THEME.border }}
       />
     </label>
-  );
-}
-
-/* ─────────────── TOAST ─────────────── */
-function Toast({ show }) {
-  return (
-    <AnimatePresence>
-      {show && (
-        <motion.div
-          initial={{ opacity: 0, y: 30 }}
-          animate={{ opacity: 1, y: 0 }}
-          exit={{ opacity: 0, y: 30 }}
-          className="fixed bottom-6 right-6 rounded-lg px-4 py-2 shadow-lg font-medium"
-          style={{
-            background: THEME.success,
-            color: "#022724",
-          }}
-        >
-          ✅ Saved!
-        </motion.div>
-      )}
-    </AnimatePresence>
   );
 }
 
@@ -176,13 +167,13 @@ const emptyProposal = {
   title: "",
   abstract: "",
   pages: "",
-  labOption: "",
+  labOption: "", // "self" | "pro"
 };
 
 function StudentForm({ onClose }) {
   const navigate = useNavigate();
   const [data, setData] = useState(() => readLS("proposal:data", emptyProposal));
-  const [step, setStep] = useState(0);
+  const [step, setStep] = useState(0); // 0: fields, 1: lab choice
   const [showToast, setShowToast] = useState(false);
 
   const formComplete =
@@ -197,20 +188,36 @@ function StudentForm({ onClose }) {
     data.abstract &&
     data.pages;
 
+  // Persist as user types
   useEffect(() => {
     writeLS("proposal:data", data);
   }, [data]);
 
-  const handleContinue = () => {
-    writeLS("proposal:data", data);
+  const pingSaveToast = (msg = "Submission saved locally ✓") => {
     setShowToast(true);
-    setTimeout(() => setShowToast(false), 1800);
+    setTimeout(() => setShowToast(false), 1200);
+  };
 
-    if (data.labOption === "self") {
-      navigate("/research-nav/journey");
-    } else {
-      onClose?.();
-    }
+  const goNextToOptions = () => {
+    if (!formComplete) return;
+    writeLS("proposal:data", data);
+    pingSaveToast("Form saved ✓");
+    // small delay to let toast appear
+    setTimeout(() => setStep(1), 250);
+  };
+
+  const handleContinue = () => {
+    if (!data.labOption) return;
+    writeLS("proposal:data", data);
+    pingSaveToast();
+    // Navigate automatically for "Create in Your Lab"
+    setTimeout(() => {
+      if (data.labOption === "self") {
+        navigate("/research-nav/journey");
+      } else {
+        onClose?.(); // For "Create with Professionals", close for now (admin flow later)
+      }
+    }, 350);
   };
 
   return (
@@ -223,11 +230,7 @@ function StudentForm({ onClose }) {
       >
         <motion.div
           className="w-[min(880px,95vw)] rounded-2xl border shadow-2xl overflow-hidden"
-          style={{
-            background: THEME.card,
-            borderColor: THEME.border,
-            color: THEME.ink,
-          }}
+          style={{ background: THEME.card, borderColor: THEME.border, color: THEME.ink }}
           initial={{ y: 24, scale: 0.98, opacity: 0 }}
           animate={{ y: 0, scale: 1, opacity: 1 }}
         >
@@ -239,10 +242,7 @@ function StudentForm({ onClose }) {
             <div className="flex items-center gap-3">
               <span
                 className="inline-grid place-items-center h-9 w-9 rounded-xl"
-                style={{
-                  background: "#033532",
-                  border: `1px solid ${THEME.border}`,
-                }}
+                style={{ background: "#033532", border: `1px solid ${THEME.border}` }}
               >
                 📘
               </span>
@@ -301,9 +301,7 @@ function StudentForm({ onClose }) {
                     <Select
                       label="Research Area (Govt Dept)"
                       value={data.researchAreaDept}
-                      onChange={(v) =>
-                        setData({ ...data, researchAreaDept: v })
-                      }
+                      onChange={(v) => setData({ ...data, researchAreaDept: v })}
                       options={GOV_DEPTS}
                     />
                     <Select
@@ -351,40 +349,33 @@ function StudentForm({ onClose }) {
                       title="🧠 Create in Your Lab"
                       desc="Work independently with the wizard and auto-save."
                       selected={data.labOption === "self"}
-                      onSelect={() =>
-                        setData({ ...data, labOption: "self" })
-                      }
+                      onSelect={() => setData({ ...data, labOption: "self" })}
                       disabled={!formComplete}
                     />
                     <LabOption
                       title="👨‍🏫 Create with Professionals"
                       desc="Hand off to our experts. Admin will see your details."
                       selected={data.labOption === "pro"}
-                      onSelect={() =>
-                        setData({ ...data, labOption: "pro" })
-                      }
+                      onSelect={() => setData({ ...data, labOption: "pro" })}
                       disabled={!formComplete}
                     />
                   </div>
-                  <div
-                    className="text-xs mt-2"
-                    style={{ color: THEME.inkSoft }}
-                  >
-                    These options activate once you complete the form above.
+                  <div className="text-xs mt-2" style={{ color: THEME.inkSoft }}>
+                    Options unlock after you complete the form above.
                   </div>
                 </motion.div>
               )}
             </AnimatePresence>
           </div>
 
-          {/* FOOTER */}
+          {/* FOOTER (no Back button by design) */}
           <div
             className="px-5 py-4 border-t flex items-center justify-end gap-2"
             style={{ borderColor: THEME.border }}
           >
             {step === 0 ? (
               <button
-                onClick={() => setStep(1)}
+                onClick={goNextToOptions}
                 disabled={!formComplete}
                 className="px-4 py-2 rounded-lg font-semibold disabled:opacity-50"
                 style={{ background: THEME.aqua, color: "#022724" }}
@@ -404,12 +395,12 @@ function StudentForm({ onClose }) {
           </div>
         </motion.div>
       </motion.div>
-      <Toast show={showToast} />
+
+      <Toast show={showToast} text="Submission saved ✓" />
     </>
   );
 }
 
-/* ─────────────── LAB OPTION BUTTON ─────────────── */
 function LabOption({ title, desc, selected, onSelect, disabled }) {
   return (
     <button
@@ -429,11 +420,7 @@ function LabOption({ title, desc, selected, onSelect, disabled }) {
         {selected && (
           <span
             className="text-xs px-2 py-0.5 rounded-full"
-            style={{
-              background: "#033532",
-              border: `1px solid ${THEME.border}`,
-              color: THEME.aqua,
-            }}
+            style={{ background: "#033532", border: `1px solid ${THEME.border}`, color: THEME.aqua }}
           >
             Selected
           </span>
@@ -446,7 +433,7 @@ function LabOption({ title, desc, selected, onSelect, disabled }) {
   );
 }
 
-/* ─────────────── MAIN ─────────────── */
+/* ─────────────── PAGE WRAPPER ─────────────── */
 export default function LabWizard() {
   const [showForm, setShowForm] = useState(false);
 
@@ -456,11 +443,7 @@ export default function LabWizard() {
 
       <header
         className="sticky top-0 z-30 backdrop-blur border-b flex items-center justify-between px-6 py-3"
-        style={{
-          background: "rgba(2,39,36,.7)",
-          borderColor: THEME.border,
-          color: THEME.aqua,
-        }}
+        style={{ background: "rgba(2,39,36,.7)", borderColor: THEME.border, color: THEME.aqua }}
       >
         <div className="font-semibold">Student Form</div>
         <div className="text-xs" style={{ color: THEME.inkSoft }}>
@@ -477,8 +460,7 @@ export default function LabWizard() {
             <h2 className="text-lg font-semibold text-white">Student Form</h2>
           </div>
           <p className="text-sm mb-5" style={{ color: THEME.inkSoft }}>
-            Fill out the form with accurate details to start your guided research
-            journey.
+            Fill out the form with accurate details to start your guided research journey.
           </p>
           <button
             onClick={() => setShowForm(true)}
