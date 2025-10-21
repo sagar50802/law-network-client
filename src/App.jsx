@@ -22,12 +22,7 @@ import AdminDashboard from "./pages/AdminDashboard.jsx";
 import AdminLogin from "./pages/AdminLogin.jsx";
 import AdminConsultancyEditor from "./components/Admin/AdminConsultancyEditor.jsx";
 
-/* ---------- Research Navigation (NEW) ---------- */
-import ResearchNav from "./components/ResearchNav/ResearchNav.jsx";
-import LabWizard from "./components/ResearchNav/LabWizard.jsx";
-import ResearchAdminPanel from "./components/ResearchNavAdmin/AdminPanel.jsx";
-/* ✅ NEW: Journey Wizard */
-import ResearchJourneyWizard from "./components/ResearchNav/ResearchJourneyWizard.jsx";
+ 
 
 /* ---------- Exam Prep ---------- */
 import PrepList from "./pages/prep/PrepList.jsx";
@@ -119,21 +114,7 @@ export default function App() {
             <Route path="/plagiarism" element={<Plagiarism />} />
             <Route path="/pdfdemo" element={<PdfDemo />} />
 
-            {/* ---------- Research Navigation (Hub + Sub-Wizard + Admin) ---------- */}
-            <Route path="/research-nav" element={<ResearchNav />} />
-            <Route path="/research-nav/lab" element={<LabWizard />} />
-            {/* ✅ NEW: Journey Wizard route */}
-            <Route path="/research-nav/journey" element={<ResearchJourneyWizard />} />
-            <Route
-              path="/admin/research"
-              element={
-                <AdminRoute>
-                  <ResearchAdminPanel />
-                </AdminRoute>
-              }
-            />
-
-            {/* ---------- Exam Prep ---------- */}
+             {/* ---------- Exam Prep ---------- */}
             <Route path="/prep" element={<PrepList />} />
             <Route path="/prep/:examId" element={<PrepWizard />} />
             <Route
