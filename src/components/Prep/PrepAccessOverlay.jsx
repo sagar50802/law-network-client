@@ -1,3 +1,4 @@
+// src/components/Prep/PrepAccessOverlay.jsx
 import { useEffect, useMemo, useState } from "react";
 import { getJSON, upload as postForm } from "../../utils/api";
 
@@ -97,8 +98,8 @@ export default function PrepAccessOverlay({ examId, email }) {
 
     try {
       const qs = new URLSearchParams({ examId, email: email || "" });
-      // *** uses the new server endpoint that *forces* overlay for non-active users
-      const r = await getJSON(`/api/prep/access/status?${qs.toString()}`);
+      // IMPORTANT: use the unique guard route to avoid any collisions
+      const r = await getJSON(`/api/prep/access/status/guard?${qs.toString()}`);
       const { exam, access, overlay } = r || {};
 
       // ACTIVE → hide overlay (unless finishing approval countdown)
@@ -139,8 +140,15 @@ export default function PrepAccessOverlay({ examId, email }) {
       }));
 
       if (!emailField && email) setEmailField(email);
-    } catch {
-      setState(s => ({ ...s, loading: false }));
+    } catch (e) {
+      // FAIL-SAFE: if anything goes wrong, don't expose content — show pay overlay
+      setState(s => ({
+        ...s,
+        loading: false,
+        show: true,
+        mode: "purchase",
+        waiting: false,
+      }));
     }
   }
 
