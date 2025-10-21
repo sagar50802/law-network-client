@@ -1,3 +1,4 @@
+// client/src/App.jsx
 import { BrowserRouter as Router, Routes, Route, useLocation, useParams } from "react-router-dom";
 import { useEffect } from "react";
 
@@ -39,7 +40,7 @@ import AdminTestResults from "./pages/testseries/AdminTestResults.jsx";
 import AdminTestManager from "./pages/testseries/AdminTestManager.jsx";
 
 /* ---------- Research Drafting ---------- */
-import ResearchDrafting from "./pages/ResearchDrafting.jsx";
+import ResearchDrafting from "./pages/ResearchDrafting.jsx"; // ✅ newly added file
 import ResearchDraftingLab from "./pages/ResearchDraftingLab.jsx";
 import AdminResearchPanel from "./components/ResearchDrafting/AdminResearchPanel.jsx";
 
