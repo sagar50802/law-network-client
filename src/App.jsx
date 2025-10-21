@@ -22,8 +22,6 @@ import AdminDashboard from "./pages/AdminDashboard.jsx";
 import AdminLogin from "./pages/AdminLogin.jsx";
 import AdminConsultancyEditor from "./components/Admin/AdminConsultancyEditor.jsx";
 
- 
-
 /* ---------- Exam Prep ---------- */
 import PrepList from "./pages/prep/PrepList.jsx";
 import PrepWizard from "./pages/prep/PrepWizard.jsx";
@@ -39,6 +37,11 @@ import ResultScreen from "./pages/testseries/ResultScreen.jsx";
 import AdminTestImporter from "./pages/testseries/AdminTestImporter.jsx";
 import AdminTestResults from "./pages/testseries/AdminTestResults.jsx";
 import AdminTestManager from "./pages/testseries/AdminTestManager.jsx";
+
+/* ---------- Research Drafting ---------- */
+import ResearchDrafting from "./pages/ResearchDrafting.jsx";
+import ResearchDraftingLab from "./pages/ResearchDraftingLab.jsx";
+import AdminResearchPanel from "./components/ResearchDrafting/AdminResearchPanel.jsx";
 
 /* ---------- Helpers ---------- */
 function NotFound() {
@@ -114,7 +117,19 @@ export default function App() {
             <Route path="/plagiarism" element={<Plagiarism />} />
             <Route path="/pdfdemo" element={<PdfDemo />} />
 
-             {/* ---------- Exam Prep ---------- */}
+            {/* ---------- Research Drafting ---------- */}
+            <Route path="/research-drafting" element={<ResearchDrafting />} />
+            <Route path="/research-drafting/lab/:id" element={<ResearchDraftingLab />} />
+            <Route
+              path="/admin/research-drafting"
+              element={
+                <IfOwnerOnly>
+                  <AdminResearchPanel />
+                </IfOwnerOnly>
+              }
+            />
+
+            {/* ---------- Exam Prep ---------- */}
             <Route path="/prep" element={<PrepList />} />
             <Route path="/prep/:examId" element={<PrepWizard />} />
             <Route
