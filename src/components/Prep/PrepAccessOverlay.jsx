@@ -98,8 +98,8 @@ export default function PrepAccessOverlay({ examId, email }) {
 
     try {
       const qs = new URLSearchParams({ examId, email: email || "" });
-      // IMPORTANT: use the unique guard route to avoid any collisions
-      const r = await getJSON(`/api/prep/access/status/guard?${qs.toString()}`);
+      // Call the overlay-enforcing route (from prep_access.js)
+      const r = await getJSON(`/api/prep/access/status?${qs.toString()}`);
       const { exam, access, overlay } = r || {};
 
       // ACTIVE → hide overlay (unless finishing approval countdown)
