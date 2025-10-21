@@ -1,14 +1,7 @@
 // client/src/pages/ResearchDrafting.jsx
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-import { postJSON } from "../utils/api"; // uses your existing helper
-
-// If you created a dedicated API helper, you can swap saveIntake to that.
-// Keeping it inline so you can drop this file in and go.
-async function saveIntake(payload, id) {
-  const qs = id ? `?id=${encodeURIComponent(id)}` : "";
-  return await postJSON(`/api/research-drafting/${qs}`, payload);
-}
+import { saveIntake } from "../utils/researchDraftingApi"; // ✅ use your existing API helper
 
 const label = "block text-sm font-semibold mb-1";
 const input = "w-full border rounded-xl px-3 py-2 focus:ring-2 focus:ring-indigo-200 outline-none";
@@ -53,7 +46,7 @@ export default function ResearchDrafting() {
 
       {tab === "form" && (
         <div className="grid md:grid-cols-2 gap-4">
-          {/* left */}
+          {/* Left side */}
           <div className="space-y-3">
             <div>
               <label className={label}>Full Name</label>
@@ -104,7 +97,7 @@ export default function ResearchDrafting() {
             </div>
           </div>
 
-          {/* right */}
+          {/* Right side */}
           <div className="space-y-3">
             <div>
               <label className={label}>Qualifications</label>
@@ -144,7 +137,9 @@ export default function ResearchDrafting() {
             <div>
               <label className={label}>Abstract (optional)</label>
               <textarea className={input} rows={6} value={v.abstract} onChange={e=>setV({...v,abstract:e.target.value})}/>
-              <p className="text-xs text-gray-500">If empty, system will auto-suggest 250–450 words later.</p>
+              <p className="text-xs text-gray-500">
+                If empty, system will auto-suggest 250–450 words later.
+              </p>
             </div>
 
             <div>
@@ -189,7 +184,9 @@ Abstract (preview): ${v.abstract?.slice(0,180) || "(will be auto-suggested)"}${(
         )}
         {tab === "preview" && (
           <>
-            <button className="px-4 py-2 rounded-xl border" onClick={()=>setTab("form")}>Back to Edit</button>
+            <button className="px-4 py-2 rounded-xl border" onClick={()=>setTab("form")}>
+              Back to Edit
+            </button>
             <button className="px-4 py-2 rounded-xl bg-indigo-600 text-white" onClick={goChoose}>
               Next
             </button>
@@ -200,14 +197,12 @@ Abstract (preview): ${v.abstract?.slice(0,180) || "(will be auto-suggested)"}${(
             <button className="px-4 py-2 rounded-xl border" onClick={()=>setTab("form")}>
               Back & Edit
             </button>
-            {/* This navigates to your existing LabFlow route */}
             <button
               className="px-4 py-2 rounded-xl bg-emerald-600 text-white"
               onClick={()=> id && nav(`/research-drafting/lab/${id}`)}
             >
               Create in Your Lab
             </button>
-            {/* Hand-off to professionals via WhatsApp query */}
             <a
               className="px-4 py-2 rounded-xl bg-amber-600 text-white"
               href={`https://wa.me/919999999999?text=${encodeURIComponent("Research Query regarding: " + (v.title||v.subject))}`}
