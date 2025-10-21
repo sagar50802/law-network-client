@@ -39,7 +39,9 @@ export default function Navbar() {
   return (
     <nav className="sticky top-0 z-40 bg-white/80 backdrop-blur border-b">
       <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-        <a href="/" className="font-black text-xl">Law Network</a>
+        <a href="/" className="font-black text-xl">
+          Law Network
+        </a>
 
         {/* Desktop */}
         <div className="hidden md:flex gap-6 items-center">
@@ -55,28 +57,67 @@ export default function Navbar() {
             Consultancy
           </a>
 
-          <a href="/prep" className="hover:text-blue-600">Preparation</a>
+          <a href="/prep" className="hover:text-blue-600">
+            Preparation
+          </a>
 
           <a href="/tests" className="hover:text-blue-600">
             Test Series {testCount ? `(${testCount})` : ""}
           </a>
 
-          <a href="/podcasts" className="hover:text-blue-600">Podcasts</a>
-          <a href="/videos" className="hover:text-blue-600">Video Gallery</a>
-          <a href="/notebook" className="hover:text-blue-600">PDF Notebook</a>
-          <a href="/plagiarism" className="hover:text-blue-600">Plagiarism</a>
-          <a href="/scholar" className="hover:text-blue-600">Scholar Space</a>
+          <a href="/podcasts" className="hover:text-blue-600">
+            Podcasts
+          </a>
+
+          <a href="/videos" className="hover:text-blue-600">
+            Video Gallery
+          </a>
+
+          <a href="/notebook" className="hover:text-blue-600">
+            PDF Notebook
+          </a>
+
+          <a href="/plagiarism" className="hover:text-blue-600">
+            Plagiarism
+          </a>
+
+          {/* ✅ Added Research Drafting link */}
+          <a href="/research-drafting" className="hover:text-blue-600">
+            Research Drafting
+          </a>
+
+          <a href="/scholar" className="hover:text-blue-600">
+            Scholar Space
+          </a>
 
           {/* ✅ Owner-only links */}
           {isOwner() && (
             <>
               <span className="text-gray-300">|</span>
-              <a href="/admin/dashboard" className="text-blue-600 underline">Admin</a>
-              <a href="/admin/prep" className="text-blue-600 underline">Prep Admin</a>
-              <a href="/admin/prep-access" className="text-blue-600 underline">Access Requests</a>
-              <a href="/owner/tests" className="text-blue-600 underline">Manage Tests</a>
-              <a href="/owner/tests/import" className="text-blue-600 underline">Import Tests</a>
-              <a href="/admin/research" className="text-blue-600 underline">Research Admin</a>
+              <a href="/admin/dashboard" className="text-blue-600 underline">
+                Admin
+              </a>
+              <a href="/admin/prep" className="text-blue-600 underline">
+                Prep Admin
+              </a>
+              <a href="/admin/prep-access" className="text-blue-600 underline">
+                Access Requests
+              </a>
+              <a href="/owner/tests" className="text-blue-600 underline">
+                Manage Tests
+              </a>
+              <a href="/owner/tests/import" className="text-blue-600 underline">
+                Import Tests
+              </a>
+              <a href="/admin/research" className="text-blue-600 underline">
+                Research Admin
+              </a>
+              <a
+                href="/admin/research-drafting"
+                className="text-blue-600 underline"
+              >
+                Research Drafting Admin
+              </a>
               <button
                 className="ml-2 text-xs border px-2 py-1 rounded"
                 onClick={() => {
@@ -92,7 +133,9 @@ export default function Navbar() {
 
         {/* Mobile burger */}
         <div className="md:hidden">
-          <button onClick={() => setOpen((v) => !v)} aria-label="Menu">☰</button>
+          <button onClick={() => setOpen((v) => !v)} aria-label="Menu">
+            ☰
+          </button>
         </div>
       </div>
 
@@ -100,23 +143,46 @@ export default function Navbar() {
       {open && (
         <div className="md:hidden px-4 pb-3 flex flex-col gap-2">
           <a href="/articles">Articles</a>
-          <a href="/#consultancy" onClick={goConsultancy}>Consultancy</a>
+          <a href="/#consultancy" onClick={goConsultancy}>
+            Consultancy
+          </a>
           <a href="/prep">Preparation</a>
-          <a href="/tests">Test Series {testCount ? `(${testCount})` : ""}</a>
+          <a href="/tests">
+            Test Series {testCount ? `(${testCount})` : ""}
+          </a>
           <a href="/podcasts">Podcasts</a>
           <a href="/videos">Video Gallery</a>
           <a href="/notebook">PDF Notebook</a>
           <a href="/plagiarism">Plagiarism</a>
+
+          {/* ✅ Added Research Drafting link for mobile */}
+          <a href="/research-drafting">Research Drafting</a>
+
           <a href="/scholar">Scholar Space</a>
 
           {isOwner() && (
             <>
-              <a href="/admin/dashboard" className="underline">Admin</a>
-              <a href="/admin/prep" className="underline">Prep Admin</a>
-              <a href="/admin/prep-access" className="underline">Access Requests</a>
-              <a href="/owner/tests" className="underline">Manage Tests</a>
-              <a href="/owner/tests/import" className="underline">Import Tests</a>
-              <a href="/admin/research" className="underline">Research Admin</a>
+              <a href="/admin/dashboard" className="underline">
+                Admin
+              </a>
+              <a href="/admin/prep" className="underline">
+                Prep Admin
+              </a>
+              <a href="/admin/prep-access" className="underline">
+                Access Requests
+              </a>
+              <a href="/owner/tests" className="underline">
+                Manage Tests
+              </a>
+              <a href="/owner/tests/import" className="underline">
+                Import Tests
+              </a>
+              <a href="/admin/research" className="underline">
+                Research Admin
+              </a>
+              <a href="/admin/research-drafting" className="underline">
+                Research Drafting Admin
+              </a>
               <button
                 className="text-left text-xs border px-2 py-1 rounded w-fit"
                 onClick={() => {
