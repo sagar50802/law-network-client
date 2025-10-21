@@ -5,7 +5,7 @@ import { getJSON } from "../../utils/api";
 
 export default function Navbar() {
   const [articleCount, setArticleCount] = useState(0);
-  const [testCount, setTestCount] = useState(0); // ✅ total tests
+  const [testCount, setTestCount] = useState(0);
   const [open, setOpen] = useState(false);
 
   useEffect(() => {
@@ -14,22 +14,19 @@ export default function Navbar() {
       .catch(() => {});
   }, []);
 
-  // ✅ fetch total number of tests (reads r.tests safely)
   useEffect(() => {
     getJSON("/api/testseries/tests")
       .then((r) => setTestCount(r?.tests?.length || 0))
       .catch(() => {});
   }, []);
 
-  // Smooth-scroll to #consultancy if we're already on "/"
-  // Otherwise navigate to "/#consultancy" so the browser jumps after the home loads.
   function goConsultancy(e) {
     e.preventDefault();
 
     const scrollNow = () => {
       const el = document.getElementById("consultancy");
       if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-      else window.location.hash = "#consultancy"; // fallback
+      else window.location.hash = "#consultancy";
     };
 
     if (window.location.pathname === "/") {
@@ -50,7 +47,6 @@ export default function Navbar() {
             Articles ({articleCount})
           </a>
 
-          {/* Consultancy (scrolls or navigates to #consultancy) */}
           <a
             href="/#consultancy"
             onClick={goConsultancy}
@@ -59,12 +55,8 @@ export default function Navbar() {
             Consultancy
           </a>
 
-          {/* ✅ Exam Preparation */}
-          <a href="/prep" className="hover:text-blue-600">
-            Preparation
-          </a>
+          <a href="/prep" className="hover:text-blue-600">Preparation</a>
 
-          {/* ✅ Test Series (dashboard) */}
           <a href="/tests" className="hover:text-blue-600">
             Test Series {testCount ? `(${testCount})` : ""}
           </a>
@@ -75,20 +67,15 @@ export default function Navbar() {
           <a href="/plagiarism" className="hover:text-blue-600">Plagiarism</a>
           <a href="/scholar" className="hover:text-blue-600">Scholar Space</a>
 
-          {/* ✅ NEW: Research Journey (User) */}
-          <a href="/research-nav" className="hover:text-blue-600">Research Journey</a>
-
-          {/* ✅ Owner-only links (admin view) */}
+          {/* ✅ Owner-only links */}
           {isOwner() && (
             <>
               <span className="text-gray-300">|</span>
               <a href="/admin/dashboard" className="text-blue-600 underline">Admin</a>
               <a href="/admin/prep" className="text-blue-600 underline">Prep Admin</a>
               <a href="/admin/prep-access" className="text-blue-600 underline">Access Requests</a>
-              {/* ✅ NEW: Manage + Import */}
               <a href="/owner/tests" className="text-blue-600 underline">Manage Tests</a>
               <a href="/owner/tests/import" className="text-blue-600 underline">Import Tests</a>
-              {/* ✅ NEW: Research Admin (mirrored milestones) */}
               <a href="/admin/research" className="text-blue-600 underline">Research Admin</a>
               <button
                 className="ml-2 text-xs border px-2 py-1 rounded"
@@ -115,7 +102,6 @@ export default function Navbar() {
           <a href="/articles">Articles</a>
           <a href="/#consultancy" onClick={goConsultancy}>Consultancy</a>
           <a href="/prep">Preparation</a>
-          {/* ✅ Test Series (mobile) */}
           <a href="/tests">Test Series {testCount ? `(${testCount})` : ""}</a>
           <a href="/podcasts">Podcasts</a>
           <a href="/videos">Video Gallery</a>
@@ -123,19 +109,13 @@ export default function Navbar() {
           <a href="/plagiarism">Plagiarism</a>
           <a href="/scholar">Scholar Space</a>
 
-          {/* ✅ NEW: Research Journey (User, mobile) */}
-          <a href="/research-nav">Research Journey</a>
-
-          {/* ✅ Owner-only mobile links */}
           {isOwner() && (
             <>
               <a href="/admin/dashboard" className="underline">Admin</a>
               <a href="/admin/prep" className="underline">Prep Admin</a>
               <a href="/admin/prep-access" className="underline">Access Requests</a>
-              {/* ✅ NEW: Manage + Import (mobile) */}
               <a href="/owner/tests" className="underline">Manage Tests</a>
               <a href="/owner/tests/import" className="underline">Import Tests</a>
-              {/* ✅ NEW: Research Admin (mobile) */}
               <a href="/admin/research" className="underline">Research Admin</a>
               <button
                 className="text-left text-xs border px-2 py-1 rounded w-fit"
