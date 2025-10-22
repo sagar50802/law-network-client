@@ -211,7 +211,7 @@ export function highlightNotes(raw, seedKey = "") {
           <mark
             key={si}
             style={{
-              backgroundColor: "rgba(255, 255, 150, 0.26)",
+              backgroundColor: "rgba(255, 255, 150, 0.26)", // very transparent so lines show
               borderRadius: 6,
               display: "inline",
               padding: "0 2px",
@@ -276,6 +276,7 @@ export function highlightNotes(raw, seedKey = "") {
           </span>
         );
       }
+      // no sentence style → do inline highlights
       return <span key={si}>{renderInline(s, rand)}</span>;
     });
 
@@ -287,7 +288,7 @@ export function highlightNotes(raw, seedKey = "") {
   });
 }
 
-/* ----------- Realistic notebook page ----------- */
+/* ----------- Realistic notebook page (white paper + crisp red margin + blue rules) ----------- */
 export const linedPage = {
   backgroundImage: `
     linear-gradient(90deg, transparent 0, transparent 56px, rgba(214,28,28,0.95) 56px, rgba(214,28,28,0.95) 58px, transparent 58px),
@@ -448,7 +449,6 @@ function ModulePanel({ m, index }) {
   const pdfUrl = pick("pdf", m)[0]?.url;
 
   const audioAbs = audioUrl ? absUrl(audioUrl) : "";
-  the
   const videoAbs = videoUrl ? absUrl(videoUrl) : "";
   const pdfAbs = pdfUrl ? absUrl(pdfUrl) : "";
 
@@ -672,7 +672,9 @@ export default function PrepWizard() {
       const [metaRes, todayRes] = await Promise.allSettled([
         getJSON(`/api/prep/user/summary?${qs.toString()}`),
         getJSON(
-          `/api/prep/user/today?examId=${encodeURIComponent(chosenId)}${email ? `&email=${encodeURIComponent(email)}` : ""}`
+          `/api/prep/user/today?examId=${encodeURIComponent(chosenId)}${
+            email ? `&email=${encodeURIComponent(email)}` : ""
+          }`
         ),
       ]);
 
@@ -784,7 +786,7 @@ export default function PrepWizard() {
       </div>
 
       {(() => {
-        const sourceMods = (allModules && allModules.length) ? allModules : modules;
+        const sourceMods = allModules && allModules.length ? allModules : modules;
 
         const byDay = new Map();
         (sourceMods || []).forEach((m) => {
@@ -918,7 +920,7 @@ export default function PrepWizard() {
 
   return (
     <div className="prep-wrap">
-      {/* 🔒 Full-screen gate (payment + WA + submit + waiting + countdown) */}
+      {/* ✅ LawNetwork Prep Access Overlay (enforces purchase/approval via /api/prep/access/status/guard) */}
       <PrepAccessOverlay examId={apiExamId || examSlug} email={localStorage.getItem("userEmail") || ""} />
 
       <div className="tabbar">
