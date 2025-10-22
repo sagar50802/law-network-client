@@ -4,26 +4,22 @@ import { getJSON, postJSON, absUrl } from "../../utils/api";
 import { ImageScroller } from "../../components/ui/ImageScroller";
 import PrepAccessOverlay from "../../components/Prep/PrepAccessOverlay.jsx";
 
-/* -------------------------------------------------------------------------- */
-/*                             ACCESS OVERLAY LOGIC                           */
-/* -------------------------------------------------------------------------- */
+/* ===========================================================================
+   ACCESS CONTROL OVERLAY
+   =========================================================================== */
 function AccessOverlay({ examId, email, onGranted }) {
-  const [state, setState] = useState("checking"); // checking | form | waiting | countdown | granted
-  const [count, setCount] = useState(15);
+  const [state, setState] = useState("checking"); // checking | form | waiting | granted
 
-  // Check current access on mount
+  // 1️⃣  Check existing access
   useEffect(() => {
     async function check() {
-      if (!examId || !email) {
-        setState("form");
-        return;
-      }
+      if (!examId || !email) return setState("form");
       try {
-        const r = await getJSON(
+        const res = await getJSON(
           `/api/prep/access/status?examId=${encodeURIComponent(examId)}&email=${encodeURIComponent(email)}`
         );
-        if (r?.status === "granted") setState("countdown");
-        else if (r?.status === "waiting") setState("waiting");
+        if (res?.status === "granted") setState("granted");
+        else if (res?.status === "waiting") setState("waiting");
         else setState("form");
       } catch {
         setState("form");
@@ -32,91 +28,81 @@ function AccessOverlay({ examId, email, onGranted }) {
     check();
   }, [examId, email]);
 
-  // Poll while waiting for admin approval
+  // 2️⃣  Poll server while waiting
   useEffect(() => {
     if (state !== "waiting") return;
     const t = setInterval(async () => {
       try {
-        const r = await getJSON(
+        const res = await getJSON(
           `/api/prep/access/status?examId=${encodeURIComponent(examId)}&email=${encodeURIComponent(email)}`
         );
-        if (r?.status === "granted") {
-          setState("countdown");
+        if (res?.status === "granted") {
           clearInterval(t);
+          setState("granted");
+          onGranted?.();
         }
       } catch {
-        /* ignore */
+        /* ignore network errors silently */
       }
     }, 5000);
     return () => clearInterval(t);
   }, [state, examId, email]);
 
-  // 15-second countdown before unlock
-  useEffect(() => {
-    if (state !== "countdown") return;
-    const id = setInterval(() => {
-      setCount((c) => {
-        if (c <= 1) {
-          clearInterval(id);
-          setState("granted");
-          onGranted?.();
-          return 0;
-        }
-        return c - 1;
-      });
-    }, 1000);
-    return () => clearInterval(id);
-  }, [state]);
-
-  async function submitReq() {
+  async function submitRequest() {
+    if (!examId || !email) {
+      alert("Missing examId or email.");
+      return;
+    }
     try {
       await postJSON("/api/prep/access/request", { examId, email });
       setState("waiting");
     } catch {
-      alert("Failed to send request");
+      alert("Failed to send access request.");
     }
   }
 
+  // 3️⃣  Nothing to render when granted
   if (state === "granted") return null;
-
-  const msg = {
-    checking: "Checking access…",
-    form: "Request Access",
-    waiting: "Waiting for admin approval…",
-    countdown: `Access granted — unlocking in ${count}s`,
-  }[state];
 
   return (
     <div
-      className="fixed inset-0 z-[9999] bg-black/80 text-white flex flex-col items-center justify-center p-6"
+      className="fixed inset-0 z-[9999] bg-black/85 text-white flex flex-col items-center justify-center p-6"
       style={{ backdropFilter: "blur(6px)" }}
     >
-      <div className="text-2xl font-semibold mb-4">{msg}</div>
+      {state === "checking" && <div className="text-lg">Checking access…</div>}
+
       {state === "form" && (
-        <button
-          onClick={submitReq}
-          className="px-5 py-2 bg-amber-500 text-black rounded font-medium hover:bg-amber-400"
-        >
-          Request Access
-        </button>
+        <>
+          <div className="text-xl font-semibold mb-4">Access Required</div>
+          <button
+            onClick={submitRequest}
+            className="px-5 py-2 bg-amber-500 text-black rounded font-medium hover:bg-amber-400"
+          >
+            Request Access
+          </button>
+        </>
       )}
+
       {state === "waiting" && (
-        <div className="text-sm text-gray-300 animate-pulse">
-          Please wait — this page will unlock automatically when approved.
-        </div>
+        <>
+          <div className="text-lg font-semibold mb-3">Waiting for approval…</div>
+          <div className="text-sm text-gray-300 animate-pulse">
+            Once approved by admin, this page will unlock automatically.
+          </div>
+        </>
       )}
     </div>
   );
 }
 
-/* -------------------------------------------------------------------------- */
-/*                      ORIGINAL PREPWIZARD (UNCHANGED)                       */
-/* -------------------------------------------------------------------------- */
+/* ===========================================================================
+   ORIGINAL PREPWIZARD (UNCHANGED CORE)
+   =========================================================================== */
+
 function readExamId() {
   const parts = window.location.pathname.split("/").filter(Boolean);
   const i = parts.findIndex((p) => p === "prep");
-  const slug = i >= 0 && parts[i + 1] ? decodeURIComponent(parts[i + 1]) : "";
-  return slug;
+  return i >= 0 && parts[i + 1] ? decodeURIComponent(parts[i + 1]) : "";
 }
 function toExamKey(slug = "") {
   return String(slug).replace(/\s+/g, "_").toUpperCase();
@@ -167,9 +153,7 @@ function pick(kind, m) {
 }
 function textOf(m) {
   const candidates = [m?.content, m?.ocrText, m?.text, m?.manualText, m?.description];
-  for (const s of candidates) {
-    if (typeof s === "string" && s.trim()) return s.trim();
-  }
+  for (const s of candidates) if (typeof s === "string" && s.trim()) return s.trim();
   return "";
 }
 function useCountdownToMidnight() {
@@ -225,9 +209,9 @@ function NextDayTeaser({ day }) {
   );
 }
 
-/* -------------------------------------------------------------------------- */
-/*                              MAIN PREPWIZARD                               */
-/* -------------------------------------------------------------------------- */
+/* ===========================================================================
+   MAIN COMPONENT
+   =========================================================================== */
 export default function PrepWizard() {
   const examSlug = readExamId();
   const [apiExamId, setApiExamId] = useState("");
@@ -335,9 +319,9 @@ export default function PrepWizard() {
   return (
     <div className="prep-wrap">
       {/* 🔒 Access gate overlay */}
-      <AccessOverlay examId={apiExamId || examSlug} email={email} onGranted={() => console.log("Unlocked")} />
+      <AccessOverlay examId={apiExamId || examSlug} email={email} onGranted={() => console.log("Access granted")} />
 
-      {/* Optional existing overlay for analytics */}
+      {/* existing internal overlay */}
       <PrepAccessOverlay examId={apiExamId || examSlug} email={email} />
 
       <div className="tabbar">
