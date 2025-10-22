@@ -211,7 +211,7 @@ export function highlightNotes(raw, seedKey = "") {
           <mark
             key={si}
             style={{
-              backgroundColor: "rgba(255, 255, 150, 0.26)", // very transparent so lines show
+              backgroundColor: "rgba(255, 255, 150, 0.26)",
               borderRadius: 6,
               display: "inline",
               padding: "0 2px",
@@ -431,9 +431,7 @@ function LockedPreviewCard({ m }) {
 
       {textOf(m) && <p className="text-xs text-gray-600 italic line-clamp-3">Unlocks soon.</p>}
 
-      {(hasAudio || hasVideo) && (
-        <div className="mt-2 text-xs text-gray-500">Media will unlock when available.</div>
-      )}
+      {(hasAudio || hasVideo) && <div className="mt-2 text-xs text-gray-500">Media will unlock when available.</div>}
     </div>
   );
 }
@@ -633,6 +631,9 @@ export default function PrepWizard() {
   const [currentDay, setCurrentDay] = useState(1);
   const [activeDay, setActiveDay] = useState(1);
 
+  // 🔒 if backend reports locked, never render content list (overlay will show too)
+  const [locked, setLocked] = useState(false);
+
   const email = localStorage.getItem("userEmail") || "";
 
   // Try BOTH ids and pick the one that actually has templates
@@ -679,15 +680,29 @@ export default function PrepWizard() {
       ]);
 
       const meta = metaRes.status === "fulfilled" ? metaRes.value : {};
-      const td = meta.todayDay || 1;
-      const pd = meta.planDays || 1;
+      const td = meta?.access?.todayDay || meta.todayDay || 1;
+      const pd = meta?.access?.planDays || meta.planDays || 1;
       setTodayDay(td);
       setPlanDays(pd);
 
+      // Respect lock from backend (enforced gate)
       let fullToday = [];
-      if (todayRes.status === "fulfilled" && Array.isArray(todayRes.value?.items)) {
+      setLocked(false);
+      if (
+        todayRes.status === "fulfilled" &&
+        todayRes.value &&
+        todayRes.value.success &&
+        Array.isArray(todayRes.value.items)
+      ) {
+        fullToday = todayRes.value.items;
+      } else if (todayRes.status === "fulfilled" && todayRes.value && todayRes.value.locked) {
+        // backend explicitly blocked (not approved / not active)
+        setLocked(true);
+        fullToday = [];
+      } else if (todayRes.status === "fulfilled" && Array.isArray(todayRes.value?.items)) {
         fullToday = todayRes.value.items;
       } else {
+        // fallback to all templates of the current day ONLY if not locked
         fullToday = all.filter((m) => Number(m.dayIndex) === Number(td));
       }
 
@@ -702,7 +717,8 @@ export default function PrepWizard() {
           return ta - tb;
         });
 
-      setModules(releasedToday);
+      // If locked, do not show anything
+      setModules(locked ? [] : releasedToday);
       setAllModules(all);
       setCurrentDay(td);
       setActiveDay(td);
@@ -887,6 +903,8 @@ export default function PrepWizard() {
 
       {loading ? (
         <div className="text-gray-500">Loading…</div>
+      ) : locked ? (
+        <div className="text-gray-500">Access locked — please purchase or wait for approval.</div>
       ) : !releasedModules.length ? (
         <div className="text-gray-500">No modules for today yet.</div>
       ) : (
@@ -908,9 +926,7 @@ export default function PrepWizard() {
 
   const progressTab = (
     <div className="max-w-3xl mx-auto text-sm text-gray-600">
-      <p>
-        Progress view (lightweight). Use “Mark Complete” on Today’s Task to record completion for Day {todayDay}.
-      </p>
+      <p>Progress view (lightweight). Use “Mark Complete” on Today’s Task to record completion for Day {todayDay}.</p>
       <p className="mt-2">
         <i>Tip:</i> If you want a detailed per-topic progress bar, we can add an endpoint that returns the user’s
         completed days/items and render it here.
@@ -920,7 +936,7 @@ export default function PrepWizard() {
 
   return (
     <div className="prep-wrap">
-      {/* ✅ LawNetwork Prep Access Overlay (enforces purchase/approval via /api/prep/access/status/guard) */}
+      {/* ✅ Fullscreen gate — payment → WhatsApp proof → submit → waiting → admin approve → 15s countdown → unlock */}
       <PrepAccessOverlay examId={apiExamId || examSlug} email={localStorage.getItem("userEmail") || ""} />
 
       <div className="tabbar">
