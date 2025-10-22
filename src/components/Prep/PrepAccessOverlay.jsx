@@ -278,12 +278,28 @@ export default function PrepAccessOverlay({ examId, email }) {
     setSubmitting(true);
     try {
       const j = await postForm("/api/prep/access/request", fd);
+
+      // 🔔 NEW: if server says the user is already active, show success and unlock immediately
+      if (j && j.code === "ALREADY_ACTIVE") {
+        // clear any waiting flags
+        localStorage.removeItem(ks.wait);
+        localStorage.removeItem(ks.waitAt);
+        localStorage.setItem(ks.lastActive, String(Date.now()));
+
+        // friendly notice + unlock
+        try { window.toast?.success?.("Access already granted"); } catch {}
+        if (!window.toast) alert("Access already granted");
+        setState(s => ({ ...s, show: false, waiting: false, mode: "" }));
+        try { window.location.reload(); } catch {}
+        return;
+      }
+
       if (!j?.success) {
         alert(j?.error || j?.message || "Request failed");
         return;
       }
 
-      // Auto-grant path
+      // Auto-grant path (admin has auto-approve on)
       if (j?.approved) {
         const until = Date.now() + 15 * 1000;
         localStorage.setItem(ks.approved, String(until));
@@ -293,7 +309,7 @@ export default function PrepAccessOverlay({ examId, email }) {
         return;
       }
 
-      // Waiting path
+      // Waiting path (normal manual approval)
       localStorage.setItem(ks.wait, "1");
       localStorage.setItem(ks.waitAt, String(Date.now()));
       setState(s => ({ ...s, mode: "waiting", show: true, waiting: true }));
