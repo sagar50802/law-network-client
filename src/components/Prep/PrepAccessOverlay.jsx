@@ -1,9 +1,10 @@
-// src/components/Prep/PrepAccessOverlay.jsx
 import { useEffect, useMemo, useState } from "react";
 import { getJSON, upload as postForm } from "../../utils/api";
 
 /* Small helpers */
-function clamp(n, lo, hi) { return Math.max(lo, Math.min(hi, n)); }
+function clamp(n, lo, hi) {
+  return Math.max(lo, Math.min(hi, n));
+}
 
 /** Component */
 export default function PrepAccessOverlay({ examId, email }) {
@@ -12,12 +13,12 @@ export default function PrepAccessOverlay({ examId, email }) {
     const e = String(examId || "").trim();
     const u = String(email || "").trim() || "anon";
     return {
-      wait:       `overlayWaiting:${e}:${u}`,           // user submitted; show "waiting"
-      waitAt:     `overlayWaiting:${e}:${u}:at`,
-      upiStart:   `overlayUPIStart:${e}:${u}`,
-      waStart:    `overlayWAStart:${e}:${u}`,
-      approved:   `overlayApprovedUntil:${e}:${u}`,     // ts (ms) when the 15s window ends
-      lastActive: `overlayLastActiveAt:${e}:${u}`,      // last time we knew access was active
+      wait: `overlayWaiting:${e}:${u}`,
+      waitAt: `overlayWaiting:${e}:${u}:at`,
+      upiStart: `overlayUPIStart:${e}:${u}`,
+      waStart: `overlayWAStart:${e}:${u}`,
+      approved: `overlayApprovedUntil:${e}:${u}`,
+      lastActive: `overlayLastActiveAt:${e}:${u}`,
     };
   }, [examId, email]);
 
@@ -25,7 +26,7 @@ export default function PrepAccessOverlay({ examId, email }) {
   const [state, setState] = useState({
     loading: true,
     show: !!(examId && localStorage.getItem(ks.wait)),
-    mode: localStorage.getItem(ks.wait) ? "waiting" : "", // "purchase" | "restart" | "waiting" | "approved"
+    mode: localStorage.getItem(ks.wait) ? "waiting" : "",
     exam: {},
     access: {},
     overlay: {},
@@ -98,39 +99,52 @@ export default function PrepAccessOverlay({ examId, email }) {
 
     try {
       const qs = new URLSearchParams({ examId, email: email || "" });
-      // Call the overlay-enforcing route (from prep_access.js)
       const r = await getJSON(`/api/prep/access/status/guard?${qs.toString()}`);
       const { exam, access, overlay } = r || {};
 
-      // ACTIVE → hide overlay (unless finishing approval countdown)
       if (access?.status === "active") {
         localStorage.setItem(ks.lastActive, String(Date.now()));
         const until = Number(localStorage.getItem(ks.approved) || 0);
         if (until > Date.now()) {
-          setState(s => ({
-            ...s, loading:false, show:true, mode:"approved", waiting:false,
-            exam: exam || {}, access: access || {}, overlay: overlay || {},
+          setState((s) => ({
+            ...s,
+            loading: false,
+            show: true,
+            mode: "approved",
+            waiting: false,
+            exam: exam || {},
+            access: access || {},
+            overlay: overlay || {},
           }));
         } else {
           localStorage.removeItem(ks.wait);
           localStorage.removeItem(ks.waitAt);
-          setState(s => ({
-            ...s, loading:false, show:false, waiting:false, mode:"",
-            exam: exam || {}, access: access || {}, overlay: overlay || {},
+          setState((s) => ({
+            ...s,
+            loading: false,
+            show: false,
+            waiting: false,
+            mode: "",
+            exam: exam || {},
+            access: access || {},
+            overlay: overlay || {},
           }));
         }
         if (!emailField && email) setEmailField(email);
         return;
       }
 
-      // NOT ACTIVE → overlay ON (server already decided the mode)
+      // inactive → keep overlay visible
       let show = true;
       let mode = overlay?.mode || "purchase";
-      if (keepWaiting) { show = true; mode = "waiting"; }
+      if (keepWaiting) {
+        show = true;
+        mode = "waiting";
+      }
 
-      setState(s => ({
+      setState((s) => ({
         ...s,
-        loading:false,
+        loading: false,
         show,
         mode,
         waiting: mode === "waiting",
@@ -141,8 +155,8 @@ export default function PrepAccessOverlay({ examId, email }) {
 
       if (!emailField && email) setEmailField(email);
     } catch (e) {
-      // FAIL-SAFE: if anything goes wrong, don't expose content — show pay overlay
-      setState(s => ({
+      console.warn("Overlay guard fetch failed:", e);
+      setState((s) => ({
         ...s,
         loading: false,
         show: true,
@@ -152,12 +166,22 @@ export default function PrepAccessOverlay({ examId, email }) {
     }
   }
 
-  useEffect(() => { fetchStatus(); /* eslint-disable-next-line */ }, [examId, email]);
+  useEffect(() => {
+    fetchStatus();
+  }, [examId, email]); // safe effect
 
-  // Poll request status when waiting
+  /* ----------- subtle enhancement: periodic backend recheck ---------- */
+  useEffect(() => {
+    const id = setInterval(() => {
+      if (!state.show) return;
+      fetchStatus();
+    }, 5000);
+    return () => clearInterval(id);
+  }, [state.show]); // harmless polling
+
+  /* ----------------------- request polling -------------------------- */
   useEffect(() => {
     if (!state?.waiting || !emailField) return;
-
     let stop = false;
     let noneCount = 0;
 
@@ -173,7 +197,7 @@ export default function PrepAccessOverlay({ examId, email }) {
           localStorage.removeItem(ks.wait);
           localStorage.removeItem(ks.waitAt);
           stop = true;
-          setState(s => ({ ...s, show: true, waiting: false, mode: "approved" }));
+          setState((s) => ({ ...s, show: true, waiting: false, mode: "approved" }));
           return;
         }
 
@@ -181,18 +205,18 @@ export default function PrepAccessOverlay({ examId, email }) {
           stop = true;
           localStorage.removeItem(ks.wait);
           localStorage.removeItem(ks.waitAt);
-          setState(s => ({ ...s, show: true, waiting: false, mode: "" }));
+          setState((s) => ({ ...s, show: true, waiting: false, mode: "" }));
           alert("Your request was rejected. Please contact support.");
           return;
         }
 
         if (!j?.status) {
-          noneCount += 1;
+          noneCount++;
           if (noneCount >= 3) {
             stop = true;
             localStorage.removeItem(ks.wait);
             localStorage.removeItem(ks.waitAt);
-            setState(s => ({ ...s, waiting: false, mode: "", show: true }));
+            setState((s) => ({ ...s, waiting: false, mode: "", show: true }));
             alert("We didn’t find your request. Please submit again.");
             return;
           }
@@ -202,16 +226,15 @@ export default function PrepAccessOverlay({ examId, email }) {
     };
 
     loop();
-    return () => { stop = true; };
-    // eslint-disable-next-line
+    return () => {
+      stop = true;
+    };
   }, [state?.waiting, emailField, examId]);
 
-  /* ----------------------- payment links --------------------------- */
+  /* ----------------------- payment link builders --------------------- */
   function buildPayMeta() {
-    const pay = state?.overlay?.payment
-      || state?.exam?.overlay?.payment
-      || state?.exam?.payment
-      || {};
+    const pay =
+      state?.overlay?.payment || state?.exam?.overlay?.payment || state?.exam?.payment || {};
 
     const courseName = state?.exam?.name || String(examId || "").toUpperCase();
     const priceINR = Number(pay.priceINR ?? state?.exam?.price ?? 0);
@@ -223,7 +246,9 @@ export default function PrepAccessOverlay({ examId, email }) {
     const waText = (pay.whatsappText || `Hello, I paid for "${courseName}" (₹${priceINR}).`).trim();
 
     const upiLink = upiId
-      ? `upi://pay?pa=${encodeURIComponent(upiId)}${upiName ? `&pn=${encodeURIComponent(upiName)}` : ""}${priceINR ? `&am=${encodeURIComponent(priceINR)}` : ""}&cu=INR&tn=${encodeURIComponent(`Payment for ${courseName}`)}`
+      ? `upi://pay?pa=${encodeURIComponent(upiId)}${upiName ? `&pn=${encodeURIComponent(upiName)}` : ""}${priceINR ? `&am=${encodeURIComponent(priceINR)}` : ""}&cu=INR&tn=${encodeURIComponent(
+          `Payment for ${courseName}`
+        )}`
       : "";
 
     const waLink = wa ? `https://wa.me/${wa}?text=${encodeURIComponent(waText)}` : "";
@@ -239,7 +264,9 @@ export default function PrepAccessOverlay({ examId, email }) {
     const now = Date.now();
     localStorage.setItem(ks.upiStart, String(now));
     setUpiStartTs(now);
-    try { window.location.href = pay.upiLink; } catch {}
+    try {
+      window.location.href = pay.upiLink;
+    } catch {}
   };
 
   const handleWA = () => {
@@ -250,47 +277,43 @@ export default function PrepAccessOverlay({ examId, email }) {
     window.open(pay.waLink, "_blank", "noopener,noreferrer");
   };
 
-  // Submit create-request
   async function submitRequest() {
     if (state.mode === "waiting") return;
 
     const intentMode = state.mode || "purchase";
     const emailVal = (emailField || "").trim();
-    if (!emailVal) { alert("Please enter your email."); return; }
+    if (!emailVal) {
+      alert("Please enter your email.");
+      return;
+    }
 
     const fd = new FormData();
     fd.append("examId", examId);
     fd.append("email", emailVal);
     fd.append("userEmail", emailVal);
-    fd.append("intent", intentMode === "purchase" ? "purchase" : "restart"); // must be purchase|restart
-    if (nameField)  fd.append("name",  nameField);
+    fd.append("intent", intentMode === "purchase" ? "purchase" : "restart");
+    if (nameField) fd.append("name", nameField);
     if (phoneField) fd.append("phone", phoneField);
 
     const noteBits = [];
-    if (nameField)  noteBits.push(`name=${nameField}`);
+    if (nameField) noteBits.push(`name=${nameField}`);
     if (phoneField) noteBits.push(`phone=${phoneField}`);
     if (upiStartTs) noteBits.push("upi_clicked=1");
-    if (waStartTs)  noteBits.push("wa_clicked=1");
+    if (waStartTs) noteBits.push("wa_clicked=1");
     if (noteBits.length) fd.append("note", noteBits.join("; "));
 
     localStorage.setItem("userEmail", emailVal);
-
     setSubmitting(true);
+
     try {
       const j = await postForm("/api/prep/access/request", fd);
-
-      // 🔔 NEW: if server says the user is already active, show success and unlock immediately
       if (j && j.code === "ALREADY_ACTIVE") {
-        // clear any waiting flags
         localStorage.removeItem(ks.wait);
         localStorage.removeItem(ks.waitAt);
         localStorage.setItem(ks.lastActive, String(Date.now()));
-
-        // friendly notice + unlock
-        try { window.toast?.success?.("Access already granted"); } catch {}
-        if (!window.toast) alert("Access already granted");
-        setState(s => ({ ...s, show: false, waiting: false, mode: "" }));
-        try { window.location.reload(); } catch {}
+        alert("Access already granted");
+        setState((s) => ({ ...s, show: false, waiting: false, mode: "" }));
+        window.location.reload();
         return;
       }
 
@@ -299,42 +322,43 @@ export default function PrepAccessOverlay({ examId, email }) {
         return;
       }
 
-      // Auto-grant path (admin has auto-approve on)
       if (j?.approved) {
         const until = Date.now() + 15 * 1000;
         localStorage.setItem(ks.approved, String(until));
         localStorage.removeItem(ks.wait);
         localStorage.removeItem(ks.waitAt);
-        setState(s => ({ ...s, show: true, waiting: false, mode: "approved" }));
+        setState((s) => ({ ...s, show: true, waiting: false, mode: "approved" }));
         return;
       }
 
-      // Waiting path (normal manual approval)
       localStorage.setItem(ks.wait, "1");
       localStorage.setItem(ks.waitAt, String(Date.now()));
-      setState(s => ({ ...s, mode: "waiting", show: true, waiting: true }));
+      setState((s) => ({ ...s, mode: "waiting", show: true, waiting: true }));
     } catch {
       alert("Could not submit right now. Please try again.");
       localStorage.removeItem(ks.wait);
       localStorage.removeItem(ks.waitAt);
-      setState(s => ({ ...s, waiting: false, mode: "", show: true }));
+      setState((s) => ({ ...s, waiting: false, mode: "", show: true }));
     } finally {
       setSubmitting(false);
     }
   }
 
-  function copy(text) { try { navigator.clipboard?.writeText(text); } catch {} }
+  function copy(text) {
+    try {
+      navigator.clipboard?.writeText(text);
+    } catch {}
+  }
 
   function unlockNow(auto = false) {
     localStorage.setItem(ks.lastActive, String(Date.now()));
-    if (auto) {
-      localStorage.setItem(ks.approved, "0");
-    } else {
-      localStorage.removeItem(ks.approved);
-    }
+    if (auto) localStorage.setItem(ks.approved, "0");
+    else localStorage.removeItem(ks.approved);
     localStorage.removeItem(ks.wait);
     localStorage.removeItem(ks.waitAt);
-    try { window.location.reload(); } catch {}
+    try {
+      window.location.reload();
+    } catch {}
   }
 
   /* ----------------------- render -------------------------------- */
@@ -342,9 +366,11 @@ export default function PrepAccessOverlay({ examId, email }) {
   if (!mustVeil) return null;
 
   const title =
-    state.mode === "waiting"  ? "Waiting for approval"
-  : state.mode === "approved" ? `Approved — unlocking in ${approveLeft || 15}s`
-  : `Start / Restart — ${pay.courseName}`;
+    state.mode === "waiting"
+      ? "Waiting for approval"
+      : state.mode === "approved"
+      ? `Approved — unlocking in ${approveLeft || 15}s`
+      : `Start / Restart — ${pay.courseName}`;
 
   const submitDisabled =
     submitting || state.mode === "waiting" || !(emailField && emailField.trim());
@@ -355,11 +381,11 @@ export default function PrepAccessOverlay({ examId, email }) {
         <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-5">
           <div className="text-lg font-semibold mb-1">{title}</div>
 
-          {/* APPROVED → countdown & unlock button */}
+          {/* approved */}
           {state.mode === "approved" && (
             <>
               <div className="text-sm text-emerald-700 mb-3">
-                Your access has been approved. We’ll unlock the content and reset your schedule to <b>Day 1</b> automatically in ~{approveLeft || 15}s.
+                Your access has been approved. Unlocking in ~{approveLeft || 15}s…
               </div>
               <button
                 className="w-full py-3 rounded bg-emerald-600 text-white text-lg font-semibold mb-2"
@@ -368,12 +394,12 @@ export default function PrepAccessOverlay({ examId, email }) {
                 Unlock now
               </button>
               <div className="text-[11px] text-gray-500">
-                After approval, your schedule starts again from Day 1 with the original release timings.
+                After approval, your schedule restarts from Day 1 automatically.
               </div>
             </>
           )}
 
-          {/* WAITING */}
+          {/* waiting */}
           {state.mode === "waiting" && (
             <>
               <div className="text-sm text-emerald-700 mb-2 flex items-center gap-2">
@@ -381,41 +407,28 @@ export default function PrepAccessOverlay({ examId, email }) {
                 <span>Waiting for admin approval…</span>
               </div>
               <div className="text-[11px] text-gray-500">
-                After approval, your schedule starts again from Day 1 with the original release timings.
+                After approval, your schedule restarts from Day 1 automatically.
               </div>
             </>
           )}
 
-          {/* PURCHASE/RESTART FORM */}
+          {/* purchase/restart */}
           {state.mode !== "waiting" && state.mode !== "approved" && (
             <>
-              <div className="flex items-center justify-between text-xs mb-3">
-                <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-full flex items-center justify-center bg-emerald-600 text-white font-semibold">1</div>
-                  <span>Pay via UPI</span>
-                </div>
-                <div className="flex-1 h-px bg-gray-200 mx-2" />
-                <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-full flex items-center justify-center bg-gray-200 text-gray-700 font-semibold">2</div>
-                  <span>Send Proof</span>
-                </div>
-                <div className="flex-1 h-px bg-gray-200 mx-2" />
-                <div className="flex items-center gap-2">
-                  <div className="w-6 h-6 rounded-full flex items-center justify-center bg-gray-200 text-gray-700 font-semibold">3</div>
-                  <span>Submit</span>
-                </div>
-              </div>
-
               <div className="grid gap-2 mb-3">
                 <button
-                  className={`w-full py-3 rounded text-white text-lg font-semibold ${pay.upiLink ? "bg-emerald-600" : "bg-gray-300 cursor-not-allowed"}`}
+                  className={`w-full py-3 rounded text-white text-lg font-semibold ${
+                    pay.upiLink ? "bg-emerald-600" : "bg-gray-300 cursor-not-allowed"
+                  }`}
                   onClick={handleUPI}
                   disabled={!pay.upiLink}
                 >
                   Pay via UPI
                 </button>
                 <button
-                  className={`w-full py-3 rounded text-lg font-semibold border ${pay.waLink ? "bg-white" : "bg-gray-100 cursor-not-allowed"}`}
+                  className={`w-full py-3 rounded text-lg font-semibold border ${
+                    pay.waLink ? "bg-white" : "bg-gray-100 cursor-not-allowed"
+                  }`}
                   onClick={handleWA}
                   disabled={!pay.waLink}
                 >
@@ -425,24 +438,34 @@ export default function PrepAccessOverlay({ examId, email }) {
 
               {!isAndroid && pay.upiId && (
                 <div className="text-[12px] text-gray-600 mb-3">
-                  Tip: On desktop, copy UPI ID <code className="bg-gray-100 px-1 rounded">{pay.upiId}</code>{" "}
-                  and pay from your phone. <button className="underline" onClick={() => copy(pay.upiId)}>Copy</button>
+                  Copy UPI ID{" "}
+                  <code className="bg-gray-100 px-1 rounded">{pay.upiId}</code>{" "}
+                  <button className="underline" onClick={() => copy(pay.upiId)}>
+                    Copy
+                  </button>
                 </div>
               )}
 
-              {(upiLeft > 0 || waLeft > 0) && (
-                <div className="text-[12px] text-gray-700 mb-3">
-                  {upiLeft > 0 && <div className="mb-1">After paying, <b>return to this tab</b> to finish. Auto-focus in ~{upiLeft}s.</div>}
-                  {waLeft > 0 && <div>After sending the screenshot on WhatsApp, <b>come back here</b>. We’ll bring you back in ~{waLeft}s.</div>}
-                </div>
-              )}
-
-              <input className="w-full border rounded px-3 py-2 mb-2" placeholder="Name"
-                     value={nameField} onChange={e=>setName(e.target.value)} />
-              <input className="w-full border rounded px-3 py-2 mb-2" placeholder="Phone Number"
-                     value={phoneField} onChange={e=>setPhone(e.target.value)} />
-              <input className="w-full border rounded px-3 py-2 mb-3" type="email" required placeholder="Email"
-                     value={emailField} onChange={e=>setEmailField(e.target.value)} />
+              <input
+                className="w-full border rounded px-3 py-2 mb-2"
+                placeholder="Name"
+                value={nameField}
+                onChange={(e) => setName(e.target.value)}
+              />
+              <input
+                className="w-full border rounded px-3 py-2 mb-2"
+                placeholder="Phone Number"
+                value={phoneField}
+                onChange={(e) => setPhone(e.target.value)}
+              />
+              <input
+                className="w-full border rounded px-3 py-2 mb-3"
+                type="email"
+                required
+                placeholder="Email"
+                value={emailField}
+                onChange={(e) => setEmailField(e.target.value)}
+              />
 
               <button
                 className="w-full py-3 rounded bg-emerald-600 text-white text-lg font-semibold disabled:opacity-60"
@@ -451,10 +474,6 @@ export default function PrepAccessOverlay({ examId, email }) {
               >
                 Submit
               </button>
-
-              <div className="text-[11px] text-gray-500 mt-3">
-                After approval, your schedule starts again from Day 1 with the original release timings.
-              </div>
             </>
           )}
         </div>
