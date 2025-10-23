@@ -55,7 +55,8 @@ export default function PrepAccessOverlay({ examId, email }) {
   /* ----------------------- effects: auxiliary timers --------------- */
   useEffect(() => {
     if (!upiStartTs) return;
-    const tick = () => setUpiLeft(Math.max(0, UPI_SECONDS - Math.floor((Date.now() - upiStartTs) / 1000)));
+    const tick = () =>
+      setUpiLeft(Math.max(0, UPI_SECONDS - Math.floor((Date.now() - upiStartTs) / 1000)));
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
@@ -63,7 +64,8 @@ export default function PrepAccessOverlay({ examId, email }) {
 
   useEffect(() => {
     if (!waStartTs) return;
-    const tick = () => setWaLeft(Math.max(0, WA_SECONDS - Math.floor((Date.now() - waStartTs) / 1000)));
+    const tick = () =>
+      setWaLeft(Math.max(0, WA_SECONDS - Math.floor((Date.now() - waStartTs) / 1000)));
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
@@ -366,8 +368,8 @@ export default function PrepAccessOverlay({ examId, email }) {
 
   /* ----------------------- render -------------------------------- */
   const mustVeil = state.show || (state.loading && !!localStorage.getItem(ks.wait));
-  if (!mustVeil) return null;
 
+  // ALWAYS MOUNT; toggle with CSS to align with PrepWizard-style overlay behavior
   const title =
     state.mode === "waiting"
       ? "Waiting for approval"
@@ -379,10 +381,41 @@ export default function PrepAccessOverlay({ examId, email }) {
     submitting || state.mode === "waiting" || !(emailField && emailField.trim());
 
   return (
-    <div className="fixed inset-0 z-[99999] bg-black/60 backdrop-blur-sm">
+    <div
+      className="fixed inset-0 z-[99999] bg-black/60 backdrop-blur-sm"
+      style={{ display: mustVeil ? "block" : "none" }}
+      role="dialog"
+      aria-modal="true"
+    >
       <div className="w-full h-full flex items-center justify-center p-4">
         <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-5">
           <div className="text-lg font-semibold mb-1">{title}</div>
+
+          {/* Step header (PrepWizard-style) */}
+          {state.mode !== "waiting" && state.mode !== "approved" && (
+            <div className="flex items-center justify-between text-xs mb-3">
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-full flex items-center justify-center bg-emerald-600 text-white font-semibold">
+                  1
+                </div>
+                <span>Pay via UPI</span>
+              </div>
+              <div className="flex-1 h-px bg-gray-200 mx-2" />
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-full flex items-center justify-center bg-gray-200 text-gray-700 font-semibold">
+                  2
+                </div>
+                <span>Send Proof</span>
+              </div>
+              <div className="flex-1 h-px bg-gray-200 mx-2" />
+              <div className="flex items-center gap-2">
+                <div className="w-6 h-6 rounded-full flex items-center justify-center bg-gray-200 text-gray-700 font-semibold">
+                  3
+                </div>
+                <span>Submit</span>
+              </div>
+            </div>
+          )}
 
           {/* approved */}
           {state.mode === "approved" && (
@@ -439,13 +472,31 @@ export default function PrepAccessOverlay({ examId, email }) {
                 </button>
               </div>
 
+              {/* Desktop UPI tip (align with wizard) */}
               {!isAndroid && pay.upiId && (
                 <div className="text-[12px] text-gray-600 mb-3">
-                  Copy UPI ID{" "}
+                  Tip: On desktop, copy UPI ID{" "}
                   <code className="bg-gray-100 px-1 rounded">{pay.upiId}</code>{" "}
+                  and pay from your phone.{" "}
                   <button className="underline" onClick={() => copy(pay.upiId)}>
                     Copy
                   </button>
+                </div>
+              )}
+
+              {(upiLeft > 0 || waLeft > 0) && (
+                <div className="text-[12px] text-gray-700 mb-3">
+                  {upiLeft > 0 && (
+                    <div className="mb-1">
+                      After paying, <b>return to this tab</b> to finish. Auto-focus in ~{upiLeft}s.
+                    </div>
+                  )}
+                  {waLeft > 0 && (
+                    <div>
+                      After sending the screenshot on WhatsApp, <b>come back here</b>. We’ll bring
+                      you back in ~{waLeft}s.
+                    </div>
+                  )}
                 </div>
               )}
 
@@ -477,6 +528,11 @@ export default function PrepAccessOverlay({ examId, email }) {
               >
                 Submit
               </button>
+
+              <div className="text-[11px] text-gray-500 mt-3">
+                After approval, your schedule starts again from Day 1 with the original release
+                timings.
+              </div>
             </>
           )}
         </div>
