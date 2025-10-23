@@ -1,5 +1,5 @@
 // client/src/pages/prep/PrepWizard.jsx
-import { useEffect, useMemo, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { getJSON, postJSON, absUrl } from "../../utils/api";
 import { ImageScroller } from "../../components/ui/ImageScroller";
 import PrepAccessOverlay from "../../components/Prep/PrepAccessOverlay.jsx";
@@ -169,7 +169,7 @@ function renderInline(sentence, rand) {
     // sprinkle a few green notes (very low probability)
     if (rand() < 0.045) {
       return (
-        <mark key={i} style={{ backgroundColor: "rgba(194, 255, 125, 0.35)", borderRadius: 2 }}>
+        <mark key={i} style={{ backgroundColor: "rgba(194, 255, 125, 0.35)" }}>
           {tok}
         </mark>
       );
@@ -634,6 +634,10 @@ export default function PrepWizard() {
   // 🔒 if backend reports locked, never render content list (overlay will show too)
   const [locked, setLocked] = useState(false);
 
+  // 🔒 HARD GATE from /access/status/guard — always show overlay until ACTIVE
+  const [gateStatus, setGateStatus] = useState("checking"); // "checking" | "inactive" | "active"
+  const pollRef = useRef(null);
+
   const email = localStorage.getItem("userEmail") || "";
 
   // Try BOTH ids and pick the one that actually has templates
@@ -717,7 +721,7 @@ export default function PrepWizard() {
           return ta - tb;
         });
 
-      // If locked, do not show anything
+      // If locked, do not show anything (PLUS the hard gate below will also protect)
       setModules(locked ? [] : releasedToday);
       setAllModules(all);
       setCurrentDay(td);
@@ -736,6 +740,57 @@ export default function PrepWizard() {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [examSlug]);
+
+  // 🔒 HARD GATE effect (separate from your load()) — checks /access/status/guard
+  useEffect(() => {
+    let cancelled = false;
+
+    async function checkGate() {
+      const ex = apiExamId || examSlug;
+      if (!ex) return;
+      try {
+        const qs = new URLSearchParams({ examId: ex });
+        if (email) qs.set("email", email);
+        const res = await fetch(`/api/prep/access/status/guard?${qs.toString()}`);
+        if (!res.ok) throw new Error("guard fetch failed");
+        const data = await res.json();
+
+        const isActive = data?.access?.status === "active";
+        if (!cancelled) setGateStatus(isActive ? "active" : "inactive");
+
+        // If it just became active, refresh today payload to show content
+        if (isActive && !cancelled) {
+          await load();
+        }
+      } catch (e) {
+        // network/404 → treat as inactive gate (safer)
+        if (!cancelled) setGateStatus("inactive");
+      }
+    }
+
+    // initial check ASAP
+    checkGate();
+
+    // poll every 5s until active (auto unlock)
+    if (pollRef.current) clearInterval(pollRef.current);
+    pollRef.current = setInterval(() => {
+      if (gateStatus === "active") {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+        return;
+      }
+      checkGate();
+    }, 5000);
+
+    return () => {
+      cancelled = true;
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apiExamId, examSlug, email]);
 
   // keep ?tab= in URL for consistency
   useEffect(() => {
@@ -903,7 +958,7 @@ export default function PrepWizard() {
 
       {loading ? (
         <div className="text-gray-500">Loading…</div>
-      ) : locked ? (
+      ) : gateStatus !== "active" || locked ? (   /* ⛔ hard gate: block content until active */
         <div className="text-gray-500">Access locked — please purchase or wait for approval.</div>
       ) : !releasedModules.length ? (
         <div className="text-gray-500">No modules for today yet.</div>
@@ -936,7 +991,7 @@ export default function PrepWizard() {
 
   return (
     <div className="prep-wrap">
-      {/* ✅ Fullscreen gate — payment → WhatsApp proof → submit → waiting → admin approve → 15s countdown → unlock */}
+      {/* ✅ Fullscreen gate — payment → WhatsApp proof → submit → waiting → admin approve → auto unlock */}
       <PrepAccessOverlay examId={apiExamId || examSlug} email={localStorage.getItem("userEmail") || ""} />
 
       <div className="tabbar">
