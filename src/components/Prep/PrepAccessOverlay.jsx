@@ -32,15 +32,24 @@ export default function PrepAccessOverlay({ examId, email }) {
     overlay: {},
   });
 
+  // NEW: show veil immediately on first mount until first fetch decides.
+  const [bootVeil, setBootVeil] = useState(true);
+
   const [submitting, setSubmitting] = useState(false);
   const [nameField, setName] = useState("");
   const [phoneField, setPhone] = useState("");
-  const [emailField, setEmailField] = useState(localStorage.getItem("userEmail") || email || "");
+  const [emailField, setEmailField] = useState(
+    localStorage.getItem("userEmail") || email || ""
+  );
 
   // timers for "return to this tab"
-  const [upiStartTs, setUpiStartTs] = useState(() => Number(localStorage.getItem(ks.upiStart) || 0));
+  const [upiStartTs, setUpiStartTs] = useState(() =>
+    Number(localStorage.getItem(ks.upiStart) || 0)
+  );
   const [upiLeft, setUpiLeft] = useState(0);
-  const [waStartTs, setWaStartTs] = useState(() => Number(localStorage.getItem(ks.waStart) || 0));
+  const [waStartTs, setWaStartTs] = useState(() =>
+    Number(localStorage.getItem(ks.waStart) || 0)
+  );
   const [waLeft, setWaLeft] = useState(0);
   const UPI_SECONDS = 104;
   const WA_SECONDS = 168;
@@ -89,6 +98,7 @@ export default function PrepAccessOverlay({ examId, email }) {
   async function fetchStatus() {
     if (!examId) return;
 
+    // Expire very old waiting marker (>15 min)
     const startedAt = Number(localStorage.getItem(ks.waitAt) || 0);
     if (startedAt && Date.now() - startedAt > 15 * 60 * 1000) {
       localStorage.removeItem(ks.wait);
@@ -164,6 +174,9 @@ export default function PrepAccessOverlay({ examId, email }) {
         mode: "purchase",
         waiting: false,
       }));
+    } finally {
+      // Hide the initial boot veil after first decision
+      setBootVeil(false);
     }
   }
 
@@ -367,7 +380,9 @@ export default function PrepAccessOverlay({ examId, email }) {
   }
 
   /* ----------------------- render -------------------------------- */
-  const mustVeil = state.show || (state.loading && !!localStorage.getItem(ks.wait));
+  // MUST show overlay immediately on first mount, then follow backend.
+  const mustVeil =
+    bootVeil || state.show || (state.loading && !!localStorage.getItem(ks.wait));
 
   // ALWAYS MOUNT; toggle with CSS to align with PrepWizard-style overlay behavior
   const title =
@@ -472,7 +487,7 @@ export default function PrepAccessOverlay({ examId, email }) {
                 </button>
               </div>
 
-              {/* Desktop UPI tip (align with wizard) */}
+              {/* Desktop UPI tip */}
               {!isAndroid && pay.upiId && (
                 <div className="text-[12px] text-gray-600 mb-3">
                   Tip: On desktop, copy UPI ID{" "}
