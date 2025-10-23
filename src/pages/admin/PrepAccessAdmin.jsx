@@ -10,11 +10,9 @@ const BACKEND =
 // join BACKEND + path safely; keep absolute URLs intact
 function abs(url) {
   try {
-    // If already absolute (http/https), use as-is
-    new URL(url);
+    new URL(url); // already absolute
     return url;
   } catch {
-    // Relative path → prefix with BACKEND
     const base = (BACKEND || "").replace(/\/+$/, "");
     const path = url.startsWith("/") ? url : `/${url}`;
     return `${base}${path}`;
@@ -32,9 +30,7 @@ async function getSecureJSON(url) {
     credentials: "include",
   });
   const j = await r.json().catch(() => ({}));
-  if (!r.ok || j?.success === false) {
-    throw new Error(j?.error || j?.message || `GET ${url} failed (${r.status})`);
-  }
+  if (!r.ok || j?.success === false) throw new Error(j?.error || j?.message || `GET ${url} failed`);
   return j;
 }
 
@@ -50,9 +46,8 @@ async function postSecureJSON(url, body) {
     credentials: "include",
   });
   const j = await r.json().catch(() => ({}));
-  if (!r.ok || j?.success === false) {
-    throw new Error(j?.error || j?.message || `POST ${url} failed (${r.status})`);
-  }
+  if (!r.ok || j?.success === false)
+    throw new Error(j?.error || j?.message || `POST ${url} failed`);
   return j;
 }
 
@@ -68,9 +63,8 @@ async function patchSecureJSON(url, body) {
     credentials: "include",
   });
   const j = await r.json().catch(() => ({}));
-  if (!r.ok || j?.success === false) {
-    throw new Error(j?.error || j?.message || `PATCH ${url} failed (${r.status})`);
-  }
+  if (!r.ok || j?.success === false)
+    throw new Error(j?.error || j?.message || `PATCH ${url} failed`);
   return j;
 }
 
@@ -79,18 +73,14 @@ export default function PrepAccessAdmin() {
   const [items, setItems] = useState([]);
   const [examId, setExamId] = useState("");
   const [emailFilter, setEmailFilter] = useState("");
-  const [status, setStatus] = useState("pending"); // pending | approved | rejected | all
+  const [status, setStatus] = useState("pending");
   const [loading, setLoading] = useState(false);
   const [err, setErr] = useState("");
   const [last, setLast] = useState(null);
-
-  // Auto-approval toggle (reads/writes exam.autoGrantRestart)
   const [autoGrant, setAutoGrant] = useState(false);
   const [autoGrantLoading, setAutoGrantLoading] = useState(false);
-
   const pollRef = useRef(null);
 
-  // Always include status (including "all") so server doesn’t default to pending.
   const qs = useMemo(() => {
     const q = new URLSearchParams();
     q.set("status", status || "pending");
@@ -123,7 +113,6 @@ export default function PrepAccessAdmin() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [qs, emailFilter]);
 
-  // Read auto-approval flag whenever examId changes
   useEffect(() => {
     if (!examId) {
       setAutoGrant(false);
@@ -137,14 +126,12 @@ export default function PrepAccessAdmin() {
         );
         setAutoGrant(!!meta?.autoGrantRestart);
       } catch {
-        // ignore; list can still load
       } finally {
         setAutoGrantLoading(false);
       }
     })();
   }, [examId]);
 
-  // Auto-poll every 10s while viewing "pending"
   useEffect(() => {
     if (pollRef.current) {
       clearInterval(pollRef.current);
@@ -154,7 +141,6 @@ export default function PrepAccessAdmin() {
     return () => {
       if (pollRef.current) clearInterval(pollRef.current);
     };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [status, qs, emailFilter]);
 
   async function approve(id, grant = true) {
@@ -184,7 +170,6 @@ export default function PrepAccessAdmin() {
     }
   }
 
-  // NEW: delete a request row (admin cleanup)
   async function deleteRow(id) {
     try {
       await postSecureJSON("/api/prep/access/admin/delete", { requestId: id });
@@ -214,7 +199,6 @@ export default function PrepAccessAdmin() {
     }
   }
 
-  // quick local debug (talks to your debug endpoints)
   async function pingDebug() {
     try {
       const a = await getSecureJSON("/api/prep/access/requests-debug");
@@ -231,12 +215,15 @@ export default function PrepAccessAdmin() {
 
   const statusLabel = status === "all" ? "" : status;
 
+  /* ------------------------- Render ------------------------- */
   return (
     <div className="max-w-5xl mx-auto p-4">
-      <div className="text-lg font-semibold mb-3">Prep • Access Requests</div>
+      <div className="text-xl font-semibold mb-4 border-b pb-2">
+        Admin • Prep Access Requests
+      </div>
 
-      {/* Controls */}
-      <div className="flex flex-wrap gap-2 items-center mb-3">
+      {/* Filters */}
+      <div className="flex flex-wrap items-center gap-3 mb-4 bg-gray-50 border border-gray-200 rounded-lg p-3">
         <select
           className="border px-2 py-1 rounded"
           value={status}
@@ -250,46 +237,46 @@ export default function PrepAccessAdmin() {
         </select>
 
         <input
-          className="border px-2 py-1 rounded w-48"
-          placeholder="Filter by examId"
+          className="border px-2 py-1 rounded w-44"
+          placeholder="Exam ID"
           value={examId}
           onChange={(e) => setExamId(e.target.value)}
         />
         <input
           className="border px-2 py-1 rounded w-56"
-          placeholder="Filter by email"
+          placeholder="User email"
           value={emailFilter}
           onChange={(e) => setEmailFilter(e.target.value)}
         />
-        <button className="px-3 py-1 border rounded" onClick={load}>
+        <button
+          className="px-3 py-1 rounded bg-white border hover:bg-gray-100"
+          onClick={load}
+        >
           Refresh
         </button>
 
         <div className="ml-auto flex items-center gap-2">
-          <label className="text-sm text-gray-700">
-            Auto-approve restarts/purchases
-          </label>
+          <label className="text-sm text-gray-700">Auto-approve restarts</label>
           <button
-            className={`px-3 py-1 rounded ${
-              autoGrant ? "bg-emerald-600 text-white" : "bg-gray-200"
+            className={`px-3 py-1 rounded text-sm font-medium ${
+              autoGrant ? "bg-emerald-600 text-white" : "bg-gray-200 text-gray-700"
             }`}
             onClick={() => toggleAutoGrant(!autoGrant)}
             disabled={!examId || autoGrantLoading}
-            title="When ON, new requests for this exam are immediately approved"
           >
             {autoGrantLoading ? "Saving…" : autoGrant ? "ON" : "OFF"}
           </button>
         </div>
 
         <button
-          className="px-3 py-1 border rounded ml-2"
+          className="px-3 py-1 border rounded text-sm hover:bg-gray-50"
           onClick={pingDebug}
-          title="Check server has rows"
+          title="Check debug info"
         >
           Debug
         </button>
 
-        <div className="text-xs text-gray-600">
+        <div className="text-xs text-gray-500">
           {loading
             ? "Loading…"
             : last
@@ -299,10 +286,10 @@ export default function PrepAccessAdmin() {
       </div>
 
       {err && (
-        <div className="text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded p-2 mb-3">
+        <div className="text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded p-2 mb-4">
           {err}
-          <div className="opacity-70 mt-1">
-            Make sure <code>X-Owner-Key</code> is set as <code>VITE_OWNER_KEY</code>.
+          <div className="text-xs opacity-70 mt-1">
+            Make sure <code>X-Owner-Key</code> matches <code>VITE_OWNER_KEY</code>.
           </div>
         </div>
       )}
@@ -318,9 +305,9 @@ export default function PrepAccessAdmin() {
             const nm = x?.meta?.name || "";
             const ph = x?.meta?.phone || "";
             return (
-              <div key={x._id} className="border rounded p-3">
-                <div className="flex items-center justify-between">
-                  <div className="text-sm font-medium">
+              <div key={x._id} className="border rounded-lg p-3 shadow-sm bg-white">
+                <div className="flex justify-between items-center mb-1">
+                  <div className="font-medium text-sm">
                     {String(x.intent || "").toUpperCase()} • {x.examId}
                   </div>
                   <div className="text-xs text-gray-500">
@@ -328,33 +315,33 @@ export default function PrepAccessAdmin() {
                   </div>
                 </div>
 
-                <div className="text-xs text-gray-700 mt-1">
+                <div className="text-xs text-gray-700 space-y-1">
                   <div>
                     <b>Email:</b> {x.userEmail}
                   </div>
-                  {nm ? (
+                  {nm && (
                     <div>
                       <b>Name:</b> {nm}
                     </div>
-                  ) : null}
-                  {ph ? (
+                  )}
+                  {ph && (
                     <div>
                       <b>Phone:</b> {ph}
                     </div>
-                  ) : null}
+                  )}
                   <div>
                     <b>Price:</b> ₹{x.priceAt ?? 0}
                   </div>
-                  {x.meta?.planLabel ? (
+                  {x.meta?.planLabel && (
                     <div>
                       <b>Plan:</b> {x.meta.planLabel}
                     </div>
-                  ) : null}
-                  {x.note ? (
-                    <div className="mt-1">
+                  )}
+                  {x.note && (
+                    <div>
                       <b>Note:</b> {x.note}
                     </div>
-                  ) : null}
+                  )}
                 </div>
 
                 {x.screenshotUrl && (
@@ -374,35 +361,28 @@ export default function PrepAccessAdmin() {
                   {x.status === "pending" && (
                     <>
                       <button
-                        className="px-3 py-1 rounded bg-emerald-600 text-white"
+                        className="px-3 py-1 rounded bg-emerald-600 text-white text-sm"
                         onClick={() => approve(x._id, true)}
-                        title="Approve and grant access immediately"
                       >
                         Approve & Grant
                       </button>
                       <button
-                        className="px-3 py-1 rounded bg-rose-600 text-white"
+                        className="px-3 py-1 rounded bg-rose-600 text-white text-sm"
                         onClick={() => approve(x._id, false)}
-                        title="Mark as rejected"
                       >
                         Reject
                       </button>
                     </>
                   )}
-
                   <button
-                    className="px-3 py-1 rounded border"
+                    className="px-3 py-1 rounded border text-sm hover:bg-gray-50"
                     onClick={() => revokeRow(x)}
-                    title="Revoke the user’s existing access for this exam"
                   >
                     Revoke Access
                   </button>
-
-                  {/* NEW: Delete row */}
                   <button
-                    className="px-3 py-1 rounded border"
+                    className="px-3 py-1 rounded border text-sm hover:bg-gray-50"
                     onClick={() => deleteRow(x._id)}
-                    title="Remove this request from the list"
                   >
                     Delete Row
                   </button>
