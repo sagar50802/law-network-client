@@ -1,12 +1,11 @@
 // client/src/pages/prep/PrepWizard.jsx
-import { useEffect, useMemo, useState, useRef } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { getJSON, postJSON, absUrl } from "../../utils/api";
 import { ImageScroller } from "../../components/ui/ImageScroller";
 import PrepAccessOverlay from "../../components/Prep/PrepAccessOverlay.jsx";
 
-/**
- * Route shape assumed: /prep/:examId
- */
+/* ────────────────────────────── Route helpers ────────────────────────────── */
+
 function readExamId() {
   const parts = window.location.pathname.split("/").filter(Boolean);
   const i = parts.findIndex((p) => p === "prep");
@@ -14,7 +13,7 @@ function readExamId() {
   return slug;
 }
 
-/** canonical form some admins use: spaces → "_", uppercase */
+/** canonical form some admins use: spaces → "_" and uppercase */
 function toExamKey(slug = "") {
   return String(slug).replace(/\s+/g, "_").toUpperCase();
 }
@@ -32,7 +31,7 @@ function fmtTime(iso) {
   }
 }
 
-/* ---------------- attachment normalization (new + legacy shapes) ---------------- */
+/* ─────────────────── Attachment normalization (all shapes) ───────────────── */
 
 function pick(kind, m) {
   const out = [];
@@ -77,7 +76,8 @@ function pick(kind, m) {
   });
 }
 
-/* --------------- prefer a non-empty text field across all shapes --------------- */
+/* ─────────────── prefer a non-empty text field across all shapes ─────────── */
+
 function textOf(m) {
   const candidates = [m?.content, m?.ocrText, m?.text, m?.manualText, m?.description];
   for (const s of candidates) {
@@ -86,7 +86,7 @@ function textOf(m) {
   return "";
 }
 
-/* ====================== Colorful Notes (sentences + words) ====================== */
+/* ──────────────────────── Colorful Notes (highlighter) ───────────────────── */
 
 const IMPORTANT = [
   /constitution/i,
@@ -133,7 +133,7 @@ function rng(seed) {
   };
 }
 
-// naive sentence split that keeps end punctuation
+// naive sentence split
 function splitSentences(text) {
   const m = text.match(/[^.!?]+[.!?]*/g);
   return m || [text];
@@ -141,9 +141,8 @@ function splitSentences(text) {
 
 const YEAR_RE = /\b(1[5-9]\d{2}|20\d{2}|2100)\b/;
 
-// inline (word-level) highlighting
 function renderInline(sentence, rand) {
-  const parts = sentence.split(/(\b[\p{L}\p{N}']+\b)/u);
+  const parts = sentence.split(/(\b[\p{L}\p{N}']+\b)/u); // keep punctuation and spaces
   return parts.map((tok, i) => {
     if (!/\b[\p{L}\p{N}']+\b/u.test(tok)) return <span key={i}>{tok}</span>;
 
@@ -154,7 +153,6 @@ function renderInline(sentence, rand) {
         </mark>
       );
     }
-
     if (YEAR_RE.test(tok)) {
       return (
         <mark key={i} style={{ backgroundColor: "rgba(255, 242, 0, 0.35)", borderRadius: 2 }}>
@@ -162,7 +160,6 @@ function renderInline(sentence, rand) {
         </mark>
       );
     }
-
     if (rand() < 0.045) {
       return (
         <mark key={i} style={{ backgroundColor: "rgba(194, 255, 125, 0.35)" }}>
@@ -170,7 +167,6 @@ function renderInline(sentence, rand) {
         </mark>
       );
     }
-
     return <span key={i}>{tok}</span>;
   });
 }
@@ -188,6 +184,7 @@ function chooseSentenceStyle(sentence, rand) {
   return null;
 }
 
+// paragraphs → sentences → styled spans
 export function highlightNotes(raw, seedKey = "") {
   if (!raw) return null;
   const paras = String(raw).trim().split(/\n{2,}/);
@@ -280,7 +277,8 @@ export function highlightNotes(raw, seedKey = "") {
   });
 }
 
-/* ----------- Realistic notebook page (white paper + crisp red margin + blue rules) ----------- */
+/* ───────────── Realistic notebook page (red margin + blue rules) ─────────── */
+
 export const linedPage = {
   backgroundImage: `
     linear-gradient(90deg, transparent 0, transparent 56px, rgba(214,28,28,0.95) 56px, rgba(214,28,28,0.95) 58px, transparent 58px),
@@ -301,7 +299,7 @@ export const linedPage = {
   boxShadow: "inset 0 0 8px rgba(0,0,0,0.03)",
 };
 
-/* ---------------- helpers for midnight countdown + day chips ---------------- */
+/* ───────────── helpers for midnight countdown + day chips ───────────── */
 
 function useCountdownToMidnight() {
   const [left, setLeft] = useState(formatLeft());
@@ -358,7 +356,7 @@ function NextDayTeaser({ day }) {
   );
 }
 
-/* ------------------------ fullscreen image viewer ------------------------ */
+/* ─────────────────────── fullscreen image viewer ─────────────────────── */
 
 function FullscreenViewer({ urls, index, onClose }) {
   if (!urls?.length) return null;
@@ -390,7 +388,7 @@ function FullscreenViewer({ urls, index, onClose }) {
   );
 }
 
-/* ------------------------ module + later components ------------------------ */
+/* ───────────────────── module + later components ───────────────────── */
 
 function LockedPreviewCard({ m }) {
   const imgs = pick("image", m);
@@ -428,7 +426,7 @@ function LockedPreviewCard({ m }) {
   );
 }
 
-/* --- Accordion-style module panel: IMAGES → TEXT → AUDIO → VIDEO → PDF --- */
+/* Accordion-style module panel: IMAGES → TEXT → AUDIO → VIDEO → PDF */
 function ModulePanel({ m, index }) {
   const [expanded, setExpanded] = useState(false);
   const [viewer, setViewer] = useState({ open: false, idx: 0 });
@@ -604,11 +602,11 @@ function PreviewPanel({ day, modules }) {
   );
 }
 
-/* ---------------------------------- page ---------------------------------- */
+/* ──────────────────────────────── Page ─────────────────────────────── */
 
 export default function PrepWizard() {
   const examSlug = readExamId(); // e.g. "up apo" or "UP_APO"
-  const [apiExamId, setApiExamId] = useState(""); // chosen id actually used in API calls
+  const [apiExamId, setApiExamId] = useState(""); // chosen id used in API calls
 
   const [tab, setTab] = useState(() => new URLSearchParams(location.search).get("tab") || "today");
   const [loading, setLoading] = useState(false);
@@ -623,15 +621,17 @@ export default function PrepWizard() {
   const [currentDay, setCurrentDay] = useState(1);
   const [activeDay, setActiveDay] = useState(1);
 
-  // 🔒 if backend reports locked, never render content list (overlay will show too)
+  // server lock (fallback)
   const [locked, setLocked] = useState(false);
 
-  // 🔒 Overlay gate control (overlay owns visibility to prevent flicker)
+  // Access gate
   const [gateStatus, setGateStatus] = useState("checking"); // checking | inactive | active
   const [showOverlay, setShowOverlay] = useState(true);
   const pollRef = useRef(null);
 
   const email = localStorage.getItem("userEmail") || "";
+
+  /* ───────────────────────────── Data load ───────────────────────────── */
 
   // Try BOTH ids and pick the one that actually has templates
   async function load() {
@@ -714,7 +714,8 @@ export default function PrepWizard() {
           return ta - tb;
         });
 
-      setModules(locked ? [] : releasedToday);
+      // If locked OR gate not active, do not show anything (overlay protects as well)
+      setModules(locked || gateStatus !== "active" ? [] : releasedToday);
       setAllModules(all);
       setCurrentDay(td);
       setActiveDay(td);
@@ -733,14 +734,17 @@ export default function PrepWizard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [examSlug]);
 
-  // 🔒 Guard effect — keep API call for robustness, but NEVER toggle overlay here.
-  // Overlay is the single authority that will call onApproved() to hide itself.
+  /* ─────────────────────── Access gatekeeper (NO FLASH) ───────────────────────
+     Rule: We DO NOT render tabs/content until guard says "active".
+  -----------------------------------------------------------------------------*/
+
   useEffect(() => {
     let cancelled = false;
 
     async function checkGate() {
       const ex = apiExamId || examSlug;
       if (!ex) return;
+
       try {
         const qs = new URLSearchParams({ examId: ex });
         if (email) qs.set("email", email);
@@ -749,22 +753,37 @@ export default function PrepWizard() {
         const data = await res.json();
 
         const isActive = data?.access?.status === "active";
-        if (!cancelled) setGateStatus(isActive ? "active" : "inactive");
 
-        // If it just became active, refresh modules to show content immediately.
-        if (isActive && !cancelled) {
-          await load();
+        // Persist a local allow token for smoother UX during rapid navigation
+        if (isActive) {
+          localStorage.setItem(`prep:allow:${ex}:${email || "anon"}`, String(Date.now()));
+        }
+
+        if (!cancelled) {
+          setGateStatus(isActive ? "active" : "inactive");
+          setShowOverlay(!isActive); // show overlay until approved
+
+          // Only after becoming active do we fetch modules again
+          if (isActive) {
+            await load();
+          } else {
+            setModules([]); // hard-hide content
+          }
         }
       } catch (err) {
         console.warn("[PrepWizard] guard error:", err);
-        if (!cancelled) setGateStatus("inactive"); // keep overlay visible by default
+        if (!cancelled) {
+          setGateStatus("inactive");
+          setShowOverlay(true);
+          setModules([]); // hide content on error as well
+        }
       }
     }
 
-    // initial check
+    // First check: prevents any content render before the overlay state is known
     checkGate();
 
-    // poll every 5s (safe, does not toggle overlay)
+    // Poll while not active
     if (pollRef.current) clearInterval(pollRef.current);
     pollRef.current = setInterval(() => {
       if (gateStatus === "active") {
@@ -777,10 +796,7 @@ export default function PrepWizard() {
 
     return () => {
       cancelled = true;
-      if (pollRef.current) {
-        clearInterval(pollRef.current);
-        pollRef.current = null;
-      }
+      if (pollRef.current) clearInterval(pollRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiExamId, examSlug, email]);
@@ -811,6 +827,8 @@ export default function PrepWizard() {
     }
   }
 
+  /* ───────────────────────── derived lists ───────────────────────── */
+
   const previewModulesForActiveDay = useMemo(() => {
     return (allModules || [])
       .filter((m) => Number(m.dayIndex) === Number(activeDay))
@@ -838,7 +856,7 @@ export default function PrepWizard() {
     return list;
   }, [modules]);
 
-  /* ---------- Tabs ---------- */
+  /* ───────────────────────────── Tabs ───────────────────────────── */
 
   const cohortDay = todayDay;
   const userStates = undefined;
@@ -952,7 +970,7 @@ export default function PrepWizard() {
       {loading ? (
         <div className="text-gray-500">Loading…</div>
       ) : gateStatus !== "active" || locked ? (
-        // ⛔ IMPORTANT: show nothing if not active or locked — overlay handles the UI.
+        // IMPORTANT: show nothing if not active or locked — overlay handles UX.
         null
       ) : !releasedModules.length ? (
         <div className="text-gray-500">No modules for today yet.</div>
@@ -977,31 +995,31 @@ export default function PrepWizard() {
     <div className="max-w-3xl mx-auto text-sm text-gray-600">
       <p>Progress view (lightweight). Use “Mark Complete” on Today’s Task to record completion for Day {todayDay}.</p>
       <p className="mt-2">
-        <i>Tip:</i> If you want a detailed per-topic progress bar, we can add an endpoint that returns the user’s
-        completed days/items and render it here.
+        <i>Tip:</i> For topic-wise progress, add a backend that returns the user’s completed days/items and render it
+        here.
       </p>
     </div>
   );
 
+  /* ───────────────────────────── Render ───────────────────────────── */
+
   return (
     <div className="prep-wrap">
-      {/* ✅ Fullscreen gate — payment → WhatsApp proof → submit → waiting → admin approve → auto unlock */}
+      {/* Fullscreen gate — payment → WhatsApp proof → submit → waiting → admin approve → auto unlock */}
       {showOverlay && (
         <PrepAccessOverlay
           examId={apiExamId || examSlug}
           email={localStorage.getItem("userEmail") || ""}
           onApproved={() => {
-            // Overlay is the only authority that may hide itself; add a tiny delay for stability.
-            setTimeout(() => {
-              setShowOverlay(false);
-              setGateStatus("active");
-              load();
-            }, 250);
+            // Called by overlay when the backend moves to "active" (manual or auto)
+            setShowOverlay(false);
+            setGateStatus("active");
+            load();
           }}
         />
       )}
 
-      {/* ✅ Hide tabbar + page content while checking or overlay visible → prevents any flash */}
+      {/* Hide tabbar + page content while checking or overlay visible → prevents any flash */}
       {gateStatus === "checking" || showOverlay ? null : (
         <>
           <div className="tabbar">
