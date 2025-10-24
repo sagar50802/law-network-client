@@ -879,29 +879,29 @@ export default function PrepWizard() {
           );
           const anyReleased = released.length > 0;
 
-          let cls = "daycell";
-          let badge = "";
-          if (d > cohortDay) {
-            cls += " locked";
-            badge = "🔒";
-          } else if (d === cohortDay) {
-            cls += " today";
-            const allDone = released.length && released.every((m) => isDone(m, userStates));
-            if (allDone) badge = "✅";
-            else if (released.length) badge = "●";
+        let cls = "daycell";
+        let badge = "";
+        if (d > cohortDay) {
+          cls += " locked";
+          badge = "🔒";
+        } else if (d === cohortDay) {
+          cls += " today";
+          const allDone = released.length && released.every((m) => isDone(m, userStates));
+          if (allDone) badge = "✅";
+          else if (released.length) badge = "●";
+        } else {
+          const allDone = released.length && released.every((m) => isDone(m, userStates));
+          if (allDone) {
+            cls += " completed";
+            badge = "✅";
+          } else if (anyReleased) {
+            cls += " available";
+            badge = "●";
           } else {
-            const allDone = released.length && released.every((m) => isDone(m, userStates));
-            if (allDone) {
-              cls += " completed";
-              badge = "✅";
-            } else if (anyReleased) {
-              cls += " available";
-              badge = "●";
-            } else {
-              cls += " locked";
-              badge = "—";
-            }
+            cls += " locked";
+            badge = "—";
           }
+        }
 
           const href = d <= cohortDay ? `?tab=today&d=${d}` : undefined;
 
@@ -1002,40 +1002,45 @@ export default function PrepWizard() {
         />
       )}
 
-      <div className="tabbar">
-        <a
-          className={`tab ${tab === "calendar" ? "active" : ""}`}
-          href="?tab=calendar"
-          onClick={(e) => {
-            e.preventDefault();
-            setTab("calendar");
-          }}
-        >
-          Calendar
-        </a>
-        <a
-          className={`tab ${tab === "today" ? "active" : ""}`}
-          href="?tab=today"
-          onClick={(e) => {
-            e.preventDefault();
-            setTab("today");
-          }}
-        >
-          Today’s Task
-        </a>
-        <a
-          className={`tab ${tab === "progress" ? "active" : ""}`}
-          href="?tab=progress"
-          onClick={(e) => {
-            e.preventDefault();
-            setTab("progress");
-          }}
-        >
-          Progress
-        </a>
-      </div>
+      {/* ✅ Hide tabbar + page content while checking or overlay visible → prevents any flash */}
+      {gateStatus === "checking" || showOverlay ? null : (
+        <>
+          <div className="tabbar">
+            <a
+              className={`tab ${tab === "calendar" ? "active" : ""}`}
+              href="?tab=calendar"
+              onClick={(e) => {
+                e.preventDefault();
+                setTab("calendar");
+              }}
+            >
+              Calendar
+            </a>
+            <a
+              className={`tab ${tab === "today" ? "active" : ""}`}
+              href="?tab=today"
+              onClick={(e) => {
+                e.preventDefault();
+                setTab("today");
+              }}
+            >
+              Today’s Task
+            </a>
+            <a
+              className={`tab ${tab === "progress" ? "active" : ""}`}
+              href="?tab=progress"
+              onClick={(e) => {
+                e.preventDefault();
+                setTab("progress");
+              }}
+            >
+              Progress
+            </a>
+          </div>
 
-      {tab === "calendar" ? calendarTab : tab === "progress" ? progressTab : todayTab}
+          {tab === "calendar" ? calendarTab : tab === "progress" ? progressTab : todayTab}
+        </>
+      )}
     </div>
   );
 }
