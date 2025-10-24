@@ -25,6 +25,7 @@ export default function PrepAccessOverlay({ examId, email }) {
   /* ----------------------- component state ------------------------ */
   const [state, setState] = useState({
     loading: true,
+    // show immediately if we were waiting earlier; otherwise we’ll decide after guard fetch
     show: !!(examId && localStorage.getItem(ks.wait)),
     mode: localStorage.getItem(ks.wait) ? "waiting" : "",
     exam: {},
@@ -32,24 +33,15 @@ export default function PrepAccessOverlay({ examId, email }) {
     overlay: {},
   });
 
-  // NEW: show veil immediately on first mount until first fetch decides.
-  const [bootVeil, setBootVeil] = useState(true);
-
   const [submitting, setSubmitting] = useState(false);
   const [nameField, setName] = useState("");
   const [phoneField, setPhone] = useState("");
-  const [emailField, setEmailField] = useState(
-    localStorage.getItem("userEmail") || email || ""
-  );
+  const [emailField, setEmailField] = useState(localStorage.getItem("userEmail") || email || "");
 
   // timers for "return to this tab"
-  const [upiStartTs, setUpiStartTs] = useState(() =>
-    Number(localStorage.getItem(ks.upiStart) || 0)
-  );
+  const [upiStartTs, setUpiStartTs] = useState(() => Number(localStorage.getItem(ks.upiStart) || 0));
   const [upiLeft, setUpiLeft] = useState(0);
-  const [waStartTs, setWaStartTs] = useState(() =>
-    Number(localStorage.getItem(ks.waStart) || 0)
-  );
+  const [waStartTs, setWaStartTs] = useState(() => Number(localStorage.getItem(ks.waStart) || 0));
   const [waLeft, setWaLeft] = useState(0);
   const UPI_SECONDS = 104;
   const WA_SECONDS = 168;
@@ -98,7 +90,6 @@ export default function PrepAccessOverlay({ examId, email }) {
   async function fetchStatus() {
     if (!examId) return;
 
-    // Expire very old waiting marker (>15 min)
     const startedAt = Number(localStorage.getItem(ks.waitAt) || 0);
     if (startedAt && Date.now() - startedAt > 15 * 60 * 1000) {
       localStorage.removeItem(ks.wait);
@@ -111,8 +102,7 @@ export default function PrepAccessOverlay({ examId, email }) {
       const qs = new URLSearchParams({ examId, email: email || "" });
       const r = await getJSON(`/api/prep/access/status/guard?${qs.toString()}`);
       const { exam, access, overlay } = r || {};
-      console.log("[Overlay fetch]", r);
-
+      // If not ACTIVE, we **force-show** overlay instantly:
       if (access?.status === "active") {
         localStorage.setItem(ks.lastActive, String(Date.now()));
         const until = Number(localStorage.getItem(ks.approved) || 0);
@@ -174,14 +164,14 @@ export default function PrepAccessOverlay({ examId, email }) {
         mode: "purchase",
         waiting: false,
       }));
-    } finally {
-      // Hide the initial boot veil after first decision
-      setBootVeil(false);
     }
   }
 
   useEffect(() => {
+    // Show the veil immediately on mount until guard answers
+    setState((s) => ({ ...s, show: true }));
     fetchStatus();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [examId, email]);
 
   useEffect(() => {
@@ -202,7 +192,6 @@ export default function PrepAccessOverlay({ examId, email }) {
       try {
         const qs = new URLSearchParams({ examId, email: emailField });
         const j = await getJSON(`/api/prep/access/request/status?${qs.toString()}`);
-        console.log("[Overlay poll request]", j);
 
         if (j?.status === "approved") {
           const until = Date.now() + 15 * 1000;
@@ -323,7 +312,6 @@ export default function PrepAccessOverlay({ examId, email }) {
 
     try {
       const j = await postForm("/api/prep/access/request", fd);
-      console.log("[Overlay submit]", j);
 
       if (j && j.code === "ALREADY_ACTIVE") {
         localStorage.removeItem(ks.wait);
@@ -349,6 +337,7 @@ export default function PrepAccessOverlay({ examId, email }) {
         return;
       }
 
+      // pending → waiting
       localStorage.setItem(ks.wait, "1");
       localStorage.setItem(ks.waitAt, String(Date.now()));
       setState((s) => ({ ...s, mode: "waiting", show: true, waiting: true }));
@@ -380,11 +369,9 @@ export default function PrepAccessOverlay({ examId, email }) {
   }
 
   /* ----------------------- render -------------------------------- */
-  // MUST show overlay immediately on first mount, then follow backend.
-  const mustVeil =
-    bootVeil || state.show || (state.loading && !!localStorage.getItem(ks.wait));
+  // SHOW IMMEDIATELY (hidden only when guard confirms ACTIVE)
+  const mustVeil = state.show || state.loading;
 
-  // ALWAYS MOUNT; toggle with CSS to align with PrepWizard-style overlay behavior
   const title =
     state.mode === "waiting"
       ? "Waiting for approval"
@@ -406,7 +393,7 @@ export default function PrepAccessOverlay({ examId, email }) {
         <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-5">
           <div className="text-lg font-semibold mb-1">{title}</div>
 
-          {/* Step header (PrepWizard-style) */}
+          {/* Step header (visual only) */}
           {state.mode !== "waiting" && state.mode !== "approved" && (
             <div className="flex items-center justify-between text-xs mb-3">
               <div className="flex items-center gap-2">
