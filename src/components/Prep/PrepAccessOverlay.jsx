@@ -2,47 +2,51 @@
 import { useEffect, useMemo, useRef, useState } from "react";
 import { getJSON, upload as postForm } from "../../utils/api";
 
-/* utils */
+/**
+ * PrepAccessOverlay
+ * - Always shows first for unauthorised users
+ * - Reads payment/price/overlay from /api/prep/exams/:examId/meta  (AdminPrepPanel is the single source of truth)
+ * - UPI + WhatsApp flow → Submit → Waiting → Approval (manual/auto) → 15s unlock window → hide
+ *
+ * Props:
+ *   examId (string, required)
+ *   email  (string, optional; used to prefill)
+ *   onApproved?: () => void   // optional callback to tell parent (PrepWizard) to refresh
+ */
+
 const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
-/**
- * Fullscreen overlay that:
- * - ALWAYS shows first for unauthorised users
- * - UPI + WhatsApp flow, then submit
- * - Waits/polls for admin approval
- * - On approval: 15s unlock window then reload / callback
- *
- * Props:
- *   examId: string (required)
- *   email:  string (optional, pre-filled)
- *   onApproved?: () => void    // optional callback to notify parent (PrepWizard)
- */
 export default function PrepAccessOverlay({ examId, email, onApproved }) {
   /** ----- localStorage keys (per exam+email) ----- */
   const ks = useMemo(() => {
     const e = String(examId || "").trim();
     const u = String(email || "").trim() || "anon";
     return {
-      wait: `overlayWaiting:${e}:${u}`, // set when user submitted; we poll until approved/rejected
+      wait: `overlayWaiting:${e}:${u}`, // set after user submits; we poll until approved/rejected
       waitAt: `overlayWaiting:${e}:${u}:at`,
       upiStart: `overlayUPIStart:${e}:${u}`,
       waStart: `overlayWAStart:${e}:${u}`,
       approved: `overlayApprovedUntil:${e}:${u}`, // ms timestamp for 15s success window
-      lastActive: `overlayLastActiveAt:${e}:${u}`, // for analytics/debug
+      lastActive: `overlayLastActiveAt:${e}:${u}`,
     };
   }, [examId, email]);
 
   /** ----- component state ----- */
   const [state, setState] = useState({
-    mountedAt: Date.now(),
     loading: true,
     show: true, // IMPORTANT: default to true to prevent content flash
     mode: "", // "purchase" | "restart" | "waiting" | "approved"
-    exam: {},
     access: {},
-    overlay: {},
     error: "",
+  });
+
+  // Meta (single source from AdminPrepPanel)
+  const [meta, setMeta] = useState({
+    name: "",
+    price: 0,
+    overlay: {}, // we mainly care about overlay.payment
+    payment: {}, // in case server keeps at root.payment as well
   });
 
   // form fields
@@ -74,10 +78,126 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
       : 0;
   });
 
-  /** ----- keep a hard “mounted” latch to avoid flicker while first guard loads ----- */
+  // hard latch to avoid any overlay flash before first guard completes
   const firstGuardDoneRef = useRef(false);
 
-  /** ----- effects: timer countdowns ----- */
+  /** ---------- READ META FROM AdminPrepPanel SOURCE ---------- */
+  async function fetchExamMeta() {
+    if (!examId) return;
+    try {
+      const r = await getJSON(`/api/prep/exams/${encodeURIComponent(examId)}/meta?_=${Date.now()}`);
+      const courseName = r?.name || String(examId || "").toUpperCase();
+      const price = Number(
+        r?.price ??
+        r?.payment?.priceINR ??
+        r?.overlay?.payment?.priceINR ??
+        0
+      );
+
+      setMeta({
+        name: courseName,
+        price,
+        overlay: r?.overlay || {},
+        payment: r?.payment || {},
+      });
+
+      // If admin changed UPI/WA recently, ensure button states re-evaluate
+    } catch (err) {
+      // keep meta minimal; overlay will still be shown but UPI may be disabled if no config
+      setMeta((m) => ({ ...m, name: m.name || String(examId || "").toUpperCase() }));
+      console.warn("[PrepAccessOverlay] meta fetch failed:", err);
+    }
+  }
+
+  /** ---------- GUARD STATUS (no flash) ---------- */
+  async function fetchGuard() {
+    if (!examId) return;
+
+    // expire very old waiting state (>15min)
+    const startedAt = Number(localStorage.getItem(ks.waitAt) || 0);
+    if (startedAt && Date.now() - startedAt > 15 * 60 * 1000) {
+      localStorage.removeItem(ks.wait);
+      localStorage.removeItem(ks.waitAt);
+    }
+    const keepWaiting = !!localStorage.getItem(ks.wait);
+
+    try {
+      const qs = new URLSearchParams({ examId, email: emailField || email || "" });
+      const r = await getJSON(`/api/prep/access/status/guard?${qs.toString()}`);
+      const { access, overlay } = r || {};
+
+      // ACTIVE → overlay OFF (unless in the 15s approved window)
+      if (access?.status === "active") {
+        localStorage.setItem(ks.lastActive, String(Date.now()));
+        const until = Number(localStorage.getItem(ks.approved) || 0);
+        if (until > Date.now()) {
+          setState((s) => ({
+            ...s,
+            loading: false,
+            show: true,
+            mode: "approved",
+            access: access || {},
+            error: "",
+          }));
+        } else {
+          localStorage.removeItem(ks.wait);
+          localStorage.removeItem(ks.waitAt);
+          setState((s) => ({
+            ...s,
+            loading: false,
+            show: false,
+            mode: "",
+            access: access || {},
+            error: "",
+          }));
+        }
+        firstGuardDoneRef.current = true;
+        if (!emailField && email) setEmailField(email);
+        return;
+      }
+
+      // NOT ACTIVE → overlay ON (server may hint restart/purchase)
+      let show = true;
+      let mode = overlay?.mode || "purchase";
+      if (keepWaiting) {
+        mode = "waiting";
+      }
+
+      setState((s) => ({
+        ...s,
+        loading: false,
+        show,
+        mode,
+        access: access || {},
+        error: "",
+      }));
+      firstGuardDoneRef.current = true;
+
+      if (!emailField && email) setEmailField(email);
+    } catch (err) {
+      // Fail-safe: show purchase overlay rather than exposing content
+      setState((s) => ({
+        ...s,
+        loading: false,
+        show: true,
+        mode: "purchase",
+        access: {},
+        error: "Could not verify access. Please try again.",
+      }));
+      firstGuardDoneRef.current = true;
+    }
+  }
+
+  /** ---------- EFFECTS ---------- */
+  useEffect(() => {
+    // show overlay immediately on first mount (prevents flash), then fetch meta + guard
+    setState((s) => ({ ...s, show: true, loading: true }));
+    fetchExamMeta();
+    fetchGuard();
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [examId, email]);
+
+  // Timers
   useEffect(() => {
     if (!upiStartTs) return;
     const tick = () =>
@@ -108,7 +228,6 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
         until > Date.now() ? Math.ceil((until - Date.now()) / 1000) : 0;
       setApproveLeft(clamp(left, 0, APPROVE_SECONDS));
       if (left <= 0) {
-        // auto-unlock (reload or callback)
         unlockNow(true);
       }
     };
@@ -118,102 +237,9 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.mode]);
 
-  /** ----- core: guard status (no flash) ----- */
-  async function fetchStatus() {
-    if (!examId) return;
-
-    // expire very old waiting state (>15min)
-    const startedAt = Number(localStorage.getItem(ks.waitAt) || 0);
-    if (startedAt && Date.now() - startedAt > 15 * 60 * 1000) {
-      localStorage.removeItem(ks.wait);
-      localStorage.removeItem(ks.waitAt);
-    }
-    const keepWaiting = !!localStorage.getItem(ks.wait);
-
-    try {
-      const qs = new URLSearchParams({ examId, email: emailField || email || "" });
-      const r = await getJSON(`/api/prep/access/status/guard?${qs.toString()}`);
-      const { exam, access, overlay } = r || {};
-
-      // ACTIVE → overlay OFF (unless in the 15s approved window)
-      if (access?.status === "active") {
-        localStorage.setItem(ks.lastActive, String(Date.now()));
-        const until = Number(localStorage.getItem(ks.approved) || 0);
-        if (until > Date.now()) {
-          setState((s) => ({
-            ...s,
-            loading: false,
-            show: true,
-            mode: "approved",
-            waiting: false,
-            exam: exam || {},
-            access: access || {},
-            overlay: overlay || {},
-          }));
-        } else {
-          localStorage.removeItem(ks.wait);
-          localStorage.removeItem(ks.waitAt);
-          setState((s) => ({
-            ...s,
-            loading: false,
-            show: false,
-            waiting: false,
-            mode: "",
-            exam: exam || {},
-            access: access || {},
-            overlay: overlay || {},
-          }));
-        }
-        firstGuardDoneRef.current = true;
-        if (!emailField && email) setEmailField(email);
-        return;
-      }
-
-      // NOT ACTIVE → overlay ON (server may hint restart/purchase)
-      let show = true;
-      let mode = overlay?.mode || "purchase";
-      if (keepWaiting) {
-        show = true;
-        mode = "waiting";
-      }
-
-      setState((s) => ({
-        ...s,
-        loading: false,
-        show,
-        mode,
-        waiting: mode === "waiting",
-        exam: exam || {},
-        access: access || {},
-        overlay: overlay || {},
-      }));
-      firstGuardDoneRef.current = true;
-
-      if (!emailField && email) setEmailField(email);
-    } catch (err) {
-      // Fail-safe: show purchase overlay rather than exposing content
-      setState((s) => ({
-        ...s,
-        loading: false,
-        show: true,
-        mode: "purchase",
-        waiting: false,
-        error: "Could not verify access. Please try again.",
-      }));
-      firstGuardDoneRef.current = true;
-    }
-  }
-
+  /** ---------- WAITING POLL LOOP ---------- */
   useEffect(() => {
-    // show overlay immediately on first mount (prevents flash)
-    setState((s) => ({ ...s, show: true, loading: true }));
-    fetchStatus();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [examId, email]);
-
-  /** ----- waiting poll loop ----- */
-  useEffect(() => {
-    if (!state?.waiting || !emailField) return;
+    if (!state?.mode || state.mode !== "waiting" || !emailField) return;
     let stop = false;
     let noneCount = 0;
 
@@ -229,7 +255,7 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
           localStorage.removeItem(ks.wait);
           localStorage.removeItem(ks.waitAt);
           stop = true;
-          setState((s) => ({ ...s, show: true, waiting: false, mode: "approved" }));
+          setState((s) => ({ ...s, show: true, mode: "approved" }));
           return;
         }
 
@@ -237,7 +263,7 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
           stop = true;
           localStorage.removeItem(ks.wait);
           localStorage.removeItem(ks.waitAt);
-          setState((s) => ({ ...s, show: true, waiting: false, mode: "" }));
+          setState((s) => ({ ...s, show: true, mode: "" }));
           alert("Your request was rejected. Please contact support.");
           return;
         }
@@ -248,7 +274,7 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
             stop = true;
             localStorage.removeItem(ks.wait);
             localStorage.removeItem(ks.waitAt);
-            setState((s) => ({ ...s, waiting: false, mode: "", show: true }));
+            setState((s) => ({ ...s, show: true, mode: "" }));
             alert("We didn’t find your request. Please submit again.");
             return;
           }
@@ -264,22 +290,34 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
       stop = true;
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state?.waiting, emailField, examId]);
+  }, [state?.mode, emailField, examId]);
 
-  /** ----- payment metadata ----- */
+  /** ---------- PAYMENT META (from exam meta only) ---------- */
   const pay = useMemo(() => {
-    const src =
-      state?.overlay?.payment ||
-      state?.exam?.overlay?.payment ||
-      state?.exam?.payment ||
-      {};
-    const courseName = state?.exam?.name || String(examId || "").toUpperCase();
-    const priceINR = Number(src.priceINR ?? state?.exam?.price ?? 0);
-    const upiId = String(src.upiId || "").trim();
+    // AdminPrepPanel writes payment both at meta.payment and meta.overlay.payment (we'll merge safely)
+    const src = {
+      ...(meta?.payment || {}),
+      ...(meta?.overlay?.payment || {}),
+    };
+
+    const courseName = meta?.name || String(examId || "").toUpperCase();
+    // price priority: overlay.payment.priceINR > payment.priceINR > meta.price
+    const priceINR = Number(
+      (meta?.overlay?.payment?.priceINR ??
+        meta?.payment?.priceINR ??
+        meta?.price) || 0
+    );
+
+    const rawUpi = String(src.upiId || "").trim();
+    const upiId = rawUpi;
     const upiName = String(src.upiName || "").trim();
-    let wa = String(src.whatsappNumber || "").trim().replace(/[^\d+]/g, "");
+
+    // normalize WA
+    let wa = String(src.whatsappNumber || "").trim();
+    wa = wa.replace(/[^\d+]/g, "");
     if (wa.startsWith("+")) wa = wa.slice(1);
     if (/^\d{10}$/.test(wa)) wa = "91" + wa;
+
     const waText = (src.whatsappText || `Hello, I paid for "${courseName}" (₹${priceINR}).`).trim();
 
     const upiLink = upiId
@@ -293,17 +331,18 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
     const waLink = wa ? `https://wa.me/${wa}?text=${encodeURIComponent(waText)}` : "";
 
     return { courseName, priceINR, upiId, upiName, upiLink, wa, waLink };
-  }, [state?.overlay, state?.exam, examId]);
+  }, [meta, examId]);
 
   const isAndroid = /Android/i.test(navigator.userAgent);
 
-  /** ----- actions ----- */
+  /** ---------- ACTIONS ---------- */
   const handleUPI = () => {
     if (!pay.upiLink) return;
     const now = Date.now();
     localStorage.setItem(ks.upiStart, String(now));
     setUpiStartTs(now);
     try {
+      // Redirect to UPI URI (works on Android; on desktop, user can copy UPI ID)
       window.location.href = pay.upiLink;
     } catch {}
   };
@@ -351,11 +390,7 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
         localStorage.removeItem(ks.wait);
         localStorage.removeItem(ks.waitAt);
         localStorage.setItem(ks.lastActive, String(Date.now()));
-        try {
-          window.toast?.success?.("Access already granted — redirecting…");
-        } catch {}
-        // small delay to show the toast
-        await sleep(300);
+        await sleep(250);
         unlockNow(false);
         return;
       }
@@ -371,19 +406,19 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
         localStorage.setItem(ks.approved, String(until));
         localStorage.removeItem(ks.wait);
         localStorage.removeItem(ks.waitAt);
-        setState((s) => ({ ...s, show: true, waiting: false, mode: "approved" }));
+        setState((s) => ({ ...s, show: true, mode: "approved" }));
         return;
       }
 
       // wait path
       localStorage.setItem(ks.wait, "1");
       localStorage.setItem(ks.waitAt, String(Date.now()));
-      setState((s) => ({ ...s, mode: "waiting", show: true, waiting: true }));
+      setState((s) => ({ ...s, show: true, mode: "waiting" }));
     } catch {
       alert("Could not submit right now. Please try again.");
       localStorage.removeItem(ks.wait);
       localStorage.removeItem(ks.waitAt);
-      setState((s) => ({ ...s, waiting: false, mode: "", show: true }));
+      setState((s) => ({ ...s, show: true, mode: "" }));
     } finally {
       setSubmitting(false);
     }
@@ -402,7 +437,6 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
     localStorage.removeItem(ks.wait);
     localStorage.removeItem(ks.waitAt);
 
-    // Prefer parent callback; fallback to reload
     if (typeof onApproved === "function") {
       onApproved();
     } else {
@@ -412,8 +446,8 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
     }
   }
 
-  /** ----- render ----- */
-  // If guard hasn’t finished yet, keep overlay visible (prevents flash)
+  /** ---------- RENDER ---------- */
+  // Keep overlay visible until first guard finishes (prevents content flash)
   const mustShow = state.show || !firstGuardDoneRef.current;
   if (!mustShow) return null;
 
@@ -437,7 +471,7 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
         <div className="w-full max-w-md bg-white rounded-2xl shadow-xl p-5">
           <div className="text-lg font-semibold mb-1">{title}</div>
 
-          {/* approved state */}
+          {/* approved */}
           {state.mode === "approved" && (
             <>
               <div className="text-sm text-emerald-700 mb-3">
@@ -490,7 +524,7 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
                   onClick={handleUPI}
                   disabled={!pay.upiLink}
                 >
-                  Pay via UPI
+                  Pay via UPI{meta?.price ? ` • ₹${Number(meta.price)}` : ""}
                 </button>
                 <button
                   className={`w-full py-3 rounded text-lg font-semibold border ${
