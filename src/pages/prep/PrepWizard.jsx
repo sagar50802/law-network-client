@@ -1,11 +1,10 @@
 // client/src/pages/prep/PrepWizard.jsx
-import { useEffect, useMemo, useRef, useState } from "react";
+import { useEffect, useMemo, useState, useRef } from "react";
 import { getJSON, postJSON, absUrl } from "../../utils/api";
 import { ImageScroller } from "../../components/ui/ImageScroller";
 import PrepAccessOverlay from "../../components/Prep/PrepAccessOverlay.jsx";
 
-/* ────────────────────────────── Route helpers ────────────────────────────── */
-
+/** Route shape assumed: /prep/:examId */
 function readExamId() {
   const parts = window.location.pathname.split("/").filter(Boolean);
   const i = parts.findIndex((p) => p === "prep");
@@ -13,7 +12,7 @@ function readExamId() {
   return slug;
 }
 
-/** canonical form some admins use: spaces → "_" and uppercase */
+/** canonical form some admins use: spaces → "_", uppercase */
 function toExamKey(slug = "") {
   return String(slug).replace(/\s+/g, "_").toUpperCase();
 }
@@ -31,7 +30,7 @@ function fmtTime(iso) {
   }
 }
 
-/* ─────────────────── Attachment normalization (all shapes) ───────────────── */
+/* ---------------- attachment normalization (new + legacy shapes) ---------------- */
 
 function pick(kind, m) {
   const out = [];
@@ -76,8 +75,7 @@ function pick(kind, m) {
   });
 }
 
-/* ─────────────── prefer a non-empty text field across all shapes ─────────── */
-
+/* --------------- prefer a non-empty text field across all shapes --------------- */
 function textOf(m) {
   const candidates = [m?.content, m?.ocrText, m?.text, m?.manualText, m?.description];
   for (const s of candidates) {
@@ -86,7 +84,7 @@ function textOf(m) {
   return "";
 }
 
-/* ──────────────────────── Colorful Notes (highlighter) ───────────────────── */
+/* ====================== Colorful Notes (sentences + words) ====================== */
 
 const IMPORTANT = [
   /constitution/i,
@@ -133,7 +131,7 @@ function rng(seed) {
   };
 }
 
-// naive sentence split
+// naive sentence split that keeps end punctuation
 function splitSentences(text) {
   const m = text.match(/[^.!?]+[.!?]*/g);
   return m || [text];
@@ -141,8 +139,9 @@ function splitSentences(text) {
 
 const YEAR_RE = /\b(1[5-9]\d{2}|20\d{2}|2100)\b/;
 
+// inline (word-level) highlighting — used when sentence isn't block styled
 function renderInline(sentence, rand) {
-  const parts = sentence.split(/(\b[\p{L}\p{N}']+\b)/u); // keep punctuation and spaces
+  const parts = sentence.split(/(\b[\p{L}\p{N}']+\b)/u);
   return parts.map((tok, i) => {
     if (!/\b[\p{L}\p{N}']+\b/u.test(tok)) return <span key={i}>{tok}</span>;
 
@@ -174,7 +173,6 @@ function renderInline(sentence, rand) {
 function chooseSentenceStyle(sentence, rand) {
   const words = sentence.trim().split(/\s+/).filter(Boolean).length;
   const isLong = words >= 18;
-
   const r = rand();
   if (isLong && r < 0.32) return "yellow";
   if (r < 0.18) return "underline";
@@ -184,7 +182,6 @@ function chooseSentenceStyle(sentence, rand) {
   return null;
 }
 
-// paragraphs → sentences → styled spans
 export function highlightNotes(raw, seedKey = "") {
   if (!raw) return null;
   const paras = String(raw).trim().split(/\n{2,}/);
@@ -277,8 +274,7 @@ export function highlightNotes(raw, seedKey = "") {
   });
 }
 
-/* ───────────── Realistic notebook page (red margin + blue rules) ─────────── */
-
+/* ----------- Realistic notebook page ----------- */
 export const linedPage = {
   backgroundImage: `
     linear-gradient(90deg, transparent 0, transparent 56px, rgba(214,28,28,0.95) 56px, rgba(214,28,28,0.95) 58px, transparent 58px),
@@ -299,7 +295,7 @@ export const linedPage = {
   boxShadow: "inset 0 0 8px rgba(0,0,0,0.03)",
 };
 
-/* ───────────── helpers for midnight countdown + day chips ───────────── */
+/* ---------------- helpers for midnight countdown + day chips ---------------- */
 
 function useCountdownToMidnight() {
   const [left, setLeft] = useState(formatLeft());
@@ -356,7 +352,7 @@ function NextDayTeaser({ day }) {
   );
 }
 
-/* ─────────────────────── fullscreen image viewer ─────────────────────── */
+/* ------------------------ fullscreen image viewer ------------------------ */
 
 function FullscreenViewer({ urls, index, onClose }) {
   if (!urls?.length) return null;
@@ -388,7 +384,7 @@ function FullscreenViewer({ urls, index, onClose }) {
   );
 }
 
-/* ───────────────────── module + later components ───────────────────── */
+/* ------------------------ module + later components ------------------------ */
 
 function LockedPreviewCard({ m }) {
   const imgs = pick("image", m);
@@ -426,7 +422,7 @@ function LockedPreviewCard({ m }) {
   );
 }
 
-/* Accordion-style module panel: IMAGES → TEXT → AUDIO → VIDEO → PDF */
+/* --- Accordion-style module panel: IMAGES → TEXT → AUDIO → VIDEO → PDF --- */
 function ModulePanel({ m, index }) {
   const [expanded, setExpanded] = useState(false);
   const [viewer, setViewer] = useState({ open: false, idx: 0 });
@@ -602,7 +598,7 @@ function PreviewPanel({ day, modules }) {
   );
 }
 
-/* ──────────────────────────────── Page ─────────────────────────────── */
+/* ---------------------------------- page ---------------------------------- */
 
 export default function PrepWizard() {
   const examSlug = readExamId(); // e.g. "up apo" or "UP_APO"
@@ -621,17 +617,15 @@ export default function PrepWizard() {
   const [currentDay, setCurrentDay] = useState(1);
   const [activeDay, setActiveDay] = useState(1);
 
-  // server lock (fallback)
+  // back-end lock
   const [locked, setLocked] = useState(false);
 
-  // Access gate
+  // overlay gate
   const [gateStatus, setGateStatus] = useState("checking"); // checking | inactive | active
   const [showOverlay, setShowOverlay] = useState(true);
   const pollRef = useRef(null);
 
   const email = localStorage.getItem("userEmail") || "";
-
-  /* ───────────────────────────── Data load ───────────────────────────── */
 
   // Try BOTH ids and pick the one that actually has templates
   async function load() {
@@ -640,14 +634,13 @@ export default function PrepWizard() {
 
     setLoading(true);
     try {
-      // fetch templates for all candidates to decide
       const templateResults = await Promise.all(
         candidates.map((id) =>
           getJSON(`/api/prep/templates?examId=${encodeURIComponent(id)}`).catch(() => ({ items: [] }))
         )
       );
 
-      // choose the id that returned the most items (fallback to first)
+      // choose id with most items
       let choiceIndex = 0;
       let maxItems = -1;
       templateResults.forEach((res, idx) => {
@@ -663,16 +656,14 @@ export default function PrepWizard() {
 
       const all = Array.isArray(templateResults[choiceIndex]?.items) ? templateResults[choiceIndex].items : [];
 
-      // fetch meta + "today" for chosen id
+      // fetch meta + today
       const qs = new URLSearchParams({ examId: chosenId });
       if (email) qs.set("email", email);
 
       const [metaRes, todayRes] = await Promise.allSettled([
         getJSON(`/api/prep/user/summary?${qs.toString()}`),
         getJSON(
-          `/api/prep/user/today?examId=${encodeURIComponent(chosenId)}${
-            email ? `&email=${encodeURIComponent(email)}` : ""
-          }`
+          `/api/prep/user/today?examId=${encodeURIComponent(chosenId)}${email ? `&email=${encodeURIComponent(email)}` : ""}`
         ),
       ]);
 
@@ -682,9 +673,9 @@ export default function PrepWizard() {
       setTodayDay(td);
       setPlanDays(pd);
 
-      // Respect lock from backend (enforced gate)
       let fullToday = [];
       setLocked(false);
+
       if (
         todayRes.status === "fulfilled" &&
         todayRes.value &&
@@ -693,13 +684,11 @@ export default function PrepWizard() {
       ) {
         fullToday = todayRes.value.items;
       } else if (todayRes.status === "fulfilled" && todayRes.value && todayRes.value.locked) {
-        // backend explicitly blocked (not approved / not active)
         setLocked(true);
         fullToday = [];
       } else if (todayRes.status === "fulfilled" && Array.isArray(todayRes.value?.items)) {
         fullToday = todayRes.value.items;
       } else {
-        // fallback to all templates of the current day ONLY if not locked
         fullToday = all.filter((m) => Number(m.dayIndex) === Number(td));
       }
 
@@ -714,8 +703,7 @@ export default function PrepWizard() {
           return ta - tb;
         });
 
-      // If locked OR gate not active, do not show anything (overlay protects as well)
-      setModules(locked || gateStatus !== "active" ? [] : releasedToday);
+      setModules(locked ? [] : releasedToday);
       setAllModules(all);
       setCurrentDay(td);
       setActiveDay(td);
@@ -734,17 +722,12 @@ export default function PrepWizard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [examSlug]);
 
-  /* ─────────────────────── Access gatekeeper (NO FLASH) ───────────────────────
-     Rule: We DO NOT render tabs/content until guard says "active".
-  -----------------------------------------------------------------------------*/
-
+  // overlay gate control — checks /access/status/guard
   useEffect(() => {
     let cancelled = false;
-
     async function checkGate() {
       const ex = apiExamId || examSlug;
       if (!ex) return;
-
       try {
         const qs = new URLSearchParams({ examId: ex });
         if (email) qs.set("email", email);
@@ -753,37 +736,22 @@ export default function PrepWizard() {
         const data = await res.json();
 
         const isActive = data?.access?.status === "active";
-
-        // Persist a local allow token for smoother UX during rapid navigation
-        if (isActive) {
-          localStorage.setItem(`prep:allow:${ex}:${email || "anon"}`, String(Date.now()));
-        }
-
         if (!cancelled) {
           setGateStatus(isActive ? "active" : "inactive");
-          setShowOverlay(!isActive); // show overlay until approved
-
-          // Only after becoming active do we fetch modules again
-          if (isActive) {
-            await load();
-          } else {
-            setModules([]); // hard-hide content
-          }
+          setShowOverlay(!isActive);
         }
+        if (isActive && !cancelled) await load();
       } catch (err) {
         console.warn("[PrepWizard] guard error:", err);
         if (!cancelled) {
           setGateStatus("inactive");
           setShowOverlay(true);
-          setModules([]); // hide content on error as well
         }
       }
     }
 
-    // First check: prevents any content render before the overlay state is known
     checkGate();
 
-    // Poll while not active
     if (pollRef.current) clearInterval(pollRef.current);
     pollRef.current = setInterval(() => {
       if (gateStatus === "active") {
@@ -801,7 +769,7 @@ export default function PrepWizard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiExamId, examSlug, email]);
 
-  // keep ?tab= in URL for consistency
+  // keep ?tab= in URL
   useEffect(() => {
     const u = new URL(location.href);
     u.searchParams.set("tab", tab);
@@ -826,8 +794,6 @@ export default function PrepWizard() {
       alert("Failed to mark complete");
     }
   }
-
-  /* ───────────────────────── derived lists ───────────────────────── */
 
   const previewModulesForActiveDay = useMemo(() => {
     return (allModules || [])
@@ -856,7 +822,7 @@ export default function PrepWizard() {
     return list;
   }, [modules]);
 
-  /* ───────────────────────────── Tabs ───────────────────────────── */
+  /* ---------- Tabs ---------- */
 
   const cohortDay = todayDay;
   const userStates = undefined;
@@ -970,7 +936,6 @@ export default function PrepWizard() {
       {loading ? (
         <div className="text-gray-500">Loading…</div>
       ) : gateStatus !== "active" || locked ? (
-        // IMPORTANT: show nothing if not active or locked — overlay handles UX.
         null
       ) : !releasedModules.length ? (
         <div className="text-gray-500">No modules for today yet.</div>
@@ -995,13 +960,11 @@ export default function PrepWizard() {
     <div className="max-w-3xl mx-auto text-sm text-gray-600">
       <p>Progress view (lightweight). Use “Mark Complete” on Today’s Task to record completion for Day {todayDay}.</p>
       <p className="mt-2">
-        <i>Tip:</i> For topic-wise progress, add a backend that returns the user’s completed days/items and render it
-        here.
+        <i>Tip:</i> If you want a detailed per-topic progress bar, we can add an endpoint that returns the user’s
+        completed days/items and render it here.
       </p>
     </div>
   );
-
-  /* ───────────────────────────── Render ───────────────────────────── */
 
   return (
     <div className="prep-wrap">
@@ -1011,7 +974,6 @@ export default function PrepWizard() {
           examId={apiExamId || examSlug}
           email={localStorage.getItem("userEmail") || ""}
           onApproved={() => {
-            // Called by overlay when the backend moves to "active" (manual or auto)
             setShowOverlay(false);
             setGateStatus("active");
             load();
@@ -1019,7 +981,7 @@ export default function PrepWizard() {
         />
       )}
 
-      {/* Hide tabbar + page content while checking or overlay visible → prevents any flash */}
+      {/* Hide tabbar + content while checking or overlay visible → prevents any flash */}
       {gateStatus === "checking" || showOverlay ? null : (
         <>
           <div className="tabbar">
