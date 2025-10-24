@@ -262,7 +262,6 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
 
   /* --------------------------- Payment details --------------------------- */
   const pay = useMemo(() => {
-    // ✅ Properly merge all payment sources to fix disabled buttons
     const src = {
       ...(meta?.overlay?.payment || {}),
       ...(meta?.payment || {}),
@@ -318,23 +317,31 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
     const emailVal = (emailField || "").trim();
     if (!emailVal) return alert("Please enter your email.");
 
-    const fd = new FormData();
-    fd.append("examId", examId);
-    fd.append("email", emailVal);
-    fd.append("userEmail", emailVal);
-    fd.append("intent", "purchase");
-    if (nameField) fd.append("name", nameField);
-    if (phoneField) fd.append("phone", phoneField);
-
-    const noteBits = [];
-    if (upiStartTs) noteBits.push("upi_clicked=1");
-    if (waStartTs) noteBits.push("wa_clicked=1");
-    if (noteBits.length) fd.append("note", noteBits.join("; "));
+    const payload = {
+      examId,
+      email: emailVal,
+      userEmail: emailVal,
+      intent: "purchase",
+      name: nameField,
+      phone: phoneField,
+      note: [
+        upiStartTs ? "upi_clicked=1" : "",
+        waStartTs ? "wa_clicked=1" : "",
+      ]
+        .filter(Boolean)
+        .join("; "),
+    };
 
     localStorage.setItem("userEmail", emailVal);
     setSubmitting(true);
     try {
-      const j = await postForm("/api/prep/access/request", fd);
+      const res = await fetch("/api/prep/access/request", {
+        method: "POST",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify(payload),
+      });
+      const j = await res.json().catch(() => ({}));
+
       if (j?.code === "ALREADY_ACTIVE") {
         unlockNow(false);
         return;
@@ -351,7 +358,8 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
       localStorage.setItem(ks.wait, "1");
       localStorage.setItem(ks.waitAt, String(Date.now()));
       setState((s) => ({ ...s, show: true, mode: "waiting" }));
-    } catch {
+    } catch (err) {
+      console.error("Submit request error:", err);
       alert("Could not submit now. Try again.");
       localStorage.removeItem(ks.wait);
       localStorage.removeItem(ks.waitAt);
