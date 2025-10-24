@@ -87,7 +87,6 @@ function textOf(m) {
 }
 
 /* ====================== Colorful Notes (sentences + words) ====================== */
-/* Balanced opacity so notebook lines & paper stay visible */
 
 const IMPORTANT = [
   /constitution/i,
@@ -129,7 +128,7 @@ function rng(seed) {
   return function rand() {
     t += 0x6d2b79f5;
     let x = Math.imul(t ^ (t >>> 15), 1 | t);
-    x ^= x + Math.imul(x ^ (x >>> 7), 61 | x);
+    x ^= x + Math.imul(x ^ (x >>> 7), 61 | t);
     return ((x ^ (x >>> 14)) >>> 0) / 4294967296;
   };
 }
@@ -142,13 +141,12 @@ function splitSentences(text) {
 
 const YEAR_RE = /\b(1[5-9]\d{2}|20\d{2}|2100)\b/;
 
-// inline (word-level) highlighting — used when sentence isn't block styled
+// inline (word-level) highlighting
 function renderInline(sentence, rand) {
-  const parts = sentence.split(/(\b[\p{L}\p{N}']+\b)/u); // keep punctuation and spaces
+  const parts = sentence.split(/(\b[\p{L}\p{N}']+\b)/u);
   return parts.map((tok, i) => {
     if (!/\b[\p{L}\p{N}']+\b/u.test(tok)) return <span key={i}>{tok}</span>;
 
-    // IMPORTANT → pink
     if (IMPORTANT.some((re) => re.test(tok))) {
       return (
         <mark key={i} style={{ backgroundColor: "rgba(255, 138, 168, 0.35)", borderRadius: 2 }}>
@@ -157,7 +155,6 @@ function renderInline(sentence, rand) {
       );
     }
 
-    // Years → yellow
     if (YEAR_RE.test(tok)) {
       return (
         <mark key={i} style={{ backgroundColor: "rgba(255, 242, 0, 0.35)", borderRadius: 2 }}>
@@ -166,7 +163,6 @@ function renderInline(sentence, rand) {
       );
     }
 
-    // sprinkle a few green notes (very low probability)
     if (rand() < 0.045) {
       return (
         <mark key={i} style={{ backgroundColor: "rgba(194, 255, 125, 0.35)" }}>
@@ -179,22 +175,19 @@ function renderInline(sentence, rand) {
   });
 }
 
-// decide per-sentence style (mutually exclusive) — tuned to be subtle but present
 function chooseSentenceStyle(sentence, rand) {
   const words = sentence.trim().split(/\s+/).filter(Boolean).length;
   const isLong = words >= 18;
 
-  // Balanced distribution: more long-sentence yellow; also blue/green blocks sprinkled
   const r = rand();
-  if (isLong && r < 0.32) return "yellow"; // block highlight (frequent on long sentences)
-  if (r < 0.18) return "underline"; // wavy underline
-  if (r < 0.28) return "bluebold"; // bold blue
-  if (r < 0.4) return "green"; // soft green block
-  if (r < 0.52) return "blue"; // soft light-blue block
+  if (isLong && r < 0.32) return "yellow";
+  if (r < 0.18) return "underline";
+  if (r < 0.28) return "bluebold";
+  if (r < 0.4) return "green";
+  if (r < 0.52) return "blue";
   return null;
 }
 
-// main renderer: paragraphs → sentences → styled spans
 export function highlightNotes(raw, seedKey = "") {
   if (!raw) return null;
   const paras = String(raw).trim().split(/\n{2,}/);
@@ -276,7 +269,6 @@ export function highlightNotes(raw, seedKey = "") {
           </span>
         );
       }
-      // no sentence style → do inline highlights
       return <span key={si}>{renderInline(s, rand)}</span>;
     });
 
@@ -721,7 +713,6 @@ export default function PrepWizard() {
           return ta - tb;
         });
 
-      // If locked, do not show anything (PLUS the hard gate below will also protect)
       setModules(locked ? [] : releasedToday);
       setAllModules(all);
       setCurrentDay(td);
@@ -762,9 +753,8 @@ export default function PrepWizard() {
         if (isActive && !cancelled) {
           await load();
         }
-      } catch (e) {
-        // network/404 → treat as inactive gate (safer)
-        if (!cancelled) setGateStatus("inactive");
+      } catch {
+        if (!cancelled) setGateStatus("inactive"); // safer default: overlay remains visible
       }
     }
 
@@ -958,7 +948,8 @@ export default function PrepWizard() {
 
       {loading ? (
         <div className="text-gray-500">Loading…</div>
-      ) : gateStatus !== "active" || locked ? (   /* ⛔ hard gate: block content until active */
+      ) : gateStatus !== "active" || locked ? (
+        /* ⛔ hard gate: block content until active */
         <div className="text-gray-500">Access locked — please purchase or wait for approval.</div>
       ) : !releasedModules.length ? (
         <div className="text-gray-500">No modules for today yet.</div>
