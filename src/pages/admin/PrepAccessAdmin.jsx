@@ -3,40 +3,30 @@ import { useEffect, useMemo, useState } from "react";
 import { getJSON, postJSON } from "../../utils/api";
 
 /**
- * Admin panel for Prep Access:
- * - Edit exam config (name, planDays, autoGrant, payment fields)
- * - View & search requests
+ * PrepAccessAdmin (Requests-only)
+ * - NO payment editing here (UPI / WhatsApp / price live in AdminPrepPanel.jsx)
+ * - Load requests for an exam
  * - Approve / Reject / Revoke
- * - Batch delete
- *
- * Requires server routes from: server/prep_access.js
+ * - Delete single / Batch delete
+ * - Read-only summary shows current payment config pulled from /api/prep/exams/:examId/meta
  *
  * Props:
- *   examId?: string (optional; if omitted, admin can type one)
+ *   examId?: string (optional; if omitted, admin can type one and Load)
  */
 export default function PrepAccessAdmin({ examId: initialExamId }) {
   const [examId, setExamId] = useState(initialExamId || "");
   const [typingExamId, setTypingExamId] = useState(initialExamId || "");
   const [loading, setLoading] = useState(false);
 
-  // Config state
-  const [config, setConfig] = useState({
-    name: "",
-    planDays: 21,
-    autoGrant: false,
-    payment: {
-      upiId: "",
-      upiName: "",
-      priceINR: "",
-      whatsappNumber: "",
-      whatsappText: "",
-    },
-  });
-  const [cfgSaving, setCfgSaving] = useState(false);
-
   // Requests list
   const [items, setItems] = useState([]);
   const [sel, setSel] = useState(() => new Set()); // selected ids for batch delete
+
+  // Quick readonly meta pulled from AdminPrepPanel's source of truth
+  const [meta, setMeta] = useState({
+    name: "",
+    payment: { upiId: "", upiName: "", priceINR: "", whatsappNumber: "", whatsappText: "" },
+  });
 
   // UI filters
   const [q, setQ] = useState("");
@@ -55,37 +45,41 @@ export default function PrepAccessAdmin({ examId: initialExamId }) {
     });
   }, [items, q, statusFilter, intentFilter]);
 
-  async function loadAll(id) {
+  async function loadRequestsAndMeta(id) {
     if (!id) return;
     setLoading(true);
     try {
-      const [cfgRes, listRes] = await Promise.all([
-        getJSON(`/api/prep/access/admin/config?examId=${encodeURIComponent(id)}`),
+      const [listRes, metaRes] = await Promise.all([
         getJSON(`/api/prep/access/admin/requests?examId=${encodeURIComponent(id)}`),
+        getJSON(`/api/prep/exams/${encodeURIComponent(id)}/meta?_=${Date.now()}`),
       ]);
-
-      if (cfgRes?.success && cfgRes?.config) {
-        setConfig({
-          name: cfgRes.config.name || id.toUpperCase(),
-          planDays: Number(cfgRes.config.planDays || 21),
-          autoGrant: !!cfgRes.config.autoGrant,
-          payment: {
-            upiId: cfgRes.config.payment?.upiId || "",
-            upiName: cfgRes.config.payment?.upiName || "",
-            priceINR: cfgRes.config.payment?.priceINR ?? "",
-            whatsappNumber: cfgRes.config.payment?.whatsappNumber || "",
-            whatsappText: cfgRes.config.payment?.whatsappText || "",
-          },
-        });
-      }
 
       if (listRes?.success && Array.isArray(listRes?.items)) {
         setItems(listRes.items);
         setSel(new Set());
+      } else {
+        setItems([]);
+        setSel(new Set());
       }
+
+      const name = metaRes?.name || id.toUpperCase();
+      const pay = {
+        ...(metaRes?.payment || {}),
+        ...(metaRes?.overlay?.payment || {}),
+      };
+      setMeta({
+        name,
+        payment: {
+          upiId: pay.upiId || "",
+          upiName: pay.upiName || "",
+          priceINR: pay.priceINR ?? (metaRes?.price ?? ""),
+          whatsappNumber: pay.whatsappNumber || "",
+          whatsappText: pay.whatsappText || "",
+        },
+      });
     } catch (e) {
       console.error(e);
-      alert("Failed to load admin data");
+      alert("Failed to load requests/meta");
     } finally {
       setLoading(false);
     }
@@ -96,7 +90,7 @@ export default function PrepAccessAdmin({ examId: initialExamId }) {
     if (initialExamId) {
       setExamId(initialExamId);
       setTypingExamId(initialExamId);
-      loadAll(initialExamId);
+      loadRequestsAndMeta(initialExamId);
     }
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialExamId]);
@@ -106,32 +100,6 @@ export default function PrepAccessAdmin({ examId: initialExamId }) {
       window.toast?.success?.(msg);
     } catch {
       alert(msg);
-    }
-  }
-
-  async function saveConfig() {
-    if (!examId) {
-      alert("Please set examId first.");
-      return;
-    }
-    setCfgSaving(true);
-    try {
-      const body = {
-        examId,
-        name: config.name,
-        planDays: Number(config.planDays || 21),
-        autoGrant: !!config.autoGrant,
-        payment: { ...config.payment },
-      };
-      const r = await postJSON("/api/prep/access/admin/config", body);
-      if (!r?.success) throw new Error(r?.error || "Failed to save config");
-      toast("Config saved");
-      await loadAll(examId);
-    } catch (e) {
-      console.error(e);
-      alert("Save failed");
-    } finally {
-      setCfgSaving(false);
     }
   }
 
@@ -147,7 +115,7 @@ export default function PrepAccessAdmin({ examId: initialExamId }) {
           ? `Rejected: ${email}`
           : `Revoked: ${email}`
       );
-      await loadAll(examId);
+      await loadRequestsAndMeta(examId);
     } catch (e) {
       console.error(e);
       alert("Action failed");
@@ -170,6 +138,20 @@ export default function PrepAccessAdmin({ examId: initialExamId }) {
     setSel(new Set());
   }
 
+  async function deleteOne(id) {
+    if (!id) return;
+    if (!confirm("Delete this request?")) return;
+    try {
+      const r = await postJSON("/api/prep/access/admin/delete", { ids: [id] });
+      if (!r?.success) throw new Error(r?.error || "Failed");
+      toast("Deleted 1 request");
+      await loadRequestsAndMeta(examId);
+    } catch (e) {
+      console.error(e);
+      alert("Delete failed");
+    }
+  }
+
   async function batchDelete() {
     if (!sel.size) return;
     if (!confirm(`Delete ${sel.size} selected request(s)?`)) return;
@@ -178,12 +160,18 @@ export default function PrepAccessAdmin({ examId: initialExamId }) {
       const r = await postJSON("/api/prep/access/admin/delete", { ids });
       if (!r?.success) throw new Error(r?.error || "Failed");
       toast(`Deleted ${r.removed || 0} request(s)`);
-      await loadAll(examId);
+      await loadRequestsAndMeta(examId);
     } catch (e) {
       console.error(e);
       alert("Batch delete failed");
     }
   }
+
+  const pay = meta.payment || {};
+  const priceLabel =
+    pay?.priceINR != null && pay?.priceINR !== ""
+      ? `₹${Number(pay.priceINR) || pay.priceINR}`
+      : "—";
 
   return (
     <div className="max-w-6xl mx-auto p-4">
@@ -201,8 +189,9 @@ export default function PrepAccessAdmin({ examId: initialExamId }) {
         <button
           className="px-4 py-2 rounded bg-black text-white"
           onClick={() => {
-            setExamId(typingExamId.trim());
-            loadAll(typingExamId.trim());
+            const id = typingExamId.trim();
+            setExamId(id);
+            loadRequestsAndMeta(id);
           }}
         >
           Load
@@ -211,130 +200,36 @@ export default function PrepAccessAdmin({ examId: initialExamId }) {
           className="px-4 py-2 rounded border"
           onClick={() => {
             if (!examId) return;
-            loadAll(examId);
+            loadRequestsAndMeta(examId);
           }}
         >
           Refresh
         </button>
       </div>
 
-      {/* Config editor */}
-      <div className="rounded-xl border p-4 mb-6 bg-white">
-        <div className="text-lg font-semibold mb-3">Exam Config</div>
-        <div className="grid md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm text-gray-600 mb-1">Course Name</label>
-            <input
-              className="w-full border rounded px-3 py-2"
-              value={config.name}
-              onChange={(e) => setConfig((c) => ({ ...c, name: e.target.value }))}
-            />
+      {/* Read-only payment summary (from AdminPrepPanel config) */}
+      {examId && (
+        <div className="rounded-xl border p-4 mb-6 bg-white">
+          <div className="text-lg font-semibold mb-2">Current Payment (read-only)</div>
+          <div className="grid md:grid-cols-4 gap-3 text-sm">
+            <Info label="Course" value={meta.name || examId} mono={false} />
+            <Info label="Price" value={priceLabel} />
+            <Info label="UPI ID" value={pay.upiId || "—"} />
+            <Info label="UPI Name" value={pay.upiName || "—"} />
+            <Info label="WhatsApp" value={pay.whatsappNumber || "—"} />
+            <div className="md:col-span-3">
+              <Info
+                label="WhatsApp Prefill"
+                value={(pay.whatsappText || "—").toString()}
+                wrap
+              />
+            </div>
           </div>
-          <div>
-            <label className="block text-sm text-gray-600 mb-1">Plan Days</label>
-            <input
-              type="number"
-              min={1}
-              className="w-full border rounded px-3 py-2"
-              value={config.planDays}
-              onChange={(e) =>
-                setConfig((c) => ({ ...c, planDays: Number(e.target.value || 1) }))
-              }
-            />
-          </div>
-          <div className="flex items-center gap-2">
-            <input
-              id="autogrant"
-              type="checkbox"
-              checked={!!config.autoGrant}
-              onChange={(e) => setConfig((c) => ({ ...c, autoGrant: e.target.checked }))}
-            />
-            <label htmlFor="autogrant" className="text-sm">
-              Auto-grant on submit
-            </label>
+          <div className="text-[12px] text-gray-500 mt-2">
+            Edit these in <b>AdminPrepPanel</b>. This panel is only for access requests & approvals.
           </div>
         </div>
-
-        <div className="mt-4 grid md:grid-cols-2 gap-4">
-          <div>
-            <label className="block text-sm text-gray-600 mb-1">UPI ID</label>
-            <input
-              className="w-full border rounded px-3 py-2"
-              placeholder="merchant@upi"
-              value={config.payment.upiId}
-              onChange={(e) =>
-                setConfig((c) => ({ ...c, payment: { ...c.payment, upiId: e.target.value } }))
-              }
-            />
-          </div>
-          <div>
-            <label className="block text-sm text-gray-600 mb-1">UPI Name</label>
-            <input
-              className="w-full border rounded px-3 py-2"
-              value={config.payment.upiName}
-              onChange={(e) =>
-                setConfig((c) => ({ ...c, payment: { ...c.payment, upiName: e.target.value } }))
-              }
-            />
-          </div>
-          <div>
-            <label className="block text-sm text-gray-600 mb-1">Price (₹)</label>
-            <input
-              type="number"
-              min={0}
-              className="w-full border rounded px-3 py-2"
-              value={config.payment.priceINR}
-              onChange={(e) =>
-                setConfig((c) => ({
-                  ...c,
-                  payment: { ...c.payment, priceINR: e.target.value },
-                }))
-              }
-            />
-          </div>
-          <div>
-            <label className="block text-sm text-gray-600 mb-1">WhatsApp Number</label>
-            <input
-              className="w-full border rounded px-3 py-2"
-              placeholder="e.g., 919876543210"
-              value={config.payment.whatsappNumber}
-              onChange={(e) =>
-                setConfig((c) => ({
-                  ...c,
-                  payment: { ...c.payment, whatsappNumber: e.target.value },
-                }))
-              }
-            />
-          </div>
-          <div className="md:col-span-2">
-            <label className="block text-sm text-gray-600 mb-1">WhatsApp Prefill Text</label>
-            <textarea
-              rows={3}
-              className="w-full border rounded px-3 py-2"
-              value={config.payment.whatsappText}
-              onChange={(e) =>
-                setConfig((c) => ({
-                  ...c,
-                  payment: { ...c.payment, whatsappText: e.target.value },
-                }))
-              }
-            />
-          </div>
-        </div>
-
-        <div className="mt-4 flex items-center gap-3">
-          <button
-            className="px-4 py-2 rounded bg-emerald-600 text-white disabled:opacity-60"
-            onClick={saveConfig}
-            disabled={cfgSaving || !examId}
-          >
-            {cfgSaving ? "Saving…" : "Save Config"}
-          </button>
-          <span className="text-xs text-gray-500">
-            Editing config for <b>{examId || "(no exam selected)"}</b>
-          </span>
-        </div>
-      </div>
+      )}
 
       {/* Requests toolbar */}
       <div className="rounded-xl border p-4 mb-2 bg-white">
@@ -393,7 +288,7 @@ export default function PrepAccessAdmin({ examId: initialExamId }) {
           </button>
           <button
             className="px-3 py-2 rounded border"
-            onClick={() => examId && loadAll(examId)}
+            onClick={() => examId && loadRequestsAndMeta(examId)}
           >
             Refresh
           </button>
@@ -413,7 +308,7 @@ export default function PrepAccessAdmin({ examId: initialExamId }) {
               <th className="p-2">Status</th>
               <th className="p-2">Note</th>
               <th className="p-2">Created</th>
-              <th className="p-2 w-64">Actions</th>
+              <th className="p-2 w-72">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -431,9 +326,7 @@ export default function PrepAccessAdmin({ examId: initialExamId }) {
               </tr>
             ) : (
               filtered.map((r) => {
-                const created = r.createdAt
-                  ? new Date(r.createdAt).toLocaleString()
-                  : "";
+                const created = r.createdAt ? new Date(r.createdAt).toLocaleString() : "";
                 const selected = sel.has(r.id);
                 return (
                   <tr key={r.id} className="border-t">
@@ -465,9 +358,7 @@ export default function PrepAccessAdmin({ examId: initialExamId }) {
                     <td className="p-2 align-top max-w-[300px] break-words">
                       {r.note || "—"}
                     </td>
-                    <td className="p-2 align-top whitespace-nowrap">
-                      {created}
-                    </td>
+                    <td className="p-2 align-top whitespace-nowrap">{created}</td>
                     <td className="p-2 align-top">
                       <div className="flex flex-wrap gap-2">
                         <button
@@ -488,6 +379,13 @@ export default function PrepAccessAdmin({ examId: initialExamId }) {
                         >
                           Revoke
                         </button>
+                        <button
+                          className="px-2 py-1 rounded border border-red-300 text-red-700"
+                          onClick={() => deleteOne(r.id)}
+                          title="Delete this request"
+                        >
+                          Delete
+                        </button>
                       </div>
                     </td>
                   </tr>
@@ -496,6 +394,24 @@ export default function PrepAccessAdmin({ examId: initialExamId }) {
             )}
           </tbody>
         </table>
+      </div>
+    </div>
+  );
+}
+
+function Info({ label, value, mono = true, wrap = false }) {
+  return (
+    <div>
+      <div className="text-[11px] uppercase tracking-wide text-gray-500">{label}</div>
+      <div
+        className={
+          (mono ? "font-mono " : "") +
+          "text-sm " +
+          (wrap ? "break-words" : "truncate")
+        }
+        title={String(value || "")}
+      >
+        {value || "—"}
       </div>
     </div>
   );
