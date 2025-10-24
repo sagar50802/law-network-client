@@ -1,397 +1,240 @@
-import { useEffect, useMemo, useRef, useState } from "react";
+// client/src/components/Prep/PrepAccessAdmin.jsx
+import { useEffect, useState } from "react";
+import { getJSON, postJSON } from "../../utils/api";
 
-/* ----------------------------------------------------------------------------
-   Backend base URL (no apiBase import required)
-   -------------------------------------------------------------------------- */
-const BACKEND =
-  (import.meta.env && (import.meta.env.VITE_BACKEND_URL || import.meta.env.VITE_API_BASE)) ||
-  (typeof window !== "undefined" ? window.location.origin : "");
-
-// join BACKEND + path safely; keep absolute URLs intact
-function abs(url) {
-  try {
-    new URL(url); // already absolute
-    return url;
-  } catch {
-    const base = (BACKEND || "").replace(/\/+$/, "");
-    const path = url.startsWith("/") ? url : `/${url}`;
-    return `${base}${path}`;
-  }
-}
-
-/* --- helpers that ALWAYS send X-Owner-Key to the backend origin --- */
-const RUNTIME_OWNER =
-  (typeof window !== "undefined" && localStorage.getItem("ownerKey")) || "";
-const OWNER_KEY = RUNTIME_OWNER || (import.meta.env.VITE_OWNER_KEY || "");
-
-async function getSecureJSON(url) {
-  const r = await fetch(abs(url), {
-    headers: { Accept: "application/json", "X-Owner-Key": OWNER_KEY },
-    credentials: "include",
-  });
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok || j?.success === false) throw new Error(j?.error || j?.message || `GET ${url} failed`);
-  return j;
-}
-
-async function postSecureJSON(url, body) {
-  const r = await fetch(abs(url), {
-    method: "POST",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      "X-Owner-Key": OWNER_KEY,
-    },
-    body: JSON.stringify(body || {}),
-    credentials: "include",
-  });
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok || j?.success === false)
-    throw new Error(j?.error || j?.message || `POST ${url} failed`);
-  return j;
-}
-
-async function patchSecureJSON(url, body) {
-  const r = await fetch(abs(url), {
-    method: "PATCH",
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      "X-Owner-Key": OWNER_KEY,
-    },
-    body: JSON.stringify(body || {}),
-    credentials: "include",
-  });
-  const j = await r.json().catch(() => ({}));
-  if (!r.ok || j?.success === false)
-    throw new Error(j?.error || j?.message || `PATCH ${url} failed`);
-  return j;
-}
-
-/* ------------------------------- Component ------------------------------- */
-export default function PrepAccessAdmin() {
-  const [items, setItems] = useState([]);
-  const [examId, setExamId] = useState("");
-  const [emailFilter, setEmailFilter] = useState("");
-  const [status, setStatus] = useState("pending");
+export default function PrepAccessAdmin({ examId }) {
+  const [cfg, setCfg] = useState(null);
+  const [list, setList] = useState([]);
   const [loading, setLoading] = useState(false);
-  const [err, setErr] = useState("");
-  const [last, setLast] = useState(null);
-  const [autoGrant, setAutoGrant] = useState(false);
-  const [autoGrantLoading, setAutoGrantLoading] = useState(false);
-  const pollRef = useRef(null);
-
-  const qs = useMemo(() => {
-    const q = new URLSearchParams();
-    q.set("status", status || "pending");
-    if (examId) q.set("examId", examId.trim());
-    return q.toString();
-  }, [status, examId]);
+  const [selected, setSelected] = useState(new Set());
 
   async function load() {
     setLoading(true);
-    setErr("");
     try {
-      const j = await getSecureJSON(`/api/prep/access/requests?${qs}`);
-      let list = j?.items || [];
-      if (emailFilter.trim()) {
-        const e = emailFilter.trim().toLowerCase();
-        list = list.filter((x) => (x.userEmail || "").toLowerCase().includes(e));
-      }
-      setItems(list);
-      setLast(new Date());
-    } catch (e) {
-      setErr(e.message || "Failed to load requests");
-      setItems([]);
+      const c = await getJSON(`/api/prep/access/admin/config?examId=${encodeURIComponent(examId)}`);
+      setCfg(c?.config || null);
+      const r = await getJSON(`/api/prep/access/admin/requests?examId=${encodeURIComponent(examId)}`);
+      setList(Array.isArray(r?.items) ? r.items : []);
+      setSelected(new Set());
     } finally {
       setLoading(false);
     }
   }
 
   useEffect(() => {
-    load();
+    if (examId) load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [qs, emailFilter]);
-
-  useEffect(() => {
-    if (!examId) {
-      setAutoGrant(false);
-      return;
-    }
-    (async () => {
-      try {
-        setAutoGrantLoading(true);
-        const meta = await getSecureJSON(
-          `/api/prep/exams/${encodeURIComponent(examId)}/meta`
-        );
-        setAutoGrant(!!meta?.autoGrantRestart);
-      } catch {
-      } finally {
-        setAutoGrantLoading(false);
-      }
-    })();
   }, [examId]);
 
-  useEffect(() => {
-    if (pollRef.current) {
-      clearInterval(pollRef.current);
-      pollRef.current = null;
-    }
-    if (status === "pending") pollRef.current = setInterval(load, 10000);
-    return () => {
-      if (pollRef.current) clearInterval(pollRef.current);
-    };
-  }, [status, qs, emailFilter]);
-
-  async function approve(id, grant = true) {
-    if (!id) return;
-    try {
-      await postSecureJSON("/api/prep/access/admin/approve", {
-        requestId: id,
-        approve: grant,
-      });
-      await load();
-      alert(grant ? "Approved & access granted." : "Request rejected.");
-    } catch (e) {
-      alert(e.message || "Approve failed");
-    }
+  async function saveConfig() {
+    const r = await postJSON("/api/prep/access/admin/config", { examId, ...cfg });
+    if (!r?.success) alert("Save failed");
+    load();
   }
 
-  async function revokeRow(x) {
-    try {
-      await postSecureJSON("/api/prep/access/admin/revoke", {
-        examId: x.examId,
-        email: x.userEmail,
-      });
-      await load();
-      alert("Access revoked.");
-    } catch (e) {
-      alert(e.message || "Revoke failed");
-    }
+  async function act(email, mode) {
+    const r = await postJSON("/api/prep/access/admin/approve", { examId, email, mode });
+    if (!r?.success) alert("Action failed");
+    load();
   }
 
-  async function deleteRow(id) {
-    try {
-      await postSecureJSON("/api/prep/access/admin/delete", { requestId: id });
-      await load();
-      alert("Request deleted.");
-    } catch (e) {
-      alert(e.message || "Delete failed");
-    }
+  async function removeSingle(id) {
+    const r = await postJSON("/api/prep/access/admin/delete", { ids: [id] });
+    if (!r?.success) alert("Delete failed");
+    load();
   }
 
-  async function toggleAutoGrant(nextVal) {
-    if (!examId) {
-      alert("Enter an examId first.");
-      return;
-    }
-    try {
-      setAutoGrantLoading(true);
-      await patchSecureJSON(
-        `/api/prep/exams/${encodeURIComponent(examId)}/overlay-config`,
-        { autoGrantRestart: !!nextVal }
-      );
-      setAutoGrant(!!nextVal);
-    } catch (e) {
-      alert(e.message || "Failed to update auto-approval");
-    } finally {
-      setAutoGrantLoading(false);
-    }
+  async function removeBatch() {
+    if (!selected.size) return;
+    const ids = Array.from(selected);
+    const r = await postJSON("/api/prep/access/admin/delete", { ids });
+    if (!r?.success) alert("Batch delete failed");
+    load();
   }
 
-  async function pingDebug() {
-    try {
-      const a = await getSecureJSON("/api/prep/access/requests-debug");
-      alert(
-        `counts: ${JSON.stringify(a.counts)}\nlatest:\n${
-          a.latest?.map((x) => `${x.userEmail} ${x.examId} ${x.status}`).join("\n") ||
-          "none"
-        }`
-      );
-    } catch (e) {
-      alert(e.message);
-    }
+  function toggle(id) {
+    const s = new Set(selected);
+    if (s.has(id)) s.delete(id);
+    else s.add(id);
+    setSelected(s);
   }
 
-  const statusLabel = status === "all" ? "" : status;
+  const allChecked = list.length > 0 && selected.size === list.length;
+  function toggleAll() {
+    if (allChecked) setSelected(new Set());
+    else setSelected(new Set(list.map((r) => r.id)));
+  }
 
-  /* ------------------------- Render ------------------------- */
+  if (!examId) return <div className="text-sm text-gray-500">Pick an examId.</div>;
+  if (!cfg) return <div className="text-sm text-gray-500">Loading config…</div>;
+
   return (
-    <div className="max-w-5xl mx-auto p-4">
-      <div className="text-xl font-semibold mb-4 border-b pb-2">
-        Admin • Prep Access Requests
-      </div>
-
-      {/* Filters */}
-      <div className="flex flex-wrap items-center gap-3 mb-4 bg-gray-50 border border-gray-200 rounded-lg p-3">
-        <select
-          className="border px-2 py-1 rounded"
-          value={status}
-          onChange={(e) => setStatus(e.target.value)}
-          title="Status filter"
-        >
-          <option value="pending">Pending</option>
-          <option value="approved">Approved</option>
-          <option value="rejected">Rejected</option>
-          <option value="all">All</option>
-        </select>
-
-        <input
-          className="border px-2 py-1 rounded w-44"
-          placeholder="Exam ID"
-          value={examId}
-          onChange={(e) => setExamId(e.target.value)}
-        />
-        <input
-          className="border px-2 py-1 rounded w-56"
-          placeholder="User email"
-          value={emailFilter}
-          onChange={(e) => setEmailFilter(e.target.value)}
-        />
-        <button
-          className="px-3 py-1 rounded bg-white border hover:bg-gray-100"
-          onClick={load}
-        >
-          Refresh
-        </button>
-
-        <div className="ml-auto flex items-center gap-2">
-          <label className="text-sm text-gray-700">Auto-approve restarts</label>
-          <button
-            className={`px-3 py-1 rounded text-sm font-medium ${
-              autoGrant ? "bg-emerald-600 text-white" : "bg-gray-200 text-gray-700"
-            }`}
-            onClick={() => toggleAutoGrant(!autoGrant)}
-            disabled={!examId || autoGrantLoading}
-          >
-            {autoGrantLoading ? "Saving…" : autoGrant ? "ON" : "OFF"}
+    <div className="grid gap-6">
+      {/* Config */}
+      <div className="p-4 border rounded-lg">
+        <div className="text-lg font-semibold mb-2">Config — {examId}</div>
+        <div className="grid md:grid-cols-2 gap-3">
+          <label className="grid gap-1 text-sm">
+            <span>Course name</span>
+            <input className="border rounded px-2 py-1"
+              value={cfg.name || ""}
+              onChange={e => setCfg({ ...cfg, name: e.target.value })} />
+          </label>
+          <label className="grid gap-1 text-sm">
+            <span>Plan days</span>
+            <input className="border rounded px-2 py-1" type="number"
+              value={cfg.planDays || 21}
+              onChange={e => setCfg({ ...cfg, planDays: Number(e.target.value||0) })} />
+          </label>
+          <label className="grid gap-1 text-sm">
+            <span>Auto grant</span>
+            <select className="border rounded px-2 py-1"
+              value={cfg.autoGrant ? "1" : "0"}
+              onChange={e => setCfg({ ...cfg, autoGrant: e.target.value === "1" })}>
+              <option value="0">Off (manual)</option>
+              <option value="1">On (auto-approve new requests)</option>
+            </select>
+          </label>
+          <label className="grid gap-1 text-sm">
+            <span>Price (₹)</span>
+            <input className="border rounded px-2 py-1" type="number"
+              value={cfg.payment?.priceINR || 0}
+              onChange={e => setCfg({ ...cfg, payment: { ...cfg.payment, priceINR: Number(e.target.value||0) } })} />
+          </label>
+          <label className="grid gap-1 text-sm">
+            <span>UPI ID</span>
+            <input className="border rounded px-2 py-1"
+              value={cfg.payment?.upiId || ""}
+              onChange={e => setCfg({ ...cfg, payment: { ...cfg.payment, upiId: e.target.value } })} />
+          </label>
+          <label className="grid gap-1 text-sm">
+            <span>UPI Name</span>
+            <input className="border rounded px-2 py-1"
+              value={cfg.payment?.upiName || ""}
+              onChange={e => setCfg({ ...cfg, payment: { ...cfg.payment, upiName: e.target.value } })} />
+          </label>
+          <label className="grid gap-1 text-sm">
+            <span>WhatsApp Number (+91… or 91…)</span>
+            <input className="border rounded px-2 py-1"
+              value={cfg.payment?.whatsappNumber || ""}
+              onChange={e => setCfg({ ...cfg, payment: { ...cfg.payment, whatsappNumber: e.target.value } })} />
+          </label>
+          <label className="grid gap-1 text-sm md:col-span-2">
+            <span>WhatsApp Prefill Text</span>
+            <textarea className="border rounded px-2 py-1"
+              value={cfg.payment?.whatsappText || ""}
+              onChange={e => setCfg({ ...cfg, payment: { ...cfg.payment, whatsappText: e.target.value } })} />
+          </label>
+        </div>
+        <div className="mt-3 flex gap-2">
+          <button className="px-4 py-2 rounded bg-emerald-600 text-white" onClick={saveConfig}>
+            Save Config
+          </button>
+          <button className="px-4 py-2 rounded bg-gray-600 text-white" onClick={load}>
+            Refresh
           </button>
         </div>
-
-        <button
-          className="px-3 py-1 border rounded text-sm hover:bg-gray-50"
-          onClick={pingDebug}
-          title="Check debug info"
-        >
-          Debug
-        </button>
-
-        <div className="text-xs text-gray-500">
-          {loading
-            ? "Loading…"
-            : last
-            ? `Last update: ${last.toLocaleTimeString()}`
-            : ""}
-        </div>
       </div>
 
-      {err && (
-        <div className="text-sm text-rose-700 bg-rose-50 border border-rose-200 rounded p-2 mb-4">
-          {err}
-          <div className="text-xs opacity-70 mt-1">
-            Make sure <code>X-Owner-Key</code> matches <code>VITE_OWNER_KEY</code>.
+      {/* Requests */}
+      <div className="p-4 border rounded-lg">
+        <div className="flex items-center justify-between mb-2">
+          <div className="text-lg font-semibold">Requests {loading ? "(loading…)" : ""}</div>
+          <div className="flex gap-2">
+            <button
+              className="px-3 py-1.5 rounded bg-rose-600 text-white disabled:opacity-50"
+              onClick={removeBatch}
+              disabled={!selected.size}
+              title="Delete selected requests"
+            >
+              Delete Selected ({selected.size})
+            </button>
           </div>
         </div>
-      )}
 
-      {/* List */}
-      {!items.length && !loading ? (
-        <div className="text-sm text-gray-600">
-          {statusLabel ? `No ${statusLabel} requests.` : "No requests."}
-        </div>
-      ) : (
-        <div className="grid gap-3">
-          {items.map((x) => {
-            const nm = x?.meta?.name || "";
-            const ph = x?.meta?.phone || "";
-            return (
-              <div key={x._id} className="border rounded-lg p-3 shadow-sm bg-white">
-                <div className="flex justify-between items-center mb-1">
-                  <div className="font-medium text-sm">
-                    {String(x.intent || "").toUpperCase()} • {x.examId}
-                  </div>
-                  <div className="text-xs text-gray-500">
-                    {new Date(x.createdAt).toLocaleString()}
-                  </div>
-                </div>
-
-                <div className="text-xs text-gray-700 space-y-1">
-                  <div>
-                    <b>Email:</b> {x.userEmail}
-                  </div>
-                  {nm && (
-                    <div>
-                      <b>Name:</b> {nm}
-                    </div>
-                  )}
-                  {ph && (
-                    <div>
-                      <b>Phone:</b> {ph}
-                    </div>
-                  )}
-                  <div>
-                    <b>Price:</b> ₹{x.priceAt ?? 0}
-                  </div>
-                  {x.meta?.planLabel && (
-                    <div>
-                      <b>Plan:</b> {x.meta.planLabel}
-                    </div>
-                  )}
-                  {x.note && (
-                    <div>
-                      <b>Note:</b> {x.note}
-                    </div>
-                  )}
-                </div>
-
-                {x.screenshotUrl && (
-                  <div className="mt-2">
-                    <a
-                      href={x.screenshotUrl}
-                      target="_blank"
-                      rel="noreferrer"
-                      className="text-xs underline text-blue-600"
-                    >
-                      View Screenshot
-                    </a>
-                  </div>
-                )}
-
-                <div className="mt-3 flex flex-wrap gap-2">
-                  {x.status === "pending" && (
-                    <>
-                      <button
-                        className="px-3 py-1 rounded bg-emerald-600 text-white text-sm"
-                        onClick={() => approve(x._id, true)}
-                      >
-                        Approve & Grant
-                      </button>
-                      <button
-                        className="px-3 py-1 rounded bg-rose-600 text-white text-sm"
-                        onClick={() => approve(x._id, false)}
-                      >
-                        Reject
-                      </button>
-                    </>
-                  )}
-                  <button
-                    className="px-3 py-1 rounded border text-sm hover:bg-gray-50"
-                    onClick={() => revokeRow(x)}
-                  >
-                    Revoke Access
-                  </button>
-                  <button
-                    className="px-3 py-1 rounded border text-sm hover:bg-gray-50"
-                    onClick={() => deleteRow(x._id)}
-                  >
-                    Delete Row
-                  </button>
-                </div>
-              </div>
-            );
-          })}
-        </div>
-      )}
+        {!list.length ? (
+          <div className="text-sm text-gray-500">No requests yet.</div>
+        ) : (
+          <div className="overflow-auto">
+            <table className="min-w-[880px] text-sm">
+              <thead>
+                <tr className="text-left border-b">
+                  <th className="py-2 pr-3">
+                    <input type="checkbox" checked={allChecked} onChange={toggleAll} />
+                  </th>
+                  <th className="py-2 pr-3">When</th>
+                  <th className="py-2 pr-3">Email</th>
+                  <th className="py-2 pr-3">Name</th>
+                  <th className="py-2 pr-3">Phone</th>
+                  <th className="py-2 pr-3">Intent</th>
+                  <th className="py-2 pr-3">Note</th>
+                  <th className="py-2 pr-3">Status</th>
+                  <th className="py-2 pr-3">Actions</th>
+                </tr>
+              </thead>
+              <tbody>
+                {list.map((r) => {
+                  const checked = selected.has(r.id);
+                  return (
+                    <tr key={r.id} className="border-b last:border-0">
+                      <td className="py-2 pr-3">
+                        <input type="checkbox" checked={checked} onChange={() => toggle(r.id)} />
+                      </td>
+                      <td className="py-2 pr-3">{new Date(r.createdAt).toLocaleString()}</td>
+                      <td className="py-2 pr-3">{r.email}</td>
+                      <td className="py-2 pr-3">{r.name}</td>
+                      <td className="py-2 pr-3">{r.phone}</td>
+                      <td className="py-2 pr-3">{r.intent}</td>
+                      <td className="py-2 pr-3">{r.note}</td>
+                      <td className="py-2 pr-3">
+                        <span
+                          className={
+                            r.status === "approved"
+                              ? "text-emerald-700"
+                              : r.status === "rejected"
+                              ? "text-rose-700"
+                              : "text-gray-700"
+                          }
+                        >
+                          {r.status}
+                        </span>
+                      </td>
+                      <td className="py-2 pr-3">
+                        <div className="flex gap-2">
+                          <button
+                            className="px-2 py-1 rounded bg-emerald-600 text-white"
+                            onClick={() => act(r.email, "grant")}
+                          >
+                            Approve
+                          </button>
+                          <button
+                            className="px-2 py-1 rounded bg-rose-600 text-white"
+                            onClick={() => act(r.email, "reject")}
+                          >
+                            Reject
+                          </button>
+                          <button
+                            className="px-2 py-1 rounded bg-gray-600 text-white"
+                            onClick={() => act(r.email, "revoke")}
+                          >
+                            Revoke
+                          </button>
+                          <button
+                            className="px-2 py-1 rounded bg-red-700 text-white"
+                            onClick={() => removeSingle(r.id)}
+                          >
+                            Delete
+                          </button>
+                        </div>
+                      </td>
+                    </tr>
+                  );
+                })}
+              </tbody>
+            </table>
+          </div>
+        )}
+      </div>
     </div>
   );
 }
