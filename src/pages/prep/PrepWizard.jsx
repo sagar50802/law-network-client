@@ -141,13 +141,12 @@ function splitSentences(text) {
 
 const YEAR_RE = /\b(1[5-9]\d{2}|20\d{2}|2100)\b/;
 
-// inline (word-level) highlighting — used when sentence isn't block styled
+// inline (word-level) highlighting
 function renderInline(sentence, rand) {
-  const parts = sentence.split(/(\b[\p{L}\p{N}']+\b)/u); // keep punctuation and spaces
+  const parts = sentence.split(/(\b[\p{L}\p{N}']+\b)/u);
   return parts.map((tok, i) => {
     if (!/\b[\p{L}\p{N}']+\b/u.test(tok)) return <span key={i}>{tok}</span>;
 
-    // IMPORTANT → pink
     if (IMPORTANT.some((re) => re.test(tok))) {
       return (
         <mark key={i} style={{ backgroundColor: "rgba(255, 138, 168, 0.35)", borderRadius: 2 }}>
@@ -156,7 +155,6 @@ function renderInline(sentence, rand) {
       );
     }
 
-    // Years → yellow
     if (YEAR_RE.test(tok)) {
       return (
         <mark key={i} style={{ backgroundColor: "rgba(255, 242, 0, 0.35)", borderRadius: 2 }}>
@@ -165,7 +163,6 @@ function renderInline(sentence, rand) {
       );
     }
 
-    // sprinkle a few green notes (very low probability)
     if (rand() < 0.045) {
       return (
         <mark key={i} style={{ backgroundColor: "rgba(194, 255, 125, 0.35)" }}>
@@ -178,22 +175,19 @@ function renderInline(sentence, rand) {
   });
 }
 
-// decide per-sentence style (mutually exclusive) — tuned to be subtle but present
 function chooseSentenceStyle(sentence, rand) {
   const words = sentence.trim().split(/\s+/).filter(Boolean).length;
   const isLong = words >= 18;
 
-  // Balanced distribution: more long-sentence yellow; also blue/green blocks sprinkled
   const r = rand();
-  if (isLong && r < 0.32) return "yellow"; // block highlight (frequent on long sentences)
-  if (r < 0.18) return "underline"; // wavy underline
-  if (r < 0.28) return "bluebold"; // bold blue
-  if (r < 0.4) return "green"; // soft green block
-  if (r < 0.52) return "blue"; // soft light-blue block
+  if (isLong && r < 0.32) return "yellow";
+  if (r < 0.18) return "underline";
+  if (r < 0.28) return "bluebold";
+  if (r < 0.4) return "green";
+  if (r < 0.52) return "blue";
   return null;
 }
 
-// main renderer: paragraphs → sentences → styled spans
 export function highlightNotes(raw, seedKey = "") {
   if (!raw) return null;
   const paras = String(raw).trim().split(/\n{2,}/);
@@ -275,7 +269,6 @@ export function highlightNotes(raw, seedKey = "") {
           </span>
         );
       }
-      // no sentence style → do inline highlights
       return <span key={si}>{renderInline(s, rand)}</span>;
     });
 
@@ -633,7 +626,7 @@ export default function PrepWizard() {
   // 🔒 if backend reports locked, never render content list (overlay will show too)
   const [locked, setLocked] = useState(false);
 
-  // 🔒 Overlay gate control
+  // 🔒 Overlay gate control (overlay owns visibility to prevent flicker)
   const [gateStatus, setGateStatus] = useState("checking"); // checking | inactive | active
   const [showOverlay, setShowOverlay] = useState(true);
   const pollRef = useRef(null);
@@ -721,7 +714,6 @@ export default function PrepWizard() {
           return ta - tb;
         });
 
-      // If locked, do not show anything (PLUS the overlay gate below will also protect)
       setModules(locked ? [] : releasedToday);
       setAllModules(all);
       setCurrentDay(td);
@@ -741,9 +733,11 @@ export default function PrepWizard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [examSlug]);
 
-  // 🔒 Overlay gate control effect — checks /access/status/guard
+  // 🔒 Guard effect — keep API call for robustness, but NEVER toggle overlay here.
+  // Overlay is the single authority that will call onApproved() to hide itself.
   useEffect(() => {
     let cancelled = false;
+
     async function checkGate() {
       const ex = apiExamId || examSlug;
       if (!ex) return;
@@ -755,23 +749,22 @@ export default function PrepWizard() {
         const data = await res.json();
 
         const isActive = data?.access?.status === "active";
-        if (!cancelled) {
-          setGateStatus(isActive ? "active" : "inactive");
-          setShowOverlay(!isActive); // show overlay until approved
-        }
+        if (!cancelled) setGateStatus(isActive ? "active" : "inactive");
 
-        if (isActive && !cancelled) await load(); // refresh modules
+        // If it just became active, refresh modules to show content immediately.
+        if (isActive && !cancelled) {
+          await load();
+        }
       } catch (err) {
         console.warn("[PrepWizard] guard error:", err);
-        if (!cancelled) {
-          setGateStatus("inactive");
-          setShowOverlay(true);
-        }
+        if (!cancelled) setGateStatus("inactive"); // keep overlay visible by default
       }
     }
 
+    // initial check
     checkGate();
 
+    // poll every 5s (safe, does not toggle overlay)
     if (pollRef.current) clearInterval(pollRef.current);
     pollRef.current = setInterval(() => {
       if (gateStatus === "active") {
@@ -784,7 +777,10 @@ export default function PrepWizard() {
 
     return () => {
       cancelled = true;
-      if (pollRef.current) clearInterval(pollRef.current);
+      if (pollRef.current) {
+        clearInterval(pollRef.current);
+        pollRef.current = null;
+      }
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiExamId, examSlug, email]);
@@ -995,9 +991,12 @@ export default function PrepWizard() {
           examId={apiExamId || examSlug}
           email={localStorage.getItem("userEmail") || ""}
           onApproved={() => {
-            setShowOverlay(false);
-            setGateStatus("active");
-            load();
+            // Overlay is the only authority that may hide itself; add a tiny delay for stability.
+            setTimeout(() => {
+              setShowOverlay(false);
+              setGateStatus("active");
+              load();
+            }, 250);
           }}
         />
       )}
