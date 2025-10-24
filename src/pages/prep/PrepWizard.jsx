@@ -721,7 +721,7 @@ export default function PrepWizard() {
           return ta - tb;
         });
 
-      // If locked, do not show anything (PLUS the hard gate below will also protect)
+      // If locked, do not show anything (PLUS the overlay gate below will also protect)
       setModules(locked ? [] : releasedToday);
       setAllModules(all);
       setCurrentDay(td);
@@ -879,29 +879,29 @@ export default function PrepWizard() {
           );
           const anyReleased = released.length > 0;
 
-        let cls = "daycell";
-        let badge = "";
-        if (d > cohortDay) {
-          cls += " locked";
-          badge = "🔒";
-        } else if (d === cohortDay) {
-          cls += " today";
-          const allDone = released.length && released.every((m) => isDone(m, userStates));
-          if (allDone) badge = "✅";
-          else if (released.length) badge = "●";
-        } else {
-          const allDone = released.length && released.every((m) => isDone(m, userStates));
-          if (allDone) {
-            cls += " completed";
-            badge = "✅";
-          } else if (anyReleased) {
-            cls += " available";
-            badge = "●";
-          } else {
+          let cls = "daycell";
+          let badge = "";
+          if (d > cohortDay) {
             cls += " locked";
-            badge = "—";
+            badge = "🔒";
+          } else if (d === cohortDay) {
+            cls += " today";
+            const allDone = released.length && released.every((m) => isDone(m, userStates));
+            if (allDone) badge = "✅";
+            else if (released.length) badge = "●";
+          } else {
+            const allDone = released.length && released.every((m) => isDone(m, userStates));
+            if (allDone) {
+              cls += " completed";
+              badge = "✅";
+            } else if (anyReleased) {
+              cls += " available";
+              badge = "●";
+            } else {
+              cls += " locked";
+              badge = "—";
+            }
           }
-        }
 
           const href = d <= cohortDay ? `?tab=today&d=${d}` : undefined;
 
