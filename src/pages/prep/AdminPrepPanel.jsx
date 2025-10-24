@@ -1,10 +1,11 @@
+// client/src/components/Prep/AdminPrepPanel.jsx
 import { useEffect, useRef, useState } from "react";
 import { getJSON, delJSON, buildUrl } from "../../utils/api";
 
 /** Robust multipart POST (keeps cookies, adds admin header, safe JSON parse, correct base URL) */
 async function sendMultipart(url, formData) {
   const ownerKey = localStorage.getItem("ownerKey") || "";
-  const headers = ownerKey ? { "X-Owner-Key": ownerKey } : {};
+  const headers = { ...(ownerKey ? { "X-Owner-Key": ownerKey } : {}) };
   const full = buildUrl(url);
 
   const res = await fetch(full, {
@@ -176,7 +177,7 @@ function ExamEditor({ examId }) {
   });
   const [overlayLoading, setOverlayLoading] = useState(false);
 
-  // ── PAYMENT & PROOF (NEW) ──
+  // ── PAYMENT & PROOF ──
   const [pay, setPay] = useState({
     upiId: "",
     upiName: "",
@@ -247,7 +248,7 @@ function ExamEditor({ examId }) {
     return () => { ignore = true; };
   }, [examId]);
 
-  // PATCH helper (send schedule + price + payment in BOTH shapes)
+  // PATCH helper (send schedule + price + payment in BOTH/ALL shapes)
   async function saveOverlayJSON({
     price,
     trialDays,
@@ -263,13 +264,13 @@ function ExamEditor({ examId }) {
   }) {
     const ownerKey = localStorage.getItem("ownerKey") || "";
 
-    // map UI -> server
+    // UI -> server shape
     const modeForServer =
       overlayMode === "afterN" ? "offset-days" :
       overlayMode === "fixed"  ? "fixed-date"  :
       overlayMode; // "planDayTime" | "never"
 
-    // single source of truth for payment
+    // single source of truth for payment (also mirrored below)
     const payment = {
       upiId: (upiId || "").trim(),
       upiName: (upiName || "").trim(),
@@ -284,20 +285,20 @@ function ExamEditor({ examId }) {
       mode: modeForServer,
 
       // schedule
-      offsetDays: modeForServer === "offset-days" ? Number(daysAfterStart || 0) : undefined,
-      fixedAt:    modeForServer === "fixed-date"  && fixedAt
+      offsetDays:  modeForServer === "offset-days" ? Number(daysAfterStart || 0) : undefined,
+      fixedAt:     modeForServer === "fixed-date"  && fixedAt
                     ? new Date(fixedAt).toISOString()
                     : undefined,
-      showOnDay:  modeForServer === "planDayTime" ? Number(showOnDay || 1) : undefined,
-      showAtLocal:modeForServer === "planDayTime" ? (showAtLocal || "09:00") : undefined,
+      showOnDay:   modeForServer === "planDayTime" ? Number(showOnDay || 1) : undefined,
+      showAtLocal: modeForServer === "planDayTime" ? (showAtLocal || "09:00") : undefined,
 
-      // send payment in ALL shapes
-      ...payment,             // flat
+      // send payment in ALL shapes so every consumer can read it
+      ...payment,             // flat (legacy)
       payment,                // root.payment
-      overlay: { payment },   // overlay.payment
+      overlay: { payment },   // overlay.payment (new UI/overlay consumers)
     };
 
-    // drop undefined
+    // strip undefineds
     Object.keys(body).forEach(k => body[k] === undefined && delete body[k]);
 
     const r = await fetch(
@@ -306,7 +307,7 @@ function ExamEditor({ examId }) {
         method: "PATCH",
         headers: {
           "Content-Type": "application/json",
-          "X-Owner-Key": ownerKey,
+          ...(ownerKey ? { "X-Owner-Key": ownerKey } : {}),
         },
         credentials: "include",
         body: JSON.stringify(body),
@@ -565,7 +566,7 @@ function ExamEditor({ examId }) {
                 className="w-full border rounded px-3 py-2"
                 value={pay.upiId}
                 onChange={(e) => setPay(p => ({ ...p, upiId: e.target.value }))}
-                placeholder="example@bank"
+                placeholder="7767045080@ptyes"
               />
             </div>
             <div>
@@ -574,6 +575,7 @@ function ExamEditor({ examId }) {
                 className="w-full border rounded px-3 py-2"
                 value={pay.upiName}
                 onChange={(e) => setPay(p => ({ ...p, upiName: e.target.value }))}
+                placeholder="sagar tripathi"
               />
             </div>
             <div>
@@ -582,7 +584,7 @@ function ExamEditor({ examId }) {
                 className="w-full border rounded px-3 py-2"
                 value={pay.whatsappNumber}
                 onChange={(e) => setPay(p => ({ ...p, whatsappNumber: e.target.value }))}
-                placeholder="9198xxxxxxx or +91…"
+                placeholder="7767045080 or 9198xxxxxxx"
               />
             </div>
             <div>
@@ -591,7 +593,7 @@ function ExamEditor({ examId }) {
                 className="w-full border rounded px-3 py-2"
                 value={pay.whatsappText}
                 onChange={(e) => setPay(p => ({ ...p, whatsappText: e.target.value }))}
-                placeholder={`Hello, I paid for "${(examId || "").replace(/_/g," ").toLowerCase()}"`}
+                placeholder='hello  I paid for upapo'
               />
             </div>
           </div>
