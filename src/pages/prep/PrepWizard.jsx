@@ -956,7 +956,8 @@ export default function PrepWizard() {
       {loading ? (
         <div className="text-gray-500">Loading…</div>
       ) : gateStatus !== "active" || locked ? (
-        <div className="text-gray-500">Access locked — please purchase or wait for approval.</div>
+        // ⛔ IMPORTANT: show nothing if not active or locked — overlay handles the UI.
+        null
       ) : !releasedModules.length ? (
         <div className="text-gray-500">No modules for today yet.</div>
       ) : (
