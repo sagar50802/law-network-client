@@ -1,239 +1,501 @@
 // client/src/components/Prep/PrepAccessAdmin.jsx
-import { useEffect, useState } from "react";
+import { useEffect, useMemo, useState } from "react";
 import { getJSON, postJSON } from "../../utils/api";
 
-export default function PrepAccessAdmin({ examId }) {
-  const [cfg, setCfg] = useState(null);
-  const [list, setList] = useState([]);
+/**
+ * Admin panel for Prep Access:
+ * - Edit exam config (name, planDays, autoGrant, payment fields)
+ * - View & search requests
+ * - Approve / Reject / Revoke
+ * - Batch delete
+ *
+ * Requires server routes from: server/prep_access.js
+ *
+ * Props:
+ *   examId?: string (optional; if omitted, admin can type one)
+ */
+export default function PrepAccessAdmin({ examId: initialExamId }) {
+  const [examId, setExamId] = useState(initialExamId || "");
+  const [typingExamId, setTypingExamId] = useState(initialExamId || "");
   const [loading, setLoading] = useState(false);
-  const [selected, setSelected] = useState(new Set());
 
-  async function load() {
+  // Config state
+  const [config, setConfig] = useState({
+    name: "",
+    planDays: 21,
+    autoGrant: false,
+    payment: {
+      upiId: "",
+      upiName: "",
+      priceINR: "",
+      whatsappNumber: "",
+      whatsappText: "",
+    },
+  });
+  const [cfgSaving, setCfgSaving] = useState(false);
+
+  // Requests list
+  const [items, setItems] = useState([]);
+  const [sel, setSel] = useState(() => new Set()); // selected ids for batch delete
+
+  // UI filters
+  const [q, setQ] = useState("");
+  const [statusFilter, setStatusFilter] = useState("all"); // all|pending|approved|rejected
+  const [intentFilter, setIntentFilter] = useState("all"); // all|purchase|restart
+
+  // derived: filtered + searched
+  const filtered = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    return (items || []).filter((r) => {
+      if (statusFilter !== "all" && r.status !== statusFilter) return false;
+      if (intentFilter !== "all" && String(r.intent || "purchase") !== intentFilter) return false;
+      if (!term) return true;
+      const hay = `${r.email} ${r.name || ""} ${r.phone || ""} ${r.intent || ""} ${r.note || ""}`.toLowerCase();
+      return hay.includes(term);
+    });
+  }, [items, q, statusFilter, intentFilter]);
+
+  async function loadAll(id) {
+    if (!id) return;
     setLoading(true);
     try {
-      const c = await getJSON(`/api/prep/access/admin/config?examId=${encodeURIComponent(examId)}`);
-      setCfg(c?.config || null);
-      const r = await getJSON(`/api/prep/access/admin/requests?examId=${encodeURIComponent(examId)}`);
-      setList(Array.isArray(r?.items) ? r.items : []);
-      setSelected(new Set());
+      const [cfgRes, listRes] = await Promise.all([
+        getJSON(`/api/prep/access/admin/config?examId=${encodeURIComponent(id)}`),
+        getJSON(`/api/prep/access/admin/requests?examId=${encodeURIComponent(id)}`),
+      ]);
+
+      if (cfgRes?.success && cfgRes?.config) {
+        setConfig({
+          name: cfgRes.config.name || id.toUpperCase(),
+          planDays: Number(cfgRes.config.planDays || 21),
+          autoGrant: !!cfgRes.config.autoGrant,
+          payment: {
+            upiId: cfgRes.config.payment?.upiId || "",
+            upiName: cfgRes.config.payment?.upiName || "",
+            priceINR: cfgRes.config.payment?.priceINR ?? "",
+            whatsappNumber: cfgRes.config.payment?.whatsappNumber || "",
+            whatsappText: cfgRes.config.payment?.whatsappText || "",
+          },
+        });
+      }
+
+      if (listRes?.success && Array.isArray(listRes?.items)) {
+        setItems(listRes.items);
+        setSel(new Set());
+      }
+    } catch (e) {
+      console.error(e);
+      alert("Failed to load admin data");
     } finally {
       setLoading(false);
     }
   }
 
+  // initial
   useEffect(() => {
-    if (examId) load();
+    if (initialExamId) {
+      setExamId(initialExamId);
+      setTypingExamId(initialExamId);
+      loadAll(initialExamId);
+    }
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [examId]);
+  }, [initialExamId]);
+
+  function toast(msg) {
+    try {
+      window.toast?.success?.(msg);
+    } catch {
+      alert(msg);
+    }
+  }
 
   async function saveConfig() {
-    const r = await postJSON("/api/prep/access/admin/config", { examId, ...cfg });
-    if (!r?.success) alert("Save failed");
-    load();
+    if (!examId) {
+      alert("Please set examId first.");
+      return;
+    }
+    setCfgSaving(true);
+    try {
+      const body = {
+        examId,
+        name: config.name,
+        planDays: Number(config.planDays || 21),
+        autoGrant: !!config.autoGrant,
+        payment: { ...config.payment },
+      };
+      const r = await postJSON("/api/prep/access/admin/config", body);
+      if (!r?.success) throw new Error(r?.error || "Failed to save config");
+      toast("Config saved");
+      await loadAll(examId);
+    } catch (e) {
+      console.error(e);
+      alert("Save failed");
+    } finally {
+      setCfgSaving(false);
+    }
   }
 
-  async function act(email, mode) {
-    const r = await postJSON("/api/prep/access/admin/approve", { examId, email, mode });
-    if (!r?.success) alert("Action failed");
-    load();
+  async function doApprove(email, mode) {
+    if (!examId) return;
+    try {
+      const r = await postJSON("/api/prep/access/admin/approve", { examId, email, mode });
+      if (!r?.success) throw new Error(r?.error || "Failed");
+      toast(
+        mode === "grant"
+          ? `Granted: ${email}`
+          : mode === "reject"
+          ? `Rejected: ${email}`
+          : `Revoked: ${email}`
+      );
+      await loadAll(examId);
+    } catch (e) {
+      console.error(e);
+      alert("Action failed");
+    }
   }
 
-  async function removeSingle(id) {
-    const r = await postJSON("/api/prep/access/admin/delete", { ids: [id] });
-    if (!r?.success) alert("Delete failed");
-    load();
+  function toggleSel(id) {
+    setSel((prev) => {
+      const ns = new Set(prev);
+      if (ns.has(id)) ns.delete(id);
+      else ns.add(id);
+      return ns;
+    });
   }
 
-  async function removeBatch() {
-    if (!selected.size) return;
-    const ids = Array.from(selected);
-    const r = await postJSON("/api/prep/access/admin/delete", { ids });
-    if (!r?.success) alert("Batch delete failed");
-    load();
+  function selectAllCurrent() {
+    setSel(new Set(filtered.map((r) => r.id)));
+  }
+  function clearSel() {
+    setSel(new Set());
   }
 
-  function toggle(id) {
-    const s = new Set(selected);
-    if (s.has(id)) s.delete(id);
-    else s.add(id);
-    setSelected(s);
+  async function batchDelete() {
+    if (!sel.size) return;
+    if (!confirm(`Delete ${sel.size} selected request(s)?`)) return;
+    try {
+      const ids = Array.from(sel);
+      const r = await postJSON("/api/prep/access/admin/delete", { ids });
+      if (!r?.success) throw new Error(r?.error || "Failed");
+      toast(`Deleted ${r.removed || 0} request(s)`);
+      await loadAll(examId);
+    } catch (e) {
+      console.error(e);
+      alert("Batch delete failed");
+    }
   }
-
-  const allChecked = list.length > 0 && selected.size === list.length;
-  function toggleAll() {
-    if (allChecked) setSelected(new Set());
-    else setSelected(new Set(list.map((r) => r.id)));
-  }
-
-  if (!examId) return <div className="text-sm text-gray-500">Pick an examId.</div>;
-  if (!cfg) return <div className="text-sm text-gray-500">Loading config…</div>;
 
   return (
-    <div className="grid gap-6">
-      {/* Config */}
-      <div className="p-4 border rounded-lg">
-        <div className="text-lg font-semibold mb-2">Config — {examId}</div>
-        <div className="grid md:grid-cols-2 gap-3">
-          <label className="grid gap-1 text-sm">
-            <span>Course name</span>
-            <input className="border rounded px-2 py-1"
-              value={cfg.name || ""}
-              onChange={e => setCfg({ ...cfg, name: e.target.value })} />
-          </label>
-          <label className="grid gap-1 text-sm">
-            <span>Plan days</span>
-            <input className="border rounded px-2 py-1" type="number"
-              value={cfg.planDays || 21}
-              onChange={e => setCfg({ ...cfg, planDays: Number(e.target.value||0) })} />
-          </label>
-          <label className="grid gap-1 text-sm">
-            <span>Auto grant</span>
-            <select className="border rounded px-2 py-1"
-              value={cfg.autoGrant ? "1" : "0"}
-              onChange={e => setCfg({ ...cfg, autoGrant: e.target.value === "1" })}>
-              <option value="0">Off (manual)</option>
-              <option value="1">On (auto-approve new requests)</option>
-            </select>
-          </label>
-          <label className="grid gap-1 text-sm">
-            <span>Price (₹)</span>
-            <input className="border rounded px-2 py-1" type="number"
-              value={cfg.payment?.priceINR || 0}
-              onChange={e => setCfg({ ...cfg, payment: { ...cfg.payment, priceINR: Number(e.target.value||0) } })} />
-          </label>
-          <label className="grid gap-1 text-sm">
-            <span>UPI ID</span>
-            <input className="border rounded px-2 py-1"
-              value={cfg.payment?.upiId || ""}
-              onChange={e => setCfg({ ...cfg, payment: { ...cfg.payment, upiId: e.target.value } })} />
-          </label>
-          <label className="grid gap-1 text-sm">
-            <span>UPI Name</span>
-            <input className="border rounded px-2 py-1"
-              value={cfg.payment?.upiName || ""}
-              onChange={e => setCfg({ ...cfg, payment: { ...cfg.payment, upiName: e.target.value } })} />
-          </label>
-          <label className="grid gap-1 text-sm">
-            <span>WhatsApp Number (+91… or 91…)</span>
-            <input className="border rounded px-2 py-1"
-              value={cfg.payment?.whatsappNumber || ""}
-              onChange={e => setCfg({ ...cfg, payment: { ...cfg.payment, whatsappNumber: e.target.value } })} />
-          </label>
-          <label className="grid gap-1 text-sm md:col-span-2">
-            <span>WhatsApp Prefill Text</span>
-            <textarea className="border rounded px-2 py-1"
-              value={cfg.payment?.whatsappText || ""}
-              onChange={e => setCfg({ ...cfg, payment: { ...cfg.payment, whatsappText: e.target.value } })} />
-          </label>
+    <div className="max-w-6xl mx-auto p-4">
+      {/* Header / exam picker */}
+      <div className="flex items-end gap-3 mb-4">
+        <div className="flex-1">
+          <label className="block text-sm text-gray-600 mb-1">Exam ID</label>
+          <input
+            className="w-full border rounded px-3 py-2"
+            placeholder="e.g., UP_APO"
+            value={typingExamId}
+            onChange={(e) => setTypingExamId(e.target.value)}
+          />
         </div>
-        <div className="mt-3 flex gap-2">
-          <button className="px-4 py-2 rounded bg-emerald-600 text-white" onClick={saveConfig}>
-            Save Config
+        <button
+          className="px-4 py-2 rounded bg-black text-white"
+          onClick={() => {
+            setExamId(typingExamId.trim());
+            loadAll(typingExamId.trim());
+          }}
+        >
+          Load
+        </button>
+        <button
+          className="px-4 py-2 rounded border"
+          onClick={() => {
+            if (!examId) return;
+            loadAll(examId);
+          }}
+        >
+          Refresh
+        </button>
+      </div>
+
+      {/* Config editor */}
+      <div className="rounded-xl border p-4 mb-6 bg-white">
+        <div className="text-lg font-semibold mb-3">Exam Config</div>
+        <div className="grid md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm text-gray-600 mb-1">Course Name</label>
+            <input
+              className="w-full border rounded px-3 py-2"
+              value={config.name}
+              onChange={(e) => setConfig((c) => ({ ...c, name: e.target.value }))}
+            />
+          </div>
+          <div>
+            <label className="block text-sm text-gray-600 mb-1">Plan Days</label>
+            <input
+              type="number"
+              min={1}
+              className="w-full border rounded px-3 py-2"
+              value={config.planDays}
+              onChange={(e) =>
+                setConfig((c) => ({ ...c, planDays: Number(e.target.value || 1) }))
+              }
+            />
+          </div>
+          <div className="flex items-center gap-2">
+            <input
+              id="autogrant"
+              type="checkbox"
+              checked={!!config.autoGrant}
+              onChange={(e) => setConfig((c) => ({ ...c, autoGrant: e.target.checked }))}
+            />
+            <label htmlFor="autogrant" className="text-sm">
+              Auto-grant on submit
+            </label>
+          </div>
+        </div>
+
+        <div className="mt-4 grid md:grid-cols-2 gap-4">
+          <div>
+            <label className="block text-sm text-gray-600 mb-1">UPI ID</label>
+            <input
+              className="w-full border rounded px-3 py-2"
+              placeholder="merchant@upi"
+              value={config.payment.upiId}
+              onChange={(e) =>
+                setConfig((c) => ({ ...c, payment: { ...c.payment, upiId: e.target.value } }))
+              }
+            />
+          </div>
+          <div>
+            <label className="block text-sm text-gray-600 mb-1">UPI Name</label>
+            <input
+              className="w-full border rounded px-3 py-2"
+              value={config.payment.upiName}
+              onChange={(e) =>
+                setConfig((c) => ({ ...c, payment: { ...c.payment, upiName: e.target.value } }))
+              }
+            />
+          </div>
+          <div>
+            <label className="block text-sm text-gray-600 mb-1">Price (₹)</label>
+            <input
+              type="number"
+              min={0}
+              className="w-full border rounded px-3 py-2"
+              value={config.payment.priceINR}
+              onChange={(e) =>
+                setConfig((c) => ({
+                  ...c,
+                  payment: { ...c.payment, priceINR: e.target.value },
+                }))
+              }
+            />
+          </div>
+          <div>
+            <label className="block text-sm text-gray-600 mb-1">WhatsApp Number</label>
+            <input
+              className="w-full border rounded px-3 py-2"
+              placeholder="e.g., 919876543210"
+              value={config.payment.whatsappNumber}
+              onChange={(e) =>
+                setConfig((c) => ({
+                  ...c,
+                  payment: { ...c.payment, whatsappNumber: e.target.value },
+                }))
+              }
+            />
+          </div>
+          <div className="md:col-span-2">
+            <label className="block text-sm text-gray-600 mb-1">WhatsApp Prefill Text</label>
+            <textarea
+              rows={3}
+              className="w-full border rounded px-3 py-2"
+              value={config.payment.whatsappText}
+              onChange={(e) =>
+                setConfig((c) => ({
+                  ...c,
+                  payment: { ...c.payment, whatsappText: e.target.value },
+                }))
+              }
+            />
+          </div>
+        </div>
+
+        <div className="mt-4 flex items-center gap-3">
+          <button
+            className="px-4 py-2 rounded bg-emerald-600 text-white disabled:opacity-60"
+            onClick={saveConfig}
+            disabled={cfgSaving || !examId}
+          >
+            {cfgSaving ? "Saving…" : "Save Config"}
           </button>
-          <button className="px-4 py-2 rounded bg-gray-600 text-white" onClick={load}>
+          <span className="text-xs text-gray-500">
+            Editing config for <b>{examId || "(no exam selected)"}</b>
+          </span>
+        </div>
+      </div>
+
+      {/* Requests toolbar */}
+      <div className="rounded-xl border p-4 mb-2 bg-white">
+        <div className="text-lg font-semibold mb-3">Access Requests</div>
+        <div className="flex flex-wrap items-center gap-3">
+          <input
+            className="border rounded px-3 py-2 flex-1 min-w-[220px]"
+            placeholder="Search (email, name, phone, note)"
+            value={q}
+            onChange={(e) => setQ(e.target.value)}
+          />
+        </div>
+        <div className="mt-3 flex flex-wrap items-center gap-3">
+          <select
+            className="border rounded px-3 py-2"
+            value={statusFilter}
+            onChange={(e) => setStatusFilter(e.target.value)}
+          >
+            <option value="all">All statuses</option>
+            <option value="pending">Pending</option>
+            <option value="approved">Approved</option>
+            <option value="rejected">Rejected</option>
+          </select>
+          <select
+            className="border rounded px-3 py-2"
+            value={intentFilter}
+            onChange={(e) => setIntentFilter(e.target.value)}
+          >
+            <option value="all">All intents</option>
+            <option value="purchase">Purchase</option>
+            <option value="restart">Restart</option>
+          </select>
+
+          <div className="flex-1" />
+
+          <button
+            className="px-3 py-2 rounded border"
+            onClick={selectAllCurrent}
+            disabled={!filtered.length}
+          >
+            Select All (filtered)
+          </button>
+          <button
+            className="px-3 py-2 rounded border"
+            onClick={clearSel}
+            disabled={!sel.size}
+          >
+            Clear Selection
+          </button>
+          <button
+            className="px-3 py-2 rounded bg-red-600 text-white disabled:opacity-60"
+            onClick={batchDelete}
+            disabled={!sel.size}
+          >
+            Delete Selected ({sel.size})
+          </button>
+          <button
+            className="px-3 py-2 rounded border"
+            onClick={() => examId && loadAll(examId)}
+          >
             Refresh
           </button>
         </div>
       </div>
 
-      {/* Requests */}
-      <div className="p-4 border rounded-lg">
-        <div className="flex items-center justify-between mb-2">
-          <div className="text-lg font-semibold">Requests {loading ? "(loading…)" : ""}</div>
-          <div className="flex gap-2">
-            <button
-              className="px-3 py-1.5 rounded bg-rose-600 text-white disabled:opacity-50"
-              onClick={removeBatch}
-              disabled={!selected.size}
-              title="Delete selected requests"
-            >
-              Delete Selected ({selected.size})
-            </button>
-          </div>
-        </div>
-
-        {!list.length ? (
-          <div className="text-sm text-gray-500">No requests yet.</div>
-        ) : (
-          <div className="overflow-auto">
-            <table className="min-w-[880px] text-sm">
-              <thead>
-                <tr className="text-left border-b">
-                  <th className="py-2 pr-3">
-                    <input type="checkbox" checked={allChecked} onChange={toggleAll} />
-                  </th>
-                  <th className="py-2 pr-3">When</th>
-                  <th className="py-2 pr-3">Email</th>
-                  <th className="py-2 pr-3">Name</th>
-                  <th className="py-2 pr-3">Phone</th>
-                  <th className="py-2 pr-3">Intent</th>
-                  <th className="py-2 pr-3">Note</th>
-                  <th className="py-2 pr-3">Status</th>
-                  <th className="py-2 pr-3">Actions</th>
-                </tr>
-              </thead>
-              <tbody>
-                {list.map((r) => {
-                  const checked = selected.has(r.id);
-                  return (
-                    <tr key={r.id} className="border-b last:border-0">
-                      <td className="py-2 pr-3">
-                        <input type="checkbox" checked={checked} onChange={() => toggle(r.id)} />
-                      </td>
-                      <td className="py-2 pr-3">{new Date(r.createdAt).toLocaleString()}</td>
-                      <td className="py-2 pr-3">{r.email}</td>
-                      <td className="py-2 pr-3">{r.name}</td>
-                      <td className="py-2 pr-3">{r.phone}</td>
-                      <td className="py-2 pr-3">{r.intent}</td>
-                      <td className="py-2 pr-3">{r.note}</td>
-                      <td className="py-2 pr-3">
-                        <span
-                          className={
-                            r.status === "approved"
-                              ? "text-emerald-700"
-                              : r.status === "rejected"
-                              ? "text-rose-700"
-                              : "text-gray-700"
-                          }
+      {/* Table */}
+      <div className="rounded-xl border bg-white overflow-x-auto">
+        <table className="w-full text-sm">
+          <thead className="bg-gray-50">
+            <tr className="text-left">
+              <th className="p-2 w-10">Sel</th>
+              <th className="p-2">Email</th>
+              <th className="p-2">Name</th>
+              <th className="p-2">Phone</th>
+              <th className="p-2">Intent</th>
+              <th className="p-2">Status</th>
+              <th className="p-2">Note</th>
+              <th className="p-2">Created</th>
+              <th className="p-2 w-64">Actions</th>
+            </tr>
+          </thead>
+          <tbody>
+            {loading ? (
+              <tr>
+                <td className="p-3 text-gray-500" colSpan={9}>
+                  Loading…
+                </td>
+              </tr>
+            ) : !filtered.length ? (
+              <tr>
+                <td className="p-3 text-gray-500" colSpan={9}>
+                  No requests.
+                </td>
+              </tr>
+            ) : (
+              filtered.map((r) => {
+                const created = r.createdAt
+                  ? new Date(r.createdAt).toLocaleString()
+                  : "";
+                const selected = sel.has(r.id);
+                return (
+                  <tr key={r.id} className="border-t">
+                    <td className="p-2 align-top">
+                      <input
+                        type="checkbox"
+                        checked={selected}
+                        onChange={() => toggleSel(r.id)}
+                      />
+                    </td>
+                    <td className="p-2 align-top font-mono">{r.email}</td>
+                    <td className="p-2 align-top">{r.name || "—"}</td>
+                    <td className="p-2 align-top">{r.phone || "—"}</td>
+                    <td className="p-2 align-top">{r.intent || "purchase"}</td>
+                    <td className="p-2 align-top">
+                      <span
+                        className={
+                          "px-1.5 py-0.5 rounded text-[11px] " +
+                          (r.status === "approved"
+                            ? "bg-emerald-100 text-emerald-700"
+                            : r.status === "pending"
+                            ? "bg-amber-100 text-amber-700"
+                            : "bg-rose-100 text-rose-700")
+                        }
+                      >
+                        {r.status}
+                      </span>
+                    </td>
+                    <td className="p-2 align-top max-w-[300px] break-words">
+                      {r.note || "—"}
+                    </td>
+                    <td className="p-2 align-top whitespace-nowrap">
+                      {created}
+                    </td>
+                    <td className="p-2 align-top">
+                      <div className="flex flex-wrap gap-2">
+                        <button
+                          className="px-2 py-1 rounded bg-emerald-600 text-white"
+                          onClick={() => doApprove(r.email, "grant")}
                         >
-                          {r.status}
-                        </span>
-                      </td>
-                      <td className="py-2 pr-3">
-                        <div className="flex gap-2">
-                          <button
-                            className="px-2 py-1 rounded bg-emerald-600 text-white"
-                            onClick={() => act(r.email, "grant")}
-                          >
-                            Approve
-                          </button>
-                          <button
-                            className="px-2 py-1 rounded bg-rose-600 text-white"
-                            onClick={() => act(r.email, "reject")}
-                          >
-                            Reject
-                          </button>
-                          <button
-                            className="px-2 py-1 rounded bg-gray-600 text-white"
-                            onClick={() => act(r.email, "revoke")}
-                          >
-                            Revoke
-                          </button>
-                          <button
-                            className="px-2 py-1 rounded bg-red-700 text-white"
-                            onClick={() => removeSingle(r.id)}
-                          >
-                            Delete
-                          </button>
-                        </div>
-                      </td>
-                    </tr>
-                  );
-                })}
-              </tbody>
-            </table>
-          </div>
-        )}
+                          Grant
+                        </button>
+                        <button
+                          className="px-2 py-1 rounded bg-amber-600 text-white"
+                          onClick={() => doApprove(r.email, "reject")}
+                        >
+                          Reject
+                        </button>
+                        <button
+                          className="px-2 py-1 rounded bg-gray-800 text-white"
+                          onClick={() => doApprove(r.email, "revoke")}
+                        >
+                          Revoke
+                        </button>
+                      </div>
+                    </td>
+                  </tr>
+                );
+              })
+            )}
+          </tbody>
+        </table>
       </div>
     </div>
   );
