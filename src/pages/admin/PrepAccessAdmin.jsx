@@ -3,98 +3,37 @@ import { useEffect, useMemo, useState } from "react";
 import { getJSON, postJSON } from "../../utils/api";
 
 /**
- * PrepAccessAdmin (Requests-only)
- * - NO payment editing here (UPI / WhatsApp / price live in AdminPrepPanel.jsx)
- * - Load requests for an exam
+ * PrepAccessAdmin (requests-only)
+ * - Select exam
+ * - Show read-only payment/price summary (from /meta)
+ * - List/search/filter requests
  * - Approve / Reject / Revoke
- * - Delete single / Batch delete
- * - Read-only summary shows current payment config pulled from /api/prep/exams/:examId/meta
+ * - Delete single + Batch delete
  *
- * Props:
- *   examId?: string (optional; if omitted, admin can type one and Load)
+ * Back-end routes:
+ *   GET  /api/prep/exams/:examId/meta
+ *   GET  /api/prep/access/admin/requests?examId=...
+ *   POST /api/prep/access/admin/approve { examId, email, mode: "grant"|"reject"|"revoke" }
+ *   POST /api/prep/access/admin/delete  { ids: string[] }
  */
+
 export default function PrepAccessAdmin({ examId: initialExamId }) {
   const [examId, setExamId] = useState(initialExamId || "");
   const [typingExamId, setTypingExamId] = useState(initialExamId || "");
+
   const [loading, setLoading] = useState(false);
+  const [meta, setMeta] = useState(null);
 
-  // Requests list
+  // Requests
   const [items, setItems] = useState([]);
-  const [sel, setSel] = useState(() => new Set()); // selected ids for batch delete
+  const [sel, setSel] = useState(() => new Set());
 
-  // Quick readonly meta pulled from AdminPrepPanel's source of truth
-  const [meta, setMeta] = useState({
-    name: "",
-    payment: { upiId: "", upiName: "", priceINR: "", whatsappNumber: "", whatsappText: "" },
-  });
-
-  // UI filters
+  // Filters
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState("all"); // all|pending|approved|rejected
   const [intentFilter, setIntentFilter] = useState("all"); // all|purchase|restart
 
-  // derived: filtered + searched
-  const filtered = useMemo(() => {
-    const term = q.trim().toLowerCase();
-    return (items || []).filter((r) => {
-      if (statusFilter !== "all" && r.status !== statusFilter) return false;
-      if (intentFilter !== "all" && String(r.intent || "purchase") !== intentFilter) return false;
-      if (!term) return true;
-      const hay = `${r.email} ${r.name || ""} ${r.phone || ""} ${r.intent || ""} ${r.note || ""}`.toLowerCase();
-      return hay.includes(term);
-    });
-  }, [items, q, statusFilter, intentFilter]);
-
-  async function loadRequestsAndMeta(id) {
-    if (!id) return;
-    setLoading(true);
-    try {
-      const [listRes, metaRes] = await Promise.all([
-        getJSON(`/api/prep/access/admin/requests?examId=${encodeURIComponent(id)}`),
-        getJSON(`/api/prep/exams/${encodeURIComponent(id)}/meta?_=${Date.now()}`),
-      ]);
-
-      if (listRes?.success && Array.isArray(listRes?.items)) {
-        setItems(listRes.items);
-        setSel(new Set());
-      } else {
-        setItems([]);
-        setSel(new Set());
-      }
-
-      const name = metaRes?.name || id.toUpperCase();
-      const pay = {
-        ...(metaRes?.payment || {}),
-        ...(metaRes?.overlay?.payment || {}),
-      };
-      setMeta({
-        name,
-        payment: {
-          upiId: pay.upiId || "",
-          upiName: pay.upiName || "",
-          priceINR: pay.priceINR ?? (metaRes?.price ?? ""),
-          whatsappNumber: pay.whatsappNumber || "",
-          whatsappText: pay.whatsappText || "",
-        },
-      });
-    } catch (e) {
-      console.error(e);
-      alert("Failed to load requests/meta");
-    } finally {
-      setLoading(false);
-    }
-  }
-
-  // initial
-  useEffect(() => {
-    if (initialExamId) {
-      setExamId(initialExamId);
-      setTypingExamId(initialExamId);
-      loadRequestsAndMeta(initialExamId);
-    }
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [initialExamId]);
-
+  // ------- helpers -------
   function toast(msg) {
     try {
       window.toast?.success?.(msg);
@@ -103,8 +42,43 @@ export default function PrepAccessAdmin({ examId: initialExamId }) {
     }
   }
 
+  async function loadAll(id) {
+    if (!id) return;
+    setLoading(true);
+    try {
+      // pull payment+price summary from /meta (single source of truth set via AdminPrepPanel)
+      const [metaRes, listRes] = await Promise.all([
+        getJSON(`/api/prep/exams/${encodeURIComponent(id)}/meta?_=${Date.now()}`),
+        getJSON(`/api/prep/access/admin/requests?examId=${encodeURIComponent(id)}&_=${Date.now()}`),
+      ]);
+
+      setMeta(metaRes || null);
+
+      const list = Array.isArray(listRes?.items) ? listRes.items.slice() : [];
+      // sort newest first
+      list.sort((a, b) => (new Date(b.createdAt || 0) - new Date(a.createdAt || 0)));
+      setItems(list);
+      setSel(new Set());
+    } catch (e) {
+      console.error(e);
+      alert("Failed to load admin data");
+    } finally {
+      setLoading(false);
+    }
+  }
+
+  useEffect(() => {
+    if (initialExamId) {
+      setExamId(initialExamId);
+      setTypingExamId(initialExamId);
+      loadAll(initialExamId);
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [initialExamId]);
+
+  // ------- actions -------
   async function doApprove(email, mode) {
-    if (!examId) return;
+    if (!examId || !email) return;
     try {
       const r = await postJSON("/api/prep/access/admin/approve", { examId, email, mode });
       if (!r?.success) throw new Error(r?.error || "Failed");
@@ -115,27 +89,11 @@ export default function PrepAccessAdmin({ examId: initialExamId }) {
           ? `Rejected: ${email}`
           : `Revoked: ${email}`
       );
-      await loadRequestsAndMeta(examId);
+      await loadAll(examId);
     } catch (e) {
       console.error(e);
       alert("Action failed");
     }
-  }
-
-  function toggleSel(id) {
-    setSel((prev) => {
-      const ns = new Set(prev);
-      if (ns.has(id)) ns.delete(id);
-      else ns.add(id);
-      return ns;
-    });
-  }
-
-  function selectAllCurrent() {
-    setSel(new Set(filtered.map((r) => r.id)));
-  }
-  function clearSel() {
-    setSel(new Set());
   }
 
   async function deleteOne(id) {
@@ -144,8 +102,8 @@ export default function PrepAccessAdmin({ examId: initialExamId }) {
     try {
       const r = await postJSON("/api/prep/access/admin/delete", { ids: [id] });
       if (!r?.success) throw new Error(r?.error || "Failed");
-      toast("Deleted 1 request");
-      await loadRequestsAndMeta(examId);
+      toast("Request deleted");
+      await loadAll(examId);
     } catch (e) {
       console.error(e);
       alert("Delete failed");
@@ -160,19 +118,41 @@ export default function PrepAccessAdmin({ examId: initialExamId }) {
       const r = await postJSON("/api/prep/access/admin/delete", { ids });
       if (!r?.success) throw new Error(r?.error || "Failed");
       toast(`Deleted ${r.removed || 0} request(s)`);
-      await loadRequestsAndMeta(examId);
+      await loadAll(examId);
     } catch (e) {
       console.error(e);
       alert("Batch delete failed");
     }
   }
 
-  const pay = meta.payment || {};
-  const priceLabel =
-    pay?.priceINR != null && pay?.priceINR !== ""
-      ? `₹${Number(pay.priceINR) || pay.priceINR}`
-      : "—";
+  function toggleSel(id) {
+    setSel((prev) => {
+      const ns = new Set(prev);
+      if (ns.has(id)) ns.delete(id);
+      else ns.add(id);
+      return ns;
+    });
+  }
+  function selectAllCurrent() {
+    setSel(new Set(filtered.map((r) => r.id)));
+  }
+  function clearSel() {
+    setSel(new Set());
+  }
 
+  // ------- derived -------
+  const filtered = useMemo(() => {
+    const term = q.trim().toLowerCase();
+    return (items || []).filter((r) => {
+      if (statusFilter !== "all" && r.status !== statusFilter) return false;
+      if (intentFilter !== "all" && String(r.intent || "purchase") !== intentFilter) return false;
+      if (!term) return true;
+      const hay = `${r.email} ${r.name || ""} ${r.phone || ""} ${r.intent || ""} ${r.note || ""}`.toLowerCase();
+      return hay.includes(term);
+    });
+  }, [items, q, statusFilter, intentFilter]);
+
+  // ------- render -------
   return (
     <div className="max-w-6xl mx-auto p-4">
       {/* Header / exam picker */}
@@ -191,42 +171,61 @@ export default function PrepAccessAdmin({ examId: initialExamId }) {
           onClick={() => {
             const id = typingExamId.trim();
             setExamId(id);
-            loadRequestsAndMeta(id);
+            loadAll(id);
           }}
         >
           Load
         </button>
         <button
           className="px-4 py-2 rounded border"
-          onClick={() => {
-            if (!examId) return;
-            loadRequestsAndMeta(examId);
-          }}
+          onClick={() => examId && loadAll(examId)}
         >
           Refresh
         </button>
       </div>
 
-      {/* Read-only payment summary (from AdminPrepPanel config) */}
+      {/* Read-only payment summary from /meta */}
       {examId && (
         <div className="rounded-xl border p-4 mb-6 bg-white">
-          <div className="text-lg font-semibold mb-2">Current Payment (read-only)</div>
-          <div className="grid md:grid-cols-4 gap-3 text-sm">
-            <Info label="Course" value={meta.name || examId} mono={false} />
-            <Info label="Price" value={priceLabel} />
-            <Info label="UPI ID" value={pay.upiId || "—"} />
-            <Info label="UPI Name" value={pay.upiName || "—"} />
-            <Info label="WhatsApp" value={pay.whatsappNumber || "—"} />
-            <div className="md:col-span-3">
-              <Info
-                label="WhatsApp Prefill"
-                value={(pay.whatsappText || "—").toString()}
-                wrap
-              />
+          <div className="text-lg font-semibold mb-3">Payment & Price (read-only)</div>
+          <div className="text-sm grid md:grid-cols-2 gap-2">
+            <Row label="Course" value={meta?.name || examId.toUpperCase()} />
+            <Row
+              label="Price (₹)"
+              value={
+                meta?.overlay?.payment?.priceINR ??
+                meta?.payment?.priceINR ??
+                meta?.price ??
+                "—"
+              }
+            />
+            <Row
+              label="UPI ID"
+              value={
+                meta?.overlay?.payment?.upiId ||
+                meta?.payment?.upiId ||
+                "—"
+              }
+            />
+            <Row
+              label="UPI Name"
+              value={
+                meta?.overlay?.payment?.upiName ||
+                meta?.payment?.upiName ||
+                "—"
+              }
+            />
+            <Row
+              label="WhatsApp"
+              value={
+                meta?.overlay?.payment?.whatsappNumber ||
+                meta?.payment?.whatsappNumber ||
+                "—"
+              }
+            />
+            <div className="md:col-span-2 text-gray-500">
+              To edit payment or overlay schedule, use <b>AdminPrepPanel</b>. This panel is only for access requests & approvals.
             </div>
-          </div>
-          <div className="text-[12px] text-gray-500 mt-2">
-            Edit these in <b>AdminPrepPanel</b>. This panel is only for access requests & approvals.
           </div>
         </div>
       )}
@@ -234,6 +233,7 @@ export default function PrepAccessAdmin({ examId: initialExamId }) {
       {/* Requests toolbar */}
       <div className="rounded-xl border p-4 mb-2 bg-white">
         <div className="text-lg font-semibold mb-3">Access Requests</div>
+
         <div className="flex flex-wrap items-center gap-3">
           <input
             className="border rounded px-3 py-2 flex-1 min-w-[220px]"
@@ -242,6 +242,7 @@ export default function PrepAccessAdmin({ examId: initialExamId }) {
             onChange={(e) => setQ(e.target.value)}
           />
         </div>
+
         <div className="mt-3 flex flex-wrap items-center gap-3">
           <select
             className="border rounded px-3 py-2"
@@ -288,7 +289,7 @@ export default function PrepAccessAdmin({ examId: initialExamId }) {
           </button>
           <button
             className="px-3 py-2 rounded border"
-            onClick={() => examId && loadRequestsAndMeta(examId)}
+            onClick={() => examId && loadAll(examId)}
           >
             Refresh
           </button>
@@ -308,7 +309,7 @@ export default function PrepAccessAdmin({ examId: initialExamId }) {
               <th className="p-2">Status</th>
               <th className="p-2">Note</th>
               <th className="p-2">Created</th>
-              <th className="p-2 w-72">Actions</th>
+              <th className="p-2 w-[320px]">Actions</th>
             </tr>
           </thead>
           <tbody>
@@ -337,7 +338,7 @@ export default function PrepAccessAdmin({ examId: initialExamId }) {
                         onChange={() => toggleSel(r.id)}
                       />
                     </td>
-                    <td className="p-2 align-top font-mono">{r.email}</td>
+                    <td className="p-2 align-top font-mono break-all">{r.email}</td>
                     <td className="p-2 align-top">{r.name || "—"}</td>
                     <td className="p-2 align-top">{r.phone || "—"}</td>
                     <td className="p-2 align-top">{r.intent || "purchase"}</td>
@@ -355,32 +356,37 @@ export default function PrepAccessAdmin({ examId: initialExamId }) {
                         {r.status}
                       </span>
                     </td>
-                    <td className="p-2 align-top max-w-[300px] break-words">
+                    <td className="p-2 align-top max-w-[320px] break-words">
                       {r.note || "—"}
                     </td>
-                    <td className="p-2 align-top whitespace-nowrap">{created}</td>
+                    <td className="p-2 align-top whitespace-nowrap">
+                      {created}
+                    </td>
                     <td className="p-2 align-top">
                       <div className="flex flex-wrap gap-2">
                         <button
                           className="px-2 py-1 rounded bg-emerald-600 text-white"
                           onClick={() => doApprove(r.email, "grant")}
+                          title="Grant access"
                         >
                           Grant
                         </button>
                         <button
                           className="px-2 py-1 rounded bg-amber-600 text-white"
                           onClick={() => doApprove(r.email, "reject")}
+                          title="Reject request"
                         >
                           Reject
                         </button>
                         <button
                           className="px-2 py-1 rounded bg-gray-800 text-white"
                           onClick={() => doApprove(r.email, "revoke")}
+                          title="Revoke existing access"
                         >
                           Revoke
                         </button>
                         <button
-                          className="px-2 py-1 rounded border border-red-300 text-red-700"
+                          className="px-2 py-1 rounded border text-red-600"
                           onClick={() => deleteOne(r.id)}
                           title="Delete this request"
                         >
@@ -399,20 +405,11 @@ export default function PrepAccessAdmin({ examId: initialExamId }) {
   );
 }
 
-function Info({ label, value, mono = true, wrap = false }) {
+function Row({ label, value }) {
   return (
-    <div>
-      <div className="text-[11px] uppercase tracking-wide text-gray-500">{label}</div>
-      <div
-        className={
-          (mono ? "font-mono " : "") +
-          "text-sm " +
-          (wrap ? "break-words" : "truncate")
-        }
-        title={String(value || "")}
-      >
-        {value || "—"}
-      </div>
+    <div className="flex items-baseline gap-2">
+      <div className="text-gray-500 w-40 shrink-0">{label}</div>
+      <div className="font-mono break-all">{String(value ?? "—")}</div>
     </div>
   );
 }
