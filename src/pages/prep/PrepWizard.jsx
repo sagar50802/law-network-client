@@ -141,12 +141,13 @@ function splitSentences(text) {
 
 const YEAR_RE = /\b(1[5-9]\d{2}|20\d{2}|2100)\b/;
 
-// inline (word-level) highlighting
+// inline (word-level) highlighting — used when sentence isn't block styled
 function renderInline(sentence, rand) {
-  const parts = sentence.split(/(\b[\p{L}\p{N}']+\b)/u);
+  const parts = sentence.split(/(\b[\p{L}\p{N}']+\b)/u); // keep punctuation and spaces
   return parts.map((tok, i) => {
     if (!/\b[\p{L}\p{N}']+\b/u.test(tok)) return <span key={i}>{tok}</span>;
 
+    // IMPORTANT → pink
     if (IMPORTANT.some((re) => re.test(tok))) {
       return (
         <mark key={i} style={{ backgroundColor: "rgba(255, 138, 168, 0.35)", borderRadius: 2 }}>
@@ -155,6 +156,7 @@ function renderInline(sentence, rand) {
       );
     }
 
+    // Years → yellow
     if (YEAR_RE.test(tok)) {
       return (
         <mark key={i} style={{ backgroundColor: "rgba(255, 242, 0, 0.35)", borderRadius: 2 }}>
@@ -163,6 +165,7 @@ function renderInline(sentence, rand) {
       );
     }
 
+    // sprinkle a few green notes (very low probability)
     if (rand() < 0.045) {
       return (
         <mark key={i} style={{ backgroundColor: "rgba(194, 255, 125, 0.35)" }}>
@@ -175,19 +178,22 @@ function renderInline(sentence, rand) {
   });
 }
 
+// decide per-sentence style (mutually exclusive) — tuned to be subtle but present
 function chooseSentenceStyle(sentence, rand) {
   const words = sentence.trim().split(/\s+/).filter(Boolean).length;
   const isLong = words >= 18;
 
+  // Balanced distribution: more long-sentence yellow; also blue/green blocks sprinkled
   const r = rand();
-  if (isLong && r < 0.32) return "yellow";
-  if (r < 0.18) return "underline";
-  if (r < 0.28) return "bluebold";
-  if (r < 0.4) return "green";
-  if (r < 0.52) return "blue";
+  if (isLong && r < 0.32) return "yellow"; // block highlight (frequent on long sentences)
+  if (r < 0.18) return "underline"; // wavy underline
+  if (r < 0.28) return "bluebold"; // bold blue
+  if (r < 0.4) return "green"; // soft green block
+  if (r < 0.52) return "blue"; // soft light-blue block
   return null;
 }
 
+// main renderer: paragraphs → sentences → styled spans
 export function highlightNotes(raw, seedKey = "") {
   if (!raw) return null;
   const paras = String(raw).trim().split(/\n{2,}/);
@@ -269,6 +275,7 @@ export function highlightNotes(raw, seedKey = "") {
           </span>
         );
       }
+      // no sentence style → do inline highlights
       return <span key={si}>{renderInline(s, rand)}</span>;
     });
 
@@ -626,8 +633,9 @@ export default function PrepWizard() {
   // 🔒 if backend reports locked, never render content list (overlay will show too)
   const [locked, setLocked] = useState(false);
 
-  // 🔒 HARD GATE from /access/status/guard — always show overlay until ACTIVE
-  const [gateStatus, setGateStatus] = useState("checking"); // "checking" | "inactive" | "active"
+  // 🔒 Overlay gate control
+  const [gateStatus, setGateStatus] = useState("checking"); // checking | inactive | active
+  const [showOverlay, setShowOverlay] = useState(true);
   const pollRef = useRef(null);
 
   const email = localStorage.getItem("userEmail") || "";
@@ -713,6 +721,7 @@ export default function PrepWizard() {
           return ta - tb;
         });
 
+      // If locked, do not show anything (PLUS the hard gate below will also protect)
       setModules(locked ? [] : releasedToday);
       setAllModules(all);
       setCurrentDay(td);
@@ -732,10 +741,9 @@ export default function PrepWizard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [examSlug]);
 
-  // 🔒 HARD GATE effect (separate from your load()) — checks /access/status/guard
+  // 🔒 Overlay gate control effect — checks /access/status/guard
   useEffect(() => {
     let cancelled = false;
-
     async function checkGate() {
       const ex = apiExamId || examSlug;
       if (!ex) return;
@@ -747,21 +755,23 @@ export default function PrepWizard() {
         const data = await res.json();
 
         const isActive = data?.access?.status === "active";
-        if (!cancelled) setGateStatus(isActive ? "active" : "inactive");
-
-        // If it just became active, refresh today payload to show content
-        if (isActive && !cancelled) {
-          await load();
+        if (!cancelled) {
+          setGateStatus(isActive ? "active" : "inactive");
+          setShowOverlay(!isActive); // show overlay until approved
         }
-      } catch {
-        if (!cancelled) setGateStatus("inactive"); // safer default: overlay remains visible
+
+        if (isActive && !cancelled) await load(); // refresh modules
+      } catch (err) {
+        console.warn("[PrepWizard] guard error:", err);
+        if (!cancelled) {
+          setGateStatus("inactive");
+          setShowOverlay(true);
+        }
       }
     }
 
-    // initial check ASAP
     checkGate();
 
-    // poll every 5s until active (auto unlock)
     if (pollRef.current) clearInterval(pollRef.current);
     pollRef.current = setInterval(() => {
       if (gateStatus === "active") {
@@ -774,10 +784,7 @@ export default function PrepWizard() {
 
     return () => {
       cancelled = true;
-      if (pollRef.current) {
-        clearInterval(pollRef.current);
-        pollRef.current = null;
-      }
+      if (pollRef.current) clearInterval(pollRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiExamId, examSlug, email]);
@@ -949,7 +956,6 @@ export default function PrepWizard() {
       {loading ? (
         <div className="text-gray-500">Loading…</div>
       ) : gateStatus !== "active" || locked ? (
-        /* ⛔ hard gate: block content until active */
         <div className="text-gray-500">Access locked — please purchase or wait for approval.</div>
       ) : !releasedModules.length ? (
         <div className="text-gray-500">No modules for today yet.</div>
@@ -983,7 +989,17 @@ export default function PrepWizard() {
   return (
     <div className="prep-wrap">
       {/* ✅ Fullscreen gate — payment → WhatsApp proof → submit → waiting → admin approve → auto unlock */}
-      <PrepAccessOverlay examId={apiExamId || examSlug} email={localStorage.getItem("userEmail") || ""} />
+      {showOverlay && (
+        <PrepAccessOverlay
+          examId={apiExamId || examSlug}
+          email={localStorage.getItem("userEmail") || ""}
+          onApproved={() => {
+            setShowOverlay(false);
+            setGateStatus("active");
+            load();
+          }}
+        />
+      )}
 
       <div className="tabbar">
         <a
