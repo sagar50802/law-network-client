@@ -4,7 +4,9 @@ import { getJSON, postJSON, absUrl } from "../../utils/api";
 import { ImageScroller } from "../../components/ui/ImageScroller";
 import PrepAccessOverlay from "../../components/Prep/PrepAccessOverlay.jsx";
 
-/** Route shape assumed: /prep/:examId */
+/**
+ * Route shape assumed: /prep/:examId
+ */
 function readExamId() {
   const parts = window.location.pathname.split("/").filter(Boolean);
   const i = parts.findIndex((p) => p === "prep");
@@ -139,7 +141,7 @@ function splitSentences(text) {
 
 const YEAR_RE = /\b(1[5-9]\d{2}|20\d{2}|2100)\b/;
 
-// inline (word-level) highlighting — used when sentence isn't block styled
+// inline (word-level) highlighting
 function renderInline(sentence, rand) {
   const parts = sentence.split(/(\b[\p{L}\p{N}']+\b)/u);
   return parts.map((tok, i) => {
@@ -152,6 +154,7 @@ function renderInline(sentence, rand) {
         </mark>
       );
     }
+
     if (YEAR_RE.test(tok)) {
       return (
         <mark key={i} style={{ backgroundColor: "rgba(255, 242, 0, 0.35)", borderRadius: 2 }}>
@@ -159,6 +162,7 @@ function renderInline(sentence, rand) {
         </mark>
       );
     }
+
     if (rand() < 0.045) {
       return (
         <mark key={i} style={{ backgroundColor: "rgba(194, 255, 125, 0.35)" }}>
@@ -166,6 +170,7 @@ function renderInline(sentence, rand) {
         </mark>
       );
     }
+
     return <span key={i}>{tok}</span>;
   });
 }
@@ -173,6 +178,7 @@ function renderInline(sentence, rand) {
 function chooseSentenceStyle(sentence, rand) {
   const words = sentence.trim().split(/\s+/).filter(Boolean).length;
   const isLong = words >= 18;
+
   const r = rand();
   if (isLong && r < 0.32) return "yellow";
   if (r < 0.18) return "underline";
@@ -602,7 +608,7 @@ function PreviewPanel({ day, modules }) {
 
 export default function PrepWizard() {
   const examSlug = readExamId(); // e.g. "up apo" or "UP_APO"
-  const [apiExamId, setApiExamId] = useState(""); // chosen id used in API calls
+  const [apiExamId, setApiExamId] = useState(""); // chosen id actually used in API calls
 
   const [tab, setTab] = useState(() => new URLSearchParams(location.search).get("tab") || "today");
   const [loading, setLoading] = useState(false);
@@ -617,10 +623,10 @@ export default function PrepWizard() {
   const [currentDay, setCurrentDay] = useState(1);
   const [activeDay, setActiveDay] = useState(1);
 
-  // back-end lock
+  // 🔒 if backend reports locked, never render content list (overlay will show too)
   const [locked, setLocked] = useState(false);
 
-  // overlay gate
+  // 🔒 Overlay gate control — start TRUE to prevent any content flash until we check
   const [gateStatus, setGateStatus] = useState("checking"); // checking | inactive | active
   const [showOverlay, setShowOverlay] = useState(true);
   const pollRef = useRef(null);
@@ -634,13 +640,14 @@ export default function PrepWizard() {
 
     setLoading(true);
     try {
+      // fetch templates for all candidates to decide
       const templateResults = await Promise.all(
         candidates.map((id) =>
           getJSON(`/api/prep/templates?examId=${encodeURIComponent(id)}`).catch(() => ({ items: [] }))
         )
       );
 
-      // choose id with most items
+      // choose the id that returned the most items (fallback to first)
       let choiceIndex = 0;
       let maxItems = -1;
       templateResults.forEach((res, idx) => {
@@ -656,14 +663,16 @@ export default function PrepWizard() {
 
       const all = Array.isArray(templateResults[choiceIndex]?.items) ? templateResults[choiceIndex].items : [];
 
-      // fetch meta + today
+      // fetch meta + "today" for chosen id
       const qs = new URLSearchParams({ examId: chosenId });
       if (email) qs.set("email", email);
 
       const [metaRes, todayRes] = await Promise.allSettled([
         getJSON(`/api/prep/user/summary?${qs.toString()}`),
         getJSON(
-          `/api/prep/user/today?examId=${encodeURIComponent(chosenId)}${email ? `&email=${encodeURIComponent(email)}` : ""}`
+          `/api/prep/user/today?examId=${encodeURIComponent(chosenId)}${
+            email ? `&email=${encodeURIComponent(email)}` : ""
+          }`
         ),
       ]);
 
@@ -673,9 +682,9 @@ export default function PrepWizard() {
       setTodayDay(td);
       setPlanDays(pd);
 
+      // Respect lock from backend (enforced gate)
       let fullToday = [];
       setLocked(false);
-
       if (
         todayRes.status === "fulfilled" &&
         todayRes.value &&
@@ -684,11 +693,13 @@ export default function PrepWizard() {
       ) {
         fullToday = todayRes.value.items;
       } else if (todayRes.status === "fulfilled" && todayRes.value && todayRes.value.locked) {
+        // backend explicitly blocked (not approved / not active)
         setLocked(true);
         fullToday = [];
       } else if (todayRes.status === "fulfilled" && Array.isArray(todayRes.value?.items)) {
         fullToday = todayRes.value.items;
       } else {
+        // fallback to all templates of the current day ONLY if not locked
         fullToday = all.filter((m) => Number(m.dayIndex) === Number(td));
       }
 
@@ -703,6 +714,7 @@ export default function PrepWizard() {
           return ta - tb;
         });
 
+      // If locked, do not show anything (PLUS the hard gate below will also protect)
       setModules(locked ? [] : releasedToday);
       setAllModules(all);
       setCurrentDay(td);
@@ -722,7 +734,7 @@ export default function PrepWizard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [examSlug]);
 
-  // overlay gate control — checks /access/status/guard
+  // 🔒 Overlay gate control effect — checks /access/status/guard continuously until active
   useEffect(() => {
     let cancelled = false;
     async function checkGate() {
@@ -738,9 +750,10 @@ export default function PrepWizard() {
         const isActive = data?.access?.status === "active";
         if (!cancelled) {
           setGateStatus(isActive ? "active" : "inactive");
-          setShowOverlay(!isActive);
+          setShowOverlay(!isActive); // show overlay until approved
         }
-        if (isActive && !cancelled) await load();
+
+        if (isActive && !cancelled) await load(); // refresh modules
       } catch (err) {
         console.warn("[PrepWizard] guard error:", err);
         if (!cancelled) {
@@ -769,7 +782,7 @@ export default function PrepWizard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiExamId, examSlug, email]);
 
-  // keep ?tab= in URL
+  // keep ?tab= in URL for consistency
   useEffect(() => {
     const u = new URL(location.href);
     u.searchParams.set("tab", tab);
@@ -936,6 +949,7 @@ export default function PrepWizard() {
       {loading ? (
         <div className="text-gray-500">Loading…</div>
       ) : gateStatus !== "active" || locked ? (
+        // ⛔ IMPORTANT: show nothing if not active or locked — overlay handles the UI.
         null
       ) : !releasedModules.length ? (
         <div className="text-gray-500">No modules for today yet.</div>
@@ -968,12 +982,13 @@ export default function PrepWizard() {
 
   return (
     <div className="prep-wrap">
-      {/* Fullscreen gate — payment → WhatsApp proof → submit → waiting → admin approve → auto unlock */}
+      {/* ✅ Fullscreen gate — payment → WhatsApp proof → submit → waiting → admin approve → auto unlock */}
       {showOverlay && (
         <PrepAccessOverlay
           examId={apiExamId || examSlug}
           email={localStorage.getItem("userEmail") || ""}
           onApproved={() => {
+            // overlay reports approval and/or admin toggled active
             setShowOverlay(false);
             setGateStatus("active");
             load();
@@ -981,7 +996,7 @@ export default function PrepWizard() {
         />
       )}
 
-      {/* Hide tabbar + content while checking or overlay visible → prevents any flash */}
+      {/* ✅ Hide tabbar + page content while checking or overlay visible → prevents any flash */}
       {gateStatus === "checking" || showOverlay ? null : (
         <>
           <div className="tabbar">
