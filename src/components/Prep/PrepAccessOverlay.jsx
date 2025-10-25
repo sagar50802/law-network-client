@@ -92,7 +92,9 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
   async function fetchExamMeta() {
     if (!examId) return;
     try {
-      const r = await getJSON(`/api/prep/exams/${encodeURIComponent(examId)}/meta?_=${Date.now()}`);
+      const r = await getJSON(
+        `/api/prep/exams/${encodeURIComponent(examId)}/meta?_=${Date.now()}`
+      );
       const overlay = r?.overlay || {};
       const payment = overlay.payment || r?.payment || {};
 
@@ -133,6 +135,7 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
       const { access, overlay } = r || {};
 
       if (access?.status === "active") {
+        console.log("[Overlay] Guard reports ACTIVE → hiding overlay now", access);
         const until = Number(localStorage.getItem(ks.approved) || 0);
         if (until > Date.now()) {
           setState((s) => ({ ...s, show: true, mode: "approved", access }));
@@ -170,6 +173,7 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
    * Lifecycle Hooks
    * -------------------------------------------------- */
   useEffect(() => {
+    console.log("[Overlay] Mount / exam change → fetching meta & guard");
     setState((s) => ({ ...s, show: true, loading: true }));
     fetchExamMeta();
     fetchGuard();
@@ -196,6 +200,7 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
 
   useEffect(() => {
     if (state.mode !== "approved") return;
+    console.log("[Overlay] Starting 15s countdown to auto-unlock");
     const tick = () => {
       const until = Number(localStorage.getItem(ks.approved) || 0);
       const left =
@@ -220,6 +225,7 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
         const j = await getJSON(`/api/prep/access/request/status?${qs.toString()}`);
 
         if (j?.status === "approved") {
+          console.log("[Overlay] Request approved by admin → entering approved mode");
           const until = Date.now() + APPROVE_SECONDS * 1000;
           localStorage.setItem(ks.approved, String(until));
           localStorage.removeItem(ks.wait);
@@ -360,6 +366,7 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
   }
 
   function unlockNow(auto = false) {
+    console.log("[Overlay] UnlockNow triggered", { auto, examId, email });
     localStorage.setItem(ks.lastActive, String(Date.now()));
     if (auto) localStorage.setItem(ks.approved, "0");
     else localStorage.removeItem(ks.approved);
@@ -367,8 +374,12 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
     localStorage.removeItem(ks.waitAt);
     setState((s) => ({ ...s, show: false }));
 
-    if (typeof onApproved === "function") onApproved();
-    else window.location.reload();
+    if (typeof onApproved === "function") {
+      console.log("[Overlay] Calling onApproved() → notifying parent");
+      onApproved();
+    } else {
+      window.location.reload();
+    }
   }
 
   /* --------------------------------------------------
