@@ -2,20 +2,22 @@ import { useEffect, useMemo, useState } from "react";
 import { getJSON, postJSON } from "../../utils/api";
 
 /**
- * PrepAccessAdmin (Responsive Version)
+ * PrepAccessAdmin (Enhanced + AutoApproval Toggle)
  * -------------------------------------------------
  * Admin view for managing prep access requests.
- * Works seamlessly across desktop, tablet, and mobile.
+ * • Full compatibility with backend routes in prep_access.js
+ * • Adds Auto Approval mode toggle (autoGrant)
+ * • Manual approve/reject/revoke/delete preserved
  */
 
 export default function PrepAccessAdmin({ examId: initialExamId }) {
   const [examId, setExamId] = useState(initialExamId || "");
   const [typingExamId, setTypingExamId] = useState(initialExamId || "");
-
   const [loading, setLoading] = useState(false);
   const [meta, setMeta] = useState(null);
   const [items, setItems] = useState([]);
   const [sel, setSel] = useState(() => new Set());
+  const [config, setConfig] = useState(null);
 
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
@@ -33,9 +35,10 @@ export default function PrepAccessAdmin({ examId: initialExamId }) {
     if (!id) return;
     setLoading(true);
     try {
-      const [metaRes, listRes] = await Promise.all([
+      const [metaRes, listRes, configRes] = await Promise.all([
         getJSON(`/api/prep/exams/${encodeURIComponent(id)}/meta?_=${Date.now()}`),
-        getJSON(`/api/prep/access/admin/requests?examId=${encodeURIComponent(id)}&_=${Date.now()}`),
+        getJSON(`/api/admin/prep/access/requests?examId=${encodeURIComponent(id)}&_=${Date.now()}`),
+        getJSON(`/api/admin/prep/access/config?_=${Date.now()}`),
       ]);
 
       const overlayPay = metaRes?.overlay?.payment || {};
@@ -53,6 +56,7 @@ export default function PrepAccessAdmin({ examId: initialExamId }) {
           0,
       };
       setMeta(cleanMeta);
+      setConfig(configRes?.config || { autoGrant: false });
 
       const list = Array.isArray(listRes?.items) ? listRes.items.slice() : [];
       list.sort((a, b) => new Date(b.createdAt || 0) - new Date(a.createdAt || 0));
@@ -78,8 +82,15 @@ export default function PrepAccessAdmin({ examId: initialExamId }) {
   async function doApprove(email, mode) {
     if (!examId || !email) return;
     try {
-      const r = await postJSON("/api/prep/access/admin/approve", { examId, email, mode });
+      let endpoint = "";
+      if (mode === "grant") endpoint = "/api/admin/prep/access/approve";
+      else if (mode === "reject") endpoint = "/api/admin/prep/access/reject";
+      else if (mode === "revoke") endpoint = "/api/admin/prep/access/revoke";
+      else return;
+
+      const r = await postJSON(endpoint, { examId, email });
       if (!r?.success) throw new Error(r?.error || "Failed");
+
       toast(
         mode === "grant"
           ? `✅ Granted access: ${email}`
@@ -98,7 +109,7 @@ export default function PrepAccessAdmin({ examId: initialExamId }) {
     if (!id) return;
     if (!confirm("Delete this request permanently?")) return;
     try {
-      const r = await postJSON("/api/prep/access/admin/delete", { ids: [id] });
+      const r = await postJSON("/api/admin/prep/access/delete", { id });
       if (!r?.success) throw new Error(r?.error || "Failed");
       toast("Request deleted");
       await loadAll(examId);
@@ -113,13 +124,25 @@ export default function PrepAccessAdmin({ examId: initialExamId }) {
     if (!confirm(`Delete ${sel.size} selected request(s)? This cannot be undone.`)) return;
     try {
       const ids = Array.from(sel);
-      const r = await postJSON("/api/prep/access/admin/delete", { ids });
+      const r = await postJSON("/api/admin/prep/access/batch-delete", { ids });
       if (!r?.success) throw new Error(r?.error || "Failed");
       toast(`Deleted ${r.removed || ids.length} request(s)`);
       await loadAll(examId);
     } catch (e) {
       console.error(e);
       alert("Batch delete failed");
+    }
+  }
+
+  async function saveConfig() {
+    try {
+      const r = await postJSON("/api/admin/prep/access/config", config);
+      if (!r?.success) throw new Error(r?.error || "Failed");
+      toast("Configuration saved");
+      setConfig(r.config);
+    } catch (e) {
+      console.error(e);
+      alert("Failed to save config");
     }
   }
 
@@ -199,6 +222,33 @@ export default function PrepAccessAdmin({ examId: initialExamId }) {
           </div>
           <div className="text-gray-500 text-xs mt-2">
             Use <b>AdminPrepPanel</b> to modify overlay or payment details.
+          </div>
+        </div>
+      )}
+
+      {/* Config Section */}
+      {config && (
+        <div className="rounded-xl border p-4 mb-6 bg-white">
+          <div className="flex items-center justify-between">
+            <label className="flex items-center gap-2 text-sm font-medium">
+              <input
+                type="checkbox"
+                checked={!!config.autoGrant}
+                onChange={(e) =>
+                  setConfig((c) => ({ ...c, autoGrant: e.target.checked }))
+                }
+              />
+              Enable Auto Approval Mode
+            </label>
+            <button
+              className="px-3 py-2 rounded bg-emerald-600 text-white"
+              onClick={saveConfig}
+            >
+              Save Config
+            </button>
+          </div>
+          <div className="text-xs text-gray-500 mt-1">
+            When Auto Approval is enabled, new requests unlock automatically within 15 seconds.
           </div>
         </div>
       )}
