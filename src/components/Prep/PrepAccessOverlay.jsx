@@ -22,6 +22,12 @@ import { getJSON } from "../../utils/api";
 const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
 const sleep = (ms) => new Promise((r) => setTimeout(r, ms));
 
+// ✅ Detect backend URL for production
+const API_BASE =
+  window.location.hostname.includes("onrender.com")
+    ? "https://law-network.onrender.com"
+    : "";
+
 export default function PrepAccessOverlay({ examId, email, onApproved }) {
   const ks = useMemo(() => {
     const e = String(examId || "").trim();
@@ -59,7 +65,6 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
   );
   const [submitting, setSubmitting] = useState(false);
 
-  // Timers
   const [upiStartTs, setUpiStartTs] = useState(
     () => Number(localStorage.getItem(ks.upiStart) || 0)
   );
@@ -127,7 +132,6 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
       const r = await getJSON(`/api/prep/access/status/guard?${qs.toString()}`);
       const { access, overlay } = r || {};
 
-      // Already active → hide overlay
       if (access?.status === "active") {
         const until = Number(localStorage.getItem(ks.approved) || 0);
         if (until > Date.now()) {
@@ -171,7 +175,7 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
     fetchGuard();
   }, [examId, email]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // UPI countdown
+  // countdown timers etc...
   useEffect(() => {
     if (!upiStartTs) return;
     const tick = () =>
@@ -181,7 +185,6 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
     return () => clearInterval(id);
   }, [upiStartTs]);
 
-  // WhatsApp countdown
   useEffect(() => {
     if (!waStartTs) return;
     const tick = () =>
@@ -191,7 +194,6 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
     return () => clearInterval(id);
   }, [waStartTs]);
 
-  // Approved unlock countdown
   useEffect(() => {
     if (state.mode !== "approved") return;
     const tick = () => {
@@ -206,7 +208,6 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
     return () => clearInterval(id);
   }, [state.mode]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Polling loop for pending requests
   useEffect(() => {
     if (state.mode !== "waiting" || !emailField) return;
     let stop = false;
@@ -291,24 +292,8 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
   const isAndroid = /Android/i.test(navigator.userAgent);
 
   /* --------------------------------------------------
-   * Action Handlers
+   * ✅ Updated submitRequest() — Safe, Production-Ready
    * -------------------------------------------------- */
-  const handleUPI = () => {
-    if (!pay.upiLink) return;
-    const now = Date.now();
-    localStorage.setItem(ks.upiStart, String(now));
-    setUpiStartTs(now);
-    window.location.href = pay.upiLink;
-  };
-
-  const handleWA = () => {
-    if (!pay.waLink) return;
-    const now = Date.now();
-    localStorage.setItem(ks.waStart, String(now));
-    setWaStartTs(now);
-    window.open(pay.waLink, "_blank", "noopener,noreferrer");
-  };
-
   async function submitRequest() {
     if (state.mode === "waiting") return;
     const emailVal = (emailField || "").trim();
@@ -331,13 +316,22 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
 
     localStorage.setItem("userEmail", emailVal);
     setSubmitting(true);
+
     try {
-      const res = await fetch("/api/prep/access/request", {
+      const res = await fetch(`${API_BASE}/api/prep/access/request`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
-      const j = await res.json().catch(() => ({}));
+
+      let j;
+      try {
+        j = await res.json();
+      } catch {
+        const text = await res.text();
+        console.warn("[PrepWizard] non-JSON response:", text.slice(0, 200));
+        j = { success: false, error: "non-JSON response", text };
+      }
 
       if (j?.code === "ALREADY_ACTIVE") {
         unlockNow(false);
@@ -355,7 +349,6 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
       localStorage.setItem(ks.wait, "1");
       localStorage.setItem(ks.waitAt, String(Date.now()));
       setState((s) => ({ ...s, show: true, mode: "waiting" }));
-      // window.toast?.success?.("Request submitted successfully!");
     } catch (err) {
       console.error("Submit request error:", err);
       alert("Could not submit now. Try again.");
@@ -447,7 +440,13 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
                     ? "bg-emerald-600 hover:bg-emerald-700"
                     : "bg-gray-300 cursor-not-allowed"
                 }`}
-                onClick={handleUPI}
+                onClick={() => {
+                  if (!pay.upiLink) return;
+                  const now = Date.now();
+                  localStorage.setItem(ks.upiStart, String(now));
+                  setUpiStartTs(now);
+                  window.location.href = pay.upiLink;
+                }}
                 disabled={!pay.upiLink}
               >
                 Pay via UPI{pay.priceINR ? ` • ₹${pay.priceINR}` : ""}
@@ -458,7 +457,13 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
                     ? "bg-white hover:bg-gray-50"
                     : "bg-gray-100 cursor-not-allowed"
                 }`}
-                onClick={handleWA}
+                onClick={() => {
+                  if (!pay.waLink) return;
+                  const now = Date.now();
+                  localStorage.setItem(ks.waStart, String(now));
+                  setWaStartTs(now);
+                  window.open(pay.waLink, "_blank", "noopener,noreferrer");
+                }}
                 disabled={!pay.waLink}
               >
                 Send Proof on WhatsApp
