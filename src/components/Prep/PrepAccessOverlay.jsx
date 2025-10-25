@@ -1,18 +1,22 @@
 import { useEffect, useMemo, useRef, useState } from "react";
-import { getJSON, upload as postForm } from "../../utils/api";
+import { getJSON } from "../../utils/api";
 
 /**
  * FINAL PRODUCTION — PrepAccessOverlay.jsx
- * -----------------------------------------
- * Unified with AdminPrepPanel + PrepAccessAdmin
+ * --------------------------------------------------
+ * Frontend user overlay for course access control.
  *
- * ✅ Reads from: /api/prep/exams/:examId/meta
- * ✅ Checks guard: /api/prep/access/status/guard
- * ✅ Submits: /api/prep/access/request
- * ✅ Polls:   /api/prep/access/request/status
+ * ✅ Reads config:  /api/prep/exams/:examId/meta
+ * ✅ Checks guard:  /api/prep/access/status/guard
+ * ✅ Submits:       /api/prep/access/request
+ * ✅ Polls status:  /api/prep/access/request/status
  *
- * Flow:
- *   purchase/restart → waiting → approved (15s unlock) → unlocked
+ * Flow summary:
+ * 1️⃣ Checks access guard → active/inactive.
+ * 2️⃣ If inactive → overlay = purchase screen.
+ * 3️⃣ User pays via UPI, sends proof via WhatsApp, submits request.
+ * 4️⃣ Auto-approval (if enabled) → immediate 15s unlock.
+ * 5️⃣ Manual approval → “waiting for admin” → polls → unlocks when approved.
  */
 
 const clamp = (n, lo, hi) => Math.max(lo, Math.min(hi, n));
@@ -39,12 +43,15 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
     access: {},
     error: "",
   });
+
   const [meta, setMeta] = useState({
     name: "",
     price: 0,
     overlay: {},
     payment: {},
+    trialDays: 0,
   });
+
   const [nameField, setName] = useState("");
   const [phoneField, setPhone] = useState("");
   const [emailField, setEmailField] = useState(
@@ -52,6 +59,7 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
   );
   const [submitting, setSubmitting] = useState(false);
 
+  // Timers
   const [upiStartTs, setUpiStartTs] = useState(
     () => Number(localStorage.getItem(ks.upiStart) || 0)
   );
@@ -62,8 +70,8 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
   const [waLeft, setWaLeft] = useState(0);
   const UPI_SECONDS = 104;
   const WA_SECONDS = 168;
-
   const APPROVE_SECONDS = 15;
+
   const [approveLeft, setApproveLeft] = useState(() => {
     const until = Number(localStorage.getItem(ks.approved) || 0);
     return until > Date.now()
@@ -73,21 +81,18 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
 
   const firstGuardDoneRef = useRef(false);
 
-  /* ------------------- Load overlay meta (Admin config) ------------------- */
+  /* --------------------------------------------------
+   * Fetch Exam Meta (payment & overlay details)
+   * -------------------------------------------------- */
   async function fetchExamMeta() {
     if (!examId) return;
     try {
-      const r = await getJSON(
-        `/api/prep/exams/${encodeURIComponent(examId)}/meta?_=${Date.now()}`
-      );
+      const r = await getJSON(`/api/prep/exams/${encodeURIComponent(examId)}/meta?_=${Date.now()}`);
       const overlay = r?.overlay || {};
-      const payment =
-        overlay.payment || r?.overlay?.payment || r?.payment || {};
+      const payment = overlay.payment || r?.payment || {};
 
       const courseName = r?.name || String(examId || "").toUpperCase();
-      const price = Number(
-        payment.priceINR ?? r?.price ?? r?.overlay?.price ?? 0
-      );
+      const price = Number(payment.priceINR ?? r?.price ?? 0);
 
       setMeta({
         name: courseName,
@@ -105,7 +110,9 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
     }
   }
 
-  /* -------------------------- Guard: access check ------------------------- */
+  /* --------------------------------------------------
+   * Guard — Determine if user already has access
+   * -------------------------------------------------- */
   async function fetchGuard() {
     if (!examId) return;
     const startedAt = Number(localStorage.getItem(ks.waitAt) || 0);
@@ -116,13 +123,11 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
     const keepWaiting = !!localStorage.getItem(ks.wait);
 
     try {
-      const qs = new URLSearchParams({
-        examId,
-        email: emailField || email || "",
-      });
+      const qs = new URLSearchParams({ examId, email: emailField || email || "" });
       const r = await getJSON(`/api/prep/access/status/guard?${qs.toString()}`);
       const { access, overlay } = r || {};
 
+      // Already active → hide overlay
       if (access?.status === "active") {
         const until = Number(localStorage.getItem(ks.approved) || 0);
         if (until > Date.now()) {
@@ -145,6 +150,7 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
       setState((s) => ({ ...s, loading: false, show: true, mode, access }));
       firstGuardDoneRef.current = true;
     } catch (e) {
+      console.error("[status/guard] failed:", e);
       setState((s) => ({
         ...s,
         loading: false,
@@ -156,33 +162,30 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
     }
   }
 
-  /* ----------------------------- Effects --------------------------------- */
+  /* --------------------------------------------------
+   * Lifecycle Hooks
+   * -------------------------------------------------- */
   useEffect(() => {
     setState((s) => ({ ...s, show: true, loading: true }));
     fetchExamMeta();
     fetchGuard();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [examId, email]);
+  }, [examId, email]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // UPI timer
+  // UPI countdown
   useEffect(() => {
     if (!upiStartTs) return;
     const tick = () =>
-      setUpiLeft(
-        Math.max(0, UPI_SECONDS - Math.floor((Date.now() - upiStartTs) / 1000))
-      );
+      setUpiLeft(Math.max(0, UPI_SECONDS - Math.floor((Date.now() - upiStartTs) / 1000)));
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
   }, [upiStartTs]);
 
-  // WA timer
+  // WhatsApp countdown
   useEffect(() => {
     if (!waStartTs) return;
     const tick = () =>
-      setWaLeft(
-        Math.max(0, WA_SECONDS - Math.floor((Date.now() - waStartTs) / 1000))
-      );
+      setWaLeft(Math.max(0, WA_SECONDS - Math.floor((Date.now() - waStartTs) / 1000)));
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
@@ -201,10 +204,9 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [state.mode]);
+  }, [state.mode]); // eslint-disable-line react-hooks/exhaustive-deps
 
-  // Poll for waiting approvals
+  // Polling loop for pending requests
   useEffect(() => {
     if (state.mode !== "waiting" || !emailField) return;
     let stop = false;
@@ -214,9 +216,7 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
       if (stop) return;
       try {
         const qs = new URLSearchParams({ examId, email: emailField });
-        const j = await getJSON(
-          `/api/prep/access/request/status?${qs.toString()}`
-        );
+        const j = await getJSON(`/api/prep/access/request/status?${qs.toString()}`);
 
         if (j?.status === "approved") {
           const until = Date.now() + APPROVE_SECONDS * 1000;
@@ -227,7 +227,6 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
           setState((s) => ({ ...s, show: true, mode: "approved" }));
           return;
         }
-
         if (j?.status === "rejected") {
           stop = true;
           localStorage.removeItem(ks.wait);
@@ -236,9 +235,8 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
           alert("Your request was rejected. Please contact support.");
           return;
         }
-
         if (!j?.status) {
-          noneCount += 1;
+          noneCount++;
           if (noneCount >= 3) {
             stop = true;
             localStorage.removeItem(ks.wait);
@@ -249,18 +247,19 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
           }
         }
       } catch {
-        // retry silently
+        // silent retry
       }
       setTimeout(loop, 5000);
     };
-
     loop();
     return () => {
       stop = true;
     };
   }, [state.mode, emailField, examId]);
 
-  /* --------------------------- Payment details --------------------------- */
+  /* --------------------------------------------------
+   * Payment handling & derived links
+   * -------------------------------------------------- */
   const pay = useMemo(() => {
     const src = {
       ...(meta?.overlay?.payment || {}),
@@ -271,14 +270,12 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
 
     const upiId = (src.upiId || "").trim();
     const upiName = (src.upiName || "").trim();
-
     let wa = (src.whatsappNumber || "").trim().replace(/[^\d+]/g, "");
     if (wa.startsWith("+")) wa = wa.slice(1);
     if (/^\d{10}$/.test(wa)) wa = "91" + wa;
 
     const waText =
-      src.whatsappText ||
-      `Hello, I paid for "${courseName}" (₹${priceINR}).`;
+      src.whatsappText || `Hello, I paid for "${courseName}" (₹${priceINR}).`;
 
     const upiLink = upiId
       ? `upi://pay?pa=${encodeURIComponent(upiId)}${
@@ -287,15 +284,15 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
           `Payment for ${courseName}`
         )}`
       : "";
-    const waLink = wa
-      ? `https://wa.me/${wa}?text=${encodeURIComponent(waText)}`
-      : "";
+    const waLink = wa ? `https://wa.me/${wa}?text=${encodeURIComponent(waText)}` : "";
     return { courseName, priceINR, upiId, upiName, upiLink, wa, waLink };
   }, [meta, examId]);
 
   const isAndroid = /Android/i.test(navigator.userAgent);
 
-  /* ------------------------------- Actions ------------------------------- */
+  /* --------------------------------------------------
+   * Action Handlers
+   * -------------------------------------------------- */
   const handleUPI = () => {
     if (!pay.upiLink) return;
     const now = Date.now();
@@ -358,6 +355,7 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
       localStorage.setItem(ks.wait, "1");
       localStorage.setItem(ks.waitAt, String(Date.now()));
       setState((s) => ({ ...s, show: true, mode: "waiting" }));
+      // window.toast?.success?.("Request submitted successfully!");
     } catch (err) {
       console.error("Submit request error:", err);
       alert("Could not submit now. Try again.");
@@ -380,7 +378,9 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
     else window.location.reload();
   }
 
-  /* ------------------------------- UI ------------------------------------ */
+  /* --------------------------------------------------
+   * UI Rendering
+   * -------------------------------------------------- */
   const mustShow = state.show || !firstGuardDoneRef.current;
   if (!mustShow) return null;
 
@@ -532,6 +532,9 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
   );
 }
 
+/* --------------------------------------------------
+ * Helper Step UI
+ * -------------------------------------------------- */
 function Step({ n, label }) {
   return (
     <div className="flex items-center gap-1.5">
