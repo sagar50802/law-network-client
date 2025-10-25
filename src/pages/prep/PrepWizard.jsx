@@ -638,12 +638,18 @@ export default function PrepWizard() {
     const candidates = Array.from(new Set([examSlug, toExamKey(examSlug)].filter(Boolean)));
     if (!candidates.length) return;
 
+    console.log("%c[PrepWizard] load() start", "color:#888");
+    console.log("[PrepWizard] candidates:", candidates); // [dbg]
+
     setLoading(true);
     try {
       // fetch templates for all candidates to decide
       const templateResults = await Promise.all(
         candidates.map((id) =>
-          getJSON(`/api/prep/templates?examId=${encodeURIComponent(id)}`).catch(() => ({ items: [] }))
+          getJSON(`/api/prep/templates?examId=${encodeURIComponent(id)}`).catch((err) => {
+            console.warn("[PrepWizard] templates fetch failed for", id, err?.message);
+            return { items: [] };
+          })
         )
       );
 
@@ -660,8 +666,10 @@ export default function PrepWizard() {
 
       const chosenId = candidates[choiceIndex];
       setApiExamId(chosenId);
+      console.log("[PrepWizard] chosen examId:", chosenId, " (max items:", maxItems, ")"); // [dbg]
 
       const all = Array.isArray(templateResults[choiceIndex]?.items) ? templateResults[choiceIndex].items : [];
+      console.log("[PrepWizard] all templates returned:", all.length); // [dbg]
 
       // fetch meta + "today" for chosen id
       const qs = new URLSearchParams({ examId: chosenId });
@@ -681,6 +689,7 @@ export default function PrepWizard() {
       const pd = meta?.access?.planDays || meta.planDays || 1;
       setTodayDay(td);
       setPlanDays(pd);
+      console.log("[PrepWizard] meta summary:", { todayDay: td, planDays: pd }); // [dbg]
 
       // Respect lock from backend (enforced gate)
       let fullToday = [];
@@ -692,15 +701,19 @@ export default function PrepWizard() {
         Array.isArray(todayRes.value.items)
       ) {
         fullToday = todayRes.value.items;
+        console.log("[PrepWizard] /user/today items:", fullToday.length); // [dbg]
       } else if (todayRes.status === "fulfilled" && todayRes.value && todayRes.value.locked) {
         // backend explicitly blocked (not approved / not active)
         setLocked(true);
         fullToday = [];
+        console.log("[PrepWizard] /user/today locked by backend"); // [dbg]
       } else if (todayRes.status === "fulfilled" && Array.isArray(todayRes.value?.items)) {
         fullToday = todayRes.value.items;
+        console.log("[PrepWizard] /user/today fallback items:", fullToday.length); // [dbg]
       } else {
         // fallback to all templates of the current day ONLY if not locked
         fullToday = all.filter((m) => Number(m.dayIndex) === Number(td));
+        console.log("[PrepWizard] fallback to day templates:", fullToday.length); // [dbg]
       }
 
       setTodayPool(fullToday);
@@ -714,16 +727,20 @@ export default function PrepWizard() {
           return ta - tb;
         });
 
+      console.log("[PrepWizard] releasedToday count:", releasedToday.length, " locked?", locked); // [dbg]
+
       // If locked, do not show anything (PLUS the hard gate below will also protect)
       setModules(locked ? [] : releasedToday);
       setAllModules(all);
       setCurrentDay(td);
       setActiveDay(td);
+      console.log("%c[PrepWizard] load() done", "color:lime"); // [dbg]
     } catch (e) {
       console.error(e);
       setModules([]);
       setAllModules([]);
       setTodayPool([]);
+      console.log("%c[PrepWizard] load() failed", "color:red"); // [dbg]
     } finally {
       setLoading(false);
     }
@@ -753,7 +770,12 @@ export default function PrepWizard() {
           setShowOverlay(!isActive); // show overlay until approved
         }
 
-        if (isActive && !cancelled) await load(); // refresh modules
+        console.log("[PrepWizard] guard status:", data?.access?.status); // [dbg]
+
+        if (isActive && !cancelled) {
+          console.log("[PrepWizard] guard ACTIVE → reloading modules"); // [dbg]
+          await load(); // refresh modules
+        }
       } catch (err) {
         console.warn("[PrepWizard] guard error:", err);
         if (!cancelled) {
@@ -989,8 +1011,13 @@ export default function PrepWizard() {
           email={localStorage.getItem("userEmail") || ""}
           onApproved={() => {
             // overlay reports approval and/or admin toggled active
+            console.log(
+              "%c[PrepWizard] Overlay reported approval — hiding overlay & reloading content",
+              "color:lime;font-weight:bold"
+            ); // [dbg]
             setShowOverlay(false);
             setGateStatus("active");
+            console.log("[PrepWizard] setGateStatus('active') → calling load()"); // [dbg]
             load();
           }}
         />
