@@ -1,14 +1,32 @@
+// client/src/components/Prep/PrepAccessAdmin.jsx
 import { useEffect, useMemo, useState } from "react";
-import { getJSON, postJSON } from "../../utils/api";
+import { getJSON, postJSON, buildUrl } from "../../utils/api";
 
 /**
- * PrepAccessAdmin (Enhanced + AutoApproval Toggle)
- * -------------------------------------------------
- * Admin view for managing prep access requests.
- * • Full compatibility with backend routes in prep_access.js
- * • Adds Auto Approval mode toggle (autoGrant)
- * • Manual approve/reject/revoke/delete preserved
+ * PrepAccessAdmin (Enhanced + AutoApproval Toggle + Auth-safe actions)
+ * --------------------------------------------------------------------
+ * • Adds proper X-Owner-Key for admin requests
+ * • Fixes silent fails for delete/approve/revoke
+ * • Ensures AutoGrant toggle sync and refresh
+ * • No layout/logic changes, just bug-level reliability fixes
  */
+
+async function postAdminJSON(url, body = {}) {
+  const ownerKey = localStorage.getItem("ownerKey") || "";
+  const res = await fetch(buildUrl(url), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(ownerKey ? { "X-Owner-Key": ownerKey } : {}),
+    },
+    credentials: "include",
+    body: JSON.stringify(body),
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok || data.success === false)
+    throw new Error(data?.error || data?.message || `HTTP ${res.status}`);
+  return data;
+}
 
 export default function PrepAccessAdmin({ examId: initialExamId }) {
   const [examId, setExamId] = useState(initialExamId || "");
@@ -18,7 +36,6 @@ export default function PrepAccessAdmin({ examId: initialExamId }) {
   const [items, setItems] = useState([]);
   const [sel, setSel] = useState(() => new Set());
   const [config, setConfig] = useState(null);
-
   const [q, setQ] = useState("");
   const [statusFilter, setStatusFilter] = useState("all");
   const [intentFilter, setIntentFilter] = useState("all");
@@ -82,15 +99,17 @@ export default function PrepAccessAdmin({ examId: initialExamId }) {
   async function doApprove(email, mode) {
     if (!examId || !email) return;
     try {
-      let endpoint = "";
-      if (mode === "grant") endpoint = "/api/admin/prep/access/approve";
-      else if (mode === "reject") endpoint = "/api/admin/prep/access/reject";
-      else if (mode === "revoke") endpoint = "/api/admin/prep/access/revoke";
-      else return;
+      const endpoint =
+        mode === "grant"
+          ? "/api/admin/prep/access/approve"
+          : mode === "reject"
+          ? "/api/admin/prep/access/reject"
+          : mode === "revoke"
+          ? "/api/admin/prep/access/revoke"
+          : null;
+      if (!endpoint) return;
 
-      const r = await postJSON(endpoint, { examId, email });
-      if (!r?.success) throw new Error(r?.error || "Failed");
-
+      await postAdminJSON(endpoint, { examId, email });
       toast(
         mode === "grant"
           ? `✅ Granted access: ${email}`
@@ -101,7 +120,7 @@ export default function PrepAccessAdmin({ examId: initialExamId }) {
       await loadAll(examId);
     } catch (e) {
       console.error(e);
-      alert("Action failed");
+      alert("Action failed: " + (e.message || e));
     }
   }
 
@@ -109,13 +128,12 @@ export default function PrepAccessAdmin({ examId: initialExamId }) {
     if (!id) return;
     if (!confirm("Delete this request permanently?")) return;
     try {
-      const r = await postJSON("/api/admin/prep/access/delete", { id });
-      if (!r?.success) throw new Error(r?.error || "Failed");
+      await postAdminJSON("/api/admin/prep/access/delete", { id });
       toast("Request deleted");
       await loadAll(examId);
     } catch (e) {
       console.error(e);
-      alert("Delete failed");
+      alert("Delete failed: " + (e.message || e));
     }
   }
 
@@ -124,33 +142,31 @@ export default function PrepAccessAdmin({ examId: initialExamId }) {
     if (!confirm(`Delete ${sel.size} selected request(s)? This cannot be undone.`)) return;
     try {
       const ids = Array.from(sel);
-      const r = await postJSON("/api/admin/prep/access/batch-delete", { ids });
-      if (!r?.success) throw new Error(r?.error || "Failed");
+      const r = await postAdminJSON("/api/admin/prep/access/batch-delete", { ids });
       toast(`Deleted ${r.removed || ids.length} request(s)`);
       await loadAll(examId);
     } catch (e) {
       console.error(e);
-      alert("Batch delete failed");
+      alert("Batch delete failed: " + (e.message || e));
     }
   }
 
   async function saveConfig() {
     try {
-      const r = await postJSON("/api/admin/prep/access/config", config);
-      if (!r?.success) throw new Error(r?.error || "Failed");
+      const r = await postAdminJSON("/api/admin/prep/access/config", config);
       toast("Configuration saved");
-      setConfig(r.config);
+      setConfig(r.config || config);
+      await loadAll(examId);
     } catch (e) {
       console.error(e);
-      alert("Failed to save config");
+      alert("Failed to save config: " + (e.message || e));
     }
   }
 
   function toggleSel(id) {
     setSel((prev) => {
       const ns = new Set(prev);
-      if (ns.has(id)) ns.delete(id);
-      else ns.add(id);
+      ns.has(id) ? ns.delete(id) : ns.add(id);
       return ns;
     });
   }
@@ -167,7 +183,8 @@ export default function PrepAccessAdmin({ examId: initialExamId }) {
     const term = q.trim().toLowerCase();
     return (items || []).filter((r) => {
       if (statusFilter !== "all" && r.status !== statusFilter) return false;
-      if (intentFilter !== "all" && String(r.intent || "purchase") !== intentFilter) return false;
+      if (intentFilter !== "all" && String(r.intent || "purchase") !== intentFilter)
+        return false;
       if (!term) return true;
       const hay = `${r.email} ${r.name || ""} ${r.phone || ""} ${r.intent || ""} ${r.note || ""}`.toLowerCase();
       return hay.includes(term);
@@ -413,10 +430,20 @@ function CardMobile({ r, selected, toggleSel, doApprove, deleteOne }) {
         <StatusBadge status={r.status} />
       </div>
       <div className="text-sm text-gray-700 space-y-1">
-        <div><b>Name:</b> {r.name || "—"}</div>
-        <div><b>Phone:</b> {r.phone || "—"}</div>
-        <div><b>Intent:</b> {r.intent || "purchase"}</div>
-        {r.note && <div><b>Note:</b> {r.note}</div>}
+        <div>
+          <b>Name:</b> {r.name || "—"}
+        </div>
+        <div>
+          <b>Phone:</b> {r.phone || "—"}
+        </div>
+        <div>
+          <b>Intent:</b> {r.intent || "purchase"}
+        </div>
+        {r.note && (
+          <div>
+            <b>Note:</b> {r.note}
+          </div>
+        )}
         <div className="text-xs text-gray-500">{created}</div>
       </div>
       <div className="flex flex-wrap gap-2 mt-2">
