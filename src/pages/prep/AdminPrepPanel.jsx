@@ -2,7 +2,7 @@
 import { useEffect, useRef, useState } from "react";
 import { getJSON, delJSON, buildUrl } from "../../utils/api";
 
-/** Robust multipart POST (keeps cookies, adds admin header, safe JSON parse, correct base URL) */
+/** Multipart POST (for templates upload) */
 async function sendMultipart(url, formData) {
   const ownerKey = localStorage.getItem("ownerKey") || "";
   const headers = { ...(ownerKey ? { "X-Owner-Key": ownerKey } : {}) };
@@ -22,21 +22,42 @@ async function sendMultipart(url, formData) {
     if (ct.includes("application/json")) data = await res.json();
     else {
       text = await res.text();
-      try { data = JSON.parse(text); } catch {}
+      try {
+        data = JSON.parse(text);
+      } catch {}
     }
   } catch {}
-
-  console.log(
-    "[AdminPrepPanel] upload status:",
-    res.status,
-    "type:",
-    ct,
-    "url:",
-    res.url,
-    "raw:",
-    (text || JSON.stringify(data) || "").slice(0, 160)
-  );
   return { ok: res.ok, status: res.status, data, text };
+}
+
+/** JSON helpers (used for /api/prep/exams and overlay-config) */
+async function postJSON(url, body) {
+  const ownerKey = localStorage.getItem("ownerKey") || "";
+  const res = await fetch(buildUrl(url), {
+    method: "POST",
+    headers: {
+      "Content-Type": "application/json",
+      ...(ownerKey ? { "X-Owner-Key": ownerKey } : {}),
+    },
+    credentials: "include",
+    body: JSON.stringify(body || {}),
+  });
+  const data = await res.json().catch(() => ({}));
+  return { ok: res.ok, status: res.status, data };
+}
+async function patchJSON(url, body) {
+  const ownerKey = localStorage.getItem("ownerKey") || "";
+  const res = await fetch(buildUrl(url), {
+    method: "PATCH",
+    headers: {
+      "Content-Type": "application/json",
+      ...(ownerKey ? { "X-Owner-Key": ownerKey } : {}),
+    },
+    credentials: "include",
+    body: JSON.stringify(body || {}),
+  });
+  const data = await res.json().catch(() => ({}));
+  return { ok: res.ok, status: res.status, data };
 }
 
 export default function AdminPrepPanel() {
@@ -50,7 +71,8 @@ export default function AdminPrepPanel() {
       const list = r.exams || [];
       setExams(list);
       if (!list.length) setSelExam("");
-      else if (!selExam || !list.find((e) => e.examId === selExam)) setSelExam(list[0].examId);
+      else if (!selExam || !list.find((e) => e.examId === selExam))
+        setSelExam(list[0].examId);
     } catch {
       alert("Failed to load exams");
     }
@@ -62,15 +84,16 @@ export default function AdminPrepPanel() {
     const name = makeExam.name.trim();
     if (!examId || !name) return alert("examId and name required");
 
-    const fd = new FormData();
-    fd.set("examId", examId);
-    fd.set("name", name);
-    fd.set("scheduleMode", "cohort");
+    const r = await postJSON("/api/prep/exams", {
+      examId,
+      name,
+      scheduleMode: "cohort",
+    });
 
-    const r = await sendMultipart("/api/prep/exams", fd);
-    if (!r.ok || !(r.data?.success)) {
-      const msg = r.data?.error || r.data?.message || (r.text?.trim() || "Create exam failed");
-      return alert(msg.length > 240 ? msg.slice(0, 240) + "…" : msg);
+    if (!r.ok || !r.data?.success) {
+      const msg =
+        r.data?.error || r.data?.message || "Create exam failed (JSON)";
+      return alert(msg);
     }
     setMakeExam({ examId: "", name: "" });
     await loadExams();
@@ -79,7 +102,8 @@ export default function AdminPrepPanel() {
 
   async function deleteExam() {
     if (!selExam) return alert("Select an exam to delete");
-    if (!confirm("Delete this exam and ALL its modules/access/progress?")) return;
+    if (!confirm("Delete this exam and ALL its modules/access/progress?"))
+      return;
     try {
       await delJSON(`/api/prep/exams/${encodeURIComponent(selExam)}`);
       await loadExams();
@@ -89,7 +113,10 @@ export default function AdminPrepPanel() {
     }
   }
 
-  useEffect(() => { loadExams(); /* eslint-disable-next-line */ }, []);
+  useEffect(() => {
+    loadExams();
+    // eslint-disable-next-line
+  }, []);
 
   return (
     <div className="max-w-6xl mx-auto p-4">
@@ -97,6 +124,7 @@ export default function AdminPrepPanel() {
         <h1 className="text-2xl font-bold">Admin Prep Panel</h1>
       </div>
 
+      {/* Exam header row */}
       <div className="rounded-xl border bg-white p-4 mb-6">
         <div className="grid md:grid-cols-2 gap-4">
           <div>
@@ -107,7 +135,9 @@ export default function AdminPrepPanel() {
                 value={selExam}
                 onChange={(e) => setSelExam(e.target.value)}
               >
-                <option value="" disabled>— choose —</option>
+                <option value="" disabled>
+                  — choose —
+                </option>
                 {exams.map((x) => (
                   <option key={x.examId} value={x.examId}>
                     {x.name} ({x.examId})
@@ -132,7 +162,9 @@ export default function AdminPrepPanel() {
                 className="w-full border rounded px-3 py-2"
                 placeholder="UP_APO"
                 value={makeExam.examId}
-                onChange={(e) => setMakeExam((v) => ({ ...v, examId: e.target.value }))}
+                onChange={(e) =>
+                  setMakeExam((v) => ({ ...v, examId: e.target.value }))
+                }
               />
             </div>
             <div>
@@ -141,11 +173,15 @@ export default function AdminPrepPanel() {
                 className="w-full border rounded px-3 py-2"
                 placeholder="UP APO"
                 value={makeExam.name}
-                onChange={(e) => setMakeExam((v) => ({ ...v, name: e.target.value }))}
+                onChange={(e) =>
+                  setMakeExam((v) => ({ ...v, name: e.target.value }))
+                }
               />
             </div>
             <div className="flex items-end">
-              <button className="px-4 py-2 rounded bg-black text-white w-full">Add Exam</button>
+              <button className="px-4 py-2 rounded bg-black text-white w-full">
+                Add Exam
+              </button>
             </div>
           </form>
         </div>
@@ -168,12 +204,12 @@ function ExamEditor({ examId }) {
   // ── OVERLAY SCHEDULE + PRICE/TRIAL ──
   const [overlay, setOverlay] = useState({
     price: 0,
-    trialDays: 3,
-    mode: "planDayTime",      // "planDayTime" | "afterN" | "fixed" | "never"
+    trialDays: 0,
+    mode: "planDayTime", // "planDayTime" | "afterN" | "fixed" | "never"
     showOnDay: 1,
     showAtLocal: "09:00",
     daysAfterStart: 0,
-    fixedAt: ""
+    fixedAt: "",
   });
   const [overlayLoading, setOverlayLoading] = useState(false);
 
@@ -182,52 +218,64 @@ function ExamEditor({ examId }) {
     upiId: "",
     upiName: "",
     whatsappNumber: "",
-    whatsappText: ""
+    whatsappText: "",
   });
 
   // Fetch templates
   async function load(force = false) {
     const ts = force ? `&_=${Date.now()}` : "";
-    const r = await getJSON(`/api/prep/templates?examId=${encodeURIComponent(examId)}${ts}`);
-    const items = (r.items || []).sort((a, b) => a.dayIndex - b.dayIndex || a.slotMin - b.slotMin);
+    const r = await getJSON(
+      `/api/prep/templates?examId=${encodeURIComponent(examId)}${ts}`
+    );
+    const items = (r.items || []).sort(
+      (a, b) => a.dayIndex - b.dayIndex || a.slotMin - b.slotMin
+    );
     setModules(items);
   }
-  useEffect(() => { load(true); }, [examId]);
+  useEffect(() => {
+    load(true);
+  }, [examId]);
 
-  // Fetch overlay + payment from the META endpoint
+  // Fetch overlay + payment from META endpoint
   useEffect(() => {
     let ignore = false;
     (async () => {
       setOverlayLoading(true);
       try {
-        const r = await getJSON(`/api/prep/exams/${encodeURIComponent(examId)}/meta?_=${Date.now()}`);
+        const r = await getJSON(
+          `/api/prep/exams/${encodeURIComponent(examId)}/meta?_=${Date.now()}`
+        );
         if (ignore) return;
 
         // price/trial
-        setOverlay(o => ({
+        setOverlay((o) => ({
           ...o,
           price: Number(r?.price ?? o.price ?? 0),
-          trialDays: Number(r?.trialDays ?? o.trialDays ?? 3),
+          trialDays: Number(r?.trialDays ?? o.trialDays ?? 0),
         }));
 
         // schedule
         const ov = r?.overlay || {};
         const mode =
           ov.mode ||
-          (ov.overlayMode === "afterN" ? "afterN" :
-           ov.overlayMode === "fixed"  ? "fixed"  :
-           (ov.mode || "planDayTime"));
-        setOverlay(o => ({
+          (ov.overlayMode === "afterN"
+            ? "afterN"
+            : ov.overlayMode === "fixed"
+            ? "fixed"
+            : "planDayTime");
+        setOverlay((o) => ({
           ...o,
           mode,
           showOnDay: Number(ov?.showOnDay ?? o.showOnDay ?? 1),
           showAtLocal: String(ov?.showAtLocal ?? o.showAtLocal ?? "09:00"),
-          daysAfterStart: Number(ov?.offsetDays ?? ov?.daysAfterStart ?? o.daysAfterStart ?? 0),
-          fixedAt: ov?.fixedAt ? new Date(ov.fixedAt).toISOString().slice(0,16) : ""
+          daysAfterStart: Number(
+            ov?.offsetDays ?? ov?.daysAfterStart ?? o.daysAfterStart ?? 0
+          ),
+          fixedAt: ov?.fixedAt ? new Date(ov.fixedAt).toISOString().slice(0, 16) : "",
         }));
 
-        // payment (overlay.payment > payment > overlayUI)
-        const paySrc = (ov?.payment || r?.payment || r?.overlayUI || {});
+        // payment
+        const paySrc = ov?.payment || r?.payment || {};
         let wa = String(paySrc.whatsappNumber || "").trim();
         if (!wa && paySrc.whatsappLink) {
           const m = String(paySrc.whatsappLink).match(/wa\.me\/(\+?\d+)/i);
@@ -245,10 +293,12 @@ function ExamEditor({ examId }) {
         setOverlayLoading(false);
       }
     })();
-    return () => { ignore = true; };
+    return () => {
+      ignore = true;
+    };
   }, [examId]);
 
-  // PATCH helper (send schedule + price + payment in BOTH/ALL shapes)
+  // PATCH overlay/payment config
   async function saveOverlayJSON({
     price,
     trialDays,
@@ -262,58 +312,52 @@ function ExamEditor({ examId }) {
     whatsappNumber,
     whatsappText,
   }) {
-    const ownerKey = localStorage.getItem("ownerKey") || "";
-
-    // UI -> server shape
     const modeForServer =
-      overlayMode === "afterN" ? "offset-days" :
-      overlayMode === "fixed"  ? "fixed-date"  :
-      overlayMode; // "planDayTime" | "never"
+      overlayMode === "afterN"
+        ? "offset-days"
+        : overlayMode === "fixed"
+        ? "fixed-date"
+        : overlayMode; // planDayTime | never
 
-    // single source of truth for payment (also mirrored below)
-    const payment = {
+    const body = {
+      price: Number(price || 0),
+      trialDays: Number(trialDays || 0),
+      mode: modeForServer,
+      offsetDays:
+        modeForServer === "offset-days" ? Number(daysAfterStart || 0) : undefined,
+      fixedAt:
+        modeForServer === "fixed-date" && fixedAt
+          ? new Date(fixedAt).toISOString()
+          : undefined,
+      showOnDay: modeForServer === "planDayTime" ? Number(showOnDay || 1) : undefined,
+      showAtLocal:
+        modeForServer === "planDayTime" ? (showAtLocal || "09:00") : undefined,
+      // payment (multiple shapes supported server-side)
       upiId: (upiId || "").trim(),
       upiName: (upiName || "").trim(),
       whatsappNumber: (whatsappNumber || "").trim(),
       whatsappText: (whatsappText || "").trim(),
-    };
-
-    const body = {
-      // essentials
-      price: Number(price || 0),
-      trialDays: Number(trialDays || 0),
-      mode: modeForServer,
-
-      // schedule
-      offsetDays:  modeForServer === "offset-days" ? Number(daysAfterStart || 0) : undefined,
-      fixedAt:     modeForServer === "fixed-date"  && fixedAt
-                    ? new Date(fixedAt).toISOString()
-                    : undefined,
-      showOnDay:   modeForServer === "planDayTime" ? Number(showOnDay || 1) : undefined,
-      showAtLocal: modeForServer === "planDayTime" ? (showAtLocal || "09:00") : undefined,
-
-      // send payment in ALL shapes so every consumer can read it
-      ...payment,             // flat (legacy)
-      payment,                // root.payment
-      overlay: { payment },   // overlay.payment (new UI/overlay consumers)
-    };
-
-    // strip undefineds
-    Object.keys(body).forEach(k => body[k] === undefined && delete body[k]);
-
-    const r = await fetch(
-      buildUrl(`/api/prep/exams/${encodeURIComponent(examId)}/overlay-config`),
-      {
-        method: "PATCH",
-        headers: {
-          "Content-Type": "application/json",
-          ...(ownerKey ? { "X-Owner-Key": ownerKey } : {}),
+      payment: {
+        upiId: (upiId || "").trim(),
+        upiName: (upiName || "").trim(),
+        whatsappNumber: (whatsappNumber || "").trim(),
+        whatsappText: (whatsappText || "").trim(),
+      },
+      overlay: {
+        payment: {
+          upiId: (upiId || "").trim(),
+          upiName: (upiName || "").trim(),
+          whatsappNumber: (whatsappNumber || "").trim(),
+          whatsappText: (whatsappText || "").trim(),
         },
-        credentials: "include",
-        body: JSON.stringify(body),
-      }
+      },
+    };
+
+    const r = await patchJSON(
+      `/api/prep/exams/${encodeURIComponent(examId)}/overlay-config`,
+      body
     );
-    if (!r.ok) throw new Error(`Save overlay failed: ${r.status}`);
+    if (!r.ok) throw new Error(r.data?.error || `Save overlay failed: ${r.status}`);
   }
 
   async function handleSaveOverlay() {
@@ -322,12 +366,11 @@ function ExamEditor({ examId }) {
       await saveOverlayJSON({
         price: Number(overlay.price) || 0,
         trialDays: Number(overlay.trialDays) || 0,
-        overlayMode: overlay.mode, // "planDayTime" | "afterN" | "fixed" | "never"
+        overlayMode: overlay.mode,
         showOnDay: Math.max(1, Number(overlay.showOnDay) || 1),
         showAtLocal: overlay.showAtLocal || "09:00",
         daysAfterStart: Number(overlay.daysAfterStart) || 0,
         fixedAt: overlay.fixedAt || null,
-        // payment fields
         upiId: pay.upiId,
         upiName: pay.upiName,
         whatsappNumber: pay.whatsappNumber,
@@ -342,7 +385,9 @@ function ExamEditor({ examId }) {
     }
   }
 
-  function bool(v) { return v ? "true" : "false"; }
+  function bool(v) {
+    return v ? "true" : "false";
+  }
 
   async function onSave(e) {
     e.preventDefault();
@@ -353,6 +398,7 @@ function ExamEditor({ examId }) {
     fd.set("showOriginal", bool(f.elements.showOriginal.checked));
     fd.set("allowDownload", bool(f.elements.allowDownload.checked));
     fd.set("highlight", bool(f.elements.highlight.checked));
+
     const ra = fd.get("releaseAt");
     if (ra) {
       const d = new Date(String(ra));
@@ -374,8 +420,6 @@ function ExamEditor({ examId }) {
         return;
       }
       f.reset();
-      await load(true);
-      await new Promise((r) => setTimeout(r, 120));
       await load(true);
       alert("Module saved");
     } catch (err) {
@@ -401,8 +445,12 @@ function ExamEditor({ examId }) {
     }
     for (const arr of m.values()) {
       arr.sort((a, b) => {
-        const aa = a.releaseAt ? Date.parse(a.releaseAt) : Number(a.slotMin || 0);
-        const bb = b.releaseAt ? Date.parse(b.releaseAt) : Number(b.slotMin || 0);
+        const aa = a.releaseAt
+          ? Date.parse(a.releaseAt)
+          : Number(a.slotMin || 0);
+        const bb = b.releaseAt
+          ? Date.parse(b.releaseAt)
+          : Number(b.slotMin || 0);
         return aa - bb;
       });
     }
@@ -426,18 +474,37 @@ function ExamEditor({ examId }) {
           className="w-full flex items-center justify-between px-4 py-2 bg-gray-50"
         >
           <div className="font-medium">Day {day}</div>
-          <span className={`text-sm text-gray-500 transition-transform ${open ? "rotate-90" : ""}`}>›</span>
+          <span
+            className={`text-sm text-gray-500 transition-transform ${
+              open ? "rotate-90" : ""
+            }`}
+          >
+            ›
+          </span>
         </button>
         {open && (
           <ul className="divide-y">
             {items.map((m) => (
-              <li key={m._id} className="px-4 py-3 flex items-center justify-between text-sm">
+              <li
+                key={m._id}
+                className="px-4 py-3 flex items-center justify-between text-sm"
+              >
                 <div>
                   <div className="font-semibold">{m.title || "Untitled"}</div>
                   <div className="text-gray-500">
-                    {timeBadge(m)} • {m.flags?.extractOCR ? (m.flags?.ocrAtRelease ? "OCR @ release" : "OCR") : "No OCR"} •{" "}
-                    {(m.files || []).length} file(s) {m.status ? `• ${String(m.status).toUpperCase()}` : ""}
-                    {m.releaseAt ? ` • releases ${new Date(m.releaseAt).toLocaleString()}` : ""}
+                    {timeBadge(m)} •{" "}
+                    {m.flags?.extractOCR
+                      ? m.flags?.ocrAtRelease
+                        ? "OCR @ release"
+                        : "OCR"
+                      : "No OCR"}{" "}
+                    • {(m.files || []).length} file(s){" "}
+                    {m.status ? `• ${String(m.status).toUpperCase()}` : ""}
+                    {m.releaseAt
+                      ? ` • releases ${new Date(
+                          m.releaseAt
+                        ).toLocaleString()}`
+                      : ""}
                   </div>
                 </div>
                 <button
@@ -448,7 +515,9 @@ function ExamEditor({ examId }) {
                 </button>
               </li>
             ))}
-            {!items.length && <li className="px-4 py-3 text-gray-500">No items.</li>}
+            {!items.length && (
+              <li className="px-4 py-3 text-gray-500">No items.</li>
+            )}
           </ul>
         )}
       </div>
@@ -473,12 +542,16 @@ function ExamEditor({ examId }) {
 
         <div className="grid md:grid-cols-3 gap-3">
           <div>
-            <label className="block text-sm font-medium mb-1">Course Price (₹)</label>
+            <label className="block text-sm font-medium mb-1">
+              Course Price (₹)
+            </label>
             <input
               type="number"
               className="w-full border rounded px-3 py-2"
               value={overlay.price}
-              onChange={(e) => setOverlay((o) => ({ ...o, price: +e.target.value || 0 }))}
+              onChange={(e) =>
+                setOverlay((o) => ({ ...o, price: +e.target.value || 0 }))
+              }
             />
           </div>
           <div>
@@ -487,15 +560,24 @@ function ExamEditor({ examId }) {
               type="number"
               className="w-full border rounded px-3 py-2"
               value={overlay.trialDays}
-              onChange={(e) => setOverlay((o) => ({ ...o, trialDays: Math.max(0, +e.target.value || 0) }))}
+              onChange={(e) =>
+                setOverlay((o) => ({
+                  ...o,
+                  trialDays: Math.max(0, +e.target.value || 0),
+                }))
+              }
             />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Overlay Mode</label>
+            <label className="block text-sm font-medium mb-1">
+              Overlay Mode
+            </label>
             <select
               className="w-full border rounded px-3 py-2 bg-white"
               value={overlay.mode}
-              onChange={(e) => setOverlay((o) => ({ ...o, mode: e.target.value }))}
+              onChange={(e) =>
+                setOverlay((o) => ({ ...o, mode: e.target.value }))
+              }
             >
               <option value="planDayTime">At specific Day & Time</option>
               <option value="afterN">After N days (per user)</option>
@@ -508,21 +590,32 @@ function ExamEditor({ examId }) {
         {overlay.mode === "planDayTime" && (
           <div className="grid md:grid-cols-3 gap-3 mt-3">
             <div>
-              <label className="block text-sm font-medium mb-1">Show on Day</label>
+              <label className="block text-sm font-medium mb-1">
+                Show on Day
+              </label>
               <input
                 type="number"
                 className="w-full border rounded px-3 py-2"
                 value={overlay.showOnDay}
-                onChange={(e) => setOverlay((o) => ({ ...o, showOnDay: Math.max(1, +e.target.value || 1) }))}
+                onChange={(e) =>
+                  setOverlay((o) => ({
+                    ...o,
+                    showOnDay: Math.max(1, +e.target.value || 1),
+                  }))
+                }
               />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">Time (local, HH:mm)</label>
+              <label className="block text-sm font-medium mb-1">
+                Time (local, HH:mm)
+              </label>
               <input
                 type="time"
                 className="w-full border rounded px-3 py-2"
                 value={overlay.showAtLocal}
-                onChange={(e) => setOverlay((o) => ({ ...o, showAtLocal: e.target.value }))}
+                onChange={(e) =>
+                  setOverlay((o) => ({ ...o, showAtLocal: e.target.value }))
+                }
               />
             </div>
           </div>
@@ -531,12 +624,19 @@ function ExamEditor({ examId }) {
         {overlay.mode === "afterN" && (
           <div className="grid md:grid-cols-3 gap-3 mt-3">
             <div>
-              <label className="block text-sm font-medium mb-1">Days after start</label>
+              <label className="block text-sm font-medium mb-1">
+                Days after start
+              </label>
               <input
                 type="number"
                 className="w-full border rounded px-3 py-2"
                 value={overlay.daysAfterStart}
-                onChange={(e) => setOverlay((o) => ({ ...o, daysAfterStart: Math.max(0, +e.target.value || 0) }))}
+                onChange={(e) =>
+                  setOverlay((o) => ({
+                    ...o,
+                    daysAfterStart: Math.max(0, +e.target.value || 0),
+                  }))
+                }
               />
             </div>
           </div>
@@ -545,12 +645,16 @@ function ExamEditor({ examId }) {
         {overlay.mode === "fixed" && (
           <div className="grid md:grid-cols-3 gap-3 mt-3">
             <div>
-              <label className="block text-sm font-medium mb-1">Fixed date/time (local)</label>
+              <label className="block text-sm font-medium mb-1">
+                Fixed date/time (local)
+              </label>
               <input
                 type="datetime-local"
                 className="w-full border rounded px-3 py-2"
                 value={overlay.fixedAt}
-                onChange={(e) => setOverlay((o) => ({ ...o, fixedAt: e.target.value }))}
+                onChange={(e) =>
+                  setOverlay((o) => ({ ...o, fixedAt: e.target.value }))
+                }
               />
             </div>
           </div>
@@ -565,34 +669,46 @@ function ExamEditor({ examId }) {
               <input
                 className="w-full border rounded px-3 py-2"
                 value={pay.upiId}
-                onChange={(e) => setPay(p => ({ ...p, upiId: e.target.value }))}
+                onChange={(e) => setPay((p) => ({ ...p, upiId: e.target.value }))}
                 placeholder="7767045080@ptyes"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">UPI Name (optional)</label>
+              <label className="block text-sm font-medium mb-1">
+                UPI Name (optional)
+              </label>
               <input
                 className="w-full border rounded px-3 py-2"
                 value={pay.upiName}
-                onChange={(e) => setPay(p => ({ ...p, upiName: e.target.value }))}
+                onChange={(e) =>
+                  setPay((p) => ({ ...p, upiName: e.target.value }))
+                }
                 placeholder="sagar tripathi"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">WhatsApp Number</label>
+              <label className="block text-sm font-medium mb-1">
+                WhatsApp Number
+              </label>
               <input
                 className="w-full border rounded px-3 py-2"
                 value={pay.whatsappNumber}
-                onChange={(e) => setPay(p => ({ ...p, whatsappNumber: e.target.value }))}
+                onChange={(e) =>
+                  setPay((p) => ({ ...p, whatsappNumber: e.target.value }))
+                }
                 placeholder="7767045080 or 9198xxxxxxx"
               />
             </div>
             <div>
-              <label className="block text-sm font-medium mb-1">Default WhatsApp Text (optional)</label>
+              <label className="block text-sm font-medium mb-1">
+                Default WhatsApp Text (optional)
+              </label>
               <input
                 className="w-full border rounded px-3 py-2"
                 value={pay.whatsappText}
-                onChange={(e) => setPay(p => ({ ...p, whatsappText: e.target.value }))}
+                onChange={(e) =>
+                  setPay((p) => ({ ...p, whatsappText: e.target.value }))
+                }
                 placeholder='hello  I paid for upapo'
               />
             </div>
@@ -611,6 +727,7 @@ function ExamEditor({ examId }) {
         </div>
       </section>
 
+      {/* Templates form */}
       <h2 className="text-xl font-semibold mb-3">
         Templates — {examId.replace(/_/g, " ").toLowerCase()}
       </h2>
@@ -625,26 +742,51 @@ function ExamEditor({ examId }) {
         <div className="grid md:grid-cols-3 gap-3">
           <div>
             <label className="block text-sm font-medium mb-1">Day Index</label>
-            <input name="dayIndex" type="number" min="1" required className="w-full border rounded px-3 py-2" />
+            <input
+              name="dayIndex"
+              type="number"
+              min="1"
+              required
+              className="w-full border rounded px-3 py-2"
+            />
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">Slot (min)</label>
-            <input name="slotMin" type="number" min="0" defaultValue="0" className="w-full border rounded px-3 py-2" />
+            <input
+              name="slotMin"
+              type="number"
+              min="0"
+              defaultValue="0"
+              className="w-full border rounded px-3 py-2"
+            />
           </div>
           <div>
             <label className="block text-sm font-medium mb-1">Title</label>
-            <input name="title" type="text" placeholder="Topic title" className="w-full border rounded px-3 py-2" />
+            <input
+              name="title"
+              type="text"
+              placeholder="Topic title"
+              className="w-full border rounded px-3 py-2"
+            />
           </div>
         </div>
 
-        {/* Row: release + small manual text */}
+        {/* Row: release + manual text */}
         <div className="grid md:grid-cols-2 gap-3">
           <div>
-            <label className="block text-sm font-medium mb-1">Release at (date &amp; time)</label>
-            <input name="releaseAt" type="datetime-local" className="w-full border rounded px-3 py-2" />
+            <label className="block text-sm font-medium mb-1">
+              Release at (date &amp; time)
+            </label>
+            <input
+              name="releaseAt"
+              type="datetime-local"
+              className="w-full border rounded px-3 py-2"
+            />
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">Text (manualText)</label>
+            <label className="block text-sm font-medium mb-1">
+              Text (manualText)
+            </label>
             <textarea
               name="manualText"
               className="w-full border rounded px-3 py-2 h-28"
@@ -653,12 +795,16 @@ function ExamEditor({ examId }) {
           </div>
         </div>
 
-        {/* Row: files */}
+        {/* Files */}
         <div className="grid md:grid-cols-2 gap-3">
           <div>
-            <label className="block text-sm font-medium mb-1">Images (multiple)</label>
+            <label className="block text-sm font-medium mb-1">
+              Images (multiple)
+            </label>
             <input name="images" type="file" accept="image/*" multiple className="w-full" />
-            <div className="text-xs text-gray-500 mt-1">Up to 12 images • 40 MB each</div>
+            <div className="text-xs text-gray-500 mt-1">
+              Up to 12 images • 40 MB each
+            </div>
           </div>
           <div className="grid gap-3">
             <div>
@@ -683,7 +829,9 @@ function ExamEditor({ examId }) {
 
         {/* Big content textarea */}
         <div>
-          <label className="block text-sm font-medium mb-1">Text (paste instead of OCR)</label>
+          <label className="block text-sm font-medium mb-1">
+            Text (paste instead of OCR)
+          </label>
           <textarea
             name="content"
             className="w-full border rounded px-3 py-2 h-40"
@@ -708,27 +856,46 @@ function ExamEditor({ examId }) {
             </label>
           </div>
           <div>
-            <label className="block text-sm font-medium mb-1">background (e.g., #fff)</label>
-            <input name="background" type="text" className="w-full border rounded px-3 py-2" placeholder="#fff" />
+            <label className="block text-sm font-medium mb-1">
+              background (e.g., #fff)
+            </label>
+            <input
+              name="background"
+              type="text"
+              className="w-full border rounded px-3 py-2"
+              placeholder="#fff"
+            />
           </div>
         </div>
 
         <div className="flex items-center gap-2 pt-2">
-          <button className={`px-4 py-2 rounded ${busy ? "bg-gray-400" : "bg-black"} text-white`} disabled={busy}>
+          <button
+            className={`px-4 py-2 rounded ${
+              busy ? "bg-gray-400" : "bg-black"
+            } text-white`}
+            disabled={busy}
+          >
             {busy ? "Saving..." : "Save Module"}
           </button>
-          <button type="button" onClick={() => load(true)} className="px-3 py-2 rounded border bg-white">
+          <button
+            type="button"
+            onClick={() => load(true)}
+            className="px-3 py-2 rounded border bg-white"
+          >
             Refresh
           </button>
         </div>
       </form>
 
+      {/* Existing Modules — collapsible day groups with delete */}
       <div className="rounded-xl border bg-white">
         <div className="px-4 py-3 border-b font-medium">Existing Modules</div>
         {groupByDay(modules).map(([day, items]) => (
           <DayGroup key={day} day={day} items={items} onDelete={onDelete} />
         ))}
-        {!modules.length && <div className="px-4 py-6 text-center text-gray-500">No modules yet.</div>}
+        {!modules.length && (
+          <div className="px-4 py-6 text-center text-gray-500">No modules yet.</div>
+        )}
       </div>
     </>
   );
