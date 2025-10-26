@@ -1,6 +1,21 @@
 // client/src/components/Prep/AdminPrepPanel.jsx
-import { useEffect, useRef, useState } from "react";
+import { useEffect, useMemo, useRef, useState } from "react";
 import { getJSON, delJSON, buildUrl } from "../../utils/api";
+
+/* --------------------------- helpers --------------------------- */
+
+function fmtDateTimeLocalISO(dt) {
+  if (!dt) return "";
+  const d = new Date(dt);
+  if (Number.isNaN(+d)) return "";
+  const pad = (n) => String(n).padStart(2, "0");
+  const yyyy = d.getFullYear();
+  const mm = pad(d.getMonth() + 1);
+  const dd = pad(d.getDate());
+  const hh = pad(d.getHours());
+  const mi = pad(d.getMinutes());
+  return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
+}
 
 /** Multipart POST (for templates upload) */
 async function sendMultipart(url, formData) {
@@ -60,6 +75,8 @@ async function patchJSON(url, body) {
   return { ok: res.ok, status: res.status, data };
 }
 
+/* ------------------------- main component ------------------------- */
+
 export default function AdminPrepPanel() {
   const [exams, setExams] = useState([]);
   const [selExam, setSelExam] = useState("");
@@ -92,7 +109,7 @@ export default function AdminPrepPanel() {
 
     if (!r.ok || !r.data?.success) {
       const msg =
-        r.data?.error || r.data?.message || "Create exam failed (JSON)";
+        r.data?.error || r.data?.message || `Create exam failed (${r.status})`;
       return alert(msg);
     }
     setMakeExam({ examId: "", name: "" });
@@ -122,6 +139,7 @@ export default function AdminPrepPanel() {
     <div className="max-w-6xl mx-auto p-4">
       <div className="flex items-center gap-3 mb-4">
         <h1 className="text-2xl font-bold">Admin Prep Panel</h1>
+        <div className="text-xs text-gray-500">Admin Mode Enabled</div>
       </div>
 
       {/* Exam header row */}
@@ -196,6 +214,8 @@ export default function AdminPrepPanel() {
   );
 }
 
+/* ------------------------- Exam editor ------------------------- */
+
 function ExamEditor({ examId }) {
   const [modules, setModules] = useState([]);
   const [busy, setBusy] = useState(false);
@@ -209,7 +229,7 @@ function ExamEditor({ examId }) {
     showOnDay: 1,
     showAtLocal: "09:00",
     daysAfterStart: 0,
-    fixedAt: "",
+    fixedAt: "", // datetime-local
   });
   const [overlayLoading, setOverlayLoading] = useState(false);
 
@@ -256,6 +276,7 @@ function ExamEditor({ examId }) {
 
         // schedule
         const ov = r?.overlay || {};
+        // map legacy to current
         const mode =
           ov.mode ||
           (ov.overlayMode === "afterN"
@@ -263,6 +284,7 @@ function ExamEditor({ examId }) {
             : ov.overlayMode === "fixed"
             ? "fixed"
             : "planDayTime");
+
         setOverlay((o) => ({
           ...o,
           mode,
@@ -271,7 +293,7 @@ function ExamEditor({ examId }) {
           daysAfterStart: Number(
             ov?.offsetDays ?? ov?.daysAfterStart ?? o.daysAfterStart ?? 0
           ),
-          fixedAt: ov?.fixedAt ? new Date(ov.fixedAt).toISOString().slice(0, 16) : "",
+          fixedAt: ov?.fixedAt ? fmtDateTimeLocalISO(ov.fixedAt) : "",
         }));
 
         // payment
@@ -445,12 +467,8 @@ function ExamEditor({ examId }) {
     }
     for (const arr of m.values()) {
       arr.sort((a, b) => {
-        const aa = a.releaseAt
-          ? Date.parse(a.releaseAt)
-          : Number(a.slotMin || 0);
-        const bb = b.releaseAt
-          ? Date.parse(b.releaseAt)
-          : Number(b.slotMin || 0);
+        const aa = a.releaseAt ? Date.parse(a.releaseAt) : Number(a.slotMin || 0);
+        const bb = b.releaseAt ? Date.parse(b.releaseAt) : Number(b.slotMin || 0);
         return aa - bb;
       });
     }
@@ -501,9 +519,7 @@ function ExamEditor({ examId }) {
                     • {(m.files || []).length} file(s){" "}
                     {m.status ? `• ${String(m.status).toUpperCase()}` : ""}
                     {m.releaseAt
-                      ? ` • releases ${new Date(
-                          m.releaseAt
-                        ).toLocaleString()}`
+                      ? ` • releases ${new Date(m.releaseAt).toLocaleString()}`
                       : ""}
                   </div>
                 </div>
@@ -523,6 +539,8 @@ function ExamEditor({ examId }) {
       </div>
     );
   }
+
+  /* --------------------------- render --------------------------- */
 
   return (
     <>
@@ -870,9 +888,7 @@ function ExamEditor({ examId }) {
 
         <div className="flex items-center gap-2 pt-2">
           <button
-            className={`px-4 py-2 rounded ${
-              busy ? "bg-gray-400" : "bg-black"
-            } text-white`}
+            className={`px-4 py-2 rounded ${busy ? "bg-gray-400" : "bg-black"} text-white`}
             disabled={busy}
           >
             {busy ? "Saving..." : "Save Module"}
