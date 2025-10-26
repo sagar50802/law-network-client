@@ -1,6 +1,6 @@
 // client/src/components/Prep/AdminPrepPanel.jsx
-import { useEffect, useMemo, useRef, useState } from "react";
-import { getJSON, delJSON, buildUrl } from "../../utils/api";
+import { useEffect, useRef, useState } from "react";
+import { getJSON, buildUrl } from "../../utils/api";
 
 /* --------------------------- helpers --------------------------- */
 
@@ -75,6 +75,24 @@ async function patchJSON(url, body) {
   return { ok: res.ok, status: res.status, data };
 }
 
+/** DELETE helper (with Owner Key) — fixes admin delete auth */
+async function delJSONAuth(url) {
+  const ownerKey = localStorage.getItem("ownerKey") || "";
+  const res = await fetch(buildUrl(url), {
+    method: "DELETE",
+    headers: {
+      ...(ownerKey ? { "X-Owner-Key": ownerKey } : {}),
+    },
+    credentials: "include",
+  });
+  const data = await res.json().catch(() => ({}));
+  if (!res.ok) {
+    const msg = data?.error || data?.message || `Delete failed (${res.status})`;
+    throw new Error(msg);
+  }
+  return data;
+}
+
 /* ------------------------- main component ------------------------- */
 
 export default function AdminPrepPanel() {
@@ -119,14 +137,14 @@ export default function AdminPrepPanel() {
 
   async function deleteExam() {
     if (!selExam) return alert("Select an exam to delete");
-    if (!confirm("Delete this exam and ALL its modules/access/progress?"))
-      return;
+    if (!confirm("Delete this exam and ALL its modules/access/progress?")) return;
     try {
-      await delJSON(`/api/prep/exams/${encodeURIComponent(selExam)}`);
+      await delJSONAuth(`/api/prep/exams/${encodeURIComponent(selExam)}`);
       await loadExams();
       alert("Exam deleted");
-    } catch {
-      alert("Delete failed");
+    } catch (e) {
+      console.error(e);
+      alert(e.message || "Delete failed");
     }
   }
 
@@ -276,14 +294,23 @@ function ExamEditor({ examId }) {
 
         // schedule
         const ov = r?.overlay || {};
-        // map legacy to current
-        const mode =
-          ov.mode ||
-          (ov.overlayMode === "afterN"
-            ? "afterN"
-            : ov.overlayMode === "fixed"
-            ? "fixed"
-            : "planDayTime");
+
+        // 🔧 Normalize server modes → UI values
+        // server: "planDayTime" | "offset-days" | "fixed-date" | "never"
+        // UI    : "planDayTime" | "afterN"      | "fixed"      | "never"
+        let mode = ov?.mode || "planDayTime";
+        if (mode === "offset-days") mode = "afterN";
+        else if (mode === "fixed-date") mode = "fixed";
+
+        // legacy mapping (if present)
+        if (!mode && ov?.overlayMode) {
+          mode =
+            ov.overlayMode === "afterN"
+              ? "afterN"
+              : ov.overlayMode === "fixed"
+              ? "fixed"
+              : "planDayTime";
+        }
 
         setOverlay((o) => ({
           ...o,
@@ -454,8 +481,13 @@ function ExamEditor({ examId }) {
 
   async function onDelete(id) {
     if (!confirm("Delete this module?")) return;
-    await delJSON(`/api/prep/templates/${id}`);
-    await load(true);
+    try {
+      await delJSONAuth(`/api/prep/templates/${id}`);
+      await load(true);
+    } catch (e) {
+      console.error(e);
+      alert(e.message || "Delete failed");
+    }
   }
 
   function groupByDay(items) {
@@ -727,7 +759,7 @@ function ExamEditor({ examId }) {
                 onChange={(e) =>
                   setPay((p) => ({ ...p, whatsappText: e.target.value }))
                 }
-                placeholder='hello  I paid for upapo'
+                placeholder="hello  I paid for upapo"
               />
             </div>
           </div>
