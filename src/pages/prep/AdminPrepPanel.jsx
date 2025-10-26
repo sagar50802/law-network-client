@@ -93,6 +93,63 @@ async function delJSONAuth(url) {
   return data;
 }
 
+/* Build a robust FormData from the form element without creating fake files.
+   We append a tiny text part `_noop=1` if NO files are selected at all, which
+   avoids edge cases on some hosts where empty file sections can trigger
+   “Unexpected end of form”. */
+function buildMultipartFromForm(form, examId) {
+  const fd = new FormData();
+
+  // Copy all non-file fields verbatim
+  Array.from(form.elements).forEach((el) => {
+    if (!el.name || el.disabled) return;
+    const t = (el.type || "").toLowerCase();
+
+    if (t === "file") return; // handled below
+    if ((t === "checkbox" || t === "radio") && !el.checked) return;
+
+    fd.append(el.name, el.value ?? "");
+  });
+
+  // Ensure required meta fields are included explicitly
+  fd.set("examId", examId);
+
+  // Convert checkboxes to "true"/"false" like before
+  fd.set("extractOCR", form.elements.extractOCR?.checked ? "true" : "false");
+  fd.set("showOriginal", form.elements.showOriginal?.checked ? "true" : "false");
+  fd.set("allowDownload", form.elements.allowDownload?.checked ? "true" : "false");
+  fd.set("highlight", form.elements.highlight?.checked ? "true" : "false");
+
+  // Normalize releaseAt to ISO if present
+  const ra = form.elements.releaseAt?.value;
+  if (ra) {
+    const d = new Date(String(ra));
+    if (!isNaN(d)) fd.set("releaseAt", d.toISOString());
+  }
+
+  // Append files if selected
+  let filesCount = 0;
+  const fileEls = Array.from(form.querySelectorAll('input[type="file"]'));
+  for (const el of fileEls) {
+    const name = el.name || "file";
+    const files = el.files || [];
+    for (const f of files) {
+      if (f && typeof f.size === "number") {
+        fd.append(name, f);
+        filesCount++;
+      }
+    }
+  }
+
+  // If no file was selected at all, append a harmless noop text field
+  // (this does NOT create a file part, and keeps your server logic intact).
+  if (filesCount === 0) {
+    fd.append("_noop", "1");
+  }
+
+  return fd;
+}
+
 /* ------------------------- main component ------------------------- */
 
 export default function AdminPrepPanel() {
@@ -441,18 +498,9 @@ function ExamEditor({ examId }) {
   async function onSave(e) {
     e.preventDefault();
     const f = formRef.current;
-    const fd = new FormData(f);
-    fd.set("examId", examId);
-    fd.set("extractOCR", bool(f.elements.extractOCR.checked));
-    fd.set("showOriginal", bool(f.elements.showOriginal.checked));
-    fd.set("allowDownload", bool(f.elements.allowDownload.checked));
-    fd.set("highlight", bool(f.elements.highlight.checked));
 
-    const ra = fd.get("releaseAt");
-    if (ra) {
-      const d = new Date(String(ra));
-      if (!isNaN(d)) fd.set("releaseAt", d.toISOString());
-    }
+    // Build robust multipart body
+    const fd = buildMultipartFromForm(f, examId);
 
     setBusy(true);
     try {
