@@ -139,7 +139,7 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
         examId,
         email: emailField || email || "",
       });
-      const r = await getJSON(`/api/prep/access/status/guard?${qs.toString()}`);
+      const r = await getJSON(`/api/prep/public/exams/${encodeURIComponent(examId)}/meta?_=${Date.now()}`);
       const { access, overlay } = r || {};
 
       if (access?.status === "active") {
