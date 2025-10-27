@@ -48,27 +48,36 @@ export default function PrepAccessAdmin({ examId: initialExamId }) {
     }
   }
 
+  /* --------------------------------------------------
+   * ✅ Load all admin data for selected exam
+   * -------------------------------------------------- */
   async function loadAll(id) {
     if (!id) return;
     setLoading(true);
     try {
       const [metaRes, listRes, configRes] = await Promise.all([
-        getJSON(`/api/prep/exams/${encodeURIComponent(id)}/meta?_=${Date.now()}`),
-        getJSON(`/api/admin/prep/access/requests?examId=${encodeURIComponent(id)}&_=${Date.now()}`),
+        // ✅ FIXED: use the public meta endpoint
+        getJSON(
+          `/api/prep/public/exams/${encodeURIComponent(id)}/meta?_=${Date.now()}`
+        ),
+        getJSON(
+          `/api/admin/prep/access/requests?examId=${encodeURIComponent(id)}&_=${Date.now()}`
+        ),
         getJSON(`/api/admin/prep/access/config?_=${Date.now()}`),
       ]);
 
-      const overlayPay = metaRes?.overlay?.payment || {};
-      const rootPay = metaRes?.payment || {};
+      const overlayPay = metaRes?.exam?.overlay?.payment || {};
+      const rootPay = metaRes?.exam?.payment || {};
       const payment = { ...rootPay, ...overlayPay };
 
       const cleanMeta = {
-        ...metaRes,
+        ...(metaRes?.exam || metaRes || {}),
         payment,
-        overlay: metaRes?.overlay || {},
+        overlay: metaRes?.exam?.overlay || metaRes?.overlay || {},
         price:
-          metaRes?.overlay?.payment?.priceINR ??
-          metaRes?.payment?.priceINR ??
+          metaRes?.exam?.overlay?.payment?.priceINR ??
+          metaRes?.exam?.payment?.priceINR ??
+          metaRes?.exam?.price ??
           metaRes?.price ??
           0,
       };
@@ -96,6 +105,9 @@ export default function PrepAccessAdmin({ examId: initialExamId }) {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [initialExamId]);
 
+  /* --------------------------------------------------
+   * Admin Actions
+   * -------------------------------------------------- */
   async function doApprove(email, mode) {
     if (!examId || !email) return;
     try {
@@ -139,10 +151,15 @@ export default function PrepAccessAdmin({ examId: initialExamId }) {
 
   async function batchDelete() {
     if (!sel.size) return;
-    if (!confirm(`Delete ${sel.size} selected request(s)? This cannot be undone.`)) return;
+    if (
+      !confirm(`Delete ${sel.size} selected request(s)? This cannot be undone.`)
+    )
+      return;
     try {
       const ids = Array.from(sel);
-      const r = await postAdminJSON("/api/admin/prep/access/batch-delete", { ids });
+      const r = await postAdminJSON("/api/admin/prep/access/batch-delete", {
+        ids,
+      });
       toast(`Deleted ${r.removed || ids.length} request(s)`);
       await loadAll(examId);
     } catch (e) {
@@ -163,6 +180,9 @@ export default function PrepAccessAdmin({ examId: initialExamId }) {
     }
   }
 
+  /* --------------------------------------------------
+   * Selection Helpers
+   * -------------------------------------------------- */
   function toggleSel(id) {
     setSel((prev) => {
       const ns = new Set(prev);
@@ -179,18 +199,29 @@ export default function PrepAccessAdmin({ examId: initialExamId }) {
     setSel(new Set());
   }
 
+  /* --------------------------------------------------
+   * Filters
+   * -------------------------------------------------- */
   const filtered = useMemo(() => {
     const term = q.trim().toLowerCase();
     return (items || []).filter((r) => {
       if (statusFilter !== "all" && r.status !== statusFilter) return false;
-      if (intentFilter !== "all" && String(r.intent || "purchase") !== intentFilter)
+      if (
+        intentFilter !== "all" &&
+        String(r.intent || "purchase") !== intentFilter
+      )
         return false;
       if (!term) return true;
-      const hay = `${r.email} ${r.name || ""} ${r.phone || ""} ${r.intent || ""} ${r.note || ""}`.toLowerCase();
+      const hay = `${r.email} ${r.name || ""} ${r.phone || ""} ${
+        r.intent || ""
+      } ${r.note || ""}`.toLowerCase();
       return hay.includes(term);
     });
   }, [items, q, statusFilter, intentFilter]);
 
+  /* --------------------------------------------------
+   * Render
+   * -------------------------------------------------- */
   return (
     <div className="max-w-6xl mx-auto p-4">
       {/* Header */}
@@ -227,15 +258,23 @@ export default function PrepAccessAdmin({ examId: initialExamId }) {
       {/* Payment Summary */}
       {examId && (
         <div className="rounded-xl border p-4 mb-6 bg-white">
-          <div className="text-lg font-semibold mb-3">Payment & Overlay Summary</div>
+          <div className="text-lg font-semibold mb-3">
+            Payment & Overlay Summary
+          </div>
           <div className="text-sm grid sm:grid-cols-2 gap-2">
             <Row label="Course" value={meta?.name || examId.toUpperCase()} />
             <Row label="Price (₹)" value={meta?.price || "—"} />
             <Row label="Trial Days" value={meta?.trialDays ?? 0} />
-            <Row label="Overlay Mode" value={meta?.overlay?.mode || "planDayTime"} />
+            <Row
+              label="Overlay Mode"
+              value={meta?.overlay?.mode || "planDayTime"}
+            />
             <Row label="UPI ID" value={meta?.payment?.upiId || "—"} />
             <Row label="UPI Name" value={meta?.payment?.upiName || "—"} />
-            <Row label="WhatsApp" value={meta?.payment?.whatsappNumber || "—"} />
+            <Row
+              label="WhatsApp"
+              value={meta?.payment?.whatsappNumber || "—"}
+            />
           </div>
           <div className="text-gray-500 text-xs mt-2">
             Use <b>AdminPrepPanel</b> to modify overlay or payment details.
@@ -265,7 +304,8 @@ export default function PrepAccessAdmin({ examId: initialExamId }) {
             </button>
           </div>
           <div className="text-xs text-gray-500 mt-1">
-            When Auto Approval is enabled, new requests unlock automatically within 15 seconds.
+            When Auto Approval is enabled, new requests unlock automatically
+            within 15 seconds.
           </div>
         </div>
       )}
@@ -326,7 +366,7 @@ export default function PrepAccessAdmin({ examId: initialExamId }) {
         </div>
       </div>
 
-      {/* Table on Desktop / Cards on Mobile */}
+      {/* Table / Cards */}
       <div className="rounded-xl border bg-white overflow-hidden">
         {loading ? (
           <div className="p-4 text-center text-gray-500">Loading…</div>
@@ -334,7 +374,6 @@ export default function PrepAccessAdmin({ examId: initialExamId }) {
           <div className="p-4 text-center text-gray-500">No requests.</div>
         ) : (
           <>
-            {/* Desktop Table */}
             <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-gray-50">
@@ -365,7 +404,6 @@ export default function PrepAccessAdmin({ examId: initialExamId }) {
               </table>
             </div>
 
-            {/* Mobile Cards */}
             <div className="block md:hidden divide-y">
               {filtered.map((r) => (
                 <CardMobile
@@ -385,6 +423,9 @@ export default function PrepAccessAdmin({ examId: initialExamId }) {
   );
 }
 
+/* --------------------------------------------------
+ * Subcomponents
+ * -------------------------------------------------- */
 function Row({ label, value }) {
   return (
     <div className="flex items-baseline gap-2">
@@ -400,7 +441,11 @@ function RowDesktop({ r, sel, toggleSel, doApprove, deleteOne }) {
   return (
     <tr className="border-t">
       <td className="p-2 align-top">
-        <input type="checkbox" checked={selected} onChange={() => toggleSel(r.id)} />
+        <input
+          type="checkbox"
+          checked={selected}
+          onChange={() => toggleSel(r.id)}
+        />
       </td>
       <td className="p-2 align-top font-mono break-all">{r.email}</td>
       <td className="p-2 align-top">{r.name || "—"}</td>
@@ -409,7 +454,9 @@ function RowDesktop({ r, sel, toggleSel, doApprove, deleteOne }) {
       <td className="p-2 align-top">
         <StatusBadge status={r.status} />
       </td>
-      <td className="p-2 align-top max-w-[320px] break-words">{r.note || "—"}</td>
+      <td className="p-2 align-top max-w-[320px] break-words">
+        {r.note || "—"}
+      </td>
       <td className="p-2 align-top whitespace-nowrap">{created}</td>
       <td className="p-2 align-top">
         <Actions r={r} doApprove={doApprove} deleteOne={deleteOne} />
@@ -424,7 +471,11 @@ function CardMobile({ r, selected, toggleSel, doApprove, deleteOne }) {
     <div className="p-3">
       <div className="flex justify-between mb-2">
         <label className="flex items-center gap-2 text-sm font-medium">
-          <input type="checkbox" checked={selected} onChange={() => toggleSel(r.id)} />
+          <input
+            type="checkbox"
+            checked={selected}
+            onChange={() => toggleSel(r.id)}
+          />
           {r.email}
         </label>
         <StatusBadge status={r.status} />
