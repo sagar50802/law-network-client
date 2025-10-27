@@ -56,7 +56,7 @@ export default function PrepAccessAdmin({ examId: initialExamId }) {
     setLoading(true);
     try {
       const [metaRes, listRes, configRes] = await Promise.all([
-        // ✅ FIXED: use the public meta endpoint
+        // ✅ Uses the public meta endpoint (consistent with backend)
         getJSON(
           `/api/prep/public/exams/${encodeURIComponent(id)}/meta?_=${Date.now()}`
         ),
@@ -239,7 +239,11 @@ export default function PrepAccessAdmin({ examId: initialExamId }) {
           <button
             className="px-4 py-2 rounded bg-black text-white"
             onClick={() => {
-              const id = typingExamId.trim();
+              // ✅ Cleans and normalizes examId before loading
+              const id = typingExamId
+                .trim()
+                .toLowerCase()
+                .replace(/\s*\(.*\)\s*/g, "");
               setExamId(id);
               loadAll(id);
             }}
@@ -374,6 +378,7 @@ export default function PrepAccessAdmin({ examId: initialExamId }) {
           <div className="p-4 text-center text-gray-500">No requests.</div>
         ) : (
           <>
+            {/* Desktop Table */}
             <div className="hidden md:block overflow-x-auto">
               <table className="w-full text-sm">
                 <thead className="bg-gray-50">
@@ -404,6 +409,7 @@ export default function PrepAccessAdmin({ examId: initialExamId }) {
               </table>
             </div>
 
+            {/* Mobile Cards */}
             <div className="block md:hidden divide-y">
               {filtered.map((r) => (
                 <CardMobile
@@ -497,6 +503,9 @@ function CardMobile({ r, selected, toggleSel, doApprove, deleteOne }) {
         )}
         <div className="text-xs text-gray-500">{created}</div>
       </div>
+      <div className="flex flex-wrap gap-continuing the final few lines of your full corrected code:  
+
+```jsx
       <div className="flex flex-wrap gap-2 mt-2">
         <Actions r={r} doApprove={doApprove} deleteOne={deleteOne} />
       </div>
