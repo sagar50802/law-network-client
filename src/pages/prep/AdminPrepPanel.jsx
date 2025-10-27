@@ -17,7 +17,7 @@ function fmtDateTimeLocalISO(dt) {
   return `${yyyy}-${mm}-${dd}T${hh}:${mi}`;
 }
 
-/** Multipart POST (for templates upload) */
+/** Multipart POST (for templates upload) — FIX 1: do NOT set Content-Type manually */
 async function sendMultipart(url, formData) {
   const ownerKey = localStorage.getItem("ownerKey") || "";
   const headers = { ...(ownerKey ? { "X-Owner-Key": ownerKey } : {}) };
@@ -25,7 +25,7 @@ async function sendMultipart(url, formData) {
 
   const res = await fetch(full, {
     method: "POST",
-    body: formData,
+    body: formData, // Browser sets proper multipart boundary
     headers,
     credentials: "include",
   });
@@ -45,7 +45,7 @@ async function sendMultipart(url, formData) {
   return { ok: res.ok, status: res.status, data, text };
 }
 
-/** JSON helpers (used for /api/prep/exams and overlay-config) */
+/** JSON helpers (used for /api/prep/exams and overlay-config and no-file templates) */
 async function postJSON(url, body) {
   const ownerKey = localStorage.getItem("ownerKey") || "";
   const res = await fetch(buildUrl(url), {
@@ -147,7 +147,7 @@ function buildMultipartFromForm(form, examId) {
     fd.append("_noop", "1");
   }
 
-  return fd;
+  return { fd, filesCount };
 }
 
 /* ------------------------- main component ------------------------- */
@@ -495,16 +495,32 @@ function ExamEditor({ examId }) {
     return v ? "true" : "false";
   }
 
+  /* --------- Save template (Fix 2: JSON when no files) --------- */
   async function onSave(e) {
     e.preventDefault();
     const f = formRef.current;
 
     // Build robust multipart body
-    const fd = buildMultipartFromForm(f, examId);
+    const { fd, filesCount } = buildMultipartFromForm(f, examId);
 
     setBusy(true);
     try {
-      const resp = await sendMultipart("/api/prep/templates", fd);
+      let resp;
+
+      if (filesCount === 0) {
+        // No files: send JSON instead of multipart
+        const obj = Object.fromEntries(fd.entries());
+        // Convert string booleans back to true/false to match server expectations (optional)
+        if (typeof obj.extractOCR === "string") obj.extractOCR = obj.extractOCR === "true";
+        if (typeof obj.showOriginal === "string") obj.showOriginal = obj.showOriginal === "true";
+        if (typeof obj.allowDownload === "string") obj.allowDownload = obj.allowDownload === "true";
+        if (typeof obj.highlight === "string") obj.highlight = obj.highlight === "true";
+        resp = await postJSON("/api/prep/templates", obj);
+      } else {
+        // Has files: use multipart
+        resp = await sendMultipart("/api/prep/templates", fd);
+      }
+
       const success =
         (resp.data && resp.data.success === true) ||
         /"success"\s*:\s*true/.test(resp.text || "");
