@@ -505,7 +505,6 @@ function CardMobile({ r, selected, toggleSel, doApprove, deleteOne }) {
       </div>
       <div className="flex flex-wrap gap-continuing the final few lines of your full corrected code:  
 
-```jsx
       <div className="flex flex-wrap gap-2 mt-2">
         <Actions r={r} doApprove={doApprove} deleteOne={deleteOne} />
       </div>
