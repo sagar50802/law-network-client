@@ -9,6 +9,7 @@ import { getJSON, postJSON, buildUrl } from "../../utils/api";
  * • Fixes silent fails for delete/approve/revoke
  * • Ensures AutoGrant toggle sync and refresh
  * • No layout/logic changes, just bug-level reliability fixes
+ * • Normalizes examId: trims, lowercases, removes parentheses text
  */
 
 async function postAdminJSON(url, body = {}) {
@@ -151,15 +152,11 @@ export default function PrepAccessAdmin({ examId: initialExamId }) {
 
   async function batchDelete() {
     if (!sel.size) return;
-    if (
-      !confirm(`Delete ${sel.size} selected request(s)? This cannot be undone.`)
-    )
+    if (!confirm(`Delete ${sel.size} selected request(s)? This cannot be undone.`))
       return;
     try {
       const ids = Array.from(sel);
-      const r = await postAdminJSON("/api/admin/prep/access/batch-delete", {
-        ids,
-      });
+      const r = await postAdminJSON("/api/admin/prep/access/batch-delete", { ids });
       toast(`Deleted ${r.removed || ids.length} request(s)`);
       await loadAll(examId);
     } catch (e) {
@@ -239,7 +236,7 @@ export default function PrepAccessAdmin({ examId: initialExamId }) {
           <button
             className="px-4 py-2 rounded bg-black text-white"
             onClick={() => {
-              // ✅ Cleans and normalizes examId before loading
+              // ✅ normalize examId: trim, lowercase, remove parentheses content
               const id = typingExamId
                 .trim()
                 .toLowerCase()
@@ -503,8 +500,6 @@ function CardMobile({ r, selected, toggleSel, doApprove, deleteOne }) {
         )}
         <div className="text-xs text-gray-500">{created}</div>
       </div>
-      <div className="flex flex-wrap gap-continuing the final few lines of your full corrected code:  
-
       <div className="flex flex-wrap gap-2 mt-2">
         <Actions r={r} doApprove={doApprove} deleteOne={deleteOne} />
       </div>
