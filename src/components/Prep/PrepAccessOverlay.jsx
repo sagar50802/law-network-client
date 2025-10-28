@@ -7,7 +7,7 @@ import { getJSON } from "../../utils/api";
  * Frontend user overlay for course access control.
  *
  * ✅ Reads config:  /api/prep/public/exams/:examId/meta
- * ✅ Checks guard:  /api/prep/public/exams/:examId/meta
+ * ✅ Checks guard:  /api/prep/access/status/guard
  * ✅ Submits:       /api/prep/access/request
  * ✅ Polls status:  /api/prep/access/request/status
  *
@@ -122,6 +122,7 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
 
   /* --------------------------------------------------
    * ✅ Guard — Determine if user already has access
+   * (Corrected to call /api/prep/access/status/guard)
    * -------------------------------------------------- */
   async function fetchGuard() {
     if (!examId) return;
@@ -135,18 +136,17 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
     const keepWaiting = !!localStorage.getItem(ks.wait);
 
     try {
-      const r = await getJSON(
-        `/api/prep/public/exams/${encodeURIComponent(examId)}/meta?_=${Date.now()}`
-      );
-      const { access, overlay } = r?.exam || {};
+      const qs = new URLSearchParams({
+        examId,
+        email: emailField || email || "",
+      });
+      const r = await getJSON(`/api/prep/access/status/guard?${qs.toString()}`);
+      const { access, overlay } = r || {};
 
       if (access?.status === "active") {
-        const until = Number(localStorage.getItem(ks.approved) || 0);
-        if (until > Date.now()) {
-          setState((s) => ({ ...s, show: true, mode: "approved", access }));
-        } else {
-          setState((s) => ({ ...s, show: false, mode: "", access }));
-        }
+        const until = Date.now() + APPROVE_SECONDS * 1000;
+        localStorage.setItem(ks.approved, String(until));
+        setState((s) => ({ ...s, show: true, mode: "approved", access }));
         firstGuardDoneRef.current = true;
         return;
       }
