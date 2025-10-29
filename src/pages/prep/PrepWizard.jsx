@@ -958,10 +958,10 @@ export default function PrepWizard() {
                 {badge && <span className="badge">{badge}</span>}
               </a>
             ) : (
-              <div key={d} className={cls} title={`<div key={d} className={cls} title={`Day ${d}`}>
-                <span>{d}</span>
-                {badge && <span className="badge">{badge}</span>}
-              </div>
+               <div key={d} className={cls} title={`Day ${d}`}>
+  <span>{d}</span>
+  {badge && <span className="badge">{badge}</span>}
+</div>
             )
           );
         }
