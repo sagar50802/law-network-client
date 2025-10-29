@@ -1,5 +1,5 @@
 import { useEffect, useMemo, useState, useRef } from "react";
-import { getJSON, postJSON, absUrl } from "../../utils/api";
+import { getJSON, postJSON, absUrl, buildUrl } from "../../utils/api";
 import { ImageScroller } from "../../components/ui/ImageScroller";
 import PrepAccessOverlay from "../../components/Prep/PrepAccessOverlay.jsx";
 
@@ -634,21 +634,22 @@ export default function PrepWizard() {
 
   // --- SAFE JSON HELPERS (prevents blank screen when API not ready) ---
   async function safeGetJSON(url) {
+    const finalUrl = buildUrl(url);
     try {
-      const res = await fetch(url);
+      const res = await fetch(finalUrl, { credentials: "include" });
       if (!res.ok) {
-        console.warn("[PrepWizard] safeGetJSON non-OK:", res.status, url);
+        console.warn("[PrepWizard] safeGetJSON non-OK:", res.status, finalUrl);
         return {};
       }
       const txt = await res.text();
       try {
         return JSON.parse(txt);
       } catch {
-        console.warn("[PrepWizard] safeGetJSON parse fail (likely HTML 404)", url);
+        console.warn("[PrepWizard] safeGetJSON parse fail (likely HTML 404)", finalUrl);
         return {};
       }
     } catch (err) {
-      console.warn("[PrepWizard] safeGetJSON network error:", err?.message);
+      console.warn("[PrepWizard] safeGetJSON network error:", err?.message, finalUrl);
       return {};
     }
   }
@@ -697,7 +698,6 @@ export default function PrepWizard() {
       if (email) qs.set("email", email);
 
       const [metaRes, todayRes] = await Promise.allSettled([
-        // ✅ SAFE: replaced getJSON with safeGetJSON
         safeGetJSON(`/api/prep/user/summary?${qs.toString()}`),
         safeGetJSON(
           `/api/prep/user/today?examId=${encodeURIComponent(chosenId)}${
@@ -725,7 +725,6 @@ export default function PrepWizard() {
         fullToday = todayRes.value.items;
         console.log("[PrepWizard] /user/today items:", fullToday.length); // [dbg]
       } else if (todayRes.status === "fulfilled" && todayRes.value && todayRes.value.locked) {
-        // backend explicitly blocked (not approved / not active)
         setLocked(true);
         fullToday = [];
         console.log("[PrepWizard] /user/today locked by backend"); // [dbg]
@@ -733,7 +732,6 @@ export default function PrepWizard() {
         fullToday = todayRes.value.items;
         console.log("[PrepWizard] /user/today fallback items:", fullToday.length); // [dbg]
       } else {
-        // fallback to all templates of the current day ONLY if not locked
         fullToday = all.filter((m) => Number(m.dayIndex) === Number(td));
         console.log("[PrepWizard] fallback to day templates:", fullToday.length); // [dbg]
       }
@@ -751,18 +749,17 @@ export default function PrepWizard() {
 
       console.log("[PrepWizard] releasedToday count:", releasedToday.length, " locked?", locked); // [dbg]
 
-      // If locked, do not show anything (PLUS the hard gate below will also protect)
       setModules(locked ? [] : releasedToday);
       setAllModules(all);
       setCurrentDay(td);
       setActiveDay(td);
-      console.log("%c[PrepWizard] load() done", "color:lime"); // [dbg]
+      console.log("%c[PrepWizard] load() done", "color:lime");
     } catch (e) {
       console.error(e);
       setModules([]);
       setAllModules([]);
       setTodayPool([]);
-      console.log("%c[PrepWizard] load() failed", "color:red"); // [dbg]
+      console.log("%c[PrepWizard] load() failed", "color:red");
     } finally {
       setLoading(false);
     }
@@ -773,7 +770,6 @@ export default function PrepWizard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [examSlug]);
 
-  // 🔒 Overlay gate control effect — checks /access/status/guard continuously until active
   useEffect(() => {
     let cancelled = false;
     async function checkGate() {
@@ -783,7 +779,6 @@ export default function PrepWizard() {
         const qs = new URLSearchParams({ examId: ex });
         if (email) qs.set("email", email);
 
-        // ✅ SAFE replacement using safeGetJSON and robust guards
         const data = await safeGetJSON(`/api/prep/access/status/guard?${qs.toString()}`);
         if (!data?.access) {
           console.warn("[PrepWizard] guard returned invalid JSON or empty data");
@@ -834,7 +829,6 @@ export default function PrepWizard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [apiExamId, examSlug, email]);
 
-  // keep ?tab= in URL for consistency
   useEffect(() => {
     const u = new URL(location.href);
     u.searchParams.set("tab", tab);
@@ -886,8 +880,6 @@ export default function PrepWizard() {
       }));
     return list;
   }, [modules]);
-
-  /* ---------- Tabs ---------- */
 
   const cohortDay = todayDay;
   const userStates = undefined;
@@ -966,7 +958,7 @@ export default function PrepWizard() {
                 {badge && <span className="badge">{badge}</span>}
               </a>
             ) : (
-              <div key={d} className={cls} title={`Day ${d}`}>
+              <div key={d} className={cls} title={`<div key={d} className={cls} title={`Day ${d}`}>
                 <span>{d}</span>
                 {badge && <span className="badge">{badge}</span>}
               </div>
@@ -1000,10 +992,7 @@ export default function PrepWizard() {
 
       {loading ? (
         <div className="text-gray-500">Loading…</div>
-      ) : gateStatus !== "active" || locked ? (
-        // ⛔ IMPORTANT: show nothing if not active or locked — overlay handles the UI.
-        null
-      ) : !releasedModules.length ? (
+      ) : gateStatus !== "active" || locked ? null : !releasedModules.length ? (
         <div className="text-gray-500">No modules for today yet.</div>
       ) : (
         releasedModules.map((m, i) => <ModulePanel key={m._id || i} m={m} index={i} />)
@@ -1034,26 +1023,20 @@ export default function PrepWizard() {
 
   return (
     <div className="prep-wrap">
-      {/* ✅ Fullscreen gate — payment → WhatsApp proof → submit → waiting → admin approve → auto unlock */}
       {showOverlay && (
         <PrepAccessOverlay
           examId={apiExamId || examSlug}
           email={localStorage.getItem("userEmail") || ""}
           onApproved={() => {
-            // overlay reports approval and/or admin toggled active
-            console.log(
-              "%c[PrepWizard] Overlay reported approval — hiding overlay & reloading content",
-              "color:lime;font-weight:bold"
-            ); // [dbg]
+            console.log("%c[PrepWizard] Overlay reported approval — hiding overlay & reloading content", "color:lime;font-weight:bold");
             setShowOverlay(false);
             setGateStatus("active");
-            console.log("[PrepWizard] setGateStatus('active') → calling load()"); // [dbg]
+            console.log("[PrepWizard] setGateStatus('active') → calling load()");
             load();
           }}
         />
       )}
 
-      {/* ✅ Hide tabbar + page content while checking or overlay visible → prevents any flash */}
       {gateStatus === "checking" || showOverlay ? null : (
         <>
           <div className="tabbar">
