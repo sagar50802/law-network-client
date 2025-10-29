@@ -28,7 +28,6 @@ const API_BASE =
     : "";
 
 export default function PrepAccessOverlay({ examId, email, onApproved }) {
-  // Use the best-known user key (typed email > prop email > anon)
   const [emailField, setEmailField] = useState(
     localStorage.getItem("userEmail") || email || ""
   );
@@ -145,6 +144,13 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
 
       if (access?.status === "active") {
         // ✅ User already has active access, so hide overlay completely
+        console.log(
+          "[PrepAccessOverlay] ✅ Access already active — overlay hidden for",
+          emailField || email,
+          "in exam:",
+          examId
+        );
+
         setState((s) => ({ ...s, show: false, mode: "", access }));
         localStorage.removeItem(ks.wait);
         localStorage.removeItem(ks.waitAt);
@@ -222,7 +228,6 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
     tick();
     const id = setInterval(tick, 1000);
     return () => clearInterval(id);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [state.mode, ks.approved]);
 
   // Poll admin decision while waiting
