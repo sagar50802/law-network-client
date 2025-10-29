@@ -780,14 +780,21 @@ export default function PrepWizard() {
         if (email) qs.set("email", email);
 
         const data = await safeGetJSON(`/api/prep/access/status/guard?${qs.toString()}`);
-        if (!data?.access) {
-          console.warn("[PrepWizard] guard returned invalid JSON or empty data");
-          if (!cancelled) {
-            setGateStatus("inactive");
-            setShowOverlay(true);
-          }
-          return;
-        }
+
+    // 🧠 FIX: If backend says "user not found" or returns invalid data → treat as new user
+    if (!data || data.success === false || !data.access) {
+      console.warn("[PrepWizard] guard missing/invalid → treating as fresh user");
+      if (!cancelled) {
+        setGateStatus("inactive");
+        setShowOverlay(true);
+        setModules([]);
+        setApiExamId("");
+        // optional: clear cached userEmail if backend deleted the record
+        // localStorage.removeItem("userEmail");
+      }
+      return;
+    }
+
 
         const isActive = data?.access?.status === "active";
         if (isActive && !cancelled) {
