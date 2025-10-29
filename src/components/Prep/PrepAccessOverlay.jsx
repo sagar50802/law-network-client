@@ -122,7 +122,7 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
 
   /* --------------------------------------------------
    * ✅ Guard — Determine if user already has access
-   * (Corrected to call /api/prep/access/status/guard)
+   * (Calls /api/prep/access/status/guard)
    * -------------------------------------------------- */
   async function fetchGuard() {
     if (!examId) return;
@@ -144,9 +144,11 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
       const { access, overlay } = r || {};
 
       if (access?.status === "active") {
-        const until = Date.now() + APPROVE_SECONDS * 1000;
-        localStorage.setItem(ks.approved, String(until));
-        setState((s) => ({ ...s, show: true, mode: "approved", access }));
+        // ✅ User already has active access, so hide overlay completely
+        setState((s) => ({ ...s, show: false, mode: "", access }));
+        localStorage.removeItem(ks.wait);
+        localStorage.removeItem(ks.waitAt);
+        localStorage.removeItem(ks.approved);
         firstGuardDoneRef.current = true;
         return;
       }
