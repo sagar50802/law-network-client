@@ -782,21 +782,29 @@ export default function PrepWizard() {
       try {
         const qs = new URLSearchParams({ examId: ex });
         if (email) qs.set("email", email);
-        const res = await fetch(`/api/prep/access/status/guard?${qs.toString()}`);
-        if (!res.ok) throw new Error("guard fetch failed");
-        const data = await res.json();
 
-        const isActive = data?.access?.status === "active";
-        if (!cancelled) {
-          setGateStatus(isActive ? "active" : "inactive");
-          setShowOverlay(!isActive); // show overlay until approved
+        // ✅ SAFE replacement using safeGetJSON and robust guards
+        const data = await safeGetJSON(`/api/prep/access/status/guard?${qs.toString()}`);
+        if (!data?.access) {
+          console.warn("[PrepWizard] guard returned invalid JSON or empty data");
+          if (!cancelled) {
+            setGateStatus("inactive");
+            setShowOverlay(true);
+          }
+          return;
         }
 
-        console.log("[PrepWizard] guard status:", data?.access?.status); // [dbg]
-
+        const isActive = data?.access?.status === "active";
         if (isActive && !cancelled) {
-          console.log("[PrepWizard] guard ACTIVE → reloading modules"); // [dbg]
-          await load(); // refresh modules
+          console.log("[PrepWizard] guard ACTIVE → reloading modules");
+          setGateStatus("active");
+          setShowOverlay(false);
+          await load();
+        } else if (!isActive && !cancelled) {
+          console.log("[PrepWizard] guard INACTIVE — forcing overlay");
+          setShowOverlay(true);
+          setGateStatus("inactive");
+          setModules([]);
         }
       } catch (err) {
         console.warn("[PrepWizard] guard error:", err);
