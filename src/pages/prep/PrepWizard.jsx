@@ -1,4 +1,3 @@
-// client/src/pages/prep/PrepWizard.jsx
 import { useEffect, useMemo, useState, useRef } from "react";
 import { getJSON, postJSON, absUrl } from "../../utils/api";
 import { ImageScroller } from "../../components/ui/ImageScroller";
@@ -633,6 +632,28 @@ export default function PrepWizard() {
 
   const email = localStorage.getItem("userEmail") || "";
 
+  // --- SAFE JSON HELPERS (prevents blank screen when API not ready) ---
+  async function safeGetJSON(url) {
+    try {
+      const res = await fetch(url);
+      if (!res.ok) {
+        console.warn("[PrepWizard] safeGetJSON non-OK:", res.status, url);
+        return {};
+      }
+      const txt = await res.text();
+      try {
+        return JSON.parse(txt);
+      } catch {
+        console.warn("[PrepWizard] safeGetJSON parse fail (likely HTML 404)", url);
+        return {};
+      }
+    } catch (err) {
+      console.warn("[PrepWizard] safeGetJSON network error:", err?.message);
+      return {};
+    }
+  }
+  // --------------------------------------------------------------------
+
   // Try BOTH ids and pick the one that actually has templates
   async function load() {
     const candidates = Array.from(new Set([examSlug, toExamKey(examSlug)].filter(Boolean)));
@@ -676,8 +697,9 @@ export default function PrepWizard() {
       if (email) qs.set("email", email);
 
       const [metaRes, todayRes] = await Promise.allSettled([
-        getJSON(`/api/prep/user/summary?${qs.toString()}`),
-        getJSON(
+        // ✅ SAFE: replaced getJSON with safeGetJSON
+        safeGetJSON(`/api/prep/user/summary?${qs.toString()}`),
+        safeGetJSON(
           `/api/prep/user/today?examId=${encodeURIComponent(chosenId)}${
             email ? `&email=${encodeURIComponent(email)}` : ""
           }`
