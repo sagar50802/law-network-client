@@ -597,17 +597,26 @@ function ModulePanel({ m, index }) {
     releaseDate.getMonth() === tomorrow.getMonth() &&
     releaseDate.getFullYear() === tomorrow.getFullYear();
 
+  // 🏷️ Smarter label
   let label = "Coming soon:";
   if (isSameDay) label = "Coming later today:";
   else if (isTomorrow) label = "Coming tomorrow:";
+  else if (first.dayIndex) label = `Coming on Day ${first.dayIndex}:`;
 
   return (
     <div className="text-sm text-gray-600 mb-3">
-      <div className="font-medium mb-1">Coming later today:</div>
+      <div className="font-medium mb-1">{label}</div>
       <ul className="list-disc ml-5">
         {later.map((m) => (
           <li key={m._id}>
-            {m.title || "Untitled"} — {fmtTime(m.releaseAt)}{" "}
+            {m.title || "Untitled"} —{" "}
+            {new Date(m.releaseAt).toLocaleString([], {
+              month: "short",
+              day: "numeric",
+              hour: "2-digit",
+              minute: "2-digit",
+            })}{" "}
+            {m.dayIndex ? `(Day ${m.dayIndex}) ` : ""}
             {m.flags?.extractOCR && !m.flags?.showOriginal ? "(text only)" : ""}
           </li>
         ))}
