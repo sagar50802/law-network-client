@@ -814,10 +814,12 @@ export default function PrepWizard() {
         }
 
         const isActive = data?.access?.status === "active";
-        if (isActive && !cancelled) {
-          setGateStatus("active");
-          setShowOverlay(false);
-          await load();
+if (isActive && !cancelled) {
+  if (gateStatus !== "active") {
+    setGateStatus("active");
+    setShowOverlay(false);
+    await load(); // run only once when gate becomes active
+  }
         } else if (!isActive && !cancelled) {
           setShowOverlay(true);
           setGateStatus("inactive");
