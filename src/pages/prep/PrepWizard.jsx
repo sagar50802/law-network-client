@@ -1026,7 +1026,7 @@ if (isActive && !cancelled) {
       />
 
       {/* 🔥 Countdown tracker for upcoming releases */}
-<PrepCountdown modules={todayPool || []} />
+ <PrepCountdown modules={allModules || []} />
       <ComingLater modules={todayPool} />
 
       {loading ? (
