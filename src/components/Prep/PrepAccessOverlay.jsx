@@ -123,64 +123,73 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
    * ✅ Guard — Determine if user already has access
    * (Calls /api/prep/access/status/guard)
    * -------------------------------------------------- */
-  async function fetchGuard() {
-    if (!examId) return;
+   async function fetchGuard() {
+  if (!examId) return;
 
-    // Expire stale waiting state (15min)
-    const startedAt = Number(localStorage.getItem(ks.waitAt) || 0);
-    if (startedAt && Date.now() - startedAt > 15 * 60 * 1000) {
+  // Expire stale waiting state (15min)
+  const startedAt = Number(localStorage.getItem(ks.waitAt) || 0);
+  if (startedAt && Date.now() - startedAt > 15 * 60 * 1000) {
+    localStorage.removeItem(ks.wait);
+    localStorage.removeItem(ks.waitAt);
+  }
+  const keepWaiting = !!localStorage.getItem(ks.wait);
+
+  try {
+    const qs = new URLSearchParams({
+      examId,
+      email: emailField || email || "",
+    });
+
+    // ✅ add cache-buster to avoid stale responses
+    const r = await getJSON(`/api/prep/access/status/guard?${qs.toString()}&_=${Date.now()}`);
+    const { access, overlay } = r || {};
+
+    if (access?.status === "active") {
+      // ✅ already has access — hide overlay
+      console.log(
+        "[PrepAccessOverlay] ✅ Access already active — overlay hidden for",
+        emailField || email,
+        "exam:",
+        examId
+      );
+      setState((s) => ({ ...s, show: false, mode: "", access }));
       localStorage.removeItem(ks.wait);
       localStorage.removeItem(ks.waitAt);
-    }
-    const keepWaiting = !!localStorage.getItem(ks.wait);
-
-    try {
-      const qs = new URLSearchParams({
-        examId,
-        email: emailField || email || "",
-      });
-      const r = await getJSON(`/api/prep/access/status/guard?${qs.toString()}`);
-      const { access, overlay } = r || {};
-
-      if (access?.status === "active") {
-        // ✅ User already has active access, so hide overlay completely
-        console.log(
-          "[PrepAccessOverlay] ✅ Access already active — overlay hidden for",
-          emailField || email,
-          "in exam:",
-          examId
-        );
-
-        setState((s) => ({ ...s, show: false, mode: "", access }));
-        localStorage.removeItem(ks.wait);
-        localStorage.removeItem(ks.waitAt);
-        localStorage.removeItem(ks.approved);
-        firstGuardDoneRef.current = true;
-        return;
-      }
-
-      if (access?.status === "trial") {
-        setState((s) => ({ ...s, show: false, mode: "trial", access }));
-        firstGuardDoneRef.current = true;
-        return;
-      }
-
-      let mode = overlay?.mode || "purchase";
-      if (keepWaiting) mode = "waiting";
-      setState((s) => ({ ...s, loading: false, show: true, mode, access }));
+      localStorage.removeItem(ks.approved);
       firstGuardDoneRef.current = true;
-    } catch (e) {
-      console.error("[status/guard] failed:", e);
-      setState((s) => ({
-        ...s,
-        loading: false,
-        show: true,
-        mode: "purchase",
-        error: "Could not verify access",
-      }));
-      firstGuardDoneRef.current = true;
+      return;
     }
+
+    // ✅ handle trial access
+    if (access?.status === "trial") {
+      setState((s) => ({ ...s, show: false, mode: "trial", access }));
+      firstGuardDoneRef.current = true;
+      return;
+    }
+
+    // ✅ reset stale states before showing purchase/wait screen
+    localStorage.removeItem(ks.approved);
+    localStorage.removeItem(ks.wait);
+    localStorage.removeItem(ks.waitAt);
+
+    let mode = overlay?.mode || "purchase";
+    if (keepWaiting) mode = "waiting";
+
+    setState((s) => ({ ...s, loading: false, show: true, mode, access }));
+    firstGuardDoneRef.current = true;
+  } catch (e) {
+    console.error("[status/guard] failed:", e);
+    setState((s) => ({
+      ...s,
+      loading: false,
+      show: true,
+      mode: "purchase",
+      error: "Could not verify access",
+    }));
+    firstGuardDoneRef.current = true;
   }
+}
+
 
   /* --------------------------------------------------
    * Lifecycle Hooks
