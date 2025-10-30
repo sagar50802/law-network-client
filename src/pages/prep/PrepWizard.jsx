@@ -638,6 +638,9 @@ export default function PrepWizard() {
   const [currentDay, setCurrentDay] = useState(1);
   const [activeDay, setActiveDay] = useState(1);
 
+  const [firstLoaded, setFirstLoaded] = useState(false);
+
+
   // 🔒 if backend reports locked, never render content list (overlay will show too)
   const [locked, setLocked] = useState(false);
 
@@ -679,7 +682,7 @@ export default function PrepWizard() {
     console.log("%c[PrepWizard] load() start", "color:#888");
     console.log("[PrepWizard] candidates:", candidates); // [dbg]
 
-    setLoading(true);
+    if (firstLoaded) setLoading(true);
     try {
       // fetch templates for all candidates to decide
       const templateResults = await Promise.all(
@@ -774,6 +777,7 @@ export default function PrepWizard() {
       setCurrentDay(td);
       setActiveDay(td);
       console.log("%c[PrepWizard] load() done", "color:lime");
+      setFirstLoaded(true);
     } catch (e) {
       console.error(e);
       setModules([]);
