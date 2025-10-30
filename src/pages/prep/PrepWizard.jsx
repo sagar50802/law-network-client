@@ -2,6 +2,8 @@ import { useEffect, useMemo, useState, useRef } from "react";
 import { getJSON, postJSON, absUrl, buildUrl } from "../../utils/api";
 import { ImageScroller } from "../../components/ui/ImageScroller";
 import PrepAccessOverlay from "../../components/Prep/PrepAccessOverlay.jsx";
+import PrepCountdown from "@/components/PrepCountdown";
+
 
 /**
  * Route shape assumed: /prep/:examId
@@ -1023,6 +1025,8 @@ if (isActive && !cancelled) {
         }}
       />
 
+      {/* 🔥 Countdown tracker for upcoming releases */}
+<PrepCountdown modules={todayPool || []} />
       <ComingLater modules={todayPool} />
 
       {loading ? (
