@@ -788,7 +788,7 @@ export default function PrepWizard() {
   useEffect(() => {
     load();
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [examSlug]);
+  }, []);
 
   /* ------ FIX: robust guard behavior (approved user → no overlay; deleted user → fresh overlay) ------ */
   useEffect(() => {
@@ -851,7 +851,7 @@ if (isActive && !cancelled) {
       if (pollRef.current) clearInterval(pollRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, [apiExamId, examSlug, email]);
+  }, []);
 
   useEffect(() => {
     const u = new URL(location.href);
