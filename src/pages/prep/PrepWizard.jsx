@@ -755,13 +755,17 @@ export default function PrepWizard() {
       setTodayPool(fullToday);
 
       const now = Date.now();
-      const releasedToday = fullToday
-        .filter((m) => !m.releaseAt || releaseMs(m.releaseAt) <= now || m.status === "released")
-        .sort((a, b) => {
-          const ta = a.releaseAt ? releaseMs(a.releaseAt) : 0;
-          const tb = b.releaseAt ? releaseMs(b.releaseAt) : 0;
-          return ta - tb;
-        });
+       const releasedToday = fullToday
+  .filter((m) => {
+    const relTime = releaseMs(m.releaseAt);
+    return (
+      !m.releaseAt ||
+      relTime <= now ||
+      (m.status && m.status.toLowerCase() === "released")
+    );
+  })
+  .sort((a, b) => (releaseMs(a.releaseAt) || 0) - (releaseMs(b.releaseAt) || 0));
+
 
       console.log("[PrepWizard] releasedToday count:", releasedToday.length, " locked?", locked); // [dbg]
 
