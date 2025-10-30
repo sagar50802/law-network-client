@@ -569,7 +569,7 @@ function ModulePanel({ m, index }) {
   );
 }
 
-function ComingLater({ modules }) {
+ function ComingLater({ modules }) {
   const later = useMemo(() => {
     const now = nowUtcMs();
     return (modules || [])
@@ -578,6 +578,28 @@ function ComingLater({ modules }) {
   }, [modules]);
 
   if (!later.length) return null;
+
+  // figure out if soonest item is today, tomorrow, or later
+  const first = later[0];
+  const relTime = releaseMs(first.releaseAt);
+  const releaseDate = new Date(relTime);
+  const today = new Date();
+  const tomorrow = new Date();
+  tomorrow.setDate(today.getDate() + 1);
+
+  const isSameDay =
+    releaseDate.getDate() === today.getDate() &&
+    releaseDate.getMonth() === today.getMonth() &&
+    releaseDate.getFullYear() === today.getFullYear();
+
+  const isTomorrow =
+    releaseDate.getDate() === tomorrow.getDate() &&
+    releaseDate.getMonth() === tomorrow.getMonth() &&
+    releaseDate.getFullYear() === tomorrow.getFullYear();
+
+  let label = "Coming soon:";
+  if (isSameDay) label = "Coming later today:";
+  else if (isTomorrow) label = "Coming tomorrow:";
 
   return (
     <div className="text-sm text-gray-600 mb-3">
@@ -1027,8 +1049,8 @@ if (isActive && !cancelled) {
 
       {/* 🔥 Countdown tracker for upcoming releases */}
  <PrepCountdown modules={allModules || []} />
-      <ComingLater modules={todayPool} />
-
+      <ComingLater modules={allModules || []} />
+    
       {loading ? (
         <div className="text-gray-500">Loading…</div>
       ) : gateStatus !== "active" || locked ? null : !releasedModules.length ? (
