@@ -31,6 +31,22 @@ function fmtTime(iso) {
   }
 }
 
+/* ---------- releaseAt parser that accepts ISO, numbers, and "dd/mm/yyyy, hh:mm am/pm" ---------- */
+function releaseMs(x) {
+  if (!x) return 0;
+  if (typeof x === "number") return x;
+  const s = String(x).trim();
+  const iso = Date.parse(s);
+  if (!Number.isNaN(iso)) return iso;
+  const m = s.match(/(\d{1,2})[\/\-](\d{1,2})[\/\-](\d{4})(?:,\s*|\s+)?(\d{1,2}):(\d{2})\s*(am|pm)/i);
+  if (m) {
+    const [, d, mo, y, hh, mm, ap] = m;
+    let h = (+hh % 12) + (/pm/i.test(ap) ? 12 : 0);
+    return new Date(+y, +mo - 1, +d, h, +mm, 0, 0).getTime();
+  }
+  return 0;
+}
+
 /* ---------------- attachment normalization (new + legacy shapes) ---------------- */
 
 function pick(kind, m) {
@@ -555,8 +571,8 @@ function ComingLater({ modules }) {
   const later = useMemo(() => {
     const now = nowUtcMs();
     return (modules || [])
-      .filter((m) => m.releaseAt && Date.parse(m.releaseAt) > now)
-      .sort((a, b) => Date.parse(a.releaseAt) - Date.parse(b.releaseAt));
+      .filter((m) => m.releaseAt && releaseMs(m.releaseAt) > now)
+      .sort((a, b) => releaseMs(a.releaseAt) - releaseMs(b.releaseAt));
   }, [modules]);
 
   if (!later.length) return null;
@@ -740,10 +756,10 @@ export default function PrepWizard() {
 
       const now = Date.now();
       const releasedToday = fullToday
-        .filter((m) => !m.releaseAt || Date.parse(m.releaseAt) <= now || m.status === "released")
+        .filter((m) => !m.releaseAt || releaseMs(m.releaseAt) <= now || m.status === "released")
         .sort((a, b) => {
-          const ta = a.releaseAt ? Date.parse(a.releaseAt) : 0;
-          const tb = b.releaseAt ? Date.parse(b.releaseAt) : 0;
+          const ta = a.releaseAt ? releaseMs(a.releaseAt) : 0;
+          const tb = b.releaseAt ? releaseMs(b.releaseAt) : 0;
           return ta - tb;
         });
 
@@ -770,8 +786,10 @@ export default function PrepWizard() {
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, [examSlug]);
 
+  /* ------ FIX: robust guard behavior (approved user → no overlay; deleted user → fresh overlay) ------ */
   useEffect(() => {
     let cancelled = false;
+
     async function checkGate() {
       const ex = apiExamId || examSlug;
       if (!ex) return;
@@ -779,31 +797,24 @@ export default function PrepWizard() {
         const qs = new URLSearchParams({ examId: ex });
         if (email) qs.set("email", email);
 
-        const data = await safeGetJSON(`/api/prep/access/status/guard?${qs.toString()}`);
+        const data = await safeGetJSON(`/api/prep/access/status/guard?${qs.toString()}&_=${Date.now()}`);
 
-    // 🧠 FIX: If backend says "user not found" or returns invalid data → treat as new user
-    if (!data || data.success === false || !data.access) {
-      console.warn("[PrepWizard] guard missing/invalid → treating as fresh user");
-      if (!cancelled) {
-        setGateStatus("inactive");
-        setShowOverlay(true);
-        setModules([]);
-        setApiExamId("");
-        // optional: clear cached userEmail if backend deleted the record
-        // localStorage.removeItem("userEmail");
-      }
-      return;
-    }
-
+        if (!data || data.success === false || !data.access) {
+          // treat as NEW user (e.g., admin deleted record)
+          if (!cancelled) {
+            setGateStatus("inactive");
+            setShowOverlay(true);
+            setModules([]);
+          }
+          return;
+        }
 
         const isActive = data?.access?.status === "active";
         if (isActive && !cancelled) {
-          console.log("[PrepWizard] guard ACTIVE → reloading modules");
           setGateStatus("active");
           setShowOverlay(false);
           await load();
         } else if (!isActive && !cancelled) {
-          console.log("[PrepWizard] guard INACTIVE — forcing overlay");
           setShowOverlay(true);
           setGateStatus("inactive");
           setModules([]);
@@ -867,26 +878,33 @@ export default function PrepWizard() {
       .sort((a, b) => {
         const sa = Number(a.slotMin || 0) - Number(b.slotMin || 0);
         if (sa !== 0) return sa;
-        const ra = a.releaseAt ? Date.parse(a.releaseAt) : 0;
-        const rb = b.releaseAt ? Date.parse(b.releaseAt) : 0;
+        const ra = a.releaseAt ? releaseMs(a.releaseAt) : 0;
+        const rb = b.releaseAt ? releaseMs(b.releaseAt) : 0;
         return ra - rb;
       });
   }, [allModules, activeDay]);
 
-  const releasedModules = useMemo(() => {
-    const list = (modules || [])
-      .filter((m) => !m.releaseAt || Date.parse(m.releaseAt) <= nowUtcMs() || m.status === "released")
-      .sort((a, b) => {
-        const ta = a.releaseAt ? Date.parse(a.releaseAt) : 0;
-        const tb = b.releaseAt ? Date.parse(b.releaseAt) : 0;
-        return ta - tb;
-      })
-      .map((m) => ({
-        ...m,
-        content: textOf(m),
-      }));
-    return list;
-  }, [modules]);
+   const releasedModules = useMemo(() => {
+  const list = (modules || [])
+    .filter(
+      (m) =>
+        !m.releaseAt ||
+        releaseMs(m.releaseAt) <= nowUtcMs() ||
+        m.status === "released"
+    )
+    .sort((a, b) => {
+      const ta = a.releaseAt ? releaseMs(a.releaseAt) : 0;
+      const tb = b.releaseAt ? releaseMs(b.releaseAt) : 0;
+      return ta - tb;
+    })
+    .map((m) => ({
+      ...m,
+      content: textOf(m),
+    }));
+
+  return list;
+}, [modules]);
+
 
   const cohortDay = todayDay;
   const userStates = undefined;
@@ -919,7 +937,7 @@ export default function PrepWizard() {
         for (let d = 1; d <= last; d++) {
           const items = byDay.get(d) || [];
           const released = items.filter(
-            (x) => x.status === "released" || !x.releaseAt || Date.parse(x.releaseAt) <= Date.now()
+            (x) => x.status === "released" || !x.releaseAt || releaseMs(x.releaseAt) <= Date.now()
           );
           const anyReleased = released.length > 0;
 
@@ -965,10 +983,10 @@ export default function PrepWizard() {
                 {badge && <span className="badge">{badge}</span>}
               </a>
             ) : (
-               <div key={d} className={cls} title={`Day ${d}`}>
-  <span>{d}</span>
-  {badge && <span className="badge">{badge}</span>}
-</div>
+              <div key={d} className={cls} title={`Day ${d}`}>
+                <span>{d}</span>
+                {badge && <span className="badge">{badge}</span>}
+              </div>
             )
           );
         }
@@ -1035,10 +1053,8 @@ export default function PrepWizard() {
           examId={apiExamId || examSlug}
           email={localStorage.getItem("userEmail") || ""}
           onApproved={() => {
-            console.log("%c[PrepWizard] Overlay reported approval — hiding overlay & reloading content", "color:lime;font-weight:bold");
             setShowOverlay(false);
             setGateStatus("active");
-            console.log("[PrepWizard] setGateStatus('active') → calling load()");
             load();
           }}
         />
