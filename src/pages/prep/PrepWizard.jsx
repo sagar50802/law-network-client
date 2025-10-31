@@ -963,34 +963,33 @@ if (isActive && !cancelled) {
  
   
 // ✅ FINAL FIX — show all released modules from previous + current days
-const releasedUpToActive = useMemo(() => {
+ const releasedUpToActive = useMemo(() => {
   const now = nowUtcMs();
 
   return (allModules || [])
     .filter((m) => {
-      // Normalize dayIndex safely (handles "1", 1, "Day 1", etc.)
       const raw = String(m.dayIndex || "").trim().toLowerCase();
       const day =
         /^\d+$/.test(raw)
           ? Number(raw)
           : Number(raw.replace(/day\s*/i, "")) || 0;
 
-      // Check if the module is released or not
       const relTime = releaseMs(m.releaseAt);
       const released =
         !m.releaseAt ||
         relTime <= now ||
         (m.status && String(m.status).toLowerCase() === "released");
 
-      // ✅ Show all released modules up to total planDays
-      return released && day > 0 && day <= planDays;
+      // ✅ match cohort: show all released ≤ todayDay
+      return released && day > 0 && day <= todayDay;
     })
     .sort((a, b) => {
       const ta = releaseMs(a.releaseAt) || 0;
       const tb = releaseMs(b.releaseAt) || 0;
       return ta - tb;
     });
-}, [allModules, planDays]);
+}, [allModules, todayDay]);
+
 console.log("[PrepWizard] visible modules:", releasedUpToActive.map(m => [m.title, m.dayIndex, m.status]));
 
 
