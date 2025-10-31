@@ -724,14 +724,15 @@ const [userStates, setUserStates] = useState({});
      if (firstLoaded && !silent) setLoading(true);
     try {
       // fetch templates for all candidates to decide
-      const templateResults = await Promise.all(
-        candidates.map((id) =>
-          getJSON(`/api/prep/templates?examId=${encodeURIComponent(id)}`).catch((err) => {
-            console.warn("[PrepWizard] templates fetch failed for", id, err?.message);
-            return { items: [] };
-          })
-        )
-      );
+       const templateResults = await Promise.all(
+  candidates.map((id) =>
+    safeGetJSON(`/api/prep/user/templates?examId=${encodeURIComponent(id)}`).catch((err) => {
+      console.warn("[PrepWizard] user templates fetch failed for", id, err?.message);
+      return { items: [] };
+    })
+  )
+);
+
 
       // choose the id that returned the most items (fallback to first)
       let choiceIndex = 0;
