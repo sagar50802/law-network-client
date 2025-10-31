@@ -959,6 +959,24 @@ if (isActive && !cancelled) {
 
   return list;
 }, [modules]);
+// ✅ include previous released days too (up to current activeDay)
+const releasedUpToActive = useMemo(() => {
+  const now = nowUtcMs();
+  return (allModules || [])
+    .filter((m) => {
+      const d = Number(m.dayIndex);
+      const rel = releaseMs(m.releaseAt);
+      return (
+        d <= activeDay && // include this and previous days
+        (!m.releaseAt || rel <= now || m.status === "released")
+      );
+    })
+    .sort(
+      (a, b) =>
+        (releaseMs(a.releaseAt) || 0) - (releaseMs(b.releaseAt) || 0)
+    );
+}, [allModules, activeDay]);
+
 
 
   const cohortDay = todayDay;  
@@ -1069,7 +1087,9 @@ if (isActive && !cancelled) {
       ) : gateStatus !== "active" || locked ? null : !releasedModules.length ? (
         <div className="text-gray-500">No modules for today yet.</div>
       ) : (
-        releasedModules.map((m, i) => <ModulePanel key={m._id || i} m={m} index={i} />)
+         releasedUpToActive.map((m, i) => (
+  <ModulePanel key={m._id || i} m={m} index={i} />
+))
       )}
 
       <div className="mt-4">
