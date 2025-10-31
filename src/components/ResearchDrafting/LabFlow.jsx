@@ -40,8 +40,22 @@ export default function LabFlow({ id }) {
   const [showPay, setShowPay] = useState(false);
   const [scrollPct, setScrollPct] = useState(0);
   const [showScrollHint, setShowScrollHint] = useState(false);
+
   const notebookRef = useRef(null);
 
+  // one ref per section so we can scroll right to it
+  const sectionRefs = {
+    title: useRef(null),
+    abstract: useRef(null),
+    review: useRef(null),
+    methodology: useRef(null),
+    aims: useRef(null),
+    chapterization: useRef(null),
+    conclusion: useRef(null),
+    assemble: useRef(null),
+  };
+
+  /* -------- load draft -------- */
   async function load() {
     const r = await fetchDraft(id);
     if (r?.ok) setDraft(r.draft);
@@ -50,19 +64,45 @@ export default function LabFlow({ id }) {
     load();
   }, [id]);
 
+  /* -------- helper: scroll to a section key -------- */
+  function scrollToSection(key) {
+    const wrap = notebookRef.current;
+    const el = sectionRefs[key]?.current;
+    if (wrap && el) {
+      const wrapTop = wrap.getBoundingClientRect().top;
+      const elTop = el.getBoundingClientRect().top;
+      const offset = elTop - wrapTop + wrap.scrollTop - 12; // 12px padding
+      wrap.scrollTo({ top: offset, behavior: "smooth" });
+    } else if (wrap) {
+      // fallback: go to bottom
+      wrap.scrollTo({ top: wrap.scrollHeight, behavior: "smooth" });
+    }
+  }
+
+  /* -------- run step -------- */
   async function runStep(k) {
     setBusy(true);
     try {
       const r = await genStep(id, k);
       if (r?.ok) {
         setDraft(r.draft);
-        setTimeout(() => setStepIdx((s) => Math.min(s + 1, steps.length - 1)), 350);
-        if (k === "assemble") setTimeout(() => setShowPay(true), 600);
+
+        // move tracker to next step
         setTimeout(() => {
-          notebookRef.current?.scrollTo({
-            top: notebookRef.current.scrollHeight,
-            behavior: "smooth",
+          setStepIdx((prev) => {
+            const next = Math.min(prev + 1, steps.length - 1);
+            return next;
           });
+        }, 350);
+
+        // show pay when final
+        if (k === "assemble") {
+          setTimeout(() => setShowPay(true), 600);
+        }
+
+        // scroll to the section just generated
+        setTimeout(() => {
+          scrollToSection(k === "assemble" ? "assemble" : k);
         }, 400);
       }
     } finally {
@@ -70,11 +110,25 @@ export default function LabFlow({ id }) {
     }
   }
 
+  /* -------- auto-run first step if empty -------- */
   useEffect(() => {
     if (!draft) return;
-    if (stepIdx === 0 && !draft.gen?.abstract?.text) runStep("abstract");
-  }, [draft]); // eslint-disable-line
+    if (stepIdx === 0 && !draft.gen?.abstract?.text) {
+      runStep("abstract");
+    }
+    // eslint-disable-next-line
+  }, [draft]);
 
+  /* -------- when tracker changes (user taps pill) → scroll to that section -------- */
+  useEffect(() => {
+    const key = steps[stepIdx]?.key;
+    if (key) {
+      // small delay to ensure DOM is rendered
+      setTimeout(() => scrollToSection(key), 60);
+    }
+  }, [stepIdx]);
+
+  /* -------- notebook scroll progress -------- */
   function handleNotebookScroll() {
     const el = notebookRef.current;
     if (!el) return;
@@ -103,6 +157,7 @@ export default function LabFlow({ id }) {
       <MobileProgress stepIdx={stepIdx} setStepIdx={setStepIdx} />
 
       <div className="grid md:grid-cols-5 gap-6">
+        {/* LEFT (desktop) */}
         <div className="hidden md:block md:col-span-2">
           <ActionCard
             stepIdx={stepIdx}
@@ -114,6 +169,7 @@ export default function LabFlow({ id }) {
           />
         </div>
 
+        {/* RIGHT (notebook) */}
         <div className="md:col-span-3 relative">
           <div
             ref={notebookRef}
@@ -122,27 +178,54 @@ export default function LabFlow({ id }) {
             style={notebookLock}
             className="p-5 border rounded-2xl bg-[rgba(253,253,250,0.96)] shadow-inner max-h-[78vh] md:max-h-[80vh] overflow-y-auto"
           >
-            {draft && (
-              <div className="text-[15px] text-gray-800 leading-7">
-                {sectionBlock("Title", draft?.gen?.title || draft?.title || "")}
-                {draft?.gen?.abstract?.text &&
-                  sectionBlock("Put your Abstract", draft.gen.abstract.text)}
-                {draft?.gen?.review?.text &&
-                  sectionBlock("Review of Literature", draft.gen.review.text)}
-                {draft?.gen?.methodology?.text &&
-                  sectionBlock("Research Methodology", draft.gen.methodology.text)}
-                {draft?.gen?.aims?.text &&
-                  sectionBlock("Aim of Research", draft.gen.aims.text)}
-                {draft?.gen?.chapterization?.text &&
-                  sectionBlock("Chapterization", draft.gen.chapterization.text)}
-                {draft?.gen?.conclusion?.text &&
-                  sectionBlock("Conclusion", draft.gen.conclusion.text)}
-                {draft?.gen?.assembled?.text &&
-                  sectionBlock("Final Preview", draft.gen.assembled.text)}
+            <div ref={sectionRefs.title}>
+              {sectionBlock("Title", draft?.gen?.title || draft?.title || "")}
+            </div>
+
+            {draft?.gen?.abstract?.text && (
+              <div ref={sectionRefs.abstract}>
+                {sectionBlock("Put your Abstract", draft.gen.abstract.text)}
+              </div>
+            )}
+
+            {draft?.gen?.review?.text && (
+              <div ref={sectionRefs.review}>
+                {sectionBlock("Review of Literature", draft.gen.review.text)}
+              </div>
+            )}
+
+            {draft?.gen?.methodology?.text && (
+              <div ref={sectionRefs.methodology}>
+                {sectionBlock("Research Methodology", draft.gen.methodology.text)}
+              </div>
+            )}
+
+            {draft?.gen?.aims?.text && (
+              <div ref={sectionRefs.aims}>
+                {sectionBlock("Aim of Research", draft.gen.aims.text)}
+              </div>
+            )}
+
+            {draft?.gen?.chapterization?.text && (
+              <div ref={sectionRefs.chapterization}>
+                {sectionBlock("Chapterization", draft.gen.chapterization.text)}
+              </div>
+            )}
+
+            {draft?.gen?.conclusion?.text && (
+              <div ref={sectionRefs.conclusion}>
+                {sectionBlock("Conclusion", draft.gen.conclusion.text)}
+              </div>
+            )}
+
+            {draft?.gen?.assembled?.text && (
+              <div ref={sectionRefs.assemble}>
+                {sectionBlock("Final Preview", draft.gen.assembled.text)}
               </div>
             )}
           </div>
 
+          {/* desktop scroll rail */}
           <div className="hidden md:block absolute top-6 -right-3 h-[78vh] w-1 bg-gray-200 rounded-full">
             <div
               className="w-1 bg-indigo-500 rounded-full transition-all"
@@ -150,6 +233,7 @@ export default function LabFlow({ id }) {
             />
           </div>
 
+          {/* mobile scroll helper */}
           {showScrollHint && (
             <button
               onClick={scrollToLatest}
@@ -161,7 +245,7 @@ export default function LabFlow({ id }) {
         </div>
       </div>
 
-      {/* Mobile FAB */}
+      {/* mobile FAB */}
       <div className="md:hidden fixed bottom-3 right-3 left-3 flex justify-end pointer-events-none">
         <div className="pointer-events-auto">
           <MobileGenerateFAB
@@ -178,7 +262,7 @@ export default function LabFlow({ id }) {
   );
 }
 
-/* ------------ Subcomponents ------------- */
+/* ------------- helpers / subcomponents ------------- */
 function sectionBlock(title, body) {
   return (
     <div className="mb-6 animate-fadeIn">
@@ -258,7 +342,7 @@ function MobileProgress({ stepIdx, setStepIdx }) {
   );
 }
 
-/* ---------------- Animated Generate Button ---------------- */
+/* ---------- shared generate button with water fill ---------- */
 function GenerateButton({ busy, stepIdx, runStep }) {
   const stepTitle = steps[stepIdx]?.title || "";
   return (
@@ -266,14 +350,11 @@ function GenerateButton({ busy, stepIdx, runStep }) {
       disabled={busy}
       onClick={() => runStep(steps[stepIdx].key)}
       className={`relative w-full px-4 py-3 rounded-xl text-white font-medium overflow-hidden transition-all ${
-        busy
-          ? "cursor-wait"
-          : "hover:scale-[1.02] hover:shadow-md"
+        busy ? "cursor-wait" : "hover:scale-[1.02] hover:shadow-md"
       }`}
     >
-      {/* background water-fill animation */}
       <span
-        className={`absolute inset-0 bg-indigo-600 transition-all duration-700 ${
+        className={`absolute inset-0 transition-all duration-700 ${
           busy ? "animate-[fill_3s_linear_infinite]" : ""
         }`}
         style={{
@@ -282,7 +363,7 @@ function GenerateButton({ busy, stepIdx, runStep }) {
           zIndex: 0,
         }}
       />
-      <span className="relative z-10 flex justify-center items-center gap-2">
+      <span className="relative z-10 flex justify-center items-center gap-2 text-center">
         {busy ? "System is writing..." : `Generate next step: ${stepTitle}`}
       </span>
       <style>
@@ -298,7 +379,7 @@ function GenerateButton({ busy, stepIdx, runStep }) {
   );
 }
 
-/* ---------------- Action Card ---------------- */
+/* ---------- desktop action card ---------- */
 function ActionCard({ stepIdx, busy, showPay, draft, runStep, reload }) {
   return (
     <div className="p-4 border rounded-2xl bg-white shadow-sm sticky top-24">
@@ -307,7 +388,7 @@ function ActionCard({ stepIdx, busy, showPay, draft, runStep, reload }) {
       </div>
       <GenerateButton busy={busy} stepIdx={stepIdx} runStep={runStep} />
       <p className="mt-3 text-xs text-gray-500 leading-snug">
-        The system writes step-by-step. You can always go back to edit intake.
+        The system writes step-by-step. Tracking is synced — it will scroll to the step.
       </p>
       {showPay && (
         <div className="mt-6 p-3 rounded-xl border bg-amber-50 shadow-inner">
@@ -319,7 +400,7 @@ function ActionCard({ stepIdx, busy, showPay, draft, runStep, reload }) {
   );
 }
 
-/* ---------------- Mobile FAB ---------------- */
+/* ---------- mobile fab ---------- */
 function MobileGenerateFAB({ stepIdx, busy, showPay, draft, runStep, reload }) {
   return (
     <div className="flex flex-col gap-2 items-end">
@@ -336,7 +417,7 @@ function MobileGenerateFAB({ stepIdx, busy, showPay, draft, runStep, reload }) {
   );
 }
 
-/* ---------------- Payment Box ---------------- */
+/* ---------- payment box ---------- */
 function PayBox({ draft, onMarked }) {
   const amount = draft?.payment?.amount || 299;
   const upiId = draft?.payment?.upiId || "lawnetwork@upi";
