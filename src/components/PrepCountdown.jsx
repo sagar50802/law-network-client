@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
 
-export default function PrepCountdown({ modules = [] }) {
+ export default function PrepCountdown({ modules = [], onExpire }) {
   const [next, setNext] = useState(null);
   const [timeLeft, setTimeLeft] = useState("");
   const [progress, setProgress] = useState(0);
@@ -37,12 +37,14 @@ export default function PrepCountdown({ modules = [] }) {
       // 🔥 check if under 10 minutes (600000 ms)
       setIsHot(diff > 0 && diff <= 600000);
 
-      if (diff <= 0) {
-        setTimeLeft("Releasing…");
-        setProgress(100);
-        clearInterval(timer);
-        return;
-      }
+       if (diff <= 0) {
+  setTimeLeft("Releasing…");
+  setProgress(100);
+  clearInterval(timer);
+  if (typeof onExpire === "function") onExpire(); // 🔁 trigger refresh
+  return;
+}
+
 
       const hrs = Math.floor(diff / 3600000);
       const mins = Math.floor((diff % 3600000) / 60000);
