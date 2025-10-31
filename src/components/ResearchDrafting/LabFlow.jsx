@@ -18,18 +18,23 @@ function Typewriter({ text = "" }) {
     setOut("");
     let i = 0;
     const t = setInterval(() => {
-      setOut((prev) => prev + text.slice(i, i + 2)); // faster typing
+      setOut((p) => p + text.slice(i, i + 2));
       i += 2;
       if (i >= text.length) clearInterval(t);
-    }, 12);
+    }, 15);
     return () => clearInterval(t);
   }, [text]);
 
-  // ✅ fixed font declaration (Option A)
   return (
     <div
-      style={{ fontFamily: '"Homemade Apple", cursive' }}
-      className="text-gray-800 leading-7"
+      className="leading-7 text-gray-800 animate-fadeIn"
+      style={{
+        fontFamily:
+          window.innerWidth < 640
+            ? "Inter, sans-serif"
+            : '"Homemade Apple", cursive',
+        transition: "all 0.3s ease",
+      }}
     >
       {out}
     </div>
@@ -41,7 +46,7 @@ export default function LabFlow({ id }) {
   const [i, setI] = useState(0);
   const [busy, setBusy] = useState(false);
   const [showPay, setShowPay] = useState(false);
-  const wrapRef = useRef(null);
+  const containerRef = useRef(null);
 
   async function load() {
     const r = await fetchDraft(id);
@@ -57,8 +62,11 @@ export default function LabFlow({ id }) {
       const r = await genStep(id, k);
       if (r?.ok) {
         setDraft(r.draft);
-        setTimeout(() => setI((s) => Math.min(s + 1, steps.length - 1)), 450);
-        if (k === "assemble") setTimeout(() => setShowPay(true), 600);
+        setTimeout(() => {
+          setI((s) => Math.min(s + 1, steps.length - 1));
+          containerRef.current?.scrollIntoView({ behavior: "smooth" });
+        }, 400);
+        if (k === "assemble") setTimeout(() => setShowPay(true), 700);
       }
     } finally {
       setBusy(false);
@@ -73,9 +81,9 @@ export default function LabFlow({ id }) {
 
   function sectionBlock(title, body) {
     return (
-      <div className="mb-6">
-        <div className="font-bold text-black mb-1">{title}</div>
-        <div className="bg-white/90 rounded-xl border p-3">
+      <div className="mb-6 transition-all duration-300 hover:scale-[1.01]">
+        <h3 className="font-semibold text-black mb-1">{title}</h3>
+        <div className="bg-white/90 rounded-xl border border-gray-200 p-4 shadow-sm hover:shadow-md">
           <Typewriter text={body || ""} />
         </div>
       </div>
@@ -92,28 +100,36 @@ export default function LabFlow({ id }) {
   }
 
   return (
-    <div className="max-w-6xl mx-auto p-4 md:p-6">
-      <div className="mb-4 flex items-center gap-2 flex-wrap">
+    <div
+      className="max-w-6xl mx-auto p-4 md:p-6 space-y-6"
+      ref={containerRef}
+    >
+      {/* Progress tracker */}
+      <div className="flex items-center gap-2 overflow-x-auto pb-2 scrollbar-hide">
         {steps.map((s, idx) => (
           <div key={s.key} className="flex items-center gap-2">
             <div
-              className={`w-9 h-9 rounded-full flex items-center justify-center text-white text-sm font-bold ${
-                idx <= i ? "bg-emerald-600" : "bg-gray-300"
+              className={`w-8 h-8 rounded-full flex items-center justify-center text-sm font-bold transition-all duration-300 ${
+                idx < i
+                  ? "bg-emerald-600 text-white"
+                  : idx === i
+                  ? "bg-indigo-600 text-white scale-110 shadow-lg"
+                  : "bg-gray-300 text-gray-700"
               }`}
             >
               {idx + 1}
             </div>
             <div
-              className={`text-sm ${
-                idx <= i ? "text-emerald-700" : "text-gray-500"
+              className={`text-sm whitespace-nowrap ${
+                idx <= i ? "text-indigo-700" : "text-gray-500"
               }`}
             >
               {s.title}
             </div>
             {idx < steps.length - 1 && (
               <div
-                className={`w-10 h-1 rounded-full ${
-                  idx < i ? "bg-emerald-400" : "bg-gray-300"
+                className={`w-10 h-1 rounded-full transition-all ${
+                  idx < i ? "bg-indigo-400" : "bg-gray-300"
                 }`}
               />
             )}
@@ -122,56 +138,52 @@ export default function LabFlow({ id }) {
       </div>
 
       <div className="grid md:grid-cols-5 gap-6">
-        {/* Left side: generate buttons */}
+        {/* Left column — actions */}
         <div className="md:col-span-2">
-          <div className="p-4 border rounded-2xl bg-white sticky top-4">
-            <div className="text-lg font-semibold mb-2">
+          <div className="p-5 border rounded-2xl bg-white sticky top-4 shadow-sm">
+            <div className="text-lg font-semibold mb-3">
               Step {i + 1}: {steps[i].title}
             </div>
             <button
               disabled={busy}
               onClick={() => runStep(steps[i].key)}
-              className="w-full px-4 py-3 rounded-xl bg-indigo-600 text-white disabled:opacity-50"
+              className={`w-full px-4 py-3 rounded-xl font-medium transition-all duration-300 ${
+                busy
+                  ? "bg-gray-400 cursor-not-allowed"
+                  : "bg-indigo-600 hover:bg-indigo-700 hover:shadow-md text-white"
+              }`}
             >
               {busy
                 ? "Working..."
                 : i === steps.length - 1
                 ? "Re-Assemble Preview"
-                : "Generate this step"}
+                : "Generate this Step"}
             </button>
-            <div className="mt-3 text-xs text-gray-500">
-              The system writes in a typewriting, handwriting-feel container.
-              You can go back in browser to edit intake and return.
-            </div>
+            <p className="mt-3 text-xs text-gray-500">
+              The system writes automatically with a typewriting animation.{" "}
+              <br />
+              You can return anytime to edit your intake.
+            </p>
 
             {showPay && (
-              <div className="mt-6 p-3 rounded-xl border bg-amber-50">
-                <div className="font-semibold mb-2">
+              <div className="mt-6 p-4 rounded-xl border bg-amber-50 shadow-sm">
+                <h4 className="font-semibold mb-2 text-amber-800">
                   Final Step: Payment
-                </div>
+                </h4>
                 <PayBox draft={draft} onMarked={load} />
               </div>
             )}
           </div>
         </div>
 
-        {/* Right side: notebook-style preview */}
+        {/* Right column — notebook preview */}
         <div className="md:col-span-3">
           <div
-            ref={wrapRef}
             onContextMenu={preventContext}
             style={notebookLock}
-            className="p-5 border rounded-2xl bg-[rgba(253,253,250,0.9)] shadow relative overflow-hidden"
+            className="p-5 border rounded-2xl bg-[rgba(253,253,250,0.9)] shadow relative overflow-hidden animate-fadeIn"
           >
-            <style>{`
-              .no-select * {
-                user-select: none;
-                -webkit-user-select: none;
-                -moz-user-select: none;
-              }
-            `}</style>
-
-            <div className="no-select text-[15px] text-gray-800 leading-7">
+            <div className="text-[15px] text-gray-800 leading-7 space-y-4">
               {sectionBlock("Title", draft?.gen?.title || draft?.title || "")}
               {draft?.gen?.abstract?.text &&
                 sectionBlock("Put your Abstract", draft.gen.abstract.text)}
@@ -194,8 +206,6 @@ export default function LabFlow({ id }) {
               {draft?.gen?.assembled?.text &&
                 sectionBlock("Final Preview", draft.gen.assembled.text)}
             </div>
-
-            <div className="pointer-events-none absolute inset-0" />
           </div>
         </div>
       </div>
@@ -203,6 +213,7 @@ export default function LabFlow({ id }) {
   );
 }
 
+/* ---------- Payment Box ---------- */
 function PayBox({ draft, onMarked }) {
   const amount = draft?.payment?.amount || 299;
   const upiId = draft?.payment?.upiId || "lawnetwork@upi";
@@ -213,9 +224,8 @@ function PayBox({ draft, onMarked }) {
   )}&pn=${encodeURIComponent("LawNetwork")}&am=${encodeURIComponent(
     amount
   )}&cu=INR&tn=${encodeURIComponent("Research Drafting")}`;
-
   const waLink = `https://wa.me/${wa}?text=${encodeURIComponent(
-    `Hi, I am ${draft?.name || ""}. I am sending payment proof for Research Drafting (Amount: ₹${amount}).`
+    `Hi, I am ${draft?.name || ""}. Sending payment proof for Research Drafting (₹${amount}).`
   )}`;
 
   async function mark() {
@@ -234,13 +244,13 @@ function PayBox({ draft, onMarked }) {
       </div>
       <div className="flex flex-wrap gap-2">
         <a
-          className="px-4 py-2 rounded-xl bg-emerald-600 text-white"
+          className="px-4 py-2 rounded-xl bg-emerald-600 hover:bg-emerald-700 text-white transition-all"
           href={upiLink}
         >
           UPI Pay (prefilled)
         </a>
         <a
-          className="px-4 py-2 rounded-xl bg-indigo-600 text-white"
+          className="px-4 py-2 rounded-xl bg-indigo-600 hover:bg-indigo-700 text-white transition-all"
           href={waLink}
           target="_blank"
           rel="noreferrer"
@@ -248,15 +258,15 @@ function PayBox({ draft, onMarked }) {
           WhatsApp Proof
         </a>
         <button
-          className="px-4 py-2 rounded-xl border"
+          className="px-4 py-2 rounded-xl border hover:bg-gray-100 transition-all"
           onClick={mark}
         >
           I Paid — Mark & Submit
         </button>
       </div>
-      <div className="text-xs text-gray-500">
+      <p className="text-xs text-gray-500">
         Admin will verify your proof and approve access in dashboard.
-      </div>
+      </p>
     </div>
   );
 }
