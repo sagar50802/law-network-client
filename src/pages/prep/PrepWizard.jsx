@@ -673,6 +673,8 @@ export default function PrepWizard() {
 
   const [firstLoaded, setFirstLoaded] = useState(false);
 
+// 🟡 highlight pulse when a new day unlocks
+const [justUnlocked, setJustUnlocked] = useState(false);
 
   // 🔒 if backend reports locked, never render content list (overlay will show too)
   const [locked, setLocked] = useState(false);
@@ -1043,8 +1045,28 @@ if (isActive && !cancelled) {
 
   const todayTab = (
     <div className="max-w-3xl mx-auto">
-      <div className="text-lg font-semibold mb-1">{examSlug}</div>
-      <div className="text-sm text-gray-600 mb-3">Day {todayDay}</div>
+       <div className="text-lg font-semibold mb-1">{examSlug}</div>
+
+{/* Progress tracker */}
+<div className="flex items-center gap-2 mb-3">
+  <div className="text-sm text-gray-600 whitespace-nowrap">
+    Day {todayDay} of {planDays}
+  </div>
+  <div className="flex-1 h-2 bg-gray-200 rounded-full overflow-hidden">
+    <div
+      style={{
+        width: `${Math.min((todayDay / planDays) * 100, 100)}%`,
+        transition: "width 1s ease",
+        background:
+          todayDay === planDays
+            ? "linear-gradient(90deg,#10b981,#059669)"
+            : "linear-gradient(90deg,#f59e0b,#fbbf24)",
+      }}
+      className="h-full rounded-full"
+    />
+  </div>
+</div>
+
 
       <DayNav
         planDays={planDays}
@@ -1057,7 +1079,15 @@ if (isActive && !cancelled) {
       />
 
       {/* 🔥 Countdown tracker for upcoming releases */}
-  <PrepCountdown modules={allModules || []} onExpire={() => load(true)} />
+   <PrepCountdown
+  modules={allModules || []}
+  onExpire={async () => {
+    await load(true);
+    setJustUnlocked(true);
+    setTimeout(() => setJustUnlocked(false), 1500);
+  }}
+/>
+
       <ComingLater modules={allModules || []} />
     
       {loading ? (
