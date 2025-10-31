@@ -1061,10 +1061,10 @@ const releasedUpToActive = useMemo(() => {
         planDays={planDays}
         currentDay={currentDay}
         activeDay={activeDay}
-        onPick={(d) => {
-          setActiveDay(d);
-          if (d !== currentDay) setTab("calendar");
-        }}
+         onPick={(d) => {
+  setActiveDay(d);
+  setTab("today");
+}}
       />
 
       {/* 🔥 Countdown tracker for upcoming releases */}
@@ -1084,11 +1084,11 @@ const releasedUpToActive = useMemo(() => {
     
       {loading ? (
         <div className="text-gray-500">Loading…</div>
-      ) : gateStatus !== "active" || locked ? null : !releasedModules.length ? (
-        <div className="text-gray-500">No modules for today yet.</div>
-      ) : (
-         releasedUpToActive.map((m, i) => (
-  <ModulePanel key={m._id || i} m={m} index={i} />
+      ) : gateStatus !== "active" || locked ? null :  !releasedUpToActive.length ? (
+  <div className="text-gray-500">No released modules yet.</div>
+) : (
+  releasedUpToActive.map((m, i) => (
+    <ModulePanel key={m._id || i} m={m} index={i} />
 ))
       )}
 
