@@ -676,6 +676,9 @@ export default function PrepWizard() {
 
 // 🟡 highlight pulse when a new day unlocks
 const [justUnlocked, setJustUnlocked] = useState(false);
+const [userStates, setUserStates] = useState({});
+
+ 
 
   // 🔒 if backend reports locked, never render content list (overlay will show too)
   const [locked, setLocked] = useState(false);
@@ -810,6 +813,12 @@ const [justUnlocked, setJustUnlocked] = useState(false);
 
       setModules(locked ? [] : releasedToday);
       setAllModules(all);
+      if (email) {
+  const progressRes = await safeGetJSON(
+    `/api/prep/user/progress?examId=${encodeURIComponent(chosenId)}&email=${encodeURIComponent(email)}`
+  );
+  setUserStates(progressRes?.map || {});
+}
       setCurrentDay(td);
       setActiveDay(td);
       console.log("%c[PrepWizard] load() done", "color:lime");
@@ -952,8 +961,7 @@ if (isActive && !cancelled) {
 }, [modules]);
 
 
-  const cohortDay = todayDay;
-  const userStates = undefined;
+  const cohortDay = todayDay;  
 
   const calendarTab = (
     <div style={{ marginTop: 16 }}>
