@@ -14,7 +14,6 @@ const steps = [
 /* ---------------- Typewriter ---------------- */
 function Typewriter({ text = "" }) {
   const [out, setOut] = useState("");
-
   useEffect(() => {
     setOut("");
     let i = 0;
@@ -43,7 +42,6 @@ export default function LabFlow({ id }) {
 
   const notebookRef = useRef(null);
 
-  // one ref per section so we can scroll right to it
   const sectionRefs = {
     title: useRef(null),
     abstract: useRef(null),
@@ -64,17 +62,16 @@ export default function LabFlow({ id }) {
     load();
   }, [id]);
 
-  /* -------- helper: scroll to a section key -------- */
+  /* -------- scroll to section -------- */
   function scrollToSection(key) {
     const wrap = notebookRef.current;
     const el = sectionRefs[key]?.current;
     if (wrap && el) {
       const wrapTop = wrap.getBoundingClientRect().top;
       const elTop = el.getBoundingClientRect().top;
-      const offset = elTop - wrapTop + wrap.scrollTop - 12; // 12px padding
+      const offset = elTop - wrapTop + wrap.scrollTop - 12;
       wrap.scrollTo({ top: offset, behavior: "smooth" });
     } else if (wrap) {
-      // fallback: go to bottom
       wrap.scrollTo({ top: wrap.scrollHeight, behavior: "smooth" });
     }
   }
@@ -86,46 +83,31 @@ export default function LabFlow({ id }) {
       const r = await genStep(id, k);
       if (r?.ok) {
         setDraft(r.draft);
-
-        // move tracker to next step
         setTimeout(() => {
-          setStepIdx((prev) => {
-            const next = Math.min(prev + 1, steps.length - 1);
-            return next;
-          });
+          setStepIdx((prev) => Math.min(prev + 1, steps.length - 1));
         }, 350);
-
-        // show pay when final
         if (k === "assemble") {
           setTimeout(() => setShowPay(true), 600);
         }
-
-        // scroll to the section just generated
-        setTimeout(() => {
-          scrollToSection(k === "assemble" ? "assemble" : k);
-        }, 400);
+        setTimeout(() => scrollToSection(k === "assemble" ? "assemble" : k), 400);
       }
     } finally {
       setBusy(false);
     }
   }
 
-  /* -------- auto-run first step if empty -------- */
+  /* -------- auto-run first step -------- */
   useEffect(() => {
     if (!draft) return;
     if (stepIdx === 0 && !draft.gen?.abstract?.text) {
       runStep("abstract");
     }
-    // eslint-disable-next-line
-  }, [draft]);
+  }, [draft]); // eslint-disable-line
 
-  /* -------- when tracker changes (user taps pill) → scroll to that section -------- */
+  /* -------- when step changes scroll to section -------- */
   useEffect(() => {
     const key = steps[stepIdx]?.key;
-    if (key) {
-      // small delay to ensure DOM is rendered
-      setTimeout(() => scrollToSection(key), 60);
-    }
+    if (key) setTimeout(() => scrollToSection(key), 60);
   }, [stepIdx]);
 
   /* -------- notebook scroll progress -------- */
@@ -262,7 +244,7 @@ export default function LabFlow({ id }) {
   );
 }
 
-/* ------------- helpers / subcomponents ------------- */
+/* ---------- helpers ---------- */
 function sectionBlock(title, body) {
   return (
     <div className="mb-6 animate-fadeIn">
@@ -274,6 +256,7 @@ function sectionBlock(title, body) {
   );
 }
 
+/* ---------- desktop progress ---------- */
 function DesktopProgress({ stepIdx }) {
   const pct = ((stepIdx + 1) / steps.length) * 100;
   return (
@@ -317,17 +300,37 @@ function DesktopProgress({ stepIdx }) {
   );
 }
 
+/* ---------- mobile progress (auto-scroll) ---------- */
 function MobileProgress({ stepIdx, setStepIdx }) {
+  const trackRef = useRef(null);
+  const stepRefs = useRef([]);
+
+  useEffect(() => {
+    const el = stepRefs.current[stepIdx];
+    const container = trackRef.current;
+    if (el && container) {
+      const elRect = el.getBoundingClientRect();
+      const containerRect = container.getBoundingClientRect();
+      const offset =
+        elRect.left - containerRect.left - containerRect.width / 2 + elRect.width / 2;
+      container.scrollBy({ left: offset, behavior: "smooth" });
+    }
+  }, [stepIdx]);
+
   return (
     <div className="md:hidden sticky top-0 z-20 bg-white/95 py-2 mb-3">
-      <div className="flex gap-3 overflow-x-auto no-scrollbar px-1">
+      <div
+        ref={trackRef}
+        className="flex gap-3 overflow-x-auto no-scrollbar px-1 scroll-smooth"
+      >
         {steps.map((s, idx) => (
           <button
             key={s.key}
+            ref={(el) => (stepRefs.current[idx] = el)}
             onClick={() => setStepIdx(idx)}
-            className={`flex items-center gap-1 px-3 py-1.5 rounded-full border text-xs shrink-0 ${
+            className={`flex items-center gap-1 px-3 py-1.5 rounded-full border text-xs shrink-0 transition-all ${
               idx === stepIdx
-                ? "bg-indigo-50 border-indigo-200 text-indigo-700"
+                ? "bg-indigo-50 border-indigo-300 text-indigo-700 shadow-sm"
                 : "bg-white border-gray-200 text-gray-500"
             }`}
           >
@@ -342,7 +345,7 @@ function MobileProgress({ stepIdx, setStepIdx }) {
   );
 }
 
-/* ---------- shared generate button with water fill ---------- */
+/* ---------- Generate button ---------- */
 function GenerateButton({ busy, stepIdx, runStep }) {
   const stepTitle = steps[stepIdx]?.title || "";
   return (
@@ -379,7 +382,7 @@ function GenerateButton({ busy, stepIdx, runStep }) {
   );
 }
 
-/* ---------- desktop action card ---------- */
+/* ---------- desktop action ---------- */
 function ActionCard({ stepIdx, busy, showPay, draft, runStep, reload }) {
   return (
     <div className="p-4 border rounded-2xl bg-white shadow-sm sticky top-24">
@@ -400,7 +403,7 @@ function ActionCard({ stepIdx, busy, showPay, draft, runStep, reload }) {
   );
 }
 
-/* ---------- mobile fab ---------- */
+/* ---------- mobile FAB ---------- */
 function MobileGenerateFAB({ stepIdx, busy, showPay, draft, runStep, reload }) {
   return (
     <div className="flex flex-col gap-2 items-end">
@@ -417,7 +420,7 @@ function MobileGenerateFAB({ stepIdx, busy, showPay, draft, runStep, reload }) {
   );
 }
 
-/* ---------- payment box ---------- */
+/* ---------- PayBox ---------- */
 function PayBox({ draft, onMarked }) {
   const amount = draft?.payment?.amount || 299;
   const upiId = draft?.payment?.upiId || "lawnetwork@upi";
