@@ -573,9 +573,10 @@ function ModulePanel({ m, index }) {
   const later = useMemo(() => {
     const now = nowUtcMs();
     return (modules || [])
-      .filter((m) => m.releaseAt && releaseMs(m.releaseAt) > now)
+      .filter((m) => Number(m.dayIndex) > todayDay)
       .sort((a, b) => releaseMs(a.releaseAt) - releaseMs(b.releaseAt));
-  }, [modules]);
+   }, [modules, todayDay]);
+
 
   if (!later.length) return null;
 
@@ -971,7 +972,8 @@ if (isActive && !cancelled) {
         });
 
         const maxPlanned = Math.max(...Array.from(byDay.keys(), (d) => +d || 1), 1);
-        const last = Math.max(maxPlanned, cohortDay + 6, 21);
+        const last = Math.max(maxPlanned, planDays);
+
 
         const isDone = (m, userStatesMap) => {
           const s = userStatesMap?.[m._id];
@@ -1088,7 +1090,10 @@ if (isActive && !cancelled) {
   }}
 />
 
-      <ComingLater modules={allModules || []} />
+      {planDays > todayDay && (
+  <ComingLater modules={allModules || []} />
+)}
+
     
       {loading ? (
         <div className="text-gray-500">Loading…</div>
