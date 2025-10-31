@@ -964,94 +964,55 @@ if (isActive && !cancelled) {
   const cohortDay = todayDay;  
 
   const calendarTab = (
-    <div style={{ marginTop: 16 }}>
-      <div className="text-sm text-gray-500">
-        Current Day (cohort): <b>Day {cohortDay}</b>
-      </div>
+  <div className="calendar-tab text-center mt-6">
+    {/* 🌟 Day Tracker */}
+    <div className="flex flex-wrap justify-center gap-3 mb-6">
+      {Array.from({ length: planDays }).map((_, i) => {
+        const day = i + 1;
+        const unlocked = day <= todayDay;
+        const isCurrent = day === todayDay;
+        const isCompleted = userStates && Object.values(userStates).some((s) => s?.dayIndex === day && s?.done);
 
-      {(() => {
-        const sourceMods = allModules && allModules.length ? allModules : modules;
-
-        const byDay = new Map();
-        (sourceMods || []).forEach((m) => {
-          const d = Number(m.dayIndex) || 1;
-          if (!byDay.has(d)) byDay.set(d, []);
-          byDay.get(d).push(m);
-        });
-
-        const maxPlanned = Math.max(...Array.from(byDay.keys(), (d) => +d || 1), 1);
-        const last = Math.max(maxPlanned, planDays);
-
-
-        const isDone = (m, userStatesMap) => {
-          const s = userStatesMap?.[m._id];
-          return s === true || s?.done === true;
-        };
-
-        const cells = [];
-        for (let d = 1; d <= last; d++) {
-          const items = byDay.get(d) || [];
-          const released = items.filter(
-            (x) => x.status === "released" || !x.releaseAt || releaseMs(x.releaseAt) <= Date.now()
-          );
-          const anyReleased = released.length > 0;
-
-          let cls = "daycell";
-          let badge = "";
-          if (d > cohortDay) {
-            cls += " locked";
-            badge = "🔒";
-          } else if (d === cohortDay) {
-            cls += " today";
-            const allDone = released.length && released.every((m) => isDone(m, userStates));
-            if (allDone) badge = "✅";
-            else if (released.length) badge = "●";
-          } else {
-            const allDone = released.length && released.every((m) => isDone(m, userStates));
-            if (allDone) {
-              cls += " completed";
-              badge = "✅";
-            } else if (anyReleased) {
-              cls += " available";
-              badge = "●";
-            } else {
-              cls += " locked";
-              badge = "—";
-            }
-          }
-
-          const href = d <= cohortDay ? `?tab=today&d=${d}` : undefined;
-
-          cells.push(
-            href ? (
-              <a
-                key={d}
-                className={cls}
-                href={href}
-                title={`Day ${d}`}
-                onClick={(e) => {
-                  e.preventDefault();
-                  setTab("today");
-                }}
-              >
-                <span>{d}</span>
-                {badge && <span className="badge">{badge}</span>}
-              </a>
-            ) : (
-              <div key={d} className={cls} title={`Day ${d}`}>
-                <span>{d}</span>
-                {badge && <span className="badge">{badge}</span>}
-              </div>
-            )
-          );
-        }
-
-        return <div className="daygrid">{cells}</div>;
-      })()}
-
-      {!!previewModulesForActiveDay.length && <PreviewPanel day={activeDay} modules={previewModulesForActiveDay} />}
+        return (
+          <button
+            key={day}
+            onClick={() => unlocked && setActiveDay(day)}
+            className={`rounded-full w-12 h-12 flex items-center justify-center font-semibold text-base transition-all duration-300
+              ${
+                isCurrent
+                  ? "bg-amber-500 text-white scale-110 shadow-lg"
+                  : isCompleted
+                  ? "bg-green-400 text-white"
+                  : unlocked
+                  ? "bg-green-100 text-green-700 hover:scale-105"
+                  : "bg-gray-100 text-gray-400 cursor-not-allowed"
+              }`}
+            title={unlocked ? `View Day ${day}` : "Locked"}
+          >
+            {day}
+          </button>
+        );
+      })}
     </div>
-  );
+
+    {/* 🔒 Unlock info banner */}
+    {todayDay < planDays && (
+      <div className="text-sm text-gray-700 bg-amber-50 border border-amber-200 rounded-lg py-3 px-6 mx-auto w-fit animate-pulse">
+        🔒 <b>Day {todayDay + 1}</b> will unlock automatically after 24 hours.
+        <br />
+        Check back soon!
+      </div>
+    )}
+
+    {/* 🗓️ Active Day Preview */}
+    {!!previewModulesForActiveDay.length && (
+      <div className="mt-8">
+        <PreviewPanel day={activeDay} modules={previewModulesForActiveDay} />
+      </div>
+    )}
+  </div>
+);
+
 
   const todayTab = (
     <div className="max-w-3xl mx-auto">
