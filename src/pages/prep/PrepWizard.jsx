@@ -708,14 +708,14 @@ export default function PrepWizard() {
   // --------------------------------------------------------------------
 
   // Try BOTH ids and pick the one that actually has templates
-  async function load() {
+   async function load(silent = false) {
     const candidates = Array.from(new Set([examSlug, toExamKey(examSlug)].filter(Boolean)));
     if (!candidates.length) return;
 
     console.log("%c[PrepWizard] load() start", "color:#888");
     console.log("[PrepWizard] candidates:", candidates); // [dbg]
 
-    if (firstLoaded) setLoading(true);
+     if (firstLoaded && !silent) setLoading(true);
     try {
       // fetch templates for all candidates to decide
       const templateResults = await Promise.all(
@@ -1057,7 +1057,7 @@ if (isActive && !cancelled) {
       />
 
       {/* 🔥 Countdown tracker for upcoming releases */}
-  <PrepCountdown modules={allModules || []} onExpire={load} />
+  <PrepCountdown modules={allModules || []} onExpire={() => load(true)} />
       <ComingLater modules={allModules || []} />
     
       {loading ? (
