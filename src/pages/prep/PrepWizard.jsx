@@ -1057,7 +1057,7 @@ if (isActive && !cancelled) {
       />
 
       {/* 🔥 Countdown tracker for upcoming releases */}
- <PrepCountdown modules={allModules || []} />
+  <PrepCountdown modules={allModules || []} onExpire={load} />
       <ComingLater modules={allModules || []} />
     
       {loading ? (
