@@ -959,25 +959,25 @@ if (isActive && !cancelled) {
 
   return list;
 }, [modules]);
-// ✅ include previous released days too (up to current activeDay)
+ 
+ // ✅ FIX: include all released modules up to *todayDay* (not only activeDay)
 const releasedUpToActive = useMemo(() => {
   const now = nowUtcMs();
   return (allModules || [])
     .filter((m) => {
-      const d = Number(m.dayIndex);
-      const rel = releaseMs(m.releaseAt);
-      return (
-        d <= activeDay && // include this and previous days
-        (!m.releaseAt || rel <= now || m.status === "released")
-      );
+      const day = Number(m.dayIndex) || 0;
+      const relTime = releaseMs(m.releaseAt);
+      const released =
+        !m.releaseAt || relTime <= now || (m.status && m.status.toLowerCase() === "released");
+      // show all released modules up to current plan day (todayDay)
+      return day > 0 && day <= todayDay && released;
     })
-    .sort(
-      (a, b) =>
-        (releaseMs(a.releaseAt) || 0) - (releaseMs(b.releaseAt) || 0)
-    );
-}, [allModules, activeDay]);
-
-
+    .sort((a, b) => {
+      const ta = releaseMs(a.releaseAt) || 0;
+      const tb = releaseMs(b.releaseAt) || 0;
+      return ta - tb;
+    });
+}, [allModules, todayDay]);
 
   const cohortDay = todayDay;  
 
