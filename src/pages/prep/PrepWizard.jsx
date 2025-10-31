@@ -569,7 +569,7 @@ function ModulePanel({ m, index }) {
   );
 }
 
- function ComingLater({ modules }) {
+  function ComingLater({ modules, todayDay }) {
   const later = useMemo(() => {
     const now = nowUtcMs();
     return (modules || [])
@@ -1099,7 +1099,7 @@ if (isActive && !cancelled) {
 />
 
       {planDays > todayDay && (
-  <ComingLater modules={allModules || []} />
+   <ComingLater modules={allModules || []} todayDay={todayDay} />
 )}
 
     
