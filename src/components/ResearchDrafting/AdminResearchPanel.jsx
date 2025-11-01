@@ -1,7 +1,14 @@
 // client/src/components/ResearchDrafting/AdminResearchPanel.jsx
 import { useEffect, useState } from "react";
 import IfOwnerOnly from "../common/IfOwnerOnly.jsx";
-import { adminList, adminApprove, adminRevoke, adminGetConfig, adminSetConfig } from "../../utils/researchDraftingApi";
+import { 
+  adminList, 
+  adminApprove, 
+  adminRevoke, 
+  adminGetConfig, 
+  adminSetConfig,
+  adminAutoApprove // ✅ newly imported
+} from "../../utils/researchDraftingApi";
 
 export default function AdminResearchPanel(){
   const [items,setItems]=useState([]);
@@ -29,6 +36,24 @@ export default function AdminResearchPanel(){
     <IfOwnerOnly>
       <div className="max-w-6xl mx-auto p-4 md:p-6">
         <h2 className="text-2xl font-bold mb-4">Admin — Research Drafting</h2>
+
+        {/* ✅ New "Auto Approve Paid Users" button */}
+        <div className="mb-4 flex gap-3">
+          <button
+            className="px-4 py-2 rounded-xl bg-green-600 hover:bg-green-700 text-white"
+            onClick={async () => {
+              const r = await adminAutoApprove();
+              if (r?.ok) {
+                alert(`✅ Auto-approved ${r.count} paid drafts`);
+                load();
+              } else {
+                alert("Error running auto-approve");
+              }
+            }}
+          >
+            Auto Approve Paid Users
+          </button>
+        </div>
 
         <div className="mb-6 p-4 border rounded-2xl bg-white">
           <div className="font-semibold mb-3">Payment Config</div>
