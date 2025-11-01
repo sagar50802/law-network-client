@@ -56,7 +56,7 @@ export default function LabFlow({ id }) {
   /* -------- load draft -------- */
   async function load() {
     const r = await fetchDraft(id);
-    if (r?.ok) setDraft(r.draft);
+    if (r?.ok) setDraft({ ...r.draft, locked: r.locked });
   }
   useEffect(() => {
     load();
@@ -393,10 +393,31 @@ function ActionCard({ stepIdx, busy, showPay, draft, runStep, reload }) {
       <p className="mt-3 text-xs text-gray-500 leading-snug">
         The system writes step-by-step. Tracking is synced — it will scroll to the step.
       </p>
+
       {showPay && (
         <div className="mt-6 p-3 rounded-xl border bg-amber-50 shadow-inner">
           <div className="font-semibold mb-2">Final Step: Payment</div>
           <PayBox draft={draft} onMarked={reload} />
+
+          {/* ✅ Add download buttons here */}
+          {!draft?.locked && (
+            <div className="mt-3 flex gap-2">
+              <a
+                href={`/api/research-drafting/${draft._id}/export?fmt=pdf`}
+                className="px-3 py-2 bg-indigo-600 text-white rounded-lg text-xs md:text-sm"
+                target="_blank"
+              >
+                Download PDF
+              </a>
+              <a
+                href={`/api/research-drafting/${draft._id}/export?fmt=docx`}
+                className="px-3 py-2 bg-indigo-100 text-indigo-700 rounded-lg text-xs md:text-sm"
+                target="_blank"
+              >
+                Download Word
+              </a>
+            </div>
+          )}
         </div>
       )}
     </div>
@@ -414,6 +435,26 @@ function MobileGenerateFAB({ stepIdx, busy, showPay, draft, runStep, reload }) {
         <div className="bg-amber-50 border rounded-xl p-2 shadow w-60">
           <div className="text-xs font-semibold mb-1">Final Step: Payment</div>
           <PayBox draft={draft} onMarked={reload} />
+
+          {/* ✅ Mobile version of download buttons */}
+          {!draft?.locked && (
+            <div className="mt-2 flex gap-2">
+              <a
+                href={`/api/research-drafting/${draft._id}/export?fmt=pdf`}
+                className="px-2 py-1 bg-indigo-600 text-white rounded-lg text-[11px]"
+                target="_blank"
+              >
+                PDF
+              </a>
+              <a
+                href={`/api/research-drafting/${draft._id}/export?fmt=docx`}
+                className="px-2 py-1 bg-indigo-100 text-indigo-700 rounded-lg text-[11px]"
+                target="_blank"
+              >
+                Word
+              </a>
+            </div>
+          )}
         </div>
       )}
     </div>
