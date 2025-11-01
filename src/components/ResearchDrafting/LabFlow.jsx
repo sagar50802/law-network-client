@@ -100,24 +100,33 @@ export default function LabFlow({ id }) {
     }
   }
 
-  /* -------- run step -------- */
-   async function runStep(k) {
+   /* -------- run step -------- */
+async function runStep(k) {
   setBusy(true);
 
-  // 👇 Force blur during generation
-  setDraft((prev) => prev ? { ...prev, locked: true } : prev);
+  // 👇 Instantly show a blurred placeholder while generating
+  setDraft((prev) => {
+    if (!prev) return prev;
+    const updated = { ...prev };
+    updated.locked = true;
+    updated.gen = updated.gen || {};
+    updated.gen[k] = { text: "System is generating content...", placeholder: true };
+    return updated;
+  });
 
   try {
     const r = await genStep(id, k);
     if (r?.ok) {
-      setDraft({ ...r.draft, locked: r.locked }); // keep real lock state from backend
+      // Keep blur active until unlocked by backend
+      setDraft({ ...r.draft, locked: r.locked || true });
+
       setTimeout(() => {
         setStepIdx((prev) => Math.min(prev + 1, steps.length - 1));
       }, 350);
-      if (k === "assemble") {
-        setTimeout(() => setShowPay(true), 600);
-      }
-      setTimeout(() => scrollToSection(k === "assemble" ? "assemble" : k), 400);
+
+      if (k === "assemble") setTimeout(() => setShowPay(true), 600);
+
+      setTimeout(() => scrollToSection(k), 400);
     }
   } finally {
     setBusy(false);
@@ -273,16 +282,37 @@ export default function LabFlow({ id }) {
 }
 
 /* ---------- helpers ---------- */
-function sectionBlock(title, body) {
+ function sectionBlock(title, body, draft) {
+  const isLocked = draft?.locked;
+  const isGenerating = body?.includes("System is generating");
+
   return (
-    <div className="mb-6 animate-fadeIn">
+    <div className="mb-6 relative animate-fadeIn">
       <div className="font-semibold text-black mb-1">{title}</div>
-      <div className="bg-white/95 border border-gray-200 rounded-xl p-3 md:p-4 shadow-sm">
-        <Typewriter text={body || ""} />
+
+      <div className={`relative ${isLocked ? "blur-sm select-none" : ""}`}>
+        <div className="bg-white/95 border border-gray-200 rounded-xl p-3 md:p-4 shadow-sm min-h-[80px]">
+          {isGenerating ? (
+            <div className="text-gray-400 italic animate-pulse">
+              System is generating...
+            </div>
+          ) : (
+            <Typewriter text={body || ""} />
+          )}
+        </div>
+
+        {isLocked && (
+          <div className="absolute inset-0 flex items-center justify-center bg-white/60 backdrop-blur-sm">
+            <span className="text-xs md:text-sm text-gray-700 bg-white/80 px-3 py-1 rounded-full shadow">
+              🔒 Unlock this content after payment
+            </span>
+          </div>
+        )}
       </div>
     </div>
   );
 }
+
 
 /* ---------- desktop progress ---------- */
 function DesktopProgress({ stepIdx }) {
