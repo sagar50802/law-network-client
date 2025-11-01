@@ -171,115 +171,116 @@ async function runStep(k) {
   const preventContext = (e) => e.preventDefault();
 
   return (
-    <div className="max-w-6xl mx-auto p-3 md:p-6">
-      <DesktopProgress stepIdx={stepIdx} />
-      <MobileProgress stepIdx={stepIdx} setStepIdx={setStepIdx} />
+  <div className="max-w-6xl mx-auto p-3 md:p-6">
+    <DesktopProgress stepIdx={stepIdx} />
+    <MobileProgress stepIdx={stepIdx} setStepIdx={setStepIdx} />
 
-      <div className="grid md:grid-cols-5 gap-6">
-        {/* LEFT (desktop) */}
-        <div className="hidden md:block md:col-span-2">
-          <ActionCard
-            stepIdx={stepIdx}
-            busy={busy}
-            showPay={showPay}
-            draft={draft}
-            runStep={runStep}
-            reload={load}
-          />
-        </div>
-
-        {/* RIGHT (notebook) */}
-        <div className="md:col-span-3 relative">
-          <div
-            ref={notebookRef}
-            onScroll={handleNotebookScroll}
-            onContextMenu={preventContext}
-            style={notebookLock}
-            className="p-5 border rounded-2xl bg-[rgba(253,253,250,0.96)] shadow-inner max-h-[78vh] md:max-h-[80vh] overflow-y-auto"
-          >
-            <div ref={sectionRefs.title}>
-              {sectionBlock("Title", draft?.gen?.title || draft?.title || "")}
-            </div>
-
-            {draft?.gen?.abstract?.text && (
-              <div ref={sectionRefs.abstract}>
-                {sectionBlock("Put your Abstract", draft.gen.abstract.text)}
-              </div>
-            )}
-
-            {draft?.gen?.review?.text && (
-              <div ref={sectionRefs.review}>
-                {sectionBlock("Review of Literature", draft.gen.review.text)}
-              </div>
-            )}
-
-            {draft?.gen?.methodology?.text && (
-              <div ref={sectionRefs.methodology}>
-                {sectionBlock("Research Methodology", draft.gen.methodology.text)}
-              </div>
-            )}
-
-            {draft?.gen?.aims?.text && (
-              <div ref={sectionRefs.aims}>
-                {sectionBlock("Aim of Research", draft.gen.aims.text)}
-              </div>
-            )}
-
-            {draft?.gen?.chapterization?.text && (
-              <div ref={sectionRefs.chapterization}>
-                {sectionBlock("Chapterization", draft.gen.chapterization.text)}
-              </div>
-            )}
-
-            {draft?.gen?.conclusion?.text && (
-              <div ref={sectionRefs.conclusion}>
-                {sectionBlock("Conclusion", draft.gen.conclusion.text)}
-              </div>
-            )}
-
-            {draft?.gen?.assembled?.text && (
-              <div ref={sectionRefs.assemble}>
-                {sectionBlock("Final Preview", draft.gen.assembled.text)}
-              </div>
-            )}
-          </div>
-
-          {/* desktop scroll rail */}
-          <div className="hidden md:block absolute top-6 -right-3 h-[78vh] w-1 bg-gray-200 rounded-full">
-            <div
-              className="w-1 bg-indigo-500 rounded-full transition-all"
-              style={{ height: `${scrollPct}%` }}
-            />
-          </div>
-
-          {/* mobile scroll helper */}
-          {showScrollHint && (
-            <button
-              onClick={scrollToLatest}
-              className="md:hidden absolute right-3 bottom-24 bg-white/90 border rounded-full px-3 py-1 text-xs shadow"
-            >
-              Scroll to latest ↓
-            </button>
-          )}
-        </div>
+    <div className="grid md:grid-cols-5 gap-6">
+      {/* LEFT (desktop) */}
+      <div className="hidden md:block md:col-span-2">
+        <ActionCard
+          stepIdx={stepIdx}
+          busy={busy}
+          showPay={showPay}
+          draft={draft}
+          runStep={runStep}
+          reload={load}
+        />
       </div>
 
-      {/* mobile FAB */}
-      <div className="md:hidden fixed bottom-3 right-3 left-3 flex justify-end pointer-events-none">
-        <div className="pointer-events-auto">
-          <MobileGenerateFAB
-            stepIdx={stepIdx}
-            busy={busy}
-            showPay={showPay}
-            draft={draft}
-            runStep={runStep}
-            reload={load}
+      {/* RIGHT (notebook) */}
+      <div className="md:col-span-3 relative">
+        <div
+          ref={notebookRef}
+          onScroll={handleNotebookScroll}
+          onContextMenu={preventContext}
+          style={notebookLock}
+          className="p-5 border rounded-2xl bg-[rgba(253,253,250,0.96)] shadow-inner max-h-[78vh] md:max-h-[80vh] overflow-y-auto"
+        >
+          <div ref={sectionRefs.title}>
+            {sectionBlock("Title", draft?.gen?.title || draft?.title || "", draft)}
+          </div>
+
+          {draft?.gen?.abstract?.text && (
+            <div ref={sectionRefs.abstract}>
+              {sectionBlock("Put your Abstract", draft.gen.abstract.text, draft)}
+            </div>
+          )}
+
+          {draft?.gen?.review?.text && (
+            <div ref={sectionRefs.review}>
+              {sectionBlock("Review of Literature", draft.gen.review.text, draft)}
+            </div>
+          )}
+
+          {draft?.gen?.methodology?.text && (
+            <div ref={sectionRefs.methodology}>
+              {sectionBlock("Research Methodology", draft.gen.methodology.text, draft)}
+            </div>
+          )}
+
+          {draft?.gen?.aims?.text && (
+            <div ref={sectionRefs.aims}>
+              {sectionBlock("Aim of Research", draft.gen.aims.text, draft)}
+            </div>
+          )}
+
+          {draft?.gen?.chapterization?.text && (
+            <div ref={sectionRefs.chapterization}>
+              {sectionBlock("Chapterization", draft.gen.chapterization.text, draft)}
+            </div>
+          )}
+
+          {draft?.gen?.conclusion?.text && (
+            <div ref={sectionRefs.conclusion}>
+              {sectionBlock("Conclusion", draft.gen.conclusion.text, draft)}
+            </div>
+          )}
+
+          {draft?.gen?.assembled?.text && (
+            <div ref={sectionRefs.assemble}>
+              {sectionBlock("Final Preview", draft.gen.assembled.text, draft)}
+            </div>
+          )}
+        </div> {/* ✅ closed notebookRef wrapper */}
+
+        {/* desktop scroll rail */}
+        <div className="hidden md:block absolute top-6 -right-3 h-[78vh] w-1 bg-gray-200 rounded-full">
+          <div
+            className="w-1 bg-indigo-500 rounded-full transition-all"
+            style={{ height: `${scrollPct}%` }}
           />
         </div>
+
+        {/* mobile scroll helper */}
+        {showScrollHint && (
+          <button
+            onClick={scrollToLatest}
+            className="md:hidden absolute right-3 bottom-24 bg-white/90 border rounded-full px-3 py-1 text-xs shadow"
+          >
+            Scroll to latest ↓
+          </button>
+        )}
       </div>
     </div>
-  );
+
+    {/* mobile FAB */}
+    <div className="md:hidden fixed bottom-3 right-3 left-3 flex justify-end pointer-events-none">
+      <div className="pointer-events-auto">
+        <MobileGenerateFAB
+          stepIdx={stepIdx}
+          busy={busy}
+          showPay={showPay}
+          draft={draft}
+          runStep={runStep}
+          reload={load}
+        />
+      </div>
+    </div>
+   </div>
+);
 }
+
 
 /* ---------- helpers ---------- */
  function sectionBlock(title, body, draft) {
