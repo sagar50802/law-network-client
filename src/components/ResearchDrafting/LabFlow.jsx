@@ -1,5 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { fetchDraft, genStep, markPaid } from "../../utils/researchDraftingApi";
+import { markPaid } from "../../utils/researchDraftingApi";
 
 const steps = [
   { key: "abstract", title: "Put your Abstract" },
@@ -519,28 +520,38 @@ function MobileGenerateFAB({ stepIdx, busy, showPay, draft, runStep, reload }) {
     </div>
   );
 }
-
-/* ---------- PayBox ---------- */
+ 
+/* ---------- PayBox (explicit confirm) ---------- */
 function PayBox({ draft, onMarked }) {
   const amount = draft?.payment?.amount || 299;
   const upiId = draft?.payment?.upiId || "lawnetwork@upi";
   const wa = draft?.payment?.waNumber || "919999999999";
+
+  // links just OPEN the apps — they do NOT mark
   const upiLink = `upi://pay?pa=${encodeURIComponent(
     upiId
   )}&pn=${encodeURIComponent("LawNetwork")}&am=${encodeURIComponent(
     amount
   )}&cu=INR&tn=${encodeURIComponent("Research Drafting")}`;
+
   const waLink = `https://wa.me/${wa}?text=${encodeURIComponent(
     `Hi, I am ${draft?.name || ""}. I am sending payment proof for Research Drafting (₹${amount}).`
   )}`;
 
-  async function mark() {
+  // what server already knows
+  const upiDone = !!draft?.payment?.upiConfirmed;
+  const waDone = !!draft?.payment?.whatsappConfirmed;
+  const fullyPaid = draft?.status === "paid" || draft?.status === "approved";
+
+  async function report(body) {
+    // send only the extra flags, server will merge
     await markPaid(draft._id, {
       name: draft?.name,
       email: draft?.email,
       phone: draft?.phone,
+      ...body,
     });
-    onMarked && onMarked();
+    onMarked && onMarked(); // reload draft from server
   }
 
   return (
@@ -548,6 +559,8 @@ function PayBox({ draft, onMarked }) {
       <div>
         Amount: <b>₹{amount}</b> • UPI: <code>{upiId}</code>
       </div>
+
+      {/* 1️⃣ action row: only open apps */}
       <div className="flex flex-wrap gap-2">
         <a
           className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs"
@@ -563,15 +576,49 @@ function PayBox({ draft, onMarked }) {
         >
           WhatsApp Proof
         </a>
+
+        {/* keep your old button as a fallback */}
+        {!fullyPaid && (
+          <button
+            className="px-3 py-1.5 rounded-lg border hover:bg-gray-50 text-xs"
+            onClick={() => report({ userMarkedPaid: true })}
+          >
+            I Paid — Mark
+          </button>
+        )}
+      </div>
+
+      {/* 2️⃣ confirm row: this is what actually counts */}
+      <div className="flex flex-wrap gap-2">
         <button
-          className="px-3 py-1.5 rounded-lg border hover:bg-gray-50 text-xs"
-          onClick={mark}
+          disabled={upiDone}
+          onClick={() => report({ upiConfirmed: true })}
+          className={`px-2.5 py-1 rounded-lg text-xs flex items-center gap-1 ${
+            upiDone
+              ? "bg-emerald-100 text-emerald-700 border border-emerald-200"
+              : "bg-white border hover:bg-emerald-50"
+          }`}
         >
-          I Paid — Mark
+          {upiDone ? "✓ UPI confirmed" : "I finished UPI"}
+        </button>
+
+        <button
+          disabled={waDone}
+          onClick={() => report({ whatsappConfirmed: true })}
+          className={`px-2.5 py-1 rounded-lg text-xs flex items-center gap-1 ${
+            waDone
+              ? "bg-indigo-100 text-indigo-700 border border-indigo-200"
+              : "bg-white border hover:bg-indigo-50"
+          }`}
+        >
+          {waDone ? "✓ WhatsApp sent" : "I sent on WhatsApp"}
         </button>
       </div>
+
       <p className="text-[10px] text-gray-500">
-        Admin will verify your proof and approve access.
+        {fullyPaid
+          ? "✅ Payment & proof received. Content unlocked."
+          : "After confirming both UPI and WhatsApp, access will unlock automatically."}
       </p>
     </div>
   );
