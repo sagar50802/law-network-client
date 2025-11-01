@@ -744,7 +744,11 @@ function PayBox({ draft, onMarked }) {
   }
 
   return (
-    <div className="space-y-2 text-xs md:text-sm">
+     <div
+    className={`space-y-2 text-xs md:text-sm transform transition-all duration-500 ease-in-out ${
+      minimized ? "translate-y-96 opacity-0 scale-95" : "translate-y-0 opacity-100 scale-100"
+    }`}
+  >
       <div>
         Amount: <b>₹{amount}</b> • UPI: <code>{upiId}</code>
       </div>
