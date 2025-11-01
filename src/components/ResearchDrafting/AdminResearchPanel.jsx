@@ -1,14 +1,17 @@
 // client/src/components/ResearchDrafting/AdminResearchPanel.jsx
 import { useEffect, useState } from "react";
 import IfOwnerOnly from "../common/IfOwnerOnly.jsx";
-import { 
+ import { 
   adminList, 
   adminApprove, 
   adminRevoke, 
   adminGetConfig, 
   adminSetConfig,
-  adminAutoApprove // ✅ newly imported
+  adminAutoApprove,
+  adminDelete,           // ✅ new
+  adminBatchDelete       // ✅ new
 } from "../../utils/researchDraftingApi";
+
 
 export default function AdminResearchPanel(){
   const [items,setItems]=useState([]);
@@ -60,7 +63,22 @@ export default function AdminResearchPanel(){
           >
             Auto Approve Paid Users
           </button>
+           {/* 🧹 New Batch Delete */}
+  <button
+    className="px-4 py-2 rounded-xl bg-red-600 hover:bg-red-700 text-white"
+    onClick={async () => {
+      if (!window.confirm("Delete all drafts and rejected entries?")) return;
+      const r = await adminBatchDelete(["draft", "rejected"]);
+      if (r?.ok) {
+        alert(`🗑️ Deleted ${r.deletedCount} items`);
+        load();
+      }
+    }}
+  >
+    Batch Delete Drafts/Rejected
+  </button>
         </div>
+        
 
         <div className="mb-6 p-4 border rounded-2xl bg-white">
           <div className="font-semibold mb-3">Payment Config</div>
@@ -110,9 +128,15 @@ export default function AdminResearchPanel(){
                   <td>{new Date(x.updatedAt).toLocaleString()}</td>
                   <td className="text-right">
                     <div className="flex gap-2 justify-end">
-                      <button className="px-3 py-1 rounded-lg border" onClick={()=>adminApprove(x._id, 30).then(load)}>Approve 30d</button>
-                      <button className="px-3 py-1 rounded-lg border" onClick={()=>adminApprove(x._id, 90).then(load)}>Approve 90d</button>
-                      <button className="px-3 py-1 rounded-lg border text-red-600" onClick={()=>adminRevoke(x._id).then(load)}>Revoke</button>
+  <button className="px-3 py-1 rounded-lg border" onClick={()=>adminApprove(x._id, 30).then(load)}>Approve 30d</button>                    
+  <button className="px-3 py-1 rounded-lg border" onClick={()=>adminApprove(x._id, 90).then(load)}>Approve 90d</button>
+  <button className="px-3 py-1 rounded-lg border text-red-600" onClick={()=>adminRevoke(x._id).then(load)}>Revoke</button>
+  <button className="px-3 py-1 rounded-lg border text-red-700" onClick={async()=>{
+    if(window.confirm("Delete this record?")){
+      const r = await adminDelete(x._id);
+      if(r?.ok) load();
+    }
+  }}>Delete</button>
                     </div>
                   </td>
                 </tr>
