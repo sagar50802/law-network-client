@@ -11,26 +11,50 @@ const steps = [
   { key: "assemble", title: "Assemble & Preview" },
 ];
 
-/* ---------------- Typewriter ---------------- */
+/* ---------------- Smooth Typewriter ---------------- */
 function Typewriter({ text = "" }) {
-  const [out, setOut] = useState("");
+  const [display, setDisplay] = useState("");
+  const indexRef = useRef(0);
+  const typingInterval = useRef(null);
+
+  // Smooth incremental typing without restarting
   useEffect(() => {
-    setOut("");
-    let i = 0;
-    const t = setInterval(() => {
-      setOut((prev) => prev + text.slice(i, i + 2));
-      i += 2;
-      if (i >= text.length) clearInterval(t);
-    }, 12);
-    return () => clearInterval(t);
+    if (!text) {
+      setDisplay("");
+      indexRef.current = 0;
+      return;
+    }
+
+    // If new text comes, only append from last known index
+    const start = indexRef.current;
+    const end = text.length;
+
+    clearInterval(typingInterval.current);
+    typingInterval.current = setInterval(() => {
+      if (indexRef.current < end) {
+        const nextChar = text[indexRef.current];
+        indexRef.current += 1;
+        setDisplay((prev) => prev + nextChar);
+      } else {
+        clearInterval(typingInterval.current);
+      }
+    }, 18); // smoother speed (~55 chars/sec)
+
+    return () => clearInterval(typingInterval.current);
   }, [text]);
 
+  // graceful fade-in animation (no flicker)
   return (
-    <div className="text-gray-800 leading-7 whitespace-pre-line md:[font-family:'Homemade_Apple',cursive]">
-      {out}
+    <div
+      className="text-gray-800 leading-7 whitespace-pre-line transition-all duration-300 ease-linear will-change-auto md:[font-family:'Homemade_Apple',cursive]"
+      style={{ opacity: display ? 1 : 0.6 }}
+    >
+      {display}
+      <span className="animate-pulse text-indigo-400 ml-0.5 select-none">▌</span>
     </div>
   );
 }
+
 
 export default function LabFlow({ id }) {
   const [draft, setDraft] = useState(null);
