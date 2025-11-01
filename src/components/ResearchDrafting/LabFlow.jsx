@@ -175,24 +175,28 @@ export default function LabFlow({ id, onMarked }) {
       if (!mounted) return;
       setAutoGenRunning(true);
       setAutoGenPct(0);
-      setMessage("⚙️ Starting automatic generation...");
+      setMessage("⚙️ Auto-generation started — please wait until all steps finish...");
 
-      for (let i = 0; i < steps.length; i++) {
-        if (autoGenCancelRef.current) break;
 
-        const step = steps[i];
-        setMessage(`⚙️ Please wait, finishing step (${step.title})...`);
+       for (let i = 0; i < steps.length; i++) {
+  if (autoGenCancelRef.current) break;
 
-        // call backend step
-        await genStep(draft._id, step.key);
+  const step = steps[i];
+  setMessage(`⚙️ Please wait, finishing step (${step.title})...`);
+  setStepIdx(i); // 🧠 move the tracker to current step
+  scrollToSection(step.key); // 🧠 scroll to current step in the notebook
 
-        // update progress bar
-        const pct = Math.round(((i + 1) / steps.length) * 100);
-        setAutoGenPct(pct);
+  // call backend step
+  await genStep(draft._id, step.key);
 
-        // small delay to avoid spamming
-        await new Promise((r) => setTimeout(r, 900));
-      }
+  // update progress bar
+  const pct = Math.round(((i + 1) / steps.length) * 100);
+  setAutoGenPct(pct);
+
+  // smooth delay so user can see it move
+  await new Promise((r) => setTimeout(r, 1200));
+}
+
 
       if (!autoGenCancelRef.current) {
         // finished normally
