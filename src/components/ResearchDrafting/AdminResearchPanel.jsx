@@ -15,6 +15,13 @@ export default function AdminResearchPanel(){
   const [cfg,setCfg]=useState(null);
   const [form,setForm]=useState({ upiId:"", defaultAmount:299, waNumber:"" });
 
+  useEffect(() => {
+  // ✅ This ensures admin key is available for API calls
+  if (!localStorage.getItem("ownerKey")) {
+    localStorage.setItem("ownerKey", "LAWNOWNER2025");
+  }
+}, []);
+
   async function load(){
     const L = await adminList();
     if (L?.ok) setItems(L.data||[]);
