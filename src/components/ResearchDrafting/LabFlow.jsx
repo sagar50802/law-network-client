@@ -527,21 +527,16 @@ function PayBox({ draft, onMarked }) {
   const amount = draft?.payment?.amount || 299;
   const upiId = draft?.payment?.upiId || "lawnetwork@upi";
   const wa = draft?.payment?.waNumber || "919999999999";
-
-  // if server says it's already unlocked, no need to wait
   const alreadyUnlocked =
     draft?.status === "paid" || draft?.status === "approved" || draft?.locked === false;
 
-  // we keep a persistent flag per draft
   const storageKey = draft ? `rd:waiting:${draft._id}` : null;
-
-  const [waiting, setWaiting] = useState(() => {
-    if (alreadyUnlocked) return false;
-    if (!storageKey) return false;
-    return localStorage.getItem(storageKey) === "1";
-  });
-  const [countdown, setCountdown] = useState(15); // first 15s = fast polling
-  const [polling, setPolling] = useState(waiting); // if we resumed, start polling
+  const [upiDone, setUpiDone] = useState(false);
+  const [waDone, setWaDone] = useState(false);
+  const [waiting, setWaiting] = useState(() => localStorage.getItem(storageKey) === "1");
+  const [countdown, setCountdown] = useState(15);
+  const [polling, setPolling] = useState(waiting);
+  const [shake, setShake] = useState(false);
 
   const upiLink = `upi://pay?pa=${encodeURIComponent(
     upiId
@@ -553,30 +548,28 @@ function PayBox({ draft, onMarked }) {
     `Hi, I am ${draft?.name || ""}. I am sending payment proof for Research Drafting (₹${amount}).`
   )}`;
 
-  // 1) user clicks "I paid & sent screenshot"
   async function confirmPaidAndSent() {
-    if (!draft?._id) return;
+    if (!upiDone || !waDone) {
+      // 🔸 shake if pressed too early
+      setShake(true);
+      setTimeout(() => setShake(false), 600);
+      return;
+    }
 
-    // tell backend: user said he did both
     await markPaid(draft._id, {
       userMarkedPaid: true,
       upiConfirmed: true,
       whatsappConfirmed: true,
     });
 
-    // persist "I am waiting for admin" locally
-    if (storageKey) localStorage.setItem(storageKey, "1");
-
-    // show waiting UI + start polling
+    localStorage.setItem(storageKey, "1");
     setWaiting(true);
     setCountdown(15);
     setPolling(true);
-
-    // refresh current draft once
     onMarked && onMarked();
   }
 
-  // 2) polling loop (checks if admin has approved)
+  // polling for admin approval
   useEffect(() => {
     if (!polling || !draft?._id) return;
 
@@ -585,52 +578,38 @@ function PayBox({ draft, onMarked }) {
 
     async function tick() {
       try {
-        // fetch latest draft
         const latest = await fetchDraft(draft._id);
         if (cancelled) return;
 
         const unlocked =
           latest?.draft?.status === "paid" || latest?.draft?.status === "approved";
-
         if (unlocked) {
-          // cleanup waiting
-          if (storageKey) localStorage.removeItem(storageKey);
+          localStorage.removeItem(storageKey);
           setWaiting(false);
           setPolling(false);
-          onMarked && onMarked(); // reload parent view (it will unblur + show downloads)
+          onMarked && onMarked();
           return;
         }
-      } catch (e) {
-        // ignore, we'll try again
-      }
+      } catch (e) {}
 
-      // if still locked, schedule next tick
-      timerId = setTimeout(
-        tick,
-        countdown > 0 ? 3000 : 8000 // first 15s every 3s, after that every 8s
-      );
-
-      // decrease countdown (for UI only)
+      timerId = setTimeout(tick, countdown > 0 ? 3000 : 8000);
       setCountdown((c) => (c > 0 ? c - 3 : 0));
     }
-
-    // start immediately
     tick();
 
     return () => {
       cancelled = true;
       if (timerId) clearTimeout(timerId);
     };
-  }, [polling, draft?._id, storageKey, onMarked, countdown]);
+  }, [polling, draft?._id, countdown]);
 
-  // 3) if backend already unlocked while we were on the page
   useEffect(() => {
     if (alreadyUnlocked && storageKey) {
       localStorage.removeItem(storageKey);
       setWaiting(false);
       setPolling(false);
     }
-  }, [alreadyUnlocked, storageKey]);
+  }, [alreadyUnlocked]);
 
   return (
     <div className="space-y-2 text-xs md:text-sm">
@@ -638,56 +617,69 @@ function PayBox({ draft, onMarked }) {
         Amount: <b>₹{amount}</b> • UPI: <code>{upiId}</code>
       </div>
 
-      {/* row that OPENS the apps (not auto-checking) */}
+      {/* 1️⃣ Pay buttons */}
       <div className="flex flex-wrap gap-2">
-        <a
-          className="px-3 py-1.5 rounded-lg bg-emerald-600 hover:bg-emerald-700 text-white text-xs"
-          href={upiLink}
+        <button
+          className={`px-3 py-1.5 rounded-lg text-xs text-white ${
+            upiDone ? "bg-emerald-700" : "bg-emerald-600 hover:bg-emerald-700"
+          }`}
+          onClick={() => {
+            window.location.href = upiLink;
+            setUpiDone(true);
+          }}
         >
-          UPI Pay
-        </a>
-        <a
-          className="px-3 py-1.5 rounded-lg bg-indigo-600 hover:bg-indigo-700 text-white text-xs"
-          href={waLink}
-          target="_blank"
-          rel="noreferrer"
+          {upiDone ? "✓ UPI Paid" : "UPI Pay"}
+        </button>
+
+        <button
+          className={`px-3 py-1.5 rounded-lg text-xs text-white ${
+            waDone ? "bg-indigo-700" : "bg-indigo-600 hover:bg-indigo-700"
+          }`}
+          onClick={() => {
+            window.open(waLink, "_blank");
+            setWaDone(true);
+          }}
         >
-          WhatsApp Proof
-        </a>
+          {waDone ? "✓ WhatsApp Sent" : "WhatsApp Proof"}
+        </button>
       </div>
 
-      {/* main action */}
+      {/* 2️⃣ Yellow main button */}
       {!alreadyUnlocked && !waiting && (
         <button
           onClick={confirmPaidAndSent}
-          className="px-3 py-1.5 rounded-lg bg-amber-200 hover:bg-amber-300 text-amber-900 text-xs font-medium flex items-center gap-2"
+          className={`px-3 py-1.5 rounded-lg text-xs font-medium bg-yellow-300 text-yellow-900 transition-transform ${
+            shake ? "animate-[wiggle_0.6s_ease-in-out]" : "hover:bg-yellow-400"
+          }`}
         >
-          ✅ I paid & sent screenshot
+          I paid and sent screenshot of my payment on WhatsApp
         </button>
       )}
 
-      {/* waiting state */}
-      {!alreadyUnlocked && waiting && (
-        <div className="flex items-center gap-2 bg-amber-50 border border-amber-200 rounded-lg px-3 py-2">
-          <span className="w-2 h-2 rounded-full bg-amber-400 animate-ping" />
-          <span className="text-[11px] text-amber-900">
+      {/* 3️⃣ Waiting */}
+      {waiting && (
+        <div className="flex items-center gap-2 bg-yellow-50 border border-yellow-200 rounded-lg px-3 py-2">
+          <span className="w-2 h-2 rounded-full bg-yellow-400 animate-ping" />
+          <span className="text-[11px] text-yellow-800">
             Waiting for admin approval
-            {countdown > 0 ? ` • checking in ${countdown}s` : " • checking every few seconds"}
+            {countdown > 0 ? ` • checking in ${countdown}s` : " • still checking..."}
           </span>
         </div>
       )}
 
-      {/* unlocked state */}
+      {/* 4️⃣ Unlocked */}
       {alreadyUnlocked && (
-        <div className="flex items-center gap-2 bg-emerald-50 border border-emerald-200 rounded-lg px-3 py-2">
-          <span className="text-emerald-700 text-xs">✅ Payment verified. Content unlocked.</span>
+        <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+          <span className="text-green-700 text-xs">
+            ✅ Approved — content unlocked. You can now view and download the PDF.
+          </span>
         </div>
       )}
 
       <p className="text-[10px] text-gray-500">
         {alreadyUnlocked
-          ? "You can now download / view full content."
-          : "After you pay and send proof, click the yellow button above. We’ll keep checking even if you reload."}
+          ? "You have full access now."
+          : "Step 1: UPI Pay • Step 2: WhatsApp Proof • Step 3: Confirm payment below."}
       </p>
     </div>
   );
