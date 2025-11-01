@@ -77,24 +77,28 @@ export default function LabFlow({ id }) {
   }
 
   /* -------- run step -------- */
-  async function runStep(k) {
-    setBusy(true);
-    try {
-      const r = await genStep(id, k);
-      if (r?.ok) {
-        setDraft(r.draft);
-        setTimeout(() => {
-          setStepIdx((prev) => Math.min(prev + 1, steps.length - 1));
-        }, 350);
-        if (k === "assemble") {
-          setTimeout(() => setShowPay(true), 600);
-        }
-        setTimeout(() => scrollToSection(k === "assemble" ? "assemble" : k), 400);
+   async function runStep(k) {
+  setBusy(true);
+
+  // 👇 Force blur during generation
+  setDraft((prev) => prev ? { ...prev, locked: true } : prev);
+
+  try {
+    const r = await genStep(id, k);
+    if (r?.ok) {
+      setDraft({ ...r.draft, locked: r.locked }); // keep real lock state from backend
+      setTimeout(() => {
+        setStepIdx((prev) => Math.min(prev + 1, steps.length - 1));
+      }, 350);
+      if (k === "assemble") {
+        setTimeout(() => setShowPay(true), 600);
       }
-    } finally {
-      setBusy(false);
+      setTimeout(() => scrollToSection(k === "assemble" ? "assemble" : k), 400);
     }
+  } finally {
+    setBusy(false);
   }
+}
 
   /* -------- auto-run first step -------- */
   useEffect(() => {
