@@ -635,7 +635,8 @@ function MobileGenerateFAB({ stepIdx, busy, showPay, draft, runStep, reload }) {
 }
 
 /* --------------------------------------------------------------------- */
-/* PayBox (with waiting + polling + resume)                              */
+/* --------------------------------------------------------------------- */
+/* PayBox (with waiting + polling + resume + minimize)                   */
 /* --------------------------------------------------------------------- */
 function PayBox({ draft, onMarked }) {
   const amount = draft?.payment?.amount || 299;
@@ -647,10 +648,13 @@ function PayBox({ draft, onMarked }) {
   const storageKey = draft ? `rd:waiting:${draft._id}` : null;
   const [upiDone, setUpiDone] = useState(false);
   const [waDone, setWaDone] = useState(false);
-  const [waiting, setWaiting] = useState(() => (storageKey ? localStorage.getItem(storageKey) === "1" : false));
+  const [waiting, setWaiting] = useState(() =>
+    storageKey ? localStorage.getItem(storageKey) === "1" : false
+  );
   const [countdown, setCountdown] = useState(15);
   const [polling, setPolling] = useState(waiting);
   const [shake, setShake] = useState(false);
+  const [minimized, setMinimized] = useState(false); // ✅ new line
 
   const upiLink = `upi://pay?pa=${encodeURIComponent(
     upiId
@@ -727,6 +731,18 @@ function PayBox({ draft, onMarked }) {
     }
   }, [alreadyUnlocked, storageKey]);
 
+  /* ✅ NEW: floating minimized button (when unlocked & minimized) */
+  if (alreadyUnlocked && minimized) {
+    return (
+      <div
+        onClick={() => setMinimized(false)}
+        className="fixed bottom-4 right-4 bg-green-600 text-white px-4 py-2 rounded-full shadow-lg cursor-pointer animate-pulse z-50"
+      >
+        💾 Download PDF
+      </div>
+    );
+  }
+
   return (
     <div className="space-y-2 text-xs md:text-sm">
       <div>
@@ -783,12 +799,39 @@ function PayBox({ draft, onMarked }) {
         </div>
       )}
 
-      {/* 4️⃣ Unlocked */}
+      {/* 4️⃣ Unlocked (with Minimize button) */}
       {alreadyUnlocked && (
-        <div className="flex items-center gap-2 bg-green-50 border border-green-200 rounded-lg px-3 py-2">
-          <span className="text-green-700 text-xs">
-            ✅ Approved — content unlocked. You can now view and download the PDF.
-          </span>
+        <div className="bg-green-50 border border-green-200 rounded-lg px-3 py-2">
+          <div className="flex justify-between items-center">
+            <span className="text-green-700 text-xs">
+              ✅ Approved — content unlocked. You can now view and download your file.
+            </span>
+            <button
+              onClick={() => setMinimized(true)}
+              className="text-[10px] text-green-600 underline animate-pulse"
+            >
+              Minimize
+            </button>
+          </div>
+
+          <div className="mt-2 flex gap-2">
+            <a
+              href={`/api/research-drafting/${draft._id}/export?fmt=pdf`}
+              className="px-2 py-1 bg-indigo-600 text-white rounded-lg text-xs"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              PDF
+            </a>
+            <a
+              href={`/api/research-drafting/${draft._id}/export?fmt=docx`}
+              className="px-2 py-1 bg-indigo-100 text-indigo-700 rounded-lg text-xs"
+              target="_blank"
+              rel="noopener noreferrer"
+            >
+              Word
+            </a>
+          </div>
         </div>
       )}
 
