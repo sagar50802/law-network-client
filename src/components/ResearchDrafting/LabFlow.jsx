@@ -1,6 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { fetchDraft, genStep, markPaid } from "../../utils/researchDraftingApi";
-import { markPaid } from "../../utils/researchDraftingApi";
+
 
 const steps = [
   { key: "abstract", title: "Put your Abstract" },
