@@ -10,7 +10,9 @@ export function MediaBoard({ media = {}, autoPlay = true, isPlaying = true }) {
   const audioRef = useRef(null);
   const [audioActive, setAudioActive] = useState(false);
 
-  // Handle auto-play / pause when `isPlaying` changes
+  /* ---------------------------------------------------------------------- */
+  /* 🎧 Handle auto-play / pause when `isPlaying` changes                   */
+  /* ---------------------------------------------------------------------- */
   useEffect(() => {
     const vid = videoRef.current;
     const aud = audioRef.current;
@@ -28,6 +30,9 @@ export function MediaBoard({ media = {}, autoPlay = true, isPlaying = true }) {
     }
   }, [isPlaying, autoPlay, videoUrl, audioUrl]);
 
+  /* ---------------------------------------------------------------------- */
+  /* 🎥 Render Media Board                                                  */
+  /* ---------------------------------------------------------------------- */
   return (
     <div className="bg-slate-950/95 rounded-2xl p-3 md:p-4 border border-slate-800 flex flex-col md:flex-row gap-3 media-fade-in">
       {/* ---------- Video Section ---------- */}
@@ -40,8 +45,8 @@ export function MediaBoard({ media = {}, autoPlay = true, isPlaying = true }) {
             controls
             playsInline
             preload="metadata"
-            controlsList="nodownload"   // 🚫 hides download button
-            disablePictureInPicture     // 🚫 disables PiP
+            controlsList="nodownload" /* 🚫 hides download button */
+            disablePictureInPicture /* 🚫 disables PiP */
           />
         ) : (
           <div className="w-full aspect-video rounded-xl bg-slate-800 flex items-center justify-center text-slate-500 text-sm">
@@ -54,13 +59,13 @@ export function MediaBoard({ media = {}, autoPlay = true, isPlaying = true }) {
           <audio
             ref={audioRef}
             src={audioUrl}
-            className="w-full mt-3"     // ✅ visible bar below video
+            className="w-full mt-3" /* ✅ visible bar below video */
             preload="metadata"
-            controls                    // ✅ play / pause / volume
+            controls /* ✅ play / pause / volume */
           />
         )}
 
-        {/* Waveform (animated if active) */}
+        {/* ---------- Waveform Visualization ---------- */}
         <div className="mt-2 h-8 bg-slate-900 rounded-lg flex items-center px-2 gap-[2px] overflow-hidden">
           {Array.from({ length: 32 }).map((_, i) => (
             <div
@@ -75,15 +80,15 @@ export function MediaBoard({ media = {}, autoPlay = true, isPlaying = true }) {
       </div>
 
       {/* ---------- Image / Thumbnail ---------- */}
-      <div className="w-full md:w-40 flex-shrink-0 flex flex-col justify-center">
+      <div className="w-full md:w-1/3 flex-shrink-0 flex flex-col justify-center">
         {imageUrl ? (
           <img
             src={imageUrl}
             alt="Slide illustration"
-            className="w-full h-full object-cover rounded-xl border border-slate-700"
+            className="w-full max-h-[320px] object-contain rounded-xl border border-slate-700 mx-auto"
           />
         ) : (
-          <div className="w-full min-h-[120px] rounded-xl bg-slate-800 flex items-center justify-center text-slate-500 text-xs">
+          <div className="w-full min-h-[160px] rounded-xl bg-slate-800 flex items-center justify-center text-slate-500 text-xs">
             Illustration
           </div>
         )}
@@ -105,6 +110,9 @@ export function MediaControlPanel({ active }) {
   );
 }
 
+/* -------------------------------------------------------------------------- */
+/* 🎛️ MediaIcon — small status badge                                         */
+/* -------------------------------------------------------------------------- */
 function MediaIcon({ emoji, label, active }) {
   return (
     <div
