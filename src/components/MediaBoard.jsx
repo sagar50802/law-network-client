@@ -40,8 +40,8 @@ export function MediaBoard({ media = {}, autoPlay = true, isPlaying = true }) {
             controls
             playsInline
             preload="metadata"
-            controlsList="nodownload"         // 🚫 hides download button
-            disablePictureInPicture            // 🚫 disables PiP mode
+            controlsList="nodownload"   // 🚫 hides download button
+            disablePictureInPicture     // 🚫 disables PiP
           />
         ) : (
           <div className="w-full aspect-video rounded-xl bg-slate-800 flex items-center justify-center text-slate-500 text-sm">
@@ -54,9 +54,9 @@ export function MediaBoard({ media = {}, autoPlay = true, isPlaying = true }) {
           <audio
             ref={audioRef}
             src={audioUrl}
-            className="w-full mt-2"            // ✅ show player with controls
+            className="w-full mt-3"     // ✅ visible bar below video
             preload="metadata"
-            controls                            // ✅ adds play/pause/volume
+            controls                    // ✅ play / pause / volume
           />
         )}
 
