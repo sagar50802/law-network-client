@@ -1,4 +1,6 @@
-/* src/components/TeacherAvatarCard.css */
+/* ==========================================================
+   🎓 TeacherAvatarCard — Styling & Speaking Animation
+   ========================================================== */
 
 /* ---------- Container ---------- */
 .teacher-avatar-container {
@@ -11,14 +13,17 @@
 
 /* ---------- Avatar Image ---------- */
 .teacher-avatar-img {
-  width: 6rem; /* same size */
+  width: 6rem;
   height: 6rem;
-  border-radius: 50%; /* ✅ make it circular instead of square */
+  border-radius: 50%;
   object-fit: cover;
   border: 2px solid rgba(71, 85, 105, 0.7); /* slate-600 */
   box-shadow: 0 0 8px rgba(0, 0, 0, 0.4);
-  transition: transform 0.3s ease, box-shadow 0.3s ease, border 0.3s ease;
-  background-color: #1e293b; /* fallback background */
+  background-color: #1e293b; /* slate-800 fallback */
+  transition:
+    transform 0.3s ease,
+    box-shadow 0.3s ease,
+    border-color 0.3s ease;
 }
 
 /* ---------- Speaking Glow ---------- */
@@ -35,14 +40,15 @@
   position: absolute;
   top: 50%;
   left: 50%;
-  width: 7.2rem; /* slightly larger than image */
+  width: 7.2rem;
   height: 7.2rem;
   transform: translate(-50%, -50%);
   border-radius: 50%;
   pointer-events: none;
-  border: 3px solid rgba(16, 185, 129, 0.5); /* emerald-400/70 */
+  border: 3px solid rgba(16, 185, 129, 0.5);
   box-shadow: 0 0 25px rgba(16, 185, 129, 0.4);
   animation: ringPulse 1.5s ease-in-out infinite;
+  z-index: 0;
 }
 
 /* ---------- Pulse Animation ---------- */
@@ -57,8 +63,21 @@
   }
 }
 
-/* ---------- Name & Text below ---------- */
+/* ---------- Text / Name Section ---------- */
 .teacher-avatar-container .text-center {
   margin-top: 0.5rem;
   text-align: center;
+}
+
+/* ---------- Responsive Scaling ---------- */
+@media (min-width: 768px) {
+  .teacher-avatar-img {
+    width: 7rem;
+    height: 7rem;
+  }
+
+  .teacher-avatar-ring {
+    width: 8.2rem;
+    height: 8.2rem;
+  }
 }
