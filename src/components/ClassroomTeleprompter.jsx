@@ -1,12 +1,12 @@
 import React, { useEffect, useState, useRef } from "react";
 
 /* -------------------------------------------------------------------------- */
-/* 🎨 Highlight Logic — persistent colored groups + underline animations       */
+/* 🎨 Highlight Logic — persistent note-style color highlighting              */
 /* -------------------------------------------------------------------------- */
 function highlightSentence(sentence = "") {
   let html = sentence;
 
-  // Block highlight groups (colored boxes)
+  // Block note color groups
   html = html.replace(/\[red](.+?)\[\/red]/g,
     '<span class="block bg-red-100 border-l-4 border-red-400 text-red-800 font-medium rounded px-2 py-0.5 my-1">$1</span>'
   );
@@ -20,7 +20,7 @@ function highlightSentence(sentence = "") {
     '<span class="block bg-yellow-100 border-l-4 border-yellow-400 text-yellow-800 font-medium rounded px-2 py-0.5 my-1">$1</span>'
   );
 
-  // Inline emphasis tags
+  // Inline tags — keep color accent inside sentences
   html = html.replace(/\[note](.+?)\[\/note]/g,
     '<span class="bg-amber-100 text-amber-800 italic rounded px-1">$1</span>'
   );
@@ -38,7 +38,7 @@ function highlightSentence(sentence = "") {
 }
 
 /* -------------------------------------------------------------------------- */
-/* ✍️ Handwritten Notebook-Style Teleprompter                                 */
+/* 📒 Persistent Highlight Notebook Teleprompter                              */
 /* -------------------------------------------------------------------------- */
 export default function ClassroomTeleprompter({
   slide,
@@ -57,12 +57,11 @@ export default function ClassroomTeleprompter({
     lastCompletedRef.current = null;
   }, [slide?._id]);
 
-  /* ✍️ Update text while speaking */
+  /* ✍️ Update displayed text */
   useEffect(() => {
     if (!currentSentence) return;
     setTypedText(currentSentence);
 
-    // Add to history when done
     if (progress >= 1 && currentSentence.trim()) {
       if (lastCompletedRef.current !== currentSentence) {
         lastCompletedRef.current = currentSentence;
@@ -71,62 +70,60 @@ export default function ClassroomTeleprompter({
     }
   }, [currentSentence, progress]);
 
-  /* 🧭 Smooth scroll when new text appears */
+  /* 🧭 Auto-scroll on new text */
   useEffect(() => {
     const el = containerRef.current;
     if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   }, [history, typedText]);
 
+  /* 📊 Progress bar width */
   const progressWidth = `${Math.min(100, Math.floor(progress * 100))}%`;
 
   /* 🧩 Render notebook look */
   return (
-    <div
-      className="relative bg-white text-gray-900 rounded-2xl px-5 py-4 md:px-6 md:py-5 shadow-lg border border-gray-300 
-                 max-h-[55vh] overflow-hidden flex flex-col transition-all duration-300"
-      style={{
-        backgroundImage: `
-          repeating-linear-gradient(
-            to bottom,
-            rgba(59,130,246,0.10) 0px,
-            rgba(59,130,246,0.10) 1px,
-            transparent 1.8em
-          )
-        `,
-        fontFamily: "'Kalam', 'Patrick Hand', cursive",
-      }}
-    >
-      {/* Red margin line */}
-      <div className="absolute left-[18px] top-0 bottom-0 w-[1.5px] bg-red-400 opacity-60 z-0"></div>
+    <div className="relative bg-white text-gray-900 rounded-2xl px-5 py-4 md:px-6 md:py-5 shadow-lg border border-gray-300 max-h-[55vh] overflow-hidden flex flex-col transition-all duration-300">
 
-      {/* Scrollable area */}
+      {/* 📓 Notebook background */}
       <div
         ref={containerRef}
-        className="flex-1 overflow-y-auto pr-3 custom-scrollbar leading-relaxed relative z-10 pl-8"
+        className="flex-1 overflow-y-auto pr-3 custom-scrollbar font-serif leading-relaxed relative z-10"
+        style={{
+          backgroundImage: `
+            linear-gradient(to bottom, rgba(59,130,246,0.15) 1px, transparent 1px),
+            linear-gradient(to right, rgba(239,68,68,0.6) 24px, transparent 24px)
+          `,
+          backgroundSize: "100% 1.8em, 100% 100%",
+          backgroundRepeat: "repeat, no-repeat",
+          backgroundPosition: "0 0, 0 0",
+        }}
       >
-        {/* Past lines with persistent color */}
-        {history.map((s, idx) => (
-          <p
-            key={idx}
-            className="text-[15px] md:text-base mb-1 animate-fadeIn"
-            dangerouslySetInnerHTML={{ __html: highlightSentence(s) }}
-          />
-        ))}
+        {/* Thin red margin */}
+        <div className="absolute left-[23px] top-0 bottom-0 w-[1.5px] bg-red-400 opacity-60 z-0"></div>
 
-        {/* Current line with glowing underline */}
-        {typedText && (
-          <p
-            className="text-base md:text-lg font-medium mb-1 animate-fadeIn relative bg-emerald-50/70 border-l-4 border-emerald-400 pl-2 rounded"
-            style={{
-              boxShadow: "inset 0 -3px 0 rgba(16,185,129,0.6)",
-            }}
-            dangerouslySetInnerHTML={{ __html: highlightSentence(typedText) }}
-          >
-          </p>
-        )}
+        {/* 🕓 Past sentences stay colored */}
+        <div className="pl-8">
+          {history.map((s, idx) => (
+            <p
+              key={idx}
+              className="text-sm md:text-base mb-1 animate-fadeIn"
+              dangerouslySetInnerHTML={{ __html: highlightSentence(s) }}
+            />
+          ))}
+
+          {/* ✍️ Current sentence (distinct green highlight) */}
+          {typedText && (
+            <p
+              className="text-base md:text-lg font-medium mb-1 animate-fadeIn bg-emerald-50 border-l-4 border-emerald-400 pl-2 rounded shadow-sm relative"
+              style={{
+                boxShadow: "inset 0 -3px 0 rgba(16,185,129,0.4)",
+              }}
+              dangerouslySetInnerHTML={{ __html: highlightSentence(typedText) }}
+            />
+          )}
+        </div>
       </div>
 
-      {/* Progress bar */}
+      {/* 📊 Progress bar */}
       <div className="mt-2 h-1.5 bg-gray-200 rounded-full overflow-hidden">
         <div
           className="h-full bg-emerald-500 transition-[width] duration-200 ease-linear"
@@ -134,7 +131,7 @@ export default function ClassroomTeleprompter({
         />
       </div>
 
-      {/* Topic title */}
+      {/* 🏷 Topic Title */}
       <div className="mt-2 text-xs uppercase tracking-wide text-gray-500 font-medium text-center">
         {slide?.topicTitle || "Untitled"}
       </div>
@@ -143,27 +140,15 @@ export default function ClassroomTeleprompter({
 }
 
 /* -------------------------------------------------------------------------- */
-/* 🧾 Add this to index.css or tailwind.css                                   */
+/* 📜 Add this CSS in index.css or tailwind.css once                          */
 /* -------------------------------------------------------------------------- */
 /*
-@import url('https://fonts.googleapis.com/css2?family=Kalam:wght@400;700&family=Patrick+Hand&display=swap');
-
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(4px); }
   to   { opacity: 1; transform: translateY(0); }
 }
 .animate-fadeIn {
   animation: fadeIn 0.3s ease-out;
-}
-
-/* Glowing underline animation for active line */
-@keyframes glowUnderline {
-  0% { box-shadow: inset 0 -3px 0 rgba(16,185,129,0.2); }
-  50% { box-shadow: inset 0 -3px 0 rgba(16,185,129,0.6); }
-  100% { box-shadow: inset 0 -3px 0 rgba(16,185,129,0.2); }
-}
-p.activeLine {
-  animation: glowUnderline 1.5s infinite ease-in-out;
 }
 
 .custom-scrollbar::-webkit-scrollbar {
