@@ -1,4 +1,6 @@
-/* src/components/LecturePlaylistSidebar.css */
+/* -------------------------------------------------------------------------- */
+/* 🎓 LecturePlaylistSidebar Styles                                           */
+/* -------------------------------------------------------------------------- */
 
 /* --- Live indicator pulse --- */
 @keyframes pulseDot {
@@ -7,18 +9,20 @@
     opacity: 1;
   }
   50% {
-    transform: scale(1.8);
+    transform: scale(1.7);
     opacity: 0.5;
   }
 }
 
 .dot-live {
   background-color: rgb(52 211 153); /* emerald-400 */
-  animation: pulseDot 1.3s ease-in-out infinite;
+  animation: pulseDot 1.2s ease-in-out infinite;
+  box-shadow: 0 0 6px rgba(52, 211, 153, 0.6);
 }
 
 .dot-scheduled {
   background-color: rgb(251 191 36); /* amber-400 */
+  box-shadow: 0 0 4px rgba(251, 191, 36, 0.5);
 }
 
 .dot-completed {
@@ -29,10 +33,50 @@
   background-color: rgb(71 85 105); /* slate-700 */
 }
 
-/* --- Entry transition --- */
+/* -------------------------------------------------------------------------- */
+/* 🎵 Playlist items                                                          */
+/* -------------------------------------------------------------------------- */
+
 .playlist-item {
   transition: all 0.25s ease;
+  position: relative;
 }
+
 .playlist-item:hover {
   transform: translateX(3px);
+  background-color: rgba(148, 163, 184, 0.1); /* slate-400/10 */
+}
+
+.playlist-item:focus-visible {
+  outline: 2px solid rgb(52 211 153);
+  outline-offset: 2px;
+}
+
+/* --- Active item glow --- */
+.playlist-item.active,
+.playlist-item[aria-current="true"] {
+  box-shadow: 0 0 8px rgba(52, 211, 153, 0.4) inset,
+              0 0 8px rgba(52, 211, 153, 0.3);
+  transform: translateX(2px);
+}
+
+/* -------------------------------------------------------------------------- */
+/* 🪶 Scroll fade effect (optional polish)                                   */
+/* -------------------------------------------------------------------------- */
+
+aside::-webkit-scrollbar {
+  width: 6px;
+}
+
+aside::-webkit-scrollbar-thumb {
+  background-color: rgba(100, 116, 139, 0.4);
+  border-radius: 3px;
+}
+
+aside::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(100, 116, 139, 0.7);
+}
+
+aside {
+  scroll-behavior: smooth;
 }
