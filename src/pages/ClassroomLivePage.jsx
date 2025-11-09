@@ -162,7 +162,6 @@ export default function ClassroomLivePage() {
         return;
       }
 
-      // ✅ Pass both setCurrentSentence + onProgress: setProgress
       playClassroomSpeech({
         slide: currentSlide,
         isMuted,
@@ -205,32 +204,45 @@ export default function ClassroomLivePage() {
     setIsPlaying(true);
   };
 
+  /* ---------------------------------------------------------------------- */
+  /* ✅ SAFER: Pause / Resume / Mute (no engine change)                     */
+  /* ---------------------------------------------------------------------- */
   const handlePlayPause = () => {
+    const synth = window.speechSynthesis;
+    if (!synth) return;
+
     if (isPlaying) {
-      stopClassroomSpeech(speechRef);
+      if (synth.speaking && !synth.paused) synth.pause();
+      console.log("⏸ Paused voice");
       setIsPlaying(false);
       setIsSpeaking(false);
     } else {
-      // restart same slide
-      setProgress(0);
-      setCurrentSentence("");
-      setIsPlaying(true);
+      if (synth.paused) {
+        synth.resume();
+        console.log("▶ Resumed voice");
+        setIsPlaying(true);
+      } else {
+        setProgress(0);
+        setCurrentSentence("");
+        setIsPlaying(true);
+      }
     }
   };
 
   const handleMuteToggle = () => {
+    const synth = window.speechSynthesis;
     setIsMuted((prev) => {
       const next = !prev;
-      if (next) stopClassroomSpeech(speechRef);
+      if (next) {
+        if (synth.speaking) synth.pause();
+        console.log("🔇 Muted speech (paused)");
+      } else {
+        if (synth.paused) synth.resume();
+        console.log("🔈 Unmuted speech (resumed)");
+      }
       return next;
     });
   };
-
-  const handleRaiseHand = () => {
-    alert("✋ Student raised hand — feature coming soon!");
-  };
-
-  const handleReaction = (emoji) => console.log("Student reaction:", emoji);
 
   /* ---------------------------------------------------------------------- */
   /* ✅ Render States                                                      */
@@ -258,13 +270,21 @@ export default function ClassroomLivePage() {
         <div className="flex items-center gap-2 text-xs md:text-sm">
           <button
             onClick={handlePlayPause}
-            className="px-3 py-1.5 rounded-full bg-emerald-500 text-black font-semibold text-xs"
+            className={`px-3 py-1.5 rounded-full font-semibold text-xs ${
+              isPlaying
+                ? "bg-emerald-500 text-black"
+                : "bg-yellow-400 text-black"
+            }`}
           >
-            {isPlaying ? "Pause" : "Play"}
+            {isPlaying ? "Pause" : "Resume"}
           </button>
           <button
             onClick={handleMuteToggle}
-            className="px-3 py-1.5 rounded-full bg-slate-800 text-slate-100 text-xs border border-slate-600"
+            className={`px-3 py-1.5 rounded-full text-xs border ${
+              isMuted
+                ? "bg-red-600 text-white border-red-400"
+                : "bg-slate-800 text-slate-100 border-slate-600"
+            }`}
           >
             {isMuted ? "Unmute" : "Mute"}
           </button>
@@ -274,23 +294,19 @@ export default function ClassroomLivePage() {
       {/* ---------- Main Section ---------- */}
       <main className="flex-1 px-4 md:px-8 py-4 md:py-6 flex flex-col gap-4">
         <div className="flex-1 grid grid-cols-1 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,2.4fr)_minmax(0,1.1fr)] gap-4">
-          {/* ---------- Teacher Avatar ---------- */}
           <TeacherAvatarCard
             teacher={currentLecture}
             subject={currentLecture?.subject}
             isSpeaking={isSpeaking}
           />
 
-          {/* ---------- Teleprompter + Media Board ---------- */}
           <section className="flex flex-col gap-3">
             <ClassroomTeleprompter
               slide={currentSlide}
               currentSentence={currentSentence}
               progress={progress}
             />
-
             <MediaBoard media={currentSlide.media} />
-
             <MediaControlPanel
               active={{
                 audio: !!currentSlide.media?.audioUrl,
@@ -298,8 +314,6 @@ export default function ClassroomLivePage() {
                 image: !!currentSlide.media?.imageUrl,
               }}
             />
-
-            {/* ---------- Slide Navigation ---------- */}
             <div className="mt-2 flex items-center justify-end gap-2 text-xs">
               <button
                 className="px-3 py-1 rounded-full bg-slate-800 border border-slate-600"
@@ -319,7 +333,6 @@ export default function ClassroomLivePage() {
             </div>
           </section>
 
-          {/* ---------- Playlist Sidebar ---------- */}
           <LecturePlaylistSidebar
             lectures={lectures}
             currentLectureId={selectedLectureId}
@@ -333,8 +346,12 @@ export default function ClassroomLivePage() {
           />
         </div>
 
-        {/* ---------- Students Row ---------- */}
-        <StudentsRow onRaiseHand={handleRaiseHand} onReaction={handleReaction} />
+        <StudentsRow
+          onRaiseHand={() =>
+            alert("✋ Student raised hand — feature coming soon!")
+          }
+          onReaction={(emoji) => console.log("Student reaction:", emoji)}
+        />
       </main>
 
       <footer className="text-xs text-slate-600 text-center py-3 border-t border-slate-800">
