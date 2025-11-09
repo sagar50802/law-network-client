@@ -1,9 +1,12 @@
 // ✅ Classroom Voice Engine
-// Handles reading teleprompter text slide-by-slide using the browser's SpeechSynthesis API.
+// Reads teleprompter text slide-by-slide with multilingual (Hindi / English / Hinglish) support
 
-export async function waitForVoices(maxWait = 1000) {
-  // Waits for speech voices to become available (important for Chrome)
+/* -------------------------------------------------------------------------- */
+/* ✅ Wait until browser voices are ready                                     */
+/* -------------------------------------------------------------------------- */
+export async function waitForVoices(maxWait = 2000) {
   const synth = window.speechSynthesis;
+  if (!synth) return [];
   let voices = synth.getVoices();
   if (voices.length) return voices;
 
@@ -19,43 +22,57 @@ export async function waitForVoices(maxWait = 1000) {
 }
 
 /* -------------------------------------------------------------------------- */
-/* ✅ Split content into readable chunks                                      */
+/* ✅ Split text into small readable chunks                                   */
 /* -------------------------------------------------------------------------- */
 export function splitIntoChunks(content) {
   if (!content) return [];
   return content
     .replace(/\s+/g, " ")
-    .split(/(?<=[.?!])\s+/)
+    .split(/(?<=[.?!।])\s+/) // supports Hindi “।” also
     .map((s) => s.trim())
     .filter(Boolean);
 }
 
 /* -------------------------------------------------------------------------- */
-/* ✅ Voice Picker (auto-detects language / teacher preference)               */
+/* ✅ Choose a good voice automatically                                       */
 /* -------------------------------------------------------------------------- */
-export function pickVoice(teacher) {
+export function pickVoice(teacher = {}) {
   const voices = window.speechSynthesis.getVoices();
   if (!voices.length) return null;
 
-  // 1️⃣ Try explicit name match
+  // Try explicit teacher voice preference
   if (teacher.voiceName) {
-    const found = voices.find((v) => v.name === teacher.voiceName);
-    if (found) return found;
+    const v = voices.find((x) => x.name === teacher.voiceName);
+    if (v) return v;
   }
 
-  // 2️⃣ Simple language heuristic
-  const text = `${teacher.role || ""} ${teacher.name || ""}`;
-  const looksHindi = /[क़खगघङचछजझञटठडढणतथदधनपफबभमयरलवशषसह]/.test(text);
+  // Detect Hindi or Hinglish
+  const sample = `${teacher.name || ""} ${teacher.role || ""}`;
+  const looksHindi =
+    /[अ-हक़-ॡफ़-य़]/.test(sample) ||
+    /हिन्दी|Hindi|Hinglish/i.test(sample);
 
-  let candidates = looksHindi
-    ? voices.filter((v) => v.lang.startsWith("hi") || v.lang.startsWith("en-IN"))
-    : voices.filter((v) => v.lang.startsWith("en"));
+  if (looksHindi) {
+    // Prefer Hindi or Indian English voices
+    return (
+      voices.find((v) => /hi-IN/i.test(v.lang)) ||
+      voices.find((v) => /en-IN/i.test(v.lang)) ||
+      voices.find((v) => /India/i.test(v.name)) ||
+      voices[0]
+    );
+  }
 
-  return candidates[0] || voices[0];
+  // Otherwise prefer English
+  return (
+    voices.find((v) => /en-IN/i.test(v.lang)) ||
+    voices.find((v) => /en-US/i.test(v.lang)) ||
+    voices.find((v) => /en-GB/i.test(v.lang)) ||
+    voices[0]
+  );
 }
 
 /* -------------------------------------------------------------------------- */
-/* ✅ Main Speech Engine                                                      */
+/* ✅ Speak slide text sentence-by-sentence                                   */
 /* -------------------------------------------------------------------------- */
 export async function playClassroomSpeech({
   slide,
@@ -66,27 +83,26 @@ export async function playClassroomSpeech({
 }) {
   const synth = window.speechSynthesis;
   if (!synth) {
-    console.warn("⚠️ speechSynthesis not supported by this browser.");
+    console.warn("⚠️ speechSynthesis not supported");
     setCurrentSentence(slide.content || "");
-    onComplete && onComplete();
+    onComplete?.();
     return;
   }
 
-  // Cancel any running utterances
+  // Cancel anything currently playing
   synth.cancel();
   if (speechRef.current?.cancel) speechRef.current.cancel();
 
-  // Wait for voices to be available
   await waitForVoices();
 
   const chunks = splitIntoChunks(slide.content);
   if (!chunks.length) {
     setCurrentSentence(slide.content || "");
-    onComplete && onComplete();
+    onComplete?.();
     return;
   }
 
-  let index = 0;
+  let idx = 0;
   let cancelled = false;
 
   speechRef.current = {
@@ -99,18 +115,18 @@ export async function playClassroomSpeech({
 
   const speakNext = async () => {
     if (cancelled) return;
-    if (index >= chunks.length) {
+    if (idx >= chunks.length) {
       speechRef.current.isPlaying = false;
-      onComplete && onComplete();
+      onComplete?.();
       return;
     }
 
-    const sentence = chunks[index++];
+    const sentence = chunks[idx++];
     setCurrentSentence(sentence);
 
     if (isMuted) {
-      // If muted, skip speaking but simulate small delay between sentences
-      setTimeout(speakNext, 200);
+      // skip actual speech, simulate delay for sync
+      setTimeout(speakNext, 400);
       return;
     }
 
@@ -119,50 +135,42 @@ export async function playClassroomSpeech({
       const voice = pickVoice(slide.teacher || {});
       if (voice) utter.voice = voice;
 
-      // Smooth rate control
-      utter.rate =
-        sentence.length > 200
-          ? 1.0
-          : sentence.length > 100
-          ? 1.1
-          : 1.2;
-
+      // Smooth natural speech speed based on length
+      const len = sentence.length;
+      utter.rate = len > 180 ? 0.9 : len > 100 ? 1.0 : 1.1;
       utter.pitch = 1.0;
       utter.volume = 1.0;
+      utter.lang = voice?.lang || "en-IN";
 
       utter.onend = () => {
         if (!cancelled) speakNext();
       };
-
-      utter.onerror = (e) => {
-        console.error("Speech synthesis error:", e);
+      utter.onerror = (err) => {
+        console.error("Speech error:", err);
         if (!cancelled) speakNext();
       };
 
       synth.speak(utter);
     } catch (err) {
-      console.error("Error creating utterance:", err);
+      console.error("Utterance error:", err);
       if (!cancelled) speakNext();
     }
   };
 
-  // Kick off sequence
   speakNext();
 }
 
 /* -------------------------------------------------------------------------- */
-/* ✅ Stop Function                                                          */
+/* ✅ Stop playback cleanly                                                  */
 /* -------------------------------------------------------------------------- */
 export function stopClassroomSpeech(speechRef) {
   const synth = window.speechSynthesis;
   try {
     if (synth) synth.cancel();
     if (speechRef.current?.cancel) speechRef.current.cancel();
-  } catch (err) {
-    console.error("Error stopping speech:", err);
+  } catch (e) {
+    console.error("Stop speech error:", e);
   } finally {
-    if (speechRef.current) {
-      speechRef.current.isPlaying = false;
-    }
+    if (speechRef.current) speechRef.current.isPlaying = false;
   }
 }
