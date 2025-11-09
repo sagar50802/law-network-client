@@ -12,29 +12,40 @@ import {
   unlockSpeechOnUserClick,
 } from "../voice/ClassroomVoiceEngine.js";
 
+/* Base API for classroom */
+const API_BASE =
+  (import.meta.env.VITE_API_URL || "https://law-network.onrender.com/api") +
+  "/classroom";
+
 /* -------------------------------------------------------------------------- */
-/* ✅ Main Component — ClassroomLivePage                                      */
+/* ✅ ClassroomLivePage                                                       */
 /* -------------------------------------------------------------------------- */
 export default function ClassroomLivePage() {
   /* ------------------------- State Management ---------------------------- */
   const [slides, setSlides] = useState([]);
   const [lectures, setLectures] = useState([]);
   const [selectedLectureId, setSelectedLectureId] = useState(null);
+
   const [currentIndex, setCurrentIndex] = useState(0);
   const [currentSentence, setCurrentSentence] = useState("");
   const [progress, setProgress] = useState(0);
+
   const [isPlaying, setIsPlaying] = useState(true);
   const [isMuted, setIsMuted] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
+
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   /* ------------------------- Refs ---------------------------------------- */
   const speechRef = useRef({ isPlaying: false, cancel: () => {} });
+
   const currentSlide = slides[currentIndex] || null;
+  const currentLecture =
+    lectures.find((l) => l._id === selectedLectureId) || null;
 
   /* ---------------------------------------------------------------------- */
-  /* ✅ Unlock Speech Autoplay (Chrome / Edge browser restriction)           */
+  /* ✅ Unlock Speech Autoplay (Chrome / Edge browser restriction)          */
   /* ---------------------------------------------------------------------- */
   useEffect(() => {
     unlockSpeechOnUserClick();
@@ -46,22 +57,17 @@ export default function ClassroomLivePage() {
   useEffect(() => {
     const loadLectures = async () => {
       try {
-        const res = await fetch(
-          `${
-            import.meta.env.VITE_API_URL ||
-            "https://law-network.onrender.com/api"
-          }/classroom/lectures?status=released`
-        );
-        const data = await res.json();
+        const res = await fetch(`${API_BASE}/lectures?status=released`);
+        const json = await res.json();
+        const list = json.data || json;
 
-        const list = data.data || data;
         if (Array.isArray(list)) {
           setLectures(list);
           if (list.length > 0 && !selectedLectureId) {
             setSelectedLectureId(list[0]._id);
           }
         } else {
-          console.warn("Unexpected lectures response:", data);
+          console.warn("Unexpected lectures response:", json);
           setLectures([]);
         }
       } catch (err) {
@@ -71,27 +77,29 @@ export default function ClassroomLivePage() {
     };
 
     loadLectures();
-  }, []);
+  }, []); // run once
 
   /* ---------------------------------------------------------------------- */
   /* ✅ Load Slides for Selected Lecture                                    */
   /* ---------------------------------------------------------------------- */
   useEffect(() => {
     if (!selectedLectureId) return;
+
     const loadSlides = async () => {
       setLoading(true);
       try {
         const res = await fetch(
-          `${
-            import.meta.env.VITE_API_URL ||
-            "https://law-network.onrender.com/api"
-          }/classroom/lectures/${selectedLectureId}/slides`
+          `${API_BASE}/lectures/${selectedLectureId}/slides`
         );
-        const data = await res.json();
-        const list = data.slides || data;
-        if (Array.isArray(list)) setSlides(list);
-        else {
-          console.warn("Unexpected slides response:", data);
+        const json = await res.json();
+        const list = json.slides || json;
+
+        if (Array.isArray(list)) {
+          setSlides(list);
+          setCurrentIndex(0);
+          console.log("📚 Slides loaded:", list.length);
+        } else {
+          console.warn("Unexpected slides response:", json);
           setSlides([]);
         }
       } catch (err) {
@@ -116,12 +124,13 @@ export default function ClassroomLivePage() {
   }, []);
 
   /* ---------------------------------------------------------------------- */
-  /* ✅ Handle Next Slide                                                    */
+  /* ✅ Move to next slide when voice is done                               */
   /* ---------------------------------------------------------------------- */
   const handleNextSlide = useCallback(() => {
     setProgress(0);
     setCurrentSentence("");
     setIsSpeaking(false);
+
     setTimeout(() => {
       setCurrentIndex((prev) =>
         prev + 1 < slides.length ? prev + 1 : prev
@@ -130,7 +139,7 @@ export default function ClassroomLivePage() {
   }, [slides.length]);
 
   /* ---------------------------------------------------------------------- */
-  /* ✅ Voice Engine — synchronized with Teleprompter                       */
+  /* ✅ Voice Engine — synchronized with Teleprompter & Avatar              */
   /* ---------------------------------------------------------------------- */
   useEffect(() => {
     let mounted = true;
@@ -138,16 +147,33 @@ export default function ClassroomLivePage() {
     async function startSpeech() {
       if (!currentSlide || !mounted) return;
 
-      stopClassroomSpeech(speechRef);
-      await waitForVoices(3000);
+      console.log("▶️ Starting speech for slide:", currentSlide.topicTitle);
 
-      const voices = window.speechSynthesis.getVoices();
+      // Stop anything currently speaking
+      stopClassroomSpeech(speechRef);
+      setProgress(0);
+      setCurrentSentence("");
+      setIsSpeaking(false);
+
+      await waitForVoices(3000);
+      const voices = window.speechSynthesis?.getVoices() || [];
+      console.log("🎙 Voices available in page:", voices.length);
+
       if (!voices.length) {
+        // If no voices, just show the full content
         setCurrentSentence(currentSlide.content || "");
         return;
       }
 
-      if (!isPlaying || isMuted) return;
+      if (!isPlaying || isMuted) {
+        console.log(
+          "⏸ Not starting speech because isPlaying=",
+          isPlaying,
+          "isMuted=",
+          isMuted
+        );
+        return;
+      }
 
       playClassroomSpeech({
         slide: currentSlide,
@@ -155,21 +181,37 @@ export default function ClassroomLivePage() {
         speechRef,
         setCurrentSentence,
         onProgress: setProgress,
-        onStartSpeaking: () => setIsSpeaking(true),
-        onStopSpeaking: () => setIsSpeaking(false),
-        onComplete: handleNextSlide,
+        onStartSpeaking: () => {
+          console.log("🔊 Avatar speaking ON");
+          setIsSpeaking(true);
+        },
+        onStopSpeaking: () => {
+          console.log("🔇 Avatar speaking OFF");
+          setIsSpeaking(false);
+        },
+        onComplete: () => {
+          console.log("✅ Slide speech complete");
+          handleNextSlide();
+        },
       });
     }
 
     startSpeech();
+
     return () => {
       mounted = false;
       stopClassroomSpeech(speechRef);
     };
-  }, [currentSlide?._id, isPlaying, isMuted, slides.length, handleNextSlide]);
+  }, [
+    currentSlide?._id,
+    isPlaying,
+    isMuted,
+    slides.length,
+    handleNextSlide,
+  ]);
 
   /* ---------------------------------------------------------------------- */
-  /* ✅ Navigation + Control Handlers                                       */
+  /* ✅ Navigation + Controls                                               */
   /* ---------------------------------------------------------------------- */
   const goToSlide = (index) => {
     if (index < 0 || index >= slides.length) return;
@@ -242,7 +284,7 @@ export default function ClassroomLivePage() {
       {/* ---------- Header ---------- */}
       <header className="px-4 md:px-8 py-3 border-b border-slate-800 flex items-center justify-between">
         <div className="text-lg md:text-2xl font-semibold tracking-wide">
-          Classroom Live • {currentSlide.subject || "Lecture"}
+          Classroom Live • {currentLecture?.subject || "Lecture"}
         </div>
 
         <div className="flex items-center gap-2 text-xs md:text-sm">
@@ -266,9 +308,9 @@ export default function ClassroomLivePage() {
         <div className="flex-1 grid grid-cols-1 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,2.4fr)_minmax(0,1.1fr)] gap-4">
           {/* ---------- Teacher Avatar ---------- */}
           <TeacherAvatarCard
-            teacher={currentSlide.teacher}
-            subject={currentSlide.subject}
-            isSpeaking={isSpeaking} // ✅ avatar glow
+            teacher={currentLecture}                // ✅ from lecture
+            subject={currentLecture?.subject}
+            isSpeaking={isSpeaking}                 // ✅ glow when speaking
           />
 
           {/* ---------- Teleprompter + Media Board ---------- */}
@@ -332,10 +374,7 @@ export default function ClassroomLivePage() {
 
       {/* ---------- Footer ---------- */}
       <footer className="text-xs text-slate-600 text-center py-3 border-t border-slate-800">
-        ClassroomLivePage • connected to API (
-        {import.meta.env.VITE_API_URL ||
-          "https://law-network.onrender.com/api"}
-        )
+        ClassroomLivePage • connected to API ({API_BASE})
       </footer>
     </div>
   );
