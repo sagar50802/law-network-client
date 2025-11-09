@@ -98,9 +98,7 @@ export default function ClassroomLivePage() {
   useEffect(() => {
     if (!currentSlide) return;
 
-    // stop any existing speech
     stopClassroomSpeech(speechRef);
-
     if (!isPlaying || isMuted) return;
 
     playClassroomSpeech({
@@ -214,11 +212,23 @@ export default function ClassroomLivePage() {
       <main className="flex-1 px-4 md:px-8 py-4 md:py-6 flex flex-col gap-4">
         <div className="flex-1 grid grid-cols-1 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,2.4fr)_minmax(0,1.1fr)] gap-4">
           {/* ---------- Teacher Avatar ---------- */}
-          <TeacherAvatarCard
-            teacher={currentSlide.teacher}
-            subject={currentSlide.subject}
-            isSpeaking={isPlaying && !isMuted}
-          />
+          <div className="flex flex-col items-center text-center bg-slate-900 rounded-2xl p-4 border border-slate-800">
+            <img
+              src={
+                currentSlide.teacher?.avatarUrl ||
+                `/avatars/${currentSlide.teacher?.avatarType || "teacher1"}.png` ||
+                "/default-avatar.png"
+              }
+              alt="Teacher"
+              className="w-20 h-20 rounded-full border-2 border-emerald-400 object-cover mb-2"
+            />
+            <p className="text-white font-semibold">
+              {currentSlide.teacher?.name || "Teacher"}
+            </p>
+            <p className="text-slate-400 text-sm">
+              {currentSlide.teacher?.role || "Faculty"}
+            </p>
+          </div>
 
           {/* ---------- Board (Teleprompter + Media) ---------- */}
           <section className="flex flex-col gap-3">
@@ -272,16 +282,13 @@ export default function ClassroomLivePage() {
         </div>
 
         {/* ---------- Students Row ---------- */}
-        <StudentsRow
-          onRaiseHand={handleRaiseHand}
-          onReaction={handleReaction}
-        />
+        <StudentsRow onRaiseHand={handleRaiseHand} onReaction={handleReaction} />
       </main>
 
       {/* ---------- Footer Debug ---------- */}
       <footer className="text-xs text-slate-600 text-center py-3 border-t border-slate-800">
-        ClassroomLivePage • connected to API ({import.meta.env.VITE_API_URL ||
-          "https://law-network.onrender.com/api"})
+        ClassroomLivePage • connected to API (
+        {import.meta.env.VITE_API_URL || "https://law-network.onrender.com/api"})
       </footer>
     </div>
   );
