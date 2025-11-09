@@ -1,21 +1,44 @@
 import React, { useEffect, useState, useRef } from "react";
 
 /* -------------------------------------------------------------------------- */
-/* 🎨 Highlight Parser                                                        */
+/* 🎨 Highlight Logic – colorful note formatting                             */
 /* -------------------------------------------------------------------------- */
 function highlightSentence(sentence = "") {
   let html = sentence;
-  html = html.replace(/\*\*(.+?)\*\*/g, '<span class="text-yellow-300 font-semibold">$1</span>');
-  html = html.replace(/\[def](.+?)\[\/def]/g, '<span class="text-green-300">$1</span>');
-  html = html.replace(/\[ex](.+?)\[\/ex]/g, '<span class="text-sky-300">$1</span>');
-  html = html.replace(/\[note](.+?)\[\/note]/g, '<span class="bg-yellow-400/20 text-yellow-200 px-1 rounded">$1</span>');
-  html = html.replace(/\[red](.+?)\[\/red]/g, '<span class="text-red-300 font-semibold">$1</span>');
-  html = html.replace(/\[blue](.+?)\[\/blue]/g, '<span class="text-blue-300">$1</span>');
+
+  // Block highlight sections
+  html = html.replace(/\[red](.+?)\[\/red]/g,
+    '<span class="block bg-red-100 text-red-700 font-medium rounded-lg px-2 py-1 my-1 shadow-sm">$1</span>'
+  );
+  html = html.replace(/\[green](.+?)\[\/green]/g,
+    '<span class="block bg-green-100 text-green-700 font-medium rounded-lg px-2 py-1 my-1 shadow-sm">$1</span>'
+  );
+  html = html.replace(/\[blue](.+?)\[\/blue]/g,
+    '<span class="block bg-blue-100 text-blue-700 font-medium rounded-lg px-2 py-1 my-1 shadow-sm">$1</span>'
+  );
+  html = html.replace(/\[yellow](.+?)\[\/yellow]/g,
+    '<span class="block bg-yellow-100 text-yellow-800 font-medium rounded-lg px-2 py-1 my-1 shadow-sm">$1</span>'
+  );
+
+  // Inline tags
+  html = html.replace(/\[note](.+?)\[\/note]/g,
+    '<span class="bg-amber-100 text-amber-800 italic rounded px-1">$1</span>'
+  );
+  html = html.replace(/\[def](.+?)\[\/def]/g,
+    '<span class="font-semibold text-green-600">$1</span>'
+  );
+  html = html.replace(/\[ex](.+?)\[\/ex]/g,
+    '<span class="text-blue-600">$1</span>'
+  );
+  html = html.replace(/\*\*(.+?)\*\*/g,
+    '<span class="font-bold underline text-rose-700">$1</span>'
+  );
+
   return html;
 }
 
 /* -------------------------------------------------------------------------- */
-/* 🧠 ClassroomTeleprompter                                                   */
+/* 📘 Notebook Teleprompter Component                                        */
 /* -------------------------------------------------------------------------- */
 export default function ClassroomTeleprompter({
   slide,
@@ -24,88 +47,97 @@ export default function ClassroomTeleprompter({
 }) {
   const [typedText, setTypedText] = useState("");
   const [history, setHistory] = useState([]);
-  const smoothProgress = useRef(0);
-  const lastCompletedRef = useRef("");
   const containerRef = useRef(null);
+  const lastCompletedRef = useRef(null);
 
-  /* ---------------------- Reset on slide change ---------------------- */
+  /* 🧹 Reset when slide changes */
   useEffect(() => {
     setHistory([]);
     setTypedText("");
-    smoothProgress.current = 0;
-    lastCompletedRef.current = "";
+    lastCompletedRef.current = null;
   }, [slide?._id]);
 
-  /* ---------------------- Smooth typing effect ---------------------- */
+  /* ✍️ Display current sentence */
   useEffect(() => {
     if (!currentSentence) return;
-    const text = currentSentence;
-    const totalChars = text.length || 1;
+    setTypedText(currentSentence);
 
-    const interval = setInterval(() => {
-      smoothProgress.current += (progress - smoothProgress.current) * 0.3;
-      const shown = Math.floor(totalChars * smoothProgress.current);
-      setTypedText(text.slice(0, shown));
-
-      if (progress >= 0.99 && lastCompletedRef.current !== text && text.trim()) {
-        lastCompletedRef.current = text;
-        setHistory((prev) => [...prev.slice(-20), text]);
+    if (progress >= 1 && currentSentence.trim()) {
+      if (lastCompletedRef.current !== currentSentence) {
+        lastCompletedRef.current = currentSentence;
+        setHistory((prev) => [...prev.slice(-25), currentSentence]);
       }
-    }, 60);
+    }
+  }, [currentSentence, progress]);
 
-    return () => clearInterval(interval);
-  }, [progress, currentSentence]);
-
-  /* ---------------------- Auto-scroll smoothly ---------------------- */
+  /* 🧭 Auto-scroll */
   useEffect(() => {
     const el = containerRef.current;
     if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
-  }, [typedText, history]);
+  }, [history, typedText]);
 
+  /* 📊 Progress width */
   const progressWidth = `${Math.min(100, Math.floor(progress * 100))}%`;
 
-  /* ------------------------------------------------------------------ */
-  /* 🧩 Render UI                                                       */
-  /* ------------------------------------------------------------------ */
+  /* 🧩 Render */
   return (
-    <div className="bg-slate-900/95 text-slate-50 rounded-2xl px-5 py-4 md:px-7 md:py-5 shadow-inner border border-slate-700 max-h-[50vh] md:max-h-[45vh] overflow-hidden flex flex-col transition-all duration-300">
-      <div ref={containerRef} className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
-        {/* 📝 History as dimmed notes */}
-        {history.map((s, idx) => (
-          <p
-            key={idx}
-            className="text-sm md:text-base leading-relaxed mb-1 text-slate-400"
-            dangerouslySetInnerHTML={{ __html: highlightSentence(s) }}
-          />
-        ))}
+    <div className="relative bg-white text-gray-800 rounded-2xl px-6 py-5 shadow-md border border-gray-300 max-h-[55vh] overflow-hidden flex flex-col transition-all duration-300">
 
-        {/* ✍️ Current active sentence */}
-        {typedText && (
-          <p
-            className="text-base md:text-lg leading-relaxed mb-1 animate-fadeIn bg-gradient-to-r from-emerald-400/10 via-transparent to-transparent border-l-4 border-emerald-400 pl-2 rounded transition-all duration-300"
-            dangerouslySetInnerHTML={{ __html: highlightSentence(typedText) }}
-          />
-        )}
+      {/* 📓 Notebook background */}
+      <div
+        ref={containerRef}
+        className="flex-1 overflow-y-auto pr-3 custom-scrollbar font-serif leading-relaxed relative z-10"
+        style={{
+          backgroundImage: `
+            linear-gradient(to bottom, rgba(59,130,246,0.25) 1px, transparent 1px),
+            linear-gradient(to right, rgba(239,68,68,0.5) 40px, transparent 40px)
+          `,
+          backgroundSize: "100% 1.8em, 100% 100%",
+          backgroundRepeat: "repeat, no-repeat",
+          backgroundPosition: "0 0, 0 0",
+        }}
+      >
+        {/* Left red margin line */}
+        <div className="absolute left-[38px] top-0 bottom-0 w-[2px] bg-red-400 opacity-60"></div>
+
+        {/* Past Sentences */}
+        <div className="pl-6">
+          {history.map((s, idx) => (
+            <p
+              key={idx}
+              className="text-sm md:text-base opacity-70 mb-1"
+              dangerouslySetInnerHTML={{ __html: highlightSentence(s) }}
+            />
+          ))}
+
+          {/* Current Sentence */}
+          {typedText && (
+            <p
+              className="text-base md:text-lg font-medium mb-1 animate-fadeIn border-l-4 border-emerald-500 pl-2 bg-emerald-50/60 rounded"
+              dangerouslySetInnerHTML={{ __html: highlightSentence(typedText) }}
+            />
+          )}
+        </div>
       </div>
 
-      {/* 📊 Progress Bar */}
-      <div className="mt-3 h-1.5 bg-slate-700 rounded-full overflow-hidden">
+      {/* Progress bar */}
+      <div className="mt-2 h-1.5 bg-gray-200 rounded-full overflow-hidden z-20">
         <div
-          className="h-full bg-emerald-400 transition-[width] duration-200 ease-linear"
+          className="h-full bg-emerald-500 transition-[width] duration-200 ease-linear"
           style={{ width: progressWidth }}
         />
       </div>
 
-      {/* 🏷 Topic Title */}
-      <div className="mt-2 text-xs uppercase tracking-wide text-slate-400">
-        {slide?.topicTitle || "Untitled Topic"}
+      {/* Topic Title */}
+      <div className="mt-2 text-xs uppercase tracking-wide text-gray-500 font-medium text-center z-20">
+        {slide?.topicTitle || "Untitled"}
       </div>
     </div>
   );
 }
 
 /* -------------------------------------------------------------------------- */
-/* 🌈 Extra CSS (add once globally in index.css or tailwind.css)              */
+/* 🖋️ Optional global CSS                                                   */
 /* -------------------------------------------------------------------------- */
 /*
 @keyframes fadeIn {
@@ -113,14 +145,14 @@ export default function ClassroomTeleprompter({
   to   { opacity: 1; transform: translateY(0); }
 }
 .animate-fadeIn {
-  animation: fadeIn 0.4s ease-out;
+  animation: fadeIn 0.3s ease-out;
 }
 
 .custom-scrollbar::-webkit-scrollbar {
   width: 6px;
 }
 .custom-scrollbar::-webkit-scrollbar-thumb {
-  background-color: rgba(255,255,255,0.15);
+  background-color: rgba(0,0,0,0.25);
   border-radius: 4px;
 }
 */
