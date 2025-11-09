@@ -63,12 +63,14 @@ function highlightSentence(sentence = "") {
 export default function ClassroomTeleprompter({
   slide,
   currentSentence,
-  duration = 4000, // ms – target time to finish typing the sentence
+  duration = 4000,   // ms – original timing logic
+  progress = null,   // 0–1 from voice engine (optional)
 }) {
   const [typedText, setTypedText] = useState("");
   const [history, setHistory] = useState([]);
   const containerRef = useRef(null);
   const rafRef = useRef(null);
+  const lastCompletedRef = useRef(null); // avoid duplicate pushes to history
 
   /* ---------------------------------------------------------------------- */
   /* ✅ Reset when slide changes                                            */
@@ -76,30 +78,59 @@ export default function ClassroomTeleprompter({
   useEffect(() => {
     setHistory([]);
     setTypedText("");
+    lastCompletedRef.current = null;
     if (rafRef.current) cancelAnimationFrame(rafRef.current);
   }, [slide?._id]);
 
   /* ---------------------------------------------------------------------- */
-  /* ✅ Typing animation – paced to match voice                             */
+  /* ✅ Typing animation                                                    */
+  /*    - If progress is provided → use progress-driven typing              */
+  /*    - Else → use original duration-based rAF typing                     */
   /* ---------------------------------------------------------------------- */
   useEffect(() => {
     if (!currentSentence) return;
 
-    let frameId;
-    let startTime;
-    let currentLength = 0;
+    // Cancel any ongoing animation frame from previous sentence
+    if (rafRef.current) {
+      cancelAnimationFrame(rafRef.current);
+      rafRef.current = null;
+    }
+
     const text = currentSentence;
     const totalChars = text.length;
 
-    // Target duration (sec). If prop not sensible, default to ~4s
-    const targetMs = typeof duration === "number" && duration > 1000
-      ? duration
-      : 4000;
+    // If we have a numeric progress between 0 and 1 → use progress-driven
+    const hasProgress =
+      typeof progress === "number" && progress >= 0 && progress <= 1;
+
+    if (hasProgress) {
+      const shown = Math.floor(totalChars * progress);
+      setTypedText(text.slice(0, shown));
+
+      // On completion, move sentence to history once
+      if (progress >= 1 && text.trim()) {
+        if (lastCompletedRef.current !== text) {
+          lastCompletedRef.current = text;
+          setHistory((prev) => {
+            const updated = [...prev, text];
+            return updated.slice(-25); // keep last 25 sentences
+          });
+        }
+      }
+      return; // ✅ no rAF needed when progress is driving it
+    }
+
+    // ---------------- Original duration-based typing (fallback) ----------
+    let frameId;
+    let startTime;
+    let currentLength = 0;
+
+    const targetMs =
+      typeof duration === "number" && duration > 1000 ? duration : 4000;
     const targetSec = targetMs / 1000;
 
     // chars per second so full sentence ~ target duration
-    let charsPerSec =
-      totalChars > 0 ? totalChars / targetSec : 15; // fallback
+    let charsPerSec = totalChars > 0 ? totalChars / targetSec : 15;
     // keep speed in a readable range
     charsPerSec = Math.max(4, Math.min(25, charsPerSec));
 
@@ -108,6 +139,7 @@ export default function ClassroomTeleprompter({
     const step = (timestamp) => {
       if (!startTime) startTime = timestamp;
       const elapsed = (timestamp - startTime) / 1000; // seconds
+
       const charsToShow = Math.min(
         totalChars,
         Math.floor(elapsed * charsPerSec)
@@ -120,21 +152,26 @@ export default function ClassroomTeleprompter({
 
       if (currentLength < totalChars) {
         frameId = requestAnimationFrame(step);
+        rafRef.current = frameId;
       } else {
         // finished typing this sentence → move it to history
-        setHistory((prev) => {
-          const updated = [...prev, text];
-          // keep last 25 for performance
-          return updated.slice(-25);
-        });
+        if (text.trim()) {
+          lastCompletedRef.current = text;
+          setHistory((prev) => {
+            const updated = [...prev, text];
+            return updated.slice(-25);
+          });
+        }
       }
     };
 
     frameId = requestAnimationFrame(step);
     rafRef.current = frameId;
 
-    return () => cancelAnimationFrame(frameId);
-  }, [currentSentence, duration]);
+    return () => {
+      if (frameId) cancelAnimationFrame(frameId);
+    };
+  }, [currentSentence, duration, progress]);
 
   /* ---------------------------------------------------------------------- */
   /* ✅ Auto-scroll to bottom when content updates                          */
@@ -149,10 +186,21 @@ export default function ClassroomTeleprompter({
   /* ✅ Derived visual progress (typing bar)                                */
   /* ---------------------------------------------------------------------- */
   const progressWidth = currentSentence
-    ? `${Math.min(
-        100,
-        (typedText.length / (currentSentence.length || 1)) * 100
-      )}%`
+    ? (() => {
+        // If progress prop is driving animation, prefer it for the bar
+        if (
+          typeof progress === "number" &&
+          progress >= 0 &&
+          progress <= 1
+        ) {
+          return `${Math.min(100, Math.floor(progress * 100))}%`;
+        }
+        // Otherwise use original typedText ratio
+        return `${Math.min(
+          100,
+          (typedText.length / (currentSentence.length || 1)) * 100
+        )}%`;
+      })()
     : "0%";
 
   /* ---------------------------------------------------------------------- */
