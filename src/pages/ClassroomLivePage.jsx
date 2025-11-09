@@ -12,6 +12,22 @@ import {
 } from "../voice/ClassroomVoiceEngine.js";
 
 /* -------------------------------------------------------------------------- */
+/* ✅ Unlock Speech Autoplay (Browser Restriction)                            */
+/* -------------------------------------------------------------------------- */
+function unlockSpeechOnUserClick() {
+  document.body.addEventListener(
+    "click",
+    () => {
+      if (window.speechSynthesis && !window.speechSynthesis.speaking) {
+        window.speechSynthesis.resume();
+        console.log("🔊 Speech synthesis unlocked after user interaction");
+      }
+    },
+    { once: true }
+  );
+}
+
+/* -------------------------------------------------------------------------- */
 /* ✅ Main Component — ClassroomLivePage                                      */
 /* -------------------------------------------------------------------------- */
 export default function ClassroomLivePage() {
@@ -24,12 +40,20 @@ export default function ClassroomLivePage() {
   const [progress, setProgress] = useState(0);
   const [isPlaying, setIsPlaying] = useState(true);
   const [isMuted, setIsMuted] = useState(false);
+  const [isSpeaking, setIsSpeaking] = useState(false); // ✅ for avatar glow
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
   /* ------------------------- Refs ---------------------------------------- */
   const speechRef = useRef({ isPlaying: false, cancel: () => {} });
   const currentSlide = slides[currentIndex] || null;
+
+  /* ---------------------------------------------------------------------- */
+  /* ✅ Unlock Voice Autoplay on First Click                                */
+  /* ---------------------------------------------------------------------- */
+  useEffect(() => {
+    unlockSpeechOnUserClick();
+  }, []);
 
   /* ---------------------------------------------------------------------- */
   /* ✅ Load Lectures List from API                                         */
@@ -100,7 +124,7 @@ export default function ClassroomLivePage() {
   }, [selectedLectureId]);
 
   /* ---------------------------------------------------------------------- */
-  /* ✅ Preload Voices Once (prevents silent start on Chrome)               */
+  /* ✅ Preload Voices (prevent silent first play)                          */
   /* ---------------------------------------------------------------------- */
   useEffect(() => {
     waitForVoices(3000).then((voices) =>
@@ -117,45 +141,36 @@ export default function ClassroomLivePage() {
     async function startSpeech() {
       if (!currentSlide || !mounted) return;
 
-      // Stop previous speech before new one starts
+      // Stop previous utterances
       stopClassroomSpeech(speechRef);
 
-      // Wait until voices are ready (important!)
       await waitForVoices(3000);
       const voices = window.speechSynthesis.getVoices();
-      console.log("🎙️ Voices available:", voices.length);
-
-      // No voices? Just show text.
       if (!voices.length) {
         setCurrentSentence(currentSlide.content || "");
         return;
       }
 
-      // Skip if paused/muted
       if (!isPlaying || isMuted) return;
 
       playClassroomSpeech({
-  slide: currentSlide,
-  isMuted,
-  speechRef,
-  setCurrentSentence,
-  onProgress: setProgress,
-  onStartSpeaking: () => {
-    speechRef.current.isPlaying = true;
-  },
-  onStopSpeaking: () => {
-    speechRef.current.isPlaying = false;
-  },
-  onComplete: () => {
-    setProgress(0);
-    setTimeout(() => {
-      setCurrentIndex((prev) =>
-        prev + 1 < slides.length ? prev + 1 : prev
-      );
-    }, 1000);
-  },
-});
-
+        slide: currentSlide,
+        isMuted,
+        speechRef,
+        setCurrentSentence,
+        onProgress: setProgress, // ✅ teleprompter sync
+        onStartSpeaking: () => setIsSpeaking(true),
+        onStopSpeaking: () => setIsSpeaking(false),
+        onComplete: () => {
+          setIsSpeaking(false);
+          setProgress(0);
+          setTimeout(() => {
+            setCurrentIndex((prev) =>
+              prev + 1 < slides.length ? prev + 1 : prev
+            );
+          }, 1000);
+        },
+      });
     }
 
     startSpeech();
@@ -167,13 +182,14 @@ export default function ClassroomLivePage() {
   }, [currentSlide?._id, isPlaying, isMuted, slides.length]);
 
   /* ---------------------------------------------------------------------- */
-  /* ✅ Navigation + Control Handlers                                       */
+  /* ✅ Navigation + Controls                                               */
   /* ---------------------------------------------------------------------- */
   const goToSlide = (index) => {
     if (index < 0 || index >= slides.length) return;
     stopClassroomSpeech(speechRef);
     setCurrentSentence("");
     setProgress(0);
+    setIsSpeaking(false);
     setCurrentIndex(index);
     setIsPlaying(true);
   };
@@ -182,6 +198,7 @@ export default function ClassroomLivePage() {
     if (isPlaying) {
       stopClassroomSpeech(speechRef);
       setIsPlaying(false);
+      setIsSpeaking(false);
     } else {
       setIsPlaying(true);
     }
@@ -204,7 +221,7 @@ export default function ClassroomLivePage() {
   };
 
   /* ---------------------------------------------------------------------- */
-  /* ✅ Conditional UI States                                               */
+  /* ✅ Conditional States                                                  */
   /* ---------------------------------------------------------------------- */
   if (loading) {
     return (
@@ -231,7 +248,7 @@ export default function ClassroomLivePage() {
   }
 
   /* ---------------------------------------------------------------------- */
-  /* ✅ Render Full Classroom Layout                                        */
+  /* ✅ Render Layout                                                       */
   /* ---------------------------------------------------------------------- */
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50 flex flex-col">
@@ -264,7 +281,7 @@ export default function ClassroomLivePage() {
           <TeacherAvatarCard
             teacher={currentSlide.teacher}
             subject={currentSlide.subject}
-            isSpeaking={isPlaying && !isMuted && speechRef.current.isPlaying}
+            isSpeaking={isSpeaking} // ✅ glow when talking
           />
 
           {/* ---------- Teleprompter + Media Board ---------- */}
