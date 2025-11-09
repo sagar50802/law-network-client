@@ -260,7 +260,7 @@ export default function ClassroomLivePage() {
     <div
       className="flex items-center justify-center min-h-screen text-white"
       style={{
-        backgroundImage: `url("/backgrounds/classroom-fallback.jpg")`,
+        backgroundImage: `url("/backgrounds/classroom-fallback.png")`,
         backgroundSize: "cover",
         backgroundPosition: "center",
         backgroundRepeat: "no-repeat",
