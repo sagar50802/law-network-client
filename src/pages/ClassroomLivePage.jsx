@@ -7,8 +7,6 @@ import StudentsRow from "../components/StudentsRow";
 
 import {
   waitForVoices,
-  splitIntoChunks,
-  pickVoice,
   playClassroomSpeech,
   stopClassroomSpeech,
 } from "../voice/ClassroomVoiceEngine.js";
@@ -23,7 +21,7 @@ export default function ClassroomLivePage() {
   const [selectedLectureId, setSelectedLectureId] = useState(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [currentSentence, setCurrentSentence] = useState("");
-  const [progress, setProgress] = useState(0); // ✅ new: teleprompter sync
+  const [progress, setProgress] = useState(0);
   const [isPlaying, setIsPlaying] = useState(true);
   const [isMuted, setIsMuted] = useState(false);
   const [loading, setLoading] = useState(true);
@@ -102,33 +100,63 @@ export default function ClassroomLivePage() {
   }, [selectedLectureId]);
 
   /* ---------------------------------------------------------------------- */
-  /* ✅ Voice Engine — Play Speech for Current Slide                         */
+  /* ✅ Preload Voices Once (prevents silent start on Chrome)               */
   /* ---------------------------------------------------------------------- */
   useEffect(() => {
-    if (!currentSlide) return;
+    waitForVoices(3000).then((voices) =>
+      console.log(`✅ Voices preloaded (${voices.length})`)
+    );
+  }, []);
 
-    // Stop any existing speech first
-    stopClassroomSpeech(speechRef);
+  /* ---------------------------------------------------------------------- */
+  /* ✅ Voice Engine — synchronized with Teleprompter                       */
+  /* ---------------------------------------------------------------------- */
+  useEffect(() => {
+    let mounted = true;
 
-    if (!isPlaying || isMuted) return;
+    async function startSpeech() {
+      if (!currentSlide || !mounted) return;
 
-    playClassroomSpeech({
-      slide: currentSlide,
-      isMuted,
-      speechRef,
-      setCurrentSentence,
-      onProgress: setProgress, // ✅ real-time teleprompter sync
-      onComplete: () => {
-        setProgress(0); // reset bar after slide
-        setTimeout(() => {
-          setCurrentIndex((prev) =>
-            prev + 1 < slides.length ? prev + 1 : prev
-          );
-        }, 800);
-      },
-    });
+      // Stop previous speech before new one starts
+      stopClassroomSpeech(speechRef);
 
-    return () => stopClassroomSpeech(speechRef);
+      // Wait until voices are ready (important!)
+      await waitForVoices(3000);
+      const voices = window.speechSynthesis.getVoices();
+      console.log("🎙️ Voices available:", voices.length);
+
+      // No voices? Just show text.
+      if (!voices.length) {
+        setCurrentSentence(currentSlide.content || "");
+        return;
+      }
+
+      // Skip if paused/muted
+      if (!isPlaying || isMuted) return;
+
+      playClassroomSpeech({
+        slide: currentSlide,
+        isMuted,
+        speechRef,
+        setCurrentSentence,
+        onProgress: setProgress, // teleprompter sync
+        onComplete: () => {
+          setProgress(0);
+          setTimeout(() => {
+            setCurrentIndex((prev) =>
+              prev + 1 < slides.length ? prev + 1 : prev
+            );
+          }, 800);
+        },
+      });
+    }
+
+    startSpeech();
+
+    return () => {
+      mounted = false;
+      stopClassroomSpeech(speechRef);
+    };
   }, [currentSlide?._id, isPlaying, isMuted, slides.length]);
 
   /* ---------------------------------------------------------------------- */
@@ -161,7 +189,7 @@ export default function ClassroomLivePage() {
   };
 
   const handleRaiseHand = () => {
-    alert("✋ Student raised hand — you can show a question queue here.");
+    alert("✋ Student raised hand — queue feature coming soon!");
   };
 
   const handleReaction = (emoji) => {
@@ -196,7 +224,7 @@ export default function ClassroomLivePage() {
   }
 
   /* ---------------------------------------------------------------------- */
-  /* ✅ Render UI Layout                                                    */
+  /* ✅ Render Full Classroom Layout                                        */
   /* ---------------------------------------------------------------------- */
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50 flex flex-col">
@@ -222,23 +250,22 @@ export default function ClassroomLivePage() {
         </div>
       </header>
 
-      {/* ---------- Main Content ---------- */}
+      {/* ---------- Main Section ---------- */}
       <main className="flex-1 px-4 md:px-8 py-4 md:py-6 flex flex-col gap-4">
         <div className="flex-1 grid grid-cols-1 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,2.4fr)_minmax(0,1.1fr)] gap-4">
           {/* ---------- Teacher Avatar ---------- */}
           <TeacherAvatarCard
             teacher={currentSlide.teacher}
             subject={currentSlide.subject}
-            isSpeaking={isPlaying && !isMuted}
+            isSpeaking={isPlaying && !isMuted && speechRef.current.isPlaying}
           />
 
-          {/* ---------- Board (Teleprompter + Media) ---------- */}
+          {/* ---------- Teleprompter + Media Board ---------- */}
           <section className="flex flex-col gap-3">
             <ClassroomTeleprompter
               slide={currentSlide}
               currentSentence={currentSentence}
-              progress={progress} // ✅ synced progress
-              duration={3000}
+              progress={progress}
             />
 
             <MediaBoard media={currentSlide.media} />
@@ -251,7 +278,7 @@ export default function ClassroomLivePage() {
               }}
             />
 
-            {/* Manual Slide Controls */}
+            {/* ---------- Slide Navigation ---------- */}
             <div className="mt-2 flex items-center justify-end gap-2 text-xs">
               <button
                 className="px-3 py-1 rounded-full bg-slate-800 border border-slate-600"
@@ -271,7 +298,7 @@ export default function ClassroomLivePage() {
             </div>
           </section>
 
-          {/* ---------- Lecture Playlist Sidebar ---------- */}
+          {/* ---------- Playlist Sidebar ---------- */}
           <LecturePlaylistSidebar
             lectures={lectures}
             currentLectureId={selectedLectureId}
@@ -292,7 +319,7 @@ export default function ClassroomLivePage() {
         />
       </main>
 
-      {/* ---------- Footer Debug ---------- */}
+      {/* ---------- Footer ---------- */}
       <footer className="text-xs text-slate-600 text-center py-3 border-t border-slate-800">
         ClassroomLivePage • connected to API (
         {import.meta.env.VITE_API_URL ||
