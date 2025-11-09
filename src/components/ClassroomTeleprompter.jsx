@@ -1,8 +1,8 @@
 import React, { useEffect, useState, useRef } from "react";
 
-/* -------------------------------------------------------------------------- */
-/* ✅ Highlight Logic                                                         */
-/* -------------------------------------------------------------------------- */
+/* ------------------------------------------------------- */
+/* 🎨 Highlight Helper                                     */
+/* ------------------------------------------------------- */
 function highlightSentence(sentence = "") {
   let html = sentence;
   html = html.replace(/\*\*(.+?)\*\*/g, '<span class="text-yellow-300 font-semibold">$1</span>');
@@ -14,118 +14,77 @@ function highlightSentence(sentence = "") {
   return html;
 }
 
-/* -------------------------------------------------------------------------- */
-/* ✅ ClassroomTeleprompter                                                   */
-/* -------------------------------------------------------------------------- */
+/* ------------------------------------------------------- */
+/* 🧠 Teleprompter Component                               */
+/* ------------------------------------------------------- */
 export default function ClassroomTeleprompter({
   slide,
   currentSentence,
-  progress = 0, // driven by voice engine
-  duration = 4000, // fallback typing duration if no progress
+  progress = 0,
+  duration = 4000,
 }) {
   const [typedText, setTypedText] = useState("");
   const [history, setHistory] = useState([]);
   const containerRef = useRef(null);
   const lastCompletedRef = useRef("");
+  const smoothProgress = useRef(0);
 
-  /* ---------------------------------------------------------------------- */
-  /* 🧹 Reset when slide changes                                            */
-  /* ---------------------------------------------------------------------- */
+  /* Reset when slide changes */
   useEffect(() => {
     setHistory([]);
     setTypedText("");
     lastCompletedRef.current = "";
+    smoothProgress.current = 0;
   }, [slide?._id]);
 
-  /* ---------------------------------------------------------------------- */
-  /* ✍️ Voice-driven Typing (syncs with onboundary progress)                */
-  /* ---------------------------------------------------------------------- */
+  /* Smooth typing driven by progress */
   useEffect(() => {
-    if (!currentSentence) {
-      setTypedText("");
-      return;
-    }
-
+    if (!currentSentence) return;
     const text = currentSentence;
     const totalChars = text.length || 1;
 
-    // voice-driven progress
-    if (progress >= 0 && progress <= 1) {
-      const shownChars = Math.floor(totalChars * progress);
-      setTypedText(text.slice(0, shownChars));
+    // Eased interpolation
+    const interval = setInterval(() => {
+      smoothProgress.current += (progress - smoothProgress.current) * 0.25;
+      const shown = Math.floor(totalChars * smoothProgress.current);
+      setTypedText(text.slice(0, shown));
 
-      // move finished sentence to history
       if (progress >= 0.99 && lastCompletedRef.current !== text && text.trim()) {
         lastCompletedRef.current = text;
         setHistory((prev) => [...prev.slice(-24), text]);
       }
-    }
-  }, [currentSentence, progress]);
+    }, 60); // ~16fps smooth
 
-  /* ---------------------------------------------------------------------- */
-  /* ⏱️ Fallback typing if voice progress missing                           */
-  /* ---------------------------------------------------------------------- */
-  useEffect(() => {
-    if (!currentSentence || progress) return; // skip if voice drives it
-    const text = currentSentence;
-    const totalChars = text.length;
-    const durationMs = duration || 4000;
-    const step = Math.max(40, durationMs / totalChars);
+    return () => clearInterval(interval);
+  }, [progress, currentSentence]);
 
-    let index = 0;
-    const timer = setInterval(() => {
-      setTypedText(text.slice(0, index));
-      index++;
-      if (index >= totalChars) {
-        clearInterval(timer);
-        if (lastCompletedRef.current !== text) {
-          lastCompletedRef.current = text;
-          setHistory((prev) => [...prev.slice(-24), text]);
-        }
-      }
-    }, step);
-
-    return () => clearInterval(timer);
-  }, [currentSentence]);
-
-  /* ---------------------------------------------------------------------- */
-  /* 🧭 Auto-scroll                                                        */
-  /* ---------------------------------------------------------------------- */
+  /* Auto-scroll */
   useEffect(() => {
     const el = containerRef.current;
     if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   }, [typedText, history]);
 
-  /* ---------------------------------------------------------------------- */
-  /* 📊 Progress Bar                                                       */
-  /* ---------------------------------------------------------------------- */
   const progressWidth = `${Math.min(100, Math.floor(progress * 100))}%`;
 
-  /* ---------------------------------------------------------------------- */
-  /* 🧩 Render                                                             */
-  /* ---------------------------------------------------------------------- */
   return (
     <div className="bg-slate-900/95 text-slate-50 rounded-2xl px-4 py-3 md:px-6 md:py-4 shadow-inner border border-slate-700 max-h-[50vh] md:max-h-[45vh] overflow-hidden flex flex-col">
       <div ref={containerRef} className="flex-1 overflow-y-auto pr-2 custom-scrollbar">
-        {/* 🕓 History */}
         {history.map((s, i) => (
           <p key={i} className="text-sm md:text-base leading-relaxed opacity-70 mb-1"
              dangerouslySetInnerHTML={{ __html: highlightSentence(s) }} />
         ))}
 
-        {/* ✍️ Active sentence */}
         {typedText && (
           <p className="text-base md:text-lg leading-relaxed mb-1 animate-fadeIn"
              dangerouslySetInnerHTML={{ __html: highlightSentence(typedText) }} />
         )}
       </div>
 
-      {/* 📊 Progress bar */}
       <div className="mt-2 h-1.5 bg-slate-700 rounded-full overflow-hidden">
-        <div className="h-full bg-emerald-400 transition-[width] duration-150 ease-linear" style={{ width: progressWidth }} />
+        <div className="h-full bg-emerald-400 transition-[width] duration-150 ease-linear"
+             style={{ width: progressWidth }} />
       </div>
 
-      {/* 🏷 Topic title */}
       <div className="mt-1 text-xs uppercase tracking-wide text-slate-400">
         {slide?.topicTitle || "Untitled"}
       </div>
@@ -133,9 +92,9 @@ export default function ClassroomTeleprompter({
   );
 }
 
-/* -------------------------------------------------------------------------- */
-/* 🪄 CSS (in global index.css or tailwind.css)                               */
-/* -------------------------------------------------------------------------- */
+/* ------------------------------------------------------- */
+/* 🌈 CSS (add globally once)                              */
+/* ------------------------------------------------------- */
 /*
 @keyframes fadeIn {
   from { opacity: 0; transform: translateY(4px); }
@@ -144,7 +103,6 @@ export default function ClassroomTeleprompter({
 .animate-fadeIn {
   animation: fadeIn 0.3s ease-out;
 }
-
 .custom-scrollbar::-webkit-scrollbar {
   width: 6px;
 }
