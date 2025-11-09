@@ -1,4 +1,4 @@
-// ✅ Classroom Voice Engine
+// ✅ Classroom Voice Engine (synchronized with teleprompter)
 // Reads teleprompter text slide-by-slide with multilingual (Hindi / English / Hinglish) support
 
 /* -------------------------------------------------------------------------- */
@@ -28,7 +28,7 @@ export function splitIntoChunks(content) {
   if (!content) return [];
   return content
     .replace(/\s+/g, " ")
-    .split(/(?<=[.?!।])\s+/) // supports Hindi “।” also
+    .split(/(?<=[.?!।])\s+/) // supports Hindi "।" punctuation
     .map((s) => s.trim())
     .filter(Boolean);
 }
@@ -46,11 +46,10 @@ export function pickVoice(teacher = {}) {
     if (v) return v;
   }
 
-  // Detect Hindi or Hinglish
+  // Detect Hindi / Hinglish
   const sample = `${teacher.name || ""} ${teacher.role || ""}`;
   const looksHindi =
-    /[अ-हक़-ॡफ़-य़]/.test(sample) ||
-    /हिन्दी|Hindi|Hinglish/i.test(sample);
+    /[अ-हक़-ॡफ़-य़]/.test(sample) || /हिन्दी|Hindi|Hinglish/i.test(sample);
 
   if (looksHindi) {
     // Prefer Hindi or Indian English voices
@@ -62,7 +61,7 @@ export function pickVoice(teacher = {}) {
     );
   }
 
-  // Otherwise prefer English
+  // Otherwise prefer English voices
   return (
     voices.find((v) => /en-IN/i.test(v.lang)) ||
     voices.find((v) => /en-US/i.test(v.lang)) ||
@@ -72,13 +71,14 @@ export function pickVoice(teacher = {}) {
 }
 
 /* -------------------------------------------------------------------------- */
-/* ✅ Speak slide text sentence-by-sentence                                   */
+/* 🎙️ Speak and broadcast progress updates to teleprompter                   */
 /* -------------------------------------------------------------------------- */
 export async function playClassroomSpeech({
   slide,
   isMuted,
   speechRef,
   setCurrentSentence,
+  onProgress, // 👈 teleprompter can listen for progress %
   onComplete,
 }) {
   const synth = window.speechSynthesis;
@@ -89,7 +89,7 @@ export async function playClassroomSpeech({
     return;
   }
 
-  // Cancel anything currently playing
+  // Stop any current playback
   synth.cancel();
   if (speechRef.current?.cancel) speechRef.current.cancel();
 
@@ -117,6 +117,7 @@ export async function playClassroomSpeech({
     if (cancelled) return;
     if (idx >= chunks.length) {
       speechRef.current.isPlaying = false;
+      onProgress?.(1);
       onComplete?.();
       return;
     }
@@ -124,9 +125,21 @@ export async function playClassroomSpeech({
     const sentence = chunks[idx++];
     setCurrentSentence(sentence);
 
+    // If muted, simulate reading speed without voice
     if (isMuted) {
-      // skip actual speech, simulate delay for sync
-      setTimeout(speakNext, 400);
+      let elapsed = 0;
+      const duration = Math.max(1500, sentence.length * 35);
+      const tick = 150;
+      const timer = setInterval(() => {
+        if (cancelled) return clearInterval(timer);
+        elapsed += tick;
+        const p = Math.min(1, elapsed / duration);
+        onProgress?.(p);
+        if (elapsed >= duration) {
+          clearInterval(timer);
+          speakNext();
+        }
+      }, tick);
       return;
     }
 
@@ -135,18 +148,33 @@ export async function playClassroomSpeech({
       const voice = pickVoice(slide.teacher || {});
       if (voice) utter.voice = voice;
 
-      // Smooth natural speech speed based on length
-      const len = sentence.length;
-      utter.rate = len > 180 ? 0.9 : len > 100 ? 1.0 : 1.1;
+      // 🎚️ Smooth, consistent playback parameters
+      utter.rate = 0.9;
       utter.pitch = 1.0;
       utter.volume = 1.0;
       utter.lang = voice?.lang || "en-IN";
 
+      // Estimated duration (ms)
+      const expectedDuration = Math.max(2000, sentence.length * 40);
+
+      // Simulated progress while utterance plays
+      let elapsed = 0;
+      const tick = 150;
+      const timer = setInterval(() => {
+        if (cancelled) return clearInterval(timer);
+        elapsed += tick;
+        const p = Math.min(1, elapsed / expectedDuration);
+        onProgress?.(p);
+      }, tick);
+
       utter.onend = () => {
+        clearInterval(timer);
+        onProgress?.(1);
         if (!cancelled) speakNext();
       };
       utter.onerror = (err) => {
         console.error("Speech error:", err);
+        clearInterval(timer);
         if (!cancelled) speakNext();
       };
 
@@ -166,10 +194,10 @@ export async function playClassroomSpeech({
 export function stopClassroomSpeech(speechRef) {
   const synth = window.speechSynthesis;
   try {
-    if (synth) synth.cancel();
-    if (speechRef.current?.cancel) speechRef.current.cancel();
-  } catch (e) {
-    console.error("Stop speech error:", e);
+    synth?.cancel();
+    speechRef.current?.cancel?.();
+  } catch (err) {
+    console.error("Stop speech error:", err);
   } finally {
     if (speechRef.current) speechRef.current.isPlaying = false;
   }
