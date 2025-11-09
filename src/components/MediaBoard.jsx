@@ -38,6 +38,10 @@ export function MediaBoard({ media = {}, autoPlay = true, isPlaying = true }) {
             src={videoUrl}
             className="w-full rounded-xl shadow-md border border-slate-800"
             controls
+            playsInline
+            preload="metadata"
+            controlsList="nodownload"         // 🚫 hides download button
+            disablePictureInPicture            // 🚫 disables PiP mode
           />
         ) : (
           <div className="w-full aspect-video rounded-xl bg-slate-800 flex items-center justify-center text-slate-500 text-sm">
@@ -50,8 +54,9 @@ export function MediaBoard({ media = {}, autoPlay = true, isPlaying = true }) {
           <audio
             ref={audioRef}
             src={audioUrl}
-            className="hidden"
-            preload="auto"
+            className="w-full mt-2"            // ✅ show player with controls
+            preload="metadata"
+            controls                            // ✅ adds play/pause/volume
           />
         )}
 
