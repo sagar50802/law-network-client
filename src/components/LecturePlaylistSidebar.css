@@ -1,0 +1,38 @@
+/* src/components/LecturePlaylistSidebar.css */
+
+/* --- Live indicator pulse --- */
+@keyframes pulseDot {
+  0%, 100% {
+    transform: scale(1);
+    opacity: 1;
+  }
+  50% {
+    transform: scale(1.8);
+    opacity: 0.5;
+  }
+}
+
+.dot-live {
+  background-color: rgb(52 211 153); /* emerald-400 */
+  animation: pulseDot 1.3s ease-in-out infinite;
+}
+
+.dot-scheduled {
+  background-color: rgb(251 191 36); /* amber-400 */
+}
+
+.dot-completed {
+  background-color: rgb(100 116 139); /* slate-500 */
+}
+
+.dot-draft {
+  background-color: rgb(71 85 105); /* slate-700 */
+}
+
+/* --- Entry transition --- */
+.playlist-item {
+  transition: all 0.25s ease;
+}
+.playlist-item:hover {
+  transform: translateX(3px);
+}

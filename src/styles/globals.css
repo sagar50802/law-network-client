@@ -1,0 +1,847 @@
+@import "tailwindcss";
+
+/* -----------------------------
+   Custom utilities
+----------------------------- */
+.no-copy {
+  user-select: none;
+  -webkit-user-select: none;
+  -ms-user-select: none;
+}
+
+/* ✅ Blink animation */
+@keyframes blink {
+  50% { opacity: 0.5; }
+}
+.animate-blink {
+  animation: blink 1s infinite;
+}
+
+/* ✅ Tick pop animation */
+@keyframes tick-pop {
+  0%   { transform: scale(0); opacity: 0; }
+  60%  { transform: scale(1.3); opacity: 1; }
+  100% { transform: scale(1); opacity: 1; }
+}
+.tick-animate {
+  display: inline-block;
+  color: green;
+  font-weight: bold;
+  margin-left: 4px;
+  animation: tick-pop 0.4s ease-out;
+}
+
+/* -----------------------------
+   Modern slim scrollbars
+----------------------------- */
+::-webkit-scrollbar {
+  width: 8px;
+  height: 8px;
+}
+::-webkit-scrollbar-track {
+  background: transparent;
+}
+::-webkit-scrollbar-thumb {
+  background-color: rgba(100, 116, 139, 0.5); /* slate-500/50 */
+  border-radius: 9999px;
+  border: 2px solid transparent;
+  background-clip: content-box;
+}
+::-webkit-scrollbar-thumb:hover {
+  background-color: rgba(100, 116, 139, 0.8); /* slate-500/80 */
+}
+
+/* Firefox */
+* {
+  scrollbar-width: thin;
+  scrollbar-color: rgba(100,116,139,0.6) transparent;
+}
+
+/* -----------------------------
+   Article fade overlay for locked previews
+----------------------------- */
+.article-fade {
+  position: relative;
+  max-height: 160px; /* show ~60 words */
+  overflow: hidden;
+}
+.article-fade::after {
+  content: "";
+  position: absolute;
+  bottom: 0;
+  left: 0;
+  right: 0;
+  height: 4rem; /* fade height */
+  background: linear-gradient(to top, white, transparent);
+  pointer-events: none;
+}
+
+/* -----------------------------
+   Scroll progress bar (unlocked)
+----------------------------- */
+.article-progress {
+  height: 4px;
+  background-color: #3b82f6; /* blue-500 */
+  transition: width 0.2s ease;
+}
+
+/* -----------------------------
+   ✅ QR Scan Glow Animation
+----------------------------- */
+@keyframes qr-glow {
+  0%, 100% {
+    box-shadow: 0 0 8px 2px rgba(34,197,94,0.7);
+  }
+  50% {
+    box-shadow: 0 0 16px 4px rgba(34,197,94,1);
+  }
+}
+.qr-glow {
+  animation: qr-glow 1s infinite;
+  border: 4px solid #22c55e; /* green-500 */
+  border-radius: 12px;
+}
+
+/* -----------------------------
+   ✅ Step Progress Blinks + Colors
+----------------------------- */
+@keyframes step-blink-1 {
+  0%, 100% { color: #ef4444; } /* red-500 */
+  50% { color: #f87171; }      /* red-400 */
+}
+@keyframes step-blink-2 {
+  0%, 100% { color: #eab308; } /* yellow-500 */
+  50% { color: #facc15; }      /* yellow-400 */
+}
+@keyframes step-blink-3 {
+  0%, 100% { color: #3b82f6; } /* blue-500 */
+  50% { color: #60a5fa; }      /* blue-400 */
+}
+
+.step-1-blink {
+  animation: step-blink-1 1s infinite;
+  font-weight: bold;
+}
+.step-2-blink {
+  animation: step-blink-2 1s infinite;
+  font-weight: bold;
+}
+.step-3-blink {
+  animation: step-blink-3 1s infinite;
+  font-weight: bold;
+}
+
+/* -----------------------------
+   ✅ Step Graph Connector + Progress
+----------------------------- */
+.step-graph {
+  position: relative;
+  display: flex;
+  align-items: center;
+  justify-content: space-between;
+  margin: 1rem 0;
+}
+.step-graph::before {
+  content: "";
+  position: absolute;
+  top: 50%;
+  left: 0;
+  height: 4px;
+  width: 100%;
+  background: #e5e7eb; /* gray-200 */
+  z-index: 0;
+  transform: translateY(-50%);
+}
+.step-graph-progress {
+  position: absolute;
+  top: 50%;
+  left: 0;
+  height: 4px;
+  width: 0%;
+  background: #22c55e; /* green-500 line */
+  transition: width 0.6s ease;
+  z-index: 1;
+}
+
+/* ✅ Add completed states */
+.step-graph-progress.step-1 { width: 33%; }
+.step-graph-progress.step-2 { width: 66%; }
+.step-graph-progress.step-3 { width: 100%; }
+
+.step-node {
+  position: relative;
+  z-index: 2;
+  width: 28px;
+  height: 28px;
+  border-radius: 50%;
+  background: white;
+  border: 3px solid #d1d5db; /* gray-300 */
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  font-size: 14px;
+  font-weight: bold;
+}
+.step-node.active {
+  border-color: #22c55e; /* green-500 */
+  background: #bbf7d0;   /* green-200 */
+}
+
+/* ============================================================
+   🎥 LAWNETWORK LIVE CHANNEL + DEBATE STAGE (Final Integration)
+============================================================ */
+
+@keyframes pulse {
+  0%, 100% { opacity: 1; }
+  50% { opacity: 0.5; }
+}
+
+/* --- Base live layout --- */
+.live-page {
+  background: radial-gradient(circle at center, #0a0a0a 40%, #000 100%);
+  color: #fff;
+  font-family: 'Poppins', sans-serif;
+  min-height: 100vh;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+/* --- Header --- */
+.live-header {
+  background: #000;
+  border-bottom: 3px solid #c7a537;
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  padding: 0.6rem 1rem;
+}
+.live-logo {
+  font-weight: 700;
+  color: #c7a537;
+  font-size: 1.2rem;
+}
+.live-badge {
+  color: #fff;
+  background: red;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: bold;
+  font-size: 0.8rem;
+  animation: pulse 1.5s infinite;
+}
+
+/* --- Standard Stage --- */
+.standard-stage {
+  position: relative;
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  height: 70vh;
+  background: linear-gradient(145deg, #111, #1a1a1a);
+  overflow: hidden;
+  border-radius: 12px;
+  box-shadow: 0 0 30px rgba(199,165,55,0.2);
+}
+.standard-main-panel {
+  width: 90%;
+  height: 90%;
+  display: flex;
+  flex-direction: row;
+  position: relative;
+}
+.standard-teleprompter {
+  flex: 1;
+  overflow-y: auto;
+  padding: 2rem;
+  background: rgba(255,255,255,0.05);
+  backdrop-filter: blur(10px);
+  border-radius: 8px;
+  scrollbar-width: none;
+}
+.tele-headline {
+  font-size: 1.8rem;
+  font-weight: 700;
+  color: #c7a537;
+  margin-bottom: 1rem;
+}
+.tele-text {
+  font-size: 1.1rem;
+  line-height: 1.6;
+  color: #ddd;
+}
+.anchor-box {
+  position: absolute;
+  bottom: 1rem;
+  right: 1rem;
+  display: flex;
+  align-items: center;
+  background: rgba(0,0,0,0.6);
+  padding: 0.6rem 1rem;
+  border-radius: 1rem;
+  border: 1px solid rgba(199,165,55,0.3);
+  box-shadow: 0 0 10px rgba(199,165,55,0.2);
+}
+.anchor-avatar {
+  width: 60px;
+  height: 60px;
+  border-radius: 50%;
+  background-size: cover;
+  background-position: center;
+  margin-right: 0.8rem;
+  border: 2px solid #c7a537;
+}
+.anchor-lawyer { background-image: url("/avatars/lawyer.png"); }
+.anchor-police { background-image: url("/avatars/police.png"); }
+.anchor-history { background-image: url("/avatars/history.png"); }
+.anchor-it { background-image: url("/avatars/it.png"); }
+.anchor-name { font-weight: 700; color: #fff; }
+.anchor-role { font-size: 0.8rem; color: #c7a537; }
+
+/* --- Debate Stage --- */
+.debate-stage {
+  position: relative;
+  height: 70vh;
+  width: 100%;
+  background: linear-gradient(120deg, #111, #1a1a1a);
+  border-radius: 12px;
+  overflow: hidden;
+  box-shadow: 0 0 40px rgba(255,215,0,0.1);
+  padding: 1rem;
+  display: flex;
+  flex-direction: column;
+  justify-content: space-between;
+}
+.debate-title-bar {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  background: rgba(0,0,0,0.7);
+  border-bottom: 2px solid #c7a537;
+  padding: 0.4rem 1rem;
+}
+.debate-title { font-weight: 700; color: #c7a537; font-size: 1.2rem; }
+.debate-live-badge {
+  color: #fff;
+  background: red;
+  padding: 2px 8px;
+  border-radius: 4px;
+  font-weight: bold;
+  animation: pulse 1.5s infinite;
+}
+.debate-panel {
+  flex: 1;
+  display: grid;
+  gap: 1rem;
+  margin-top: 1rem;
+  justify-items: center;
+  align-items: center;
+}
+.avatars-2 { grid-template-columns: repeat(2, 1fr); }
+.avatars-3 { grid-template-columns: repeat(3, 1fr); }
+.avatars-4 { grid-template-columns: repeat(4, 1fr); }
+.debate-avatar-frame {
+  position: relative;
+  width: 140px;
+  height: 160px;
+  background: rgba(255,255,255,0.05);
+  border-radius: 12px;
+  overflow: hidden;
+  transition: all 0.6s ease;
+  border: 2px solid transparent;
+}
+.debate-avatar-frame.active {
+  transform: scale(1.15);
+  border: 2px solid #c7a537;
+  box-shadow: 0 0 25px rgba(199,165,55,0.5);
+}
+.debate-avatar-frame.inactive {
+  opacity: 0.6;
+  transform: scale(0.95);
+}
+.debate-avatar-img {
+  width: 100%;
+  height: 70%;
+  background-size: cover;
+  background-position: center;
+  border-bottom: 1px solid rgba(255,255,255,0.1);
+}
+.avatar-lawyer { background-image: url("/avatars/lawyer.png"); }
+.avatar-police { background-image: url("/avatars/police.png"); }
+.avatar-it { background-image: url("/avatars/it.png"); }
+.avatar-history { background-image: url("/avatars/history.png"); }
+.debate-avatar-meta { text-align: center; padding-top: 0.4rem; }
+.debate-avatar-name { font-weight: 600; color: #fff; }
+.debate-avatar-role { font-size: 0.8rem; color: #c7a537; }
+
+/* --- Speech Box --- */
+.debate-speech-box {
+  background: rgba(0,0,0,0.6);
+  padding: 1rem;
+  border-top: 1px solid rgba(199,165,55,0.3);
+  border-radius: 0 0 12px 12px;
+  color: #fff;
+  font-size: 1rem;
+  line-height: 1.4;
+}
+.debate-speaker-name {
+  font-weight: 700;
+  color: #c7a537;
+  margin-bottom: 0.4rem;
+}
+
+/* --- Camera zoom animation --- */
+@keyframes cameraZoom {
+  from { transform: scale(1); }
+  to { transform: scale(1.15); }
+}
+.debate-avatar-frame.active {
+  animation: cameraZoom 0.6s ease forwards;
+}
+
+/* --- Ticker --- */
+.ticker-bar {
+  background: #000;
+  color: #c7a537;
+  padding: 0.4rem;
+  overflow: hidden;
+  border-top: 2px solid #c7a537;
+  font-size: 0.9rem;
+  display: flex;
+  align-items: center;
+}
+.ticker-label { font-weight: 700; padding-right: 1rem; color: red; }
+.ticker-track {
+  white-space: nowrap;
+  overflow: hidden;
+  position: relative;
+  flex: 1;
+}
+.ticker-text {
+  display: inline-block;
+  animation: tickerScroll 90s linear infinite;
+}
+@keyframes tickerScroll {
+  0% { transform: translateX(100%); }
+  100% { transform: translateX(-100%); }
+}
+
+/* ============================================================
+   📰 Smooth HeadlineBar Scroller (Updated Slow Version)
+============================================================ */
+.headline-bar {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(to right, #000, #111);
+  border-top: 2px solid #c7a537;
+  color: gold;
+  font-weight: 500;
+  font-size: 1rem;
+  padding: 0.4rem 0;
+  display: flex;
+  align-items: center;
+}
+
+.headline-inner {
+  display: inline-block;
+  white-space: nowrap;
+  animation: scrollHeadline linear infinite;
+}
+
+.headline-text {
+  display: inline-block;
+  padding-left: 1rem;
+}
+
+/* 🟡 Slow, smooth scroll animation */
+@keyframes scrollHeadline {
+  from {
+    transform: translateX(100%);
+  }
+  to {
+    transform: translateX(-100%);
+  }
+}
+
+/* 🔴 LIVE red dot (already defined, but keep if missing) */
+.live-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 8px;
+  background-color: red;
+  border-radius: 50%;
+  animation: pulse 1.5s infinite;
+  vertical-align: middle;
+}
+
+/* ============================================================
+   🆕 Enhanced Ticker Styling Upgrade
+============================================================ */
+.ticker-bar {
+  position: relative;
+  overflow: hidden;
+  background: linear-gradient(to right, #000, #111);
+  color: gold;
+  font-weight: 500;
+}
+.ticker-track {
+  display: inline-block;
+  white-space: nowrap;
+  animation: scrollTicker 90s linear infinite;
+  mask-image: linear-gradient(to right, transparent, black 10%, black 90%, transparent);
+}
+@keyframes scrollTicker {
+  from { transform: translateX(100%); }
+  to { transform: translateX(-100%); }
+}
+
+/* ============================================================
+   🆕 Background Slow Zoom Animation
+============================================================ */
+@keyframes slowZoom {
+  0% {
+    transform: scale(1);
+  }
+  50% {
+    transform: scale(1.05);
+  }
+  100% {
+    transform: scale(1);
+  }
+}
+.animate-slowZoom {
+  animation: slowZoom 22s ease-in-out infinite;
+}
+
+/* ============================================================
+   🆕 Animated Gradient Background
+============================================================ */
+@keyframes gradientMotion {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.animate-gradientMotion {
+  background-size: 400% 400%;
+  animation: gradientMotion 12s ease infinite;
+}
+
+/* ============================================================
+   📱 RESPONSIVE DESIGN FOR LAWNETWORK LIVE CHANNEL
+============================================================ */
+
+@media (max-width: 1024px) {
+  .standard-stage,
+  .debate-stage {
+    height: auto;
+    min-height: 70vh;
+    padding: 1rem;
+    flex-direction: column;
+  }
+
+  .standard-main-panel {
+    flex-direction: column;
+    align-items: center;
+    text-align: center;
+  }
+
+  .standard-teleprompter {
+    padding: 1rem;
+    font-size: 1rem;
+    line-height: 1.5;
+    height: auto;
+    max-height: 60vh;
+  }
+
+  .anchor-box {
+    position: static;
+    margin-top: 1rem;
+    justify-content: center;
+  }
+
+  .tele-headline {
+    font-size: 1.4rem;
+  }
+}
+
+@media (max-width: 768px) {
+  .live-header {
+    flex-direction: column;
+    padding: 0.4rem;
+    text-align: center;
+  }
+
+  .live-logo {
+    font-size: 1rem;
+    margin-bottom: 0.4rem;
+  }
+
+  .live-badge {
+    font-size: 0.7rem;
+    padding: 1px 6px;
+  }
+
+  .debate-panel {
+    grid-template-columns: 1fr 1fr !important;
+    gap: 0.6rem;
+  }
+
+  .debate-avatar-frame {
+    width: 120px;
+    height: 140px;
+  }
+
+  .debate-avatar-name {
+    font-size: 0.85rem;
+  }
+
+  .debate-avatar-role {
+    font-size: 0.7rem;
+  }
+
+  .debate-speech-box {
+    font-size: 0.9rem;
+    line-height: 1.3;
+    padding: 0.8rem;
+  }
+
+  .standard-teleprompter {
+    width: 100%;
+    max-height: 50vh;
+  }
+
+  .ticker-bar {
+    font-size: 0.8rem;
+    padding: 0.3rem 0.5rem;
+  }
+
+  .ticker-label {
+    font-size: 0.75rem;
+  }
+}
+
+@media (max-width: 480px) {
+  .debate-panel {
+    grid-template-columns: 1fr !important;
+  }
+
+  .debate-avatar-frame {
+    width: 90%;
+    max-width: 280px;
+    height: 150px;
+  }
+
+  .tele-headline {
+    font-size: 1.2rem;
+  }
+
+  .tele-text {
+    font-size: 0.95rem;
+  }
+
+  .anchor-avatar {
+    width: 48px;
+    height: 48px;
+  }
+
+  .anchor-name {
+    font-size: 0.9rem;
+  }
+
+  .anchor-role {
+    font-size: 0.7rem;
+  }
+
+  .debate-speech-box {
+    font-size: 0.85rem;
+  }
+
+  .debate-title {
+    font-size: 1rem;
+  }
+
+  .debate-title-bar {
+    padding: 0.3rem 0.5rem;
+  }
+}
+/* ============================================================
+   🆕 Animated Gradient Background
+============================================================ */
+@keyframes gradientMotion {
+  0% { background-position: 0% 50%; }
+  50% { background-position: 100% 50%; }
+  100% { background-position: 0% 50%; }
+}
+
+.animate-gradientMotion {
+  background-size: 400% 400%;
+  animation: gradientMotion 12s ease infinite;
+}
+
+/* ============================================================
+   🎙️ Voice Selector Dropdown (for LiveAdminPage)
+============================================================ */
+.voice-selector {
+  position: absolute;
+  top: 1rem;
+  right: 1rem;
+  background: rgba(0,0,0,0.7);
+  border: 1px solid #c7a537;
+  border-radius: 8px;
+  padding: 0.4rem 0.8rem;
+  color: #facc15;
+  font-weight: 600;
+  cursor: pointer;
+  transition: all 0.3s ease;
+  z-index: 30;
+}
+.voice-selector:hover {
+  background: rgba(250,204,21,0.15);
+  transform: scale(1.05);
+}
+.voice-selector select {
+  background: transparent;
+  border: none;
+  color: inherit;
+  font: inherit;
+  outline: none;
+  cursor: pointer;
+}
+
+  /* ============================================================
+   🔴 LIVE Dot for Headline Bar
+============================================================ */
+.live-dot {
+  display: inline-block;
+  width: 10px;
+  height: 10px;
+  margin-right: 8px;
+  background-color: red;
+  border-radius: 50%;
+  animation: pulse 1.5s infinite;
+  vertical-align: middle;
+}
+ /* ============================================================
+   📱 TELEPROMPTER & ANCHOR FIX FOR MOBILE (LawNetwork v4 — FINAL)
+   ✅ No flicker on mobile
+   ✅ Smooth scroll & fixed height
+   ✅ Fully responsive and stable
+============================================================ */
+
+/* 🔧 Unified Teleprompter Styling — Mobile */
+@media (max-width: 768px) {
+  .standard-teleprompter {
+    position: relative !important;
+    width: 94% !important;
+    margin: 10px auto !important;
+    max-height: 48vh !important;
+    overflow-y: auto !important;
+    background: rgba(0, 0, 0, 0.85) !important;
+    border-left: 3px solid #facc15 !important;
+    border-radius: 10px;
+    padding: 12px 16px !important;
+    backdrop-filter: blur(8px);
+    box-shadow: 0 0 15px rgba(250, 204, 21, 0.25);
+    color: #facc15 !important;
+    text-shadow: 0 0 4px rgba(250, 204, 21, 0.3);
+    font-weight: 600;
+    line-height: 1.5;
+    font-size: 1rem !important;
+    z-index: 5 !important;
+    scroll-behavior: smooth;
+    -webkit-overflow-scrolling: touch;
+    transition: none !important; /* Prevent flicker on Android/iOS */
+  }
+
+  .standard-teleprompter p {
+    color: #facc15 !important;
+    font-size: 0.95rem !important;
+    line-height: 1.45 !important;
+  }
+
+  /* Custom slim scrollbar for mobile */
+  .standard-teleprompter::-webkit-scrollbar {
+    width: 3px;
+  }
+  .standard-teleprompter::-webkit-scrollbar-thumb {
+    background: rgba(250, 204, 21, 0.5);
+    border-radius: 8px;
+  }
+
+  /* Headline and Progress Bar */
+  .tele-headline,
+  .main-slide .text-yellow-400 {
+    font-size: 0.9rem !important;
+    text-align: center !important;
+    margin-top: 0.4rem !important;
+    line-height: 1.2;
+  }
+
+  .main-slide .h-1 {
+    height: 3px !important;
+  }
+
+  /* Anchor box below teleprompter */
+  .anchor-box {
+    position: relative !important;
+    bottom: auto !important;
+    margin: 14px auto 18px !important;
+    width: 92% !important;
+    justify-content: flex-start !important;
+    padding: 0.7rem 1rem !important;
+    background: rgba(0, 0, 0, 0.65) !important;
+    border: 1px solid rgba(250, 204, 21, 0.3);
+    box-shadow: 0 0 15px rgba(250, 204, 21, 0.15);
+    border-radius: 12px;
+    z-index: 25 !important;
+  }
+
+  .anchor-avatar {
+    width: 42px !important;
+    height: 42px !important;
+    margin-right: 0.8rem;
+  }
+
+  .anchor-name {
+    font-size: 0.95rem !important;
+    color: #fff !important;
+    font-weight: 600;
+  }
+
+  .anchor-role {
+    font-size: 0.75rem !important;
+    color: #facc15 !important;
+  }
+
+  /* Subtle guideline */
+  .main-slide .absolute.bg-yellow-400\/30 {
+    opacity: 0.3;
+    height: 1px !important;
+  }
+}
+
+/* ============================================================
+   💻 Desktop Enhancement — Smooth Scroll & Spacing
+============================================================ */
+@media (min-width: 769px) {
+  .standard-teleprompter {
+    scroll-behavior: smooth;
+    transition: opacity 0.4s ease-in-out, transform 0.4s ease-in-out;
+    background: rgba(0, 0, 0, 0.75) !important;
+    max-height: 60vh !important;
+    border-left: 4px solid #facc15 !important;
+    padding: 1.5rem 2rem !important;
+    color: #facc15 !important;
+    font-size: 1.05rem !important;
+    line-height: 1.6 !important;
+    border-radius: 12px;
+  }
+
+  .standard-teleprompter p {
+    color: #facc15 !important;
+    text-shadow: 0 0 6px rgba(250, 204, 21, 0.3);
+  }
+}
+

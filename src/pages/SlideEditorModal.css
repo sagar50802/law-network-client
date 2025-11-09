@@ -1,0 +1,38 @@
+/* src/pages/SlideEditorModal.css */
+
+/* --- Overlay fade-in --- */
+@keyframes overlayFade {
+  from {
+    opacity: 0;
+  }
+  to {
+    opacity: 1;
+  }
+}
+
+.modal-overlay {
+  animation: overlayFade 0.25s ease-out;
+}
+
+/* --- Modal zoom-in --- */
+@keyframes modalZoom {
+  from {
+    opacity: 0;
+    transform: scale(0.94) translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: scale(1) translateY(0);
+  }
+}
+
+.modal-content {
+  animation: modalZoom 0.25s ease-out;
+  transform-origin: center center;
+}
+
+/* --- Slight shadow lift --- */
+.modal-content:hover {
+  box-shadow: 0 8px 20px rgba(0, 0, 0, 0.15);
+  transition: box-shadow 0.25s ease;
+}

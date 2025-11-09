@@ -1,0 +1,293 @@
+/* ---------- Design tokens ---------- */
+:root{
+  --bg:#f8f9fc;
+  --surface:#ffffff;
+  --muted:#f2f4f7;
+  --text:#1f2329;
+  --sub:#59616a;
+  --brand:#f6bf65;        /* warm orange */
+  --chip:#f5f6f8;
+  --chip-active:#fff7e6;
+  --border:#dce0e5;
+  --radius:16px;
+  --shadow:0 6px 20px rgba(0,0,0,.06);
+}
+
+/* Page background (optional) */
+body{ background:var(--bg); }
+
+/* ---------- Card ---------- */
+.prep-card{
+  background:var(--surface);
+  border:1px solid var(--border);
+  border-radius:var(--radius);
+  box-shadow:var(--shadow);
+  padding:14px 16px;
+}
+.prep-card__title{ font-weight:600; color:var(--text); margin-bottom:.25rem; }
+.prep-card__footer{ color:var(--sub); font-size:.9rem; margin-top:.25rem; }
+.prep-card:hover{ transform:translateY(-2px); transition:transform .12s ease; }
+
+/* ---------- Day chips calendar ---------- */
+.day-chips{ display:flex; gap:.5rem; margin:.5rem 0 1rem; }
+.day-chip{
+  border:1px solid var(--border);
+  background:var(--chip);
+  color:var(--text);
+  padding:.35rem .7rem;
+  border-radius:10px;
+  font-weight:600;
+  box-shadow:var(--shadow);
+}
+.day-chip--active{ background:var(--chip-active); outline:2px solid var(--brand); }
+
+/* ---------- OCR text box ---------- */
+.ocr-box{
+  background:var(--chip-active);
+  border:1px solid var(--border);
+  border-radius:12px;
+  padding:12px;
+  max-height:220px;
+  overflow:auto;
+  line-height:1.5;
+}
+
+/* ---------- Horizontal image scroller ---------- */
+.img-scroller{ display:flex; gap:12px; overflow:auto; padding:6px 2px; }
+.img-scroller img{
+  height:160px; border-radius:12px; border:1px solid var(--border);
+}
+
+/* ---------- Small helpers ---------- */
+.badge{ font-size:.75rem; padding:.1rem .5rem; border-radius:999px; background:var(--muted); }
+.btn-primary{
+  background:#111; color:#fff; border-radius:10px;
+  padding:.55rem 1rem; border:1px solid #111;
+}
+.btn-primary:hover{ opacity:.9 }
+
+/* ---------- Accordion module ---------- */
+.module summary{
+  display:flex; align-items:center; justify-content:space-between;
+  cursor:pointer; list-style:none; user-select:none;
+}
+.module summary::-webkit-details-marker{ display:none; }
+.module .chev{ transition: transform .12s ease; }
+.module[open] .chev{ transform: rotate(90deg); }
+
+/* ========================================================================== */
+/* =============================  APPENDED  ================================= */
+/* ========================================================================== */
+
+/* ---------- Prep: layout spacing ---------- */
+.prep-wrap{
+  max-width: 960px;
+  margin: 0 auto;
+  padding: 20px 16px 80px;
+}
+
+/* ---------- Modern tabs ---------- */
+.tabbar{
+  display:flex; gap:8px; align-items:center;
+  background:#fff; padding:8px; border-radius:12px;
+  border:1px solid rgba(0,0,0,.06);
+  box-shadow: 0 4px 14px rgba(0,0,0,.04);
+  position:sticky; top:8px; z-index:5;
+}
+.tab{
+  padding:8px 14px; border-radius:10px; font-weight:600;
+  background:#f8fafc; color:#334155; text-decoration:none;
+  border:1px solid #e5e7eb;
+  transition:all .15s ease;
+}
+.tab:hover{ transform: translateY(-1px); }
+.tab.active{
+  background:#111827; color:#fff; border-color:#111827;
+}
+
+/* ---------- Cohort mini-calendar ---------- */
+.daygrid{
+  display:grid; grid-template-columns: repeat(7, 1fr);
+  gap:10px; margin-top:12px;
+}
+.daycell{
+  position:relative;
+  display:flex; align-items:center; justify-content:center;
+  height:58px; border-radius:14px; font-weight:700;
+  background:#fff; border:1px solid #e5e7eb; color:#111827;
+  transition:all .15s ease; user-select:none;
+}
+.daycell.available:hover{ transform:translateY(-1px); box-shadow:0 6px 16px rgba(0,0,0,.08); }
+.daycell.today{ outline:2px solid #f59e0b; box-shadow:0 0 0 4px rgba(245,158,11,.12) inset; }
+.daycell.completed{ background:#eafff2; border-color:#bef8d0; color:#15803d; }
+.daycell.locked{ background:#f8fafc; color:#94a3b8; border-style:dashed; }
+.daycell .badge{
+  position:absolute; right:8px; top:6px; font-size:11px;
+  opacity:.75;
+}
+
+/* ---------- Module cards still look nice ---------- */
+.prep-card{
+  background:#fff; border:1px solid #e5e7eb; border-radius:14px;
+  padding:10px 12px; margin-bottom:12px;
+  box-shadow:0 2px 10px rgba(0,0,0,.04);
+}
+
+/* ---------- Accordion chevron for modules ---------- */
+.module summary{ display:flex; align-items:center; justify-content:space-between; cursor:pointer; list-style:none; user-select:none; }
+.module summary::-webkit-details-marker{ display:none; }
+.module .chev{ transition: transform .12s ease; }
+.module[open] .chev{ transform: rotate(90deg); }
+
+/* ---------- Scrollable OCR box ---------- */
+.ocr-box{
+  max-height: 300px; overflow-y: auto;
+  background: #fffbe7; padding: 12px; border-radius: 10px;
+  line-height: 1.55;
+}
+
+/* ========================================================================== */
+/* =======================  PARCHMENT THEME (SCOPED)  ======================= */
+/* ========================================================================== */
+
+/* === Parchment Theme Tokens (light yellow) =============================== */
+:root {
+  --paper-bg: #fff7e6;         /* light warm parchment */
+  --paper-edge: #f1e1c6;       /* border tone */
+  --ink-900: #2c2a26;
+  --ink-700: #5b544a;
+  --accent-ink: #2a4a7a;       /* buttons/links */
+  --accent-emerald: #2e7d6a;   /* success */
+  --accent-amber: #c27a10;     /* warning */
+  --accent-rose: #b8565a;      /* danger */
+  --chip-parch: #faecd0;
+  --chip-parch-text: #6b5d40;
+
+  --pill-bg: #fff2c2;
+  --pill-ring: #f5d98f;
+
+  --shadow-soft: 0 6px 30px rgba(108, 82, 38, 0.12);
+  --shadow-card: 0 10px 40px rgba(0,0,0,0.08);
+}
+
+/* Subtle parchment gradient background */
+.theme-parchment {
+  background: radial-gradient(1200px 600px at 25% -10%, #fff9e9 0%, #fff2cc 35%, #fff7e6 55%, #fffdf6 100%);
+}
+
+/* Paper cards */
+.theme-parchment .paper {
+  background: var(--paper-bg);
+  border: 1px solid var(--paper-edge);
+  box-shadow: var(--shadow-card);
+  border-radius: 18px;
+}
+
+.theme-parchment .paper-soft {
+  background: linear-gradient(#fffaf0, #fff6e0);
+  border: 1px solid #f0e2c9;
+  border-radius: 16px;
+  box-shadow: var(--shadow-soft);
+}
+
+/* Typography on parchment */
+.theme-parchment .ink-900 { color: var(--ink-900); }
+.theme-parchment .ink-700 { color: var(--ink-700); }
+
+/* Milestone “pill” buttons */
+.theme-parchment .pill {
+  background: var(--pill-bg);
+  border: 1px solid var(--pill-ring);
+  border-radius: 999px;
+  padding: 8px 12px;
+  display: inline-flex;
+  align-items: center;
+  gap: 8px;
+  box-shadow: 0 3px 12px rgba(199, 150, 54, 0.15);
+}
+.theme-parchment .pill-lock { opacity: .55; filter: grayscale(.2); }
+
+/* Glowing connector line between milestones */
+.theme-parchment .connector {
+  height: 6px;
+  border-radius: 999px;
+  background: linear-gradient(90deg, #f3d38a 0%, #9fd7be 60%, #8bb4ec 100%);
+  opacity: .35;
+}
+.theme-parchment .connector.on {
+  opacity: 1;
+  animation: shimmer 2s linear infinite;
+}
+@keyframes shimmer {
+  0% { filter: saturate(1) brightness(.95); }
+  50% { filter: saturate(1.2) brightness(1.15); }
+  100% { filter: saturate(1) brightness(.95); }
+}
+
+/* Primary parchment button (scoped) */
+.theme-parchment .btn-primary {
+  background: linear-gradient(180deg, #4a6fb8, #375c9e);
+  color: #fff;
+  border-radius: 12px;
+  padding: 10px 16px;
+  box-shadow: 0 8px 24px rgba(55, 92, 158, 0.25);
+  border: none;
+}
+.theme-parchment .btn-primary:disabled {
+  background: #cfc7b3; color: #fff; cursor: not-allowed;
+}
+
+/* Paper-style secondary */
+.theme-parchment .btn-paper {
+  background: #fff7e6;
+  border: 1px solid #efd9a9;
+  border-radius: 12px;
+  padding: 10px 16px;
+}
+
+/* Inputs */
+.theme-parchment .input-paper {
+  background: #fffdf6;
+  border: 1px solid #ead7b1;
+  border-radius: 14px;
+  padding: 12px 14px;
+  outline: none;
+}
+.theme-parchment .input-paper:focus {
+  border-color: #d9b878;
+  box-shadow: 0 0 0 4px rgba(217, 184, 120, .25);
+}
+
+/* Section titles */
+.theme-parchment .section-title {
+  font-weight: 800;
+  letter-spacing: .3px;
+  color: var(--ink-900);
+}
+
+/* Right rail cards */
+.theme-parchment .rail-card {
+  background: linear-gradient(#fffaf0, #fff6e0);
+  border: 1px solid #f0e2c9;
+  border-radius: 18px;
+  padding: 16px;
+  box-shadow: var(--shadow-soft);
+}
+
+/* End ceremony modal paper */
+.theme-parchment .modal-paper {
+  background: linear-gradient(#fffaf0 0%, #fff3d9 100%);
+  border: 1px solid #efd9a9;
+  border-radius: 22px;
+  box-shadow: 0 30px 80px rgba(0,0,0,.18);
+}
+
+/* Tiny badge used in preview */
+.theme-parchment .badge-chip {
+  background: var(--chip-parch);
+  color: var(--chip-parch-text);
+  border: 1px solid #efd9a9;
+  border-radius: 999px;
+  padding: 2px 8px;
+  font-size: 12px;
+}

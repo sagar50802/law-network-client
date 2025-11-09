@@ -1,0 +1,52 @@
+/* src/pages/AdminLectureManager.css */
+
+/* --- Fade in animation for modal --- */
+@keyframes fadeIn {
+  from {
+    opacity: 0;
+    transform: translateY(10px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
+
+.animate-fadeIn {
+  animation: fadeIn 0.25s ease-out;
+}
+
+/* --- Smooth row hover --- */
+table tbody tr {
+  transition: background-color 0.25s ease, transform 0.15s ease;
+}
+
+table tbody tr:hover {
+  background-color: #f8fafc; /* soft slate tint */
+  transform: translateX(2px);
+}
+
+/* --- Button hover feedback --- */
+button {
+  transition: background-color 0.2s ease, transform 0.1s ease;
+}
+
+button:active {
+  transform: scale(0.97);
+}
+
+/* --- Form slide animation --- */
+.form-slide {
+  animation: slideDown 0.25s ease;
+}
+
+@keyframes slideDown {
+  from {
+    opacity: 0;
+    transform: translateY(-8px);
+  }
+  to {
+    opacity: 1;
+    transform: translateY(0);
+  }
+}
