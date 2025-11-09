@@ -1,6 +1,10 @@
-// ✅ Classroom Voice Engine (Final Synced Version)
-// Provides synced teleprompter + avatar control + voice in Hindi/English/Hinglish.
+// ✅ Classroom Voice Engine — Final Version (2025)
+// Provides synced teleprompter + avatar control + multilingual voice (Hindi / English / Hinglish)
 
+//
+// ---------------------------------------------------------------------------
+// 🕗 Load available voices (with timeout + event fallback)
+// ---------------------------------------------------------------------------
 export async function waitForVoices(maxWait = 3000) {
   const synth = window.speechSynthesis;
   if (!synth) return [];
@@ -8,7 +12,6 @@ export async function waitForVoices(maxWait = 3000) {
   let voices = synth.getVoices();
   if (voices.length) return voices;
 
-  // Wait for voices to load
   await new Promise((resolve) => {
     const timeout = setTimeout(resolve, maxWait);
     window.speechSynthesis.onvoiceschanged = () => {
@@ -20,9 +23,10 @@ export async function waitForVoices(maxWait = 3000) {
   return synth.getVoices();
 }
 
-/* -------------------------------------------------------------------------- */
-/* ✅ Split readable sentences                                                */
-/* -------------------------------------------------------------------------- */
+//
+// ---------------------------------------------------------------------------
+// ✂️ Split readable sentences for pacing
+// ---------------------------------------------------------------------------
 export function splitIntoChunks(content) {
   if (!content) return [];
   return content
@@ -32,19 +36,21 @@ export function splitIntoChunks(content) {
     .filter(Boolean);
 }
 
-/* -------------------------------------------------------------------------- */
-/* ✅ Smart voice selection (Hindi / English / Hinglish)                      */
-/* -------------------------------------------------------------------------- */
+//
+// ---------------------------------------------------------------------------
+// 🧠 Smart voice selection (Hindi / English / Hinglish)
+// ---------------------------------------------------------------------------
 export function pickVoice(teacher = {}) {
   const voices = window.speechSynthesis.getVoices();
   if (!voices.length) return null;
 
-  // If teacher has a preferred voice
+  // ✅ Teacher-specified voice (manual override)
   if (teacher.voiceName) {
     const found = voices.find((x) => x.name === teacher.voiceName);
     if (found) return found;
   }
 
+  // ✅ Auto-detect language preference
   const looksHindi =
     /[अ-हक़-य़]/.test(teacher.name || "") ||
     /हिन्दी|Hindi|Hinglish/i.test(teacher.role || "");
@@ -58,6 +64,7 @@ export function pickVoice(teacher = {}) {
     );
   }
 
+  // ✅ Default fallback — English voices
   return (
     voices.find((v) => /en-IN/i.test(v.lang)) ||
     voices.find((v) => /en-US/i.test(v.lang)) ||
@@ -66,9 +73,10 @@ export function pickVoice(teacher = {}) {
   );
 }
 
-/* -------------------------------------------------------------------------- */
-/* ✅ Core speech engine — synced with teleprompter & avatar                  */
-/* -------------------------------------------------------------------------- */
+//
+// ---------------------------------------------------------------------------
+// 🎙 Core Speech Engine — synced with teleprompter & avatar
+// ---------------------------------------------------------------------------
 export async function playClassroomSpeech({
   slide,
   isMuted,
@@ -87,11 +95,11 @@ export async function playClassroomSpeech({
     return;
   }
 
-  // cancel old voice
+  // 🧹 Cancel any previous speech
   synth.cancel();
   if (speechRef.current?.cancel) speechRef.current.cancel();
 
-  // wait for available voices
+  // 🗣 Ensure voices are loaded
   await waitForVoices(3000);
 
   const chunks = splitIntoChunks(slide.content);
@@ -104,6 +112,7 @@ export async function playClassroomSpeech({
   let idx = 0;
   let cancelled = false;
 
+  // 🎛 Trackable speech reference (for stop / cancel)
   speechRef.current = {
     isPlaying: true,
     cancel: () => {
@@ -113,9 +122,14 @@ export async function playClassroomSpeech({
     },
   };
 
+  // -------------------------------------------------------------------------
+  // 🔁 Speak each chunk recursively
+  // -------------------------------------------------------------------------
   const speakNext = () => {
     if (cancelled) return;
+
     if (idx >= chunks.length) {
+      // ✅ Finished all chunks
       speechRef.current.isPlaying = false;
       onStopSpeaking?.();
       onComplete?.();
@@ -126,7 +140,7 @@ export async function playClassroomSpeech({
     setCurrentSentence(sentence);
     onProgress?.(0);
 
-    // 🧩 simulate short delay if muted
+    // 🔇 If muted, simulate a short delay to keep teleprompter in sync
     if (isMuted) {
       setTimeout(() => {
         onProgress?.(1);
@@ -140,7 +154,7 @@ export async function playClassroomSpeech({
     if (voice) utter.voice = voice;
     utter.lang = voice?.lang || "en-IN";
 
-    // natural speed depending on sentence length
+    // 🎚 Adaptive speech rate based on sentence length
     const len = sentence.length;
     utter.rate = len > 180 ? 0.9 : len > 100 ? 1.0 : 1.1;
     utter.pitch = 1.0;
@@ -149,12 +163,14 @@ export async function playClassroomSpeech({
     const totalLen = len;
     let started = false;
 
+    // -----------------------------------------------------------------------
+    // 🔈 Voice lifecycle events
+    // -----------------------------------------------------------------------
     utter.onstart = () => {
       started = true;
       onStartSpeaking?.();
     };
 
-    // progressive sync for teleprompter
     utter.onboundary = (event) => {
       if (event.name === "word" || event.charIndex !== undefined) {
         const progress = Math.min(1, event.charIndex / totalLen);
@@ -175,16 +191,19 @@ export async function playClassroomSpeech({
     };
 
     try {
-      synth.speak(utter);
+      // ⚙️ Speak asynchronously (iOS-safe)
+      setTimeout(() => synth.speak(utter), 0);
     } catch (err) {
       console.error("Utterance error:", err);
       if (!cancelled) speakNext();
     }
 
-    // Fallback timer: if voice never starts due to Chrome block
+    // 🧩 Fallback: Chrome sometimes blocks autoplay until click
     setTimeout(() => {
       if (!started && !cancelled) {
-        console.warn("⚠️ Speech blocked until user interaction. Please click Play.");
+        console.warn(
+          "⚠️ Speech blocked until user interaction. Please click once on the page."
+        );
         onStopSpeaking?.();
         onComplete?.();
       }
@@ -194,9 +213,10 @@ export async function playClassroomSpeech({
   speakNext();
 }
 
-/* -------------------------------------------------------------------------- */
-/* ✅ Stop speech gracefully                                                 */
-/* -------------------------------------------------------------------------- */
+//
+// ---------------------------------------------------------------------------
+// 🛑 Stop any current speech gracefully
+// ---------------------------------------------------------------------------
 export function stopClassroomSpeech(speechRef) {
   const synth = window.speechSynthesis;
   try {
@@ -209,9 +229,10 @@ export function stopClassroomSpeech(speechRef) {
   }
 }
 
-/* -------------------------------------------------------------------------- */
-/* ✅ Unlock voices once user interacts (browser policy)                     */
-/* -------------------------------------------------------------------------- */
+//
+// ---------------------------------------------------------------------------
+// 🖱 Unlock speech after first user interaction (Chrome/Edge policy)
+// ---------------------------------------------------------------------------
 export function unlockSpeechOnUserClick() {
   document.body.addEventListener(
     "click",
@@ -219,6 +240,7 @@ export function unlockSpeechOnUserClick() {
       if (window.speechSynthesis) {
         try {
           window.speechSynthesis.resume();
+          console.log("🔓 Speech synthesis unlocked after user click");
         } catch (e) {
           console.warn("Voice unlock error:", e);
         }
