@@ -16,6 +16,9 @@ const API_BASE =
   (import.meta.env.VITE_API_URL || "https://law-network.onrender.com/api") +
   "/classroom";
 
+// 🧩 Global flag for safe pause control
+let PAUSE_LOCK = false;
+
 /* -------------------------------------------------------------------------- */
 /* ✅ ClassroomLivePage                                                       */
 /* -------------------------------------------------------------------------- */
@@ -84,7 +87,9 @@ export default function ClassroomLivePage() {
     const loadSlides = async () => {
       setLoading(true);
       try {
-        const res = await fetch(`${API_BASE}/lectures/${selectedLectureId}/slides`);
+        const res = await fetch(
+          `${API_BASE}/lectures/${selectedLectureId}/slides`
+        );
         const json = await res.json();
         const list = json.slides || json;
 
@@ -126,9 +131,7 @@ export default function ClassroomLivePage() {
     setIsSpeaking(false);
 
     setTimeout(() => {
-      setCurrentIndex((prev) =>
-        prev + 1 < slides.length ? prev + 1 : prev
-      );
+      setCurrentIndex((prev) => (prev + 1 < slides.length ? prev + 1 : prev));
     }, 800);
   }, [slides.length]);
 
@@ -156,9 +159,9 @@ export default function ClassroomLivePage() {
         return;
       }
 
-      // only play if user wants and not muted
-      if (!isPlaying || isMuted) {
-        console.log("⏸ Skipped speech — paused or muted");
+      // ✅ Block when paused, muted, or locked
+      if (!isPlaying || isMuted || PAUSE_LOCK) {
+        console.log("⏸ Skipped speech — paused, muted, or queue locked");
         return;
       }
 
@@ -205,27 +208,25 @@ export default function ClassroomLivePage() {
   };
 
   /* ---------------------------------------------------------------------- */
-  /* ✅ SAFER: Pause / Resume / Mute (no engine change)                     */
+  /* ✅ Safe Play / Pause / Mute Controls                                   */
   /* ---------------------------------------------------------------------- */
   const handlePlayPause = () => {
     const synth = window.speechSynthesis;
     if (!synth) return;
 
     if (isPlaying) {
+      // Pause everything + lock new chunks
+      PAUSE_LOCK = true;
       if (synth.speaking && !synth.paused) synth.pause();
-      console.log("⏸ Paused voice");
+      console.log("⏸ Paused voice + queue locked");
       setIsPlaying(false);
       setIsSpeaking(false);
     } else {
-      if (synth.paused) {
-        synth.resume();
-        console.log("▶ Resumed voice");
-        setIsPlaying(true);
-      } else {
-        setProgress(0);
-        setCurrentSentence("");
-        setIsPlaying(true);
-      }
+      // Resume and unlock
+      PAUSE_LOCK = false;
+      if (synth.paused) synth.resume();
+      console.log("▶ Resumed voice + queue unlocked");
+      setIsPlaying(true);
     }
   };
 
@@ -237,7 +238,7 @@ export default function ClassroomLivePage() {
         if (synth.speaking) synth.pause();
         console.log("🔇 Muted speech (paused)");
       } else {
-        if (synth.paused) synth.resume();
+        if (synth.paused && !PAUSE_LOCK) synth.resume();
         console.log("🔈 Unmuted speech (resumed)");
       }
       return next;
@@ -248,13 +249,25 @@ export default function ClassroomLivePage() {
   /* ✅ Render States                                                      */
   /* ---------------------------------------------------------------------- */
   if (loading)
-    return <div className="text-center text-slate-100 p-10 animate-pulse">Loading classroom…</div>;
+    return (
+      <div className="text-center text-slate-100 p-10 animate-pulse">
+        Loading classroom…
+      </div>
+    );
 
   if (error)
-    return <div className="text-center text-red-400 p-10">⚠️ {error || "Something went wrong."}</div>;
+    return (
+      <div className="text-center text-red-400 p-10">
+        ⚠️ {error || "Something went wrong."}
+      </div>
+    );
 
   if (!slides.length)
-    return <div className="text-center text-slate-400 p-10">No slides available for this lecture.</div>;
+    return (
+      <div className="text-center text-slate-400 p-10">
+        No slides available for this lecture.
+      </div>
+    );
 
   /* ---------------------------------------------------------------------- */
   /* ✅ Render Full Layout                                                 */
@@ -278,6 +291,7 @@ export default function ClassroomLivePage() {
           >
             {isPlaying ? "Pause" : "Resume"}
           </button>
+
           <button
             onClick={handleMuteToggle}
             className={`px-3 py-1.5 rounded-full text-xs border ${
@@ -294,18 +308,21 @@ export default function ClassroomLivePage() {
       {/* ---------- Main Section ---------- */}
       <main className="flex-1 px-4 md:px-8 py-4 md:py-6 flex flex-col gap-4">
         <div className="flex-1 grid grid-cols-1 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,2.4fr)_minmax(0,1.1fr)] gap-4">
+          {/* ---------- Teacher Avatar ---------- */}
           <TeacherAvatarCard
             teacher={currentLecture}
             subject={currentLecture?.subject}
             isSpeaking={isSpeaking}
           />
 
+          {/* ---------- Teleprompter + Media Board ---------- */}
           <section className="flex flex-col gap-3">
             <ClassroomTeleprompter
               slide={currentSlide}
               currentSentence={currentSentence}
               progress={progress}
             />
+
             <MediaBoard media={currentSlide.media} />
             <MediaControlPanel
               active={{
@@ -314,6 +331,7 @@ export default function ClassroomLivePage() {
                 image: !!currentSlide.media?.imageUrl,
               }}
             />
+
             <div className="mt-2 flex items-center justify-end gap-2 text-xs">
               <button
                 className="px-3 py-1 rounded-full bg-slate-800 border border-slate-600"
@@ -333,6 +351,7 @@ export default function ClassroomLivePage() {
             </div>
           </section>
 
+          {/* ---------- Playlist Sidebar ---------- */}
           <LecturePlaylistSidebar
             lectures={lectures}
             currentLectureId={selectedLectureId}
@@ -346,6 +365,7 @@ export default function ClassroomLivePage() {
           />
         </div>
 
+        {/* ---------- Students Row ---------- */}
         <StudentsRow
           onRaiseHand={() =>
             alert("✋ Student raised hand — feature coming soon!")
