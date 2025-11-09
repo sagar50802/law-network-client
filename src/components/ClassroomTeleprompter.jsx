@@ -4,51 +4,40 @@ import React, { useEffect, useState, useRef } from "react";
 /* ✅ Highlight Logic                                                         */
 /* -------------------------------------------------------------------------- */
 /**
- * Supports:
+ * Supports rich inline annotations:
  *  - **term**           → yellow highlight (important)
  *  - [def]text[/def]    → green (definition)
  *  - [ex]text[/ex]      → blue (example)
- *  - [note]text[/note]  → yellow block (notes)
+ *  - [note]text[/note]  → yellow block (note)
  *  - [blue]text[/blue]  → blue block
- *  - [red]text[/red]    → red block (warnings)
+ *  - [red]text[/red]    → red block (warning)
  *
- * You can write in slide content, for example:
+ * Example in slide content:
  *   आज हम **इतिहास** [note]बहुत important topic[/note] पढ़ेंगे।
  */
 function highlightSentence(sentence = "") {
   let html = sentence;
 
-  // **bold** → yellow
   html = html.replace(
     /\*\*(.+?)\*\*/g,
     '<span class="text-yellow-300 font-semibold">$1</span>'
   );
-
-  // [def]definition[/def] → green
   html = html.replace(
     /\[def](.+?)\[\/def]/g,
     '<span class="text-green-300">$1</span>'
   );
-
-  // [ex]example[/ex] → blue
   html = html.replace(
     /\[ex](.+?)\[\/ex]/g,
     '<span class="text-blue-300">$1</span>'
   );
-
-  // [note]…[/note] → yellow block
   html = html.replace(
     /\[note](.+?)\[\/note]/g,
     '<span class="text-yellow-300 font-semibold">$1</span>'
   );
-
-  // [blue]…[/blue] → blue block
   html = html.replace(
     /\[blue](.+?)\[\/blue]/g,
     '<span class="text-sky-300">$1</span>'
   );
-
-  // [red]…[/red] → red block
   html = html.replace(
     /\[red](.+?)\[\/red]/g,
     '<span class="text-red-300 font-semibold">$1</span>'
@@ -58,22 +47,22 @@ function highlightSentence(sentence = "") {
 }
 
 /* -------------------------------------------------------------------------- */
-/* ✅ Component                                                               */
+/* ✅ ClassroomTeleprompter Component                                         */
 /* -------------------------------------------------------------------------- */
 export default function ClassroomTeleprompter({
   slide,
   currentSentence,
-  duration = 4000,   // ms – original timing logic
-  progress = null,   // 0–1 from voice engine (optional)
+  duration = 4000, // fallback typing duration in ms
+  progress = null, // 0–1 real-time from voice engine
 }) {
   const [typedText, setTypedText] = useState("");
   const [history, setHistory] = useState([]);
   const containerRef = useRef(null);
   const rafRef = useRef(null);
-  const lastCompletedRef = useRef(null); // avoid duplicate pushes to history
+  const lastCompletedRef = useRef(null); // to avoid duplicate pushes
 
   /* ---------------------------------------------------------------------- */
-  /* ✅ Reset when slide changes                                            */
+  /* 🧹 Reset when slide changes                                            */
   /* ---------------------------------------------------------------------- */
   useEffect(() => {
     setHistory([]);
@@ -83,14 +72,11 @@ export default function ClassroomTeleprompter({
   }, [slide?._id]);
 
   /* ---------------------------------------------------------------------- */
-  /* ✅ Typing animation                                                    */
-  /*    - If progress is provided → use progress-driven typing              */
-  /*    - Else → use original duration-based rAF typing                     */
+  /* ✍️ Typing / Progress Animation                                         */
   /* ---------------------------------------------------------------------- */
   useEffect(() => {
     if (!currentSentence) return;
 
-    // Cancel any ongoing animation frame from previous sentence
     if (rafRef.current) {
       cancelAnimationFrame(rafRef.current);
       rafRef.current = null;
@@ -99,28 +85,28 @@ export default function ClassroomTeleprompter({
     const text = currentSentence;
     const totalChars = text.length;
 
-    // If we have a numeric progress between 0 and 1 → use progress-driven
     const hasProgress =
       typeof progress === "number" && progress >= 0 && progress <= 1;
 
+    // ✅ Voice-driven progress typing
     if (hasProgress) {
       const shown = Math.floor(totalChars * progress);
       setTypedText(text.slice(0, shown));
 
-      // On completion, move sentence to history once
+      // push to history when complete
       if (progress >= 1 && text.trim()) {
         if (lastCompletedRef.current !== text) {
           lastCompletedRef.current = text;
           setHistory((prev) => {
             const updated = [...prev, text];
-            return updated.slice(-25); // keep last 25 sentences
+            return updated.slice(-25); // keep recent 25 lines
           });
         }
       }
-      return; // ✅ no rAF needed when progress is driving it
+      return;
     }
 
-    // ---------------- Original duration-based typing (fallback) ----------
+    // ✅ Fallback to self-driven typing (if no progress provided)
     let frameId;
     let startTime;
     let currentLength = 0;
@@ -128,18 +114,14 @@ export default function ClassroomTeleprompter({
     const targetMs =
       typeof duration === "number" && duration > 1000 ? duration : 4000;
     const targetSec = targetMs / 1000;
-
-    // chars per second so full sentence ~ target duration
     let charsPerSec = totalChars > 0 ? totalChars / targetSec : 15;
-    // keep speed in a readable range
-    charsPerSec = Math.max(4, Math.min(25, charsPerSec));
+    charsPerSec = Math.max(4, Math.min(25, charsPerSec)); // limit speed
 
     setTypedText("");
 
     const step = (timestamp) => {
       if (!startTime) startTime = timestamp;
-      const elapsed = (timestamp - startTime) / 1000; // seconds
-
+      const elapsed = (timestamp - startTime) / 1000;
       const charsToShow = Math.min(
         totalChars,
         Math.floor(elapsed * charsPerSec)
@@ -154,7 +136,6 @@ export default function ClassroomTeleprompter({
         frameId = requestAnimationFrame(step);
         rafRef.current = frameId;
       } else {
-        // finished typing this sentence → move it to history
         if (text.trim()) {
           lastCompletedRef.current = text;
           setHistory((prev) => {
@@ -174,7 +155,7 @@ export default function ClassroomTeleprompter({
   }, [currentSentence, duration, progress]);
 
   /* ---------------------------------------------------------------------- */
-  /* ✅ Auto-scroll to bottom when content updates                          */
+  /* 🧭 Auto-scroll on update                                               */
   /* ---------------------------------------------------------------------- */
   useEffect(() => {
     if (!containerRef.current) return;
@@ -183,11 +164,10 @@ export default function ClassroomTeleprompter({
   }, [history, typedText]);
 
   /* ---------------------------------------------------------------------- */
-  /* ✅ Derived visual progress (typing bar)                                */
+  /* 📊 Progress Bar Calculation                                            */
   /* ---------------------------------------------------------------------- */
   const progressWidth = currentSentence
     ? (() => {
-        // If progress prop is driving animation, prefer it for the bar
         if (
           typeof progress === "number" &&
           progress >= 0 &&
@@ -195,7 +175,6 @@ export default function ClassroomTeleprompter({
         ) {
           return `${Math.min(100, Math.floor(progress * 100))}%`;
         }
-        // Otherwise use original typedText ratio
         return `${Math.min(
           100,
           (typedText.length / (currentSentence.length || 1)) * 100
@@ -204,7 +183,7 @@ export default function ClassroomTeleprompter({
     : "0%";
 
   /* ---------------------------------------------------------------------- */
-  /* ✅ Render                                                              */
+  /* 🧩 Render                                                              */
   /* ---------------------------------------------------------------------- */
   return (
     <div className="bg-slate-900/95 text-slate-50 rounded-2xl px-4 py-3 md:px-6 md:py-4 shadow-inner border border-slate-700 max-h-[50vh] md:max-h-[45vh] overflow-hidden flex flex-col transition-all duration-500">
@@ -212,7 +191,7 @@ export default function ClassroomTeleprompter({
         ref={containerRef}
         className="flex-1 overflow-y-auto pr-2 custom-scrollbar"
       >
-        {/* Past Sentences */}
+        {/* 🕓 Past Sentences */}
         {history.map((s, idx) => (
           <p
             key={idx}
@@ -221,7 +200,7 @@ export default function ClassroomTeleprompter({
           />
         ))}
 
-        {/* Current Typing Sentence */}
+        {/* ✍️ Current Typing Sentence */}
         {typedText && (
           <p
             className="text-base md:text-lg leading-relaxed mb-1 animate-fadeIn"
@@ -230,7 +209,7 @@ export default function ClassroomTeleprompter({
         )}
       </div>
 
-      {/* Progress Bar */}
+      {/* 📊 Progress Bar */}
       <div className="mt-2 h-1.5 bg-slate-700 rounded-full overflow-hidden">
         <div
           className="h-full bg-emerald-400 transition-[width] duration-150 ease-linear"
@@ -238,7 +217,7 @@ export default function ClassroomTeleprompter({
         />
       </div>
 
-      {/* Topic Title */}
+      {/* 🏷 Topic Title */}
       <div className="mt-1 text-xs uppercase tracking-wide text-slate-400">
         {slide?.topicTitle || "Untitled"}
       </div>
@@ -247,7 +226,7 @@ export default function ClassroomTeleprompter({
 }
 
 /* -------------------------------------------------------------------------- */
-/* ✅ Extra CSS (make sure this exists once globally)                        */
+/* ✅ Extra CSS (ensure globally in index.css or tailwind.css)                */
 /* -------------------------------------------------------------------------- */
 /*
 @keyframes fadeIn {
