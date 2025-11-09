@@ -135,20 +135,27 @@ export default function ClassroomLivePage() {
       if (!isPlaying || isMuted) return;
 
       playClassroomSpeech({
-        slide: currentSlide,
-        isMuted,
-        speechRef,
-        setCurrentSentence,
-        onProgress: setProgress, // teleprompter sync
-        onComplete: () => {
-          setProgress(0);
-          setTimeout(() => {
-            setCurrentIndex((prev) =>
-              prev + 1 < slides.length ? prev + 1 : prev
-            );
-          }, 800);
-        },
-      });
+  slide: currentSlide,
+  isMuted,
+  speechRef,
+  setCurrentSentence,
+  onProgress: setProgress,
+  onStartSpeaking: () => {
+    speechRef.current.isPlaying = true;
+  },
+  onStopSpeaking: () => {
+    speechRef.current.isPlaying = false;
+  },
+  onComplete: () => {
+    setProgress(0);
+    setTimeout(() => {
+      setCurrentIndex((prev) =>
+        prev + 1 < slides.length ? prev + 1 : prev
+      );
+    }, 1000);
+  },
+});
+
     }
 
     startSpeech();
