@@ -446,14 +446,45 @@ export default function AdminLectureManager() {
   };
 
   const handleSaveSlides = async (lectureId, slides) => {
+  // 🧹 Clean slides before sending
+  const cleanedSlides = slides
+    .filter(s => s.topicTitle?.trim() || s.content?.trim()) // skip empty slides
+    .map(s => ({
+      topicTitle: s.topicTitle?.trim() || "Untitled Slide",
+      content: s.content?.trim() || "",
+      media: {
+        videoUrl: s.media?.videoUrl?.trim() || "",
+        audioUrl: s.media?.audioUrl?.trim() || "",
+        imageUrl: s.media?.imageUrl?.trim() || "",
+      },
+    }));
+
+  if (cleanedSlides.length === 0) {
+    alert("❌ Please add at least one slide with title or content");
+    return;
+  }
+
+  try {
+    console.log("Sending slides to API:", cleanedSlides);
     const res = await fetch(`${API_BASE}/lectures/${lectureId}/slides`, {
       method: "PUT",
       headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ slides }),
+      body: JSON.stringify({ slides: cleanedSlides }),
     });
-    if (!res.ok) throw new Error("Failed to save slides");
+
+    if (!res.ok) {
+      const text = await res.text();
+      throw new Error(`Server error (${res.status}): ${text}`);
+    }
+
+    alert("✅ Slides saved successfully!");
     await loadLectures();
-  };
+  } catch (err) {
+    console.error("Save error:", err);
+    alert("❌ Failed to save slides. Check console for details.");
+  }
+};
+
 
   return (
     <div className="p-6 bg-slate-50 min-h-screen">
