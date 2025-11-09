@@ -53,29 +53,37 @@ function SlideEditor({ open, onClose, lecture, onSaveSlides }) {
     }
   }, [lecture]);
 
-  // 🔼 Add this helper function above handleAddSlide()
+  // 🔼 Updated R2 Upload (pre-signed URL) version
   const handleFileUpload = async (index, field, file) => {
     if (!file) return;
     try {
-      const formData = new FormData();
-      formData.append("file", file);
-
-      const res = await fetch(`${API_BASE}/media/upload`, {
+      // Step 1: Ask backend for pre-signed R2 upload URL
+      const signRes = await fetch(`${API_BASE}/media/sign`, {
         method: "POST",
-        body: formData,
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({
+          filename: file.name,
+          mimetype: file.type,
+        }),
       });
 
-      const data = await res.json();
-      if (!data?.success || !data?.url) {
-        alert("Upload failed");
-        return;
-      }
+      const signData = await signRes.json();
+      if (!signData.success) throw new Error(signData.message || "Sign failed");
 
-      // field can be "videoUrl" | "audioUrl" | "imageUrl"
-      handleMediaChange(index, field, data.url);
+      // Step 2: Upload directly to Cloudflare R2
+      const uploadRes = await fetch(signData.uploadUrl, {
+        method: "PUT",
+        headers: { "Content-Type": file.type },
+        body: file,
+      });
+      if (!uploadRes.ok)
+        throw new Error(`Upload failed (${uploadRes.status})`);
+
+      // Step 3: Store returned public R2 URL in slide
+      handleMediaChange(index, field, signData.fileUrl);
     } catch (err) {
       console.error("Upload error:", err);
-      alert("Upload error");
+      alert(err.message || "Upload failed");
     }
   };
 
@@ -166,82 +174,87 @@ function SlideEditor({ open, onClose, lecture, onSaveSlides }) {
           />
 
           <div className="flex flex-col md:flex-row gap-3 mb-2">
-  {/* 🎥 Video */}
-  <div className="flex flex-col gap-1 flex-1">
-    <div className="flex items-center gap-2">
-      <Video className="w-4 h-4 text-slate-500" />
-      <span className="text-xs text-slate-600">Video</span>
-    </div>
-    <div className="flex gap-2 items-center">
-      <input
-        type="text"
-        placeholder="Video URL"
-        value={s.media?.videoUrl || ""}
-        onChange={(e) => handleMediaChange(i, "videoUrl", e.target.value)}
-        className="flex-1 border border-slate-300 rounded-lg px-2 py-1 text-sm"
-      />
-      <input
-        type="file"
-        accept="video/*"
-        onChange={(e) =>
-          handleFileUpload(i, "videoUrl", e.target.files?.[0])
-        }
-        className="text-xs"
-      />
-    </div>
-  </div>
+            {/* 🎥 Video */}
+            <div className="flex flex-col gap-1 flex-1">
+              <div className="flex items-center gap-2">
+                <Video className="w-4 h-4 text-slate-500" />
+                <span className="text-xs text-slate-600">Video</span>
+              </div>
+              <div className="flex gap-2 items-center">
+                <input
+                  type="text"
+                  placeholder="Video URL"
+                  value={s.media?.videoUrl || ""}
+                  onChange={(e) =>
+                    handleMediaChange(i, "videoUrl", e.target.value)
+                  }
+                  className="flex-1 border border-slate-300 rounded-lg px-2 py-1 text-sm"
+                />
+                <input
+                  type="file"
+                  accept="video/*"
+                  onChange={(e) =>
+                    handleFileUpload(i, "videoUrl", e.target.files?.[0])
+                  }
+                  className="text-xs"
+                />
+              </div>
+            </div>
 
-  {/* 🎧 Audio */}
-  <div className="flex flex-col gap-1 flex-1">
-    <div className="flex items-center gap-2">
-      <Music2 className="w-4 h-4 text-slate-500" />
-      <span className="text-xs text-slate-600">Audio</span>
-    </div>
-    <div className="flex gap-2 items-center">
-      <input
-        type="text"
-        placeholder="Audio URL"
-        value={s.media?.audioUrl || ""}
-        onChange={(e) => handleMediaChange(i, "audioUrl", e.target.value)}
-        className="flex-1 border border-slate-300 rounded-lg px-2 py-1 text-sm"
-      />
-      <input
-        type="file"
-        accept="audio/*"
-        onChange={(e) =>
-          handleFileUpload(i, "audioUrl", e.target.files?.[0])
-        }
-        className="text-xs"
-      />
-    </div>
-  </div>
-</div>
+            {/* 🎧 Audio */}
+            <div className="flex flex-col gap-1 flex-1">
+              <div className="flex items-center gap-2">
+                <Music2 className="w-4 h-4 text-slate-500" />
+                <span className="text-xs text-slate-600">Audio</span>
+              </div>
+              <div className="flex gap-2 items-center">
+                <input
+                  type="text"
+                  placeholder="Audio URL"
+                  value={s.media?.audioUrl || ""}
+                  onChange={(e) =>
+                    handleMediaChange(i, "audioUrl", e.target.value)
+                  }
+                  className="flex-1 border border-slate-300 rounded-lg px-2 py-1 text-sm"
+                />
+                <input
+                  type="file"
+                  accept="audio/*"
+                  onChange={(e) =>
+                    handleFileUpload(i, "audioUrl", e.target.files?.[0])
+                  }
+                  className="text-xs"
+                />
+              </div>
+            </div>
+          </div>
 
-{/* 🖼️ Image */}
-<div className="flex flex-col gap-1 mb-3">
-  <div className="flex items-center gap-2">
-    <ImgIcon className="w-4 h-4 text-slate-500" />
-    <span className="text-xs text-slate-600">Image</span>
-  </div>
-  <div className="flex gap-2 items-center">
-    <input
-      type="text"
-      placeholder="Image URL"
-      value={s.media?.imageUrl || ""}
-      onChange={(e) => handleMediaChange(i, "imageUrl", e.target.value)}
-      className="flex-1 border border-slate-300 rounded-lg px-2 py-1 text-sm"
-    />
-    <input
-      type="file"
-      accept="image/*"
-      onChange={(e) =>
-        handleFileUpload(i, "imageUrl", e.target.files?.[0])
-      }
-      className="text-xs"
-    />
-  </div>
-</div>
-
+          {/* 🖼️ Image */}
+          <div className="flex flex-col gap-1 mb-3">
+            <div className="flex items-center gap-2">
+              <ImgIcon className="w-4 h-4 text-slate-500" />
+              <span className="text-xs text-slate-600">Image</span>
+            </div>
+            <div className="flex gap-2 items-center">
+              <input
+                type="text"
+                placeholder="Image URL"
+                value={s.media?.imageUrl || ""}
+                onChange={(e) =>
+                  handleMediaChange(i, "imageUrl", e.target.value)
+                }
+                className="flex-1 border border-slate-300 rounded-lg px-2 py-1 text-sm"
+              />
+              <input
+                type="file"
+                accept="image/*"
+                onChange={(e) =>
+                  handleFileUpload(i, "imageUrl", e.target.files?.[0])
+                }
+                className="text-xs"
+              />
+            </div>
+          </div>
 
           <div className="bg-slate-900 text-slate-50 rounded-xl p-3 text-sm">
             <div className="font-semibold text-slate-300 mb-1">Preview:</div>
@@ -274,6 +287,7 @@ function SlideEditor({ open, onClose, lecture, onSaveSlides }) {
     </Modal>
   );
 }
+
 
 /* ------------------------ Lecture Row (small sub-component) ------------------------ */
 function LectureRow({ lec, onToggle, onEditSlides, onDelete }) {
