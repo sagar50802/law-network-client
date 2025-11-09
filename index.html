@@ -12,27 +12,54 @@
     />
   </head>
 
-  <body>
-    <div id="root"></div>
+  <!-- ✅ Added instant background image + soft dark overlay -->
+  <body
+    style="
+      margin: 0;
+      padding: 0;
+      background-color: #1a1a1a;
+      background-image: url('/backgrounds/classroom-fallback.png');
+      background-size: cover;
+      background-position: center;
+      background-repeat: no-repeat;
+      transition: opacity 0.5s ease-in-out;
+    "
+  >
+    <div
+      id="root"
+      style="
+        min-height: 100vh;
+        background-color: rgba(0, 0, 0, 0.55);
+        transition: opacity 0.5s ease-in-out;
+      "
+    ></div>
 
     <!-- On-screen boot errors (so a bad import doesn't look like a "blank site") -->
-    <pre id="boot-error" style="
-      display:none; white-space:pre-wrap; 
-      font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-      color:#b91c1c; background:#fff3f3; border:1px solid #fecaca; padding:8px; margin:8px;">
-    </pre>
+    <pre
+      id="boot-error"
+      style="
+        display: none;
+        white-space: pre-wrap;
+        font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
+        color: #b91c1c;
+        background: #fff3f3;
+        border: 1px solid #fecaca;
+        padding: 8px;
+        margin: 8px;
+      "
+    ></pre>
 
     <script>
-      const box = document.getElementById('boot-error');
+      const box = document.getElementById("boot-error");
       function showBootError(msg, stack) {
-        box.style.display = 'block';
-        box.textContent = `[Boot error]\n${msg}\n\n${stack || ''}`;
-        console.error('[Boot error]', msg, stack);
+        box.style.display = "block";
+        box.textContent = `[Boot error]\n${msg}\n\n${stack || ""}`;
+        console.error("[Boot error]", msg, stack);
       }
-      window.addEventListener('error', (e) =>
+      window.addEventListener("error", (e) =>
         showBootError(e.message, e.error && e.error.stack)
       );
-      window.addEventListener('unhandledrejection', (e) =>
+      window.addEventListener("unhandledrejection", (e) =>
         showBootError(String(e.reason), e.reason && e.reason.stack)
       );
     </script>
