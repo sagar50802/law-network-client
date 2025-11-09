@@ -1,26 +1,26 @@
 import React, { useEffect, useState, useRef } from "react";
 
 /* -------------------------------------------------------------------------- */
-/* 🎨 Highlight Logic – supports colored note marks & highlight effects       */
+/* 🎨 Highlight Logic — persistent note-style color highlighting              */
 /* -------------------------------------------------------------------------- */
 function highlightSentence(sentence = "") {
   let html = sentence;
 
-  // Block color regions for note-like grouping
+  // Block note color groups
   html = html.replace(/\[red](.+?)\[\/red]/g,
-    '<span class="block bg-red-50 border-l-4 border-red-400 text-red-800 font-medium rounded px-2 py-0.5 my-1">$1</span>'
+    '<span class="block bg-red-100 border-l-4 border-red-400 text-red-800 font-medium rounded px-2 py-0.5 my-1">$1</span>'
   );
   html = html.replace(/\[green](.+?)\[\/green]/g,
-    '<span class="block bg-green-50 border-l-4 border-green-400 text-green-800 font-medium rounded px-2 py-0.5 my-1">$1</span>'
+    '<span class="block bg-green-100 border-l-4 border-green-400 text-green-800 font-medium rounded px-2 py-0.5 my-1">$1</span>'
   );
   html = html.replace(/\[blue](.+?)\[\/blue]/g,
-    '<span class="block bg-blue-50 border-l-4 border-blue-400 text-blue-800 font-medium rounded px-2 py-0.5 my-1">$1</span>'
+    '<span class="block bg-blue-100 border-l-4 border-blue-400 text-blue-800 font-medium rounded px-2 py-0.5 my-1">$1</span>'
   );
   html = html.replace(/\[yellow](.+?)\[\/yellow]/g,
-    '<span class="block bg-yellow-50 border-l-4 border-yellow-400 text-yellow-800 font-medium rounded px-2 py-0.5 my-1">$1</span>'
+    '<span class="block bg-yellow-100 border-l-4 border-yellow-400 text-yellow-800 font-medium rounded px-2 py-0.5 my-1">$1</span>'
   );
 
-  // Inline emphasis tags
+  // Inline tags — keep color accent inside sentences
   html = html.replace(/\[note](.+?)\[\/note]/g,
     '<span class="bg-amber-100 text-amber-800 italic rounded px-1">$1</span>'
   );
@@ -38,7 +38,7 @@ function highlightSentence(sentence = "") {
 }
 
 /* -------------------------------------------------------------------------- */
-/* 📒 Notebook-Style Teleprompter                                            */
+/* 📒 Persistent Highlight Notebook Teleprompter                              */
 /* -------------------------------------------------------------------------- */
 export default function ClassroomTeleprompter({
   slide,
@@ -57,12 +57,11 @@ export default function ClassroomTeleprompter({
     lastCompletedRef.current = null;
   }, [slide?._id]);
 
-  /* ✍️ Show current sentence while speaking */
+  /* ✍️ Update displayed text */
   useEffect(() => {
     if (!currentSentence) return;
     setTypedText(currentSentence);
 
-    // Add to history when complete (progress === 1)
     if (progress >= 1 && currentSentence.trim()) {
       if (lastCompletedRef.current !== currentSentence) {
         lastCompletedRef.current = currentSentence;
@@ -71,16 +70,16 @@ export default function ClassroomTeleprompter({
     }
   }, [currentSentence, progress]);
 
-  /* 🧭 Smooth scroll as new lines appear */
+  /* 🧭 Auto-scroll on new text */
   useEffect(() => {
     const el = containerRef.current;
     if (el) el.scrollTo({ top: el.scrollHeight, behavior: "smooth" });
   }, [history, typedText]);
 
-  /* 📊 Progress width */
+  /* 📊 Progress bar width */
   const progressWidth = `${Math.min(100, Math.floor(progress * 100))}%`;
 
-  /* 🧩 Render */
+  /* 🧩 Render notebook look */
   return (
     <div className="relative bg-white text-gray-900 rounded-2xl px-5 py-4 md:px-6 md:py-5 shadow-lg border border-gray-300 max-h-[55vh] overflow-hidden flex flex-col transition-all duration-300">
 
@@ -91,30 +90,33 @@ export default function ClassroomTeleprompter({
         style={{
           backgroundImage: `
             linear-gradient(to bottom, rgba(59,130,246,0.15) 1px, transparent 1px),
-            linear-gradient(to right, rgba(239,68,68,0.6) 28px, transparent 28px)
+            linear-gradient(to right, rgba(239,68,68,0.6) 24px, transparent 24px)
           `,
           backgroundSize: "100% 1.8em, 100% 100%",
           backgroundRepeat: "repeat, no-repeat",
           backgroundPosition: "0 0, 0 0",
         }}
       >
-        {/* 🟥 Thin margin line (fixed) */}
-        <div className="absolute left-[27px] top-0 bottom-0 w-[1.5px] bg-red-400 opacity-60 z-0"></div>
+        {/* Thin red margin */}
+        <div className="absolute left-[23px] top-0 bottom-0 w-[1.5px] bg-red-400 opacity-60 z-0"></div>
 
-        {/* 🕓 Past Sentences (soft highlight) */}
+        {/* 🕓 Past sentences stay colored */}
         <div className="pl-8">
           {history.map((s, idx) => (
             <p
               key={idx}
-              className="text-sm md:text-base mb-1 bg-yellow-50/40 rounded px-1"
+              className="text-sm md:text-base mb-1 animate-fadeIn"
               dangerouslySetInnerHTML={{ __html: highlightSentence(s) }}
             />
           ))}
 
-          {/* ✍️ Current Sentence (strong highlight while speaking) */}
+          {/* ✍️ Current sentence (distinct green highlight) */}
           {typedText && (
             <p
-              className="text-base md:text-lg font-medium mb-1 animate-fadeIn bg-emerald-50 border-l-4 border-emerald-400 pl-2 rounded shadow-sm"
+              className="text-base md:text-lg font-medium mb-1 animate-fadeIn bg-emerald-50 border-l-4 border-emerald-400 pl-2 rounded shadow-sm relative"
+              style={{
+                boxShadow: "inset 0 -3px 0 rgba(16,185,129,0.4)",
+              }}
               dangerouslySetInnerHTML={{ __html: highlightSentence(typedText) }}
             />
           )}
@@ -138,7 +140,7 @@ export default function ClassroomTeleprompter({
 }
 
 /* -------------------------------------------------------------------------- */
-/* 🧾 Add to your global CSS once (e.g., index.css or tailwind.css)          */
+/* 📜 Add this CSS in index.css or tailwind.css once                          */
 /* -------------------------------------------------------------------------- */
 /*
 @keyframes fadeIn {
