@@ -4,31 +4,50 @@ import "./MediaBoard.css";
 /* -------------------------------------------------------------------------- */
 /* ✅ MediaBoard — Video, Audio, Image area                                   */
 /* -------------------------------------------------------------------------- */
-export function MediaBoard({ media = {}, autoPlay = true, isPlaying = true }) {
+export function MediaBoard({ media = {}, autoPlay = false, isPlaying = true }) {
   const { videoUrl, audioUrl, imageUrl } = media;
   const videoRef = useRef(null);
   const audioRef = useRef(null);
   const [audioActive, setAudioActive] = useState(false);
 
   /* ---------------------------------------------------------------------- */
-  /* 🎧 Handle auto-play / pause when `isPlaying` changes                   */
+  /* 🎧 Handle play / pause manually (user-triggered only)                  */
   /* ---------------------------------------------------------------------- */
   useEffect(() => {
     const vid = videoRef.current;
     const aud = audioRef.current;
 
-    if (isPlaying && autoPlay) {
-      if (vid && videoUrl) vid.play().catch(() => {});
-      if (aud && audioUrl) {
-        aud.play().catch(() => {});
-        setAudioActive(true);
+    // ✅ Don’t auto-play; only pause if global play state stops
+    if (!isPlaying) {
+      if (vid && !vid.paused) vid.pause();
+      if (aud && !aud.paused) {
+        aud.pause();
+        setAudioActive(false);
       }
-    } else {
-      if (vid) vid.pause();
-      if (aud) aud.pause();
-      setAudioActive(false);
     }
-  }, [isPlaying, autoPlay, videoUrl, audioUrl]);
+  }, [isPlaying]);
+
+  /* ---------------------------------------------------------------------- */
+  /* 🎶 Track audio activity state                                          */
+  /* ---------------------------------------------------------------------- */
+  useEffect(() => {
+    const aud = audioRef.current;
+    if (!aud) return;
+
+    const handlePlay = () => setAudioActive(true);
+    const handlePause = () => setAudioActive(false);
+    const handleEnded = () => setAudioActive(false);
+
+    aud.addEventListener("play", handlePlay);
+    aud.addEventListener("pause", handlePause);
+    aud.addEventListener("ended", handleEnded);
+
+    return () => {
+      aud.removeEventListener("play", handlePlay);
+      aud.removeEventListener("pause", handlePause);
+      aud.removeEventListener("ended", handleEnded);
+    };
+  }, [audioUrl]);
 
   /* ---------------------------------------------------------------------- */
   /* 🎥 Render Media Board                                                  */
@@ -61,7 +80,7 @@ export function MediaBoard({ media = {}, autoPlay = true, isPlaying = true }) {
             src={audioUrl}
             className="w-full mt-3" /* ✅ visible bar below video */
             preload="metadata"
-            controls /* ✅ play / pause / volume */
+            controls /* ✅ user can play manually */
           />
         )}
 
@@ -98,7 +117,7 @@ export function MediaBoard({ media = {}, autoPlay = true, isPlaying = true }) {
 }
 
 /* -------------------------------------------------------------------------- */
-/* ✅ MediaControlPanel                                                       */
+/* ✅ MediaControlPanel — visual indicators                                   */
 /* -------------------------------------------------------------------------- */
 export function MediaControlPanel({ active }) {
   return (
