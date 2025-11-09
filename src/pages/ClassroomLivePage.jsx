@@ -5,7 +5,6 @@ import { MediaBoard, MediaControlPanel } from "../components/MediaBoard";
 import LecturePlaylistSidebar from "../components/LecturePlaylistSidebar";
 import StudentsRow from "../components/StudentsRow";
 
-// ✅ Voice Engine Import — make sure folder is exactly `src/voice/` (lowercase, no spaces)
 import {
   waitForVoices,
   splitIntoChunks,
@@ -15,117 +14,91 @@ import {
 } from "../voice/ClassroomVoiceEngine.js";
 
 /* -------------------------------------------------------------------------- */
-/* ✅ Mock Data (replace with API later)                                      */
-/* -------------------------------------------------------------------------- */
-const MOCK_LECTURES = [
-  {
-    _id: "lec1",
-    title: "Definition",
-    status: "released",
-    releaseAt: new Date().toISOString(),
-  },
-  {
-    _id: "lec2",
-    title: "Examples",
-    status: "scheduled",
-    releaseAt: new Date().toISOString(),
-  },
-  {
-    _id: "lec3",
-    title: "Exercise",
-    status: "draft",
-    releaseAt: new Date().toISOString(),
-  },
-];
-
-const MOCK_SLIDES = [
-  {
-    _id: "slide1",
-    subject: "History",
-    topicTitle: "Industrial Revolution – Definition",
-    content:
-      "The **Industrial Revolution** was a period of [def]transition to new manufacturing processes[/def] from about **1760** to sometime between **1820** and **1840**.",
-    teacher: {
-      name: "Mr. Smith",
-      role: "Faculty – History",
-      avatarType: "HISTORY",
-    },
-    media: {
-      videoUrl: "/media/industrial-video.mp4",
-      audioUrl: "/media/industrial-audio.mp3",
-      imageUrl: "/media/factory.png",
-    },
-  },
-  {
-    _id: "slide2",
-    subject: "History",
-    topicTitle: "Impact – Example",
-    content:
-      "[ex]Factories allowed goods to be produced faster and cheaper[/ex], changing how people lived and worked in cities.",
-    teacher: {
-      name: "Mr. Smith",
-      role: "Faculty – History",
-      avatarType: "HISTORY",
-    },
-    media: {},
-  },
-];
-
-/* -------------------------------------------------------------------------- */
-/* ✅ Main Component                                                          */
+/* ✅ Main Component — ClassroomLivePage                                      */
 /* -------------------------------------------------------------------------- */
 export default function ClassroomLivePage() {
-  // ------------------------- State Management ------------------------------
+  /* ------------------------- State Management ---------------------------- */
   const [slides, setSlides] = useState([]);
   const [lectures, setLectures] = useState([]);
+  const [selectedLectureId, setSelectedLectureId] = useState(null);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [currentSentence, setCurrentSentence] = useState("");
   const [isPlaying, setIsPlaying] = useState(true);
   const [isMuted, setIsMuted] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState(null);
 
-  // ------------------------- Refs -----------------------------------------
+  /* ------------------------- Refs ---------------------------------------- */
   const speechRef = useRef({ isPlaying: false, cancel: () => {} });
   const currentSlide = slides[currentIndex] || null;
 
   /* ---------------------------------------------------------------------- */
-  /* ✅ Simulated API Fetch (Replace with real backend later)               */
+  /* ✅ Load Lectures List from API                                         */
   /* ---------------------------------------------------------------------- */
   useEffect(() => {
-  const loadSlides = async () => {
-    try {
-      // Fetch the active lecture ID from the URL or state
-      const lectureId = selectedLectureId || "replace_with_actual_lecture_id";
-
-      const res = await fetch(`https://law-network.onrender.com/api/classroom/lectures/${lectureId}/slides`);
-      const data = await res.json();
-
-      if (Array.isArray(data.slides)) {
-        setSlides(data.slides);
-      } else {
-        console.warn("Unexpected API shape:", data);
-        setSlides([]);
+    const loadLectures = async () => {
+      try {
+        const res = await fetch(
+          `${import.meta.env.VITE_API_URL || "https://law-network.onrender.com/api"}/classroom/lectures?status=released`
+        );
+        const data = await res.json();
+        if (Array.isArray(data.data || data)) {
+          const arr = data.data || data;
+          setLectures(arr);
+          if (arr.length > 0 && !selectedLectureId) {
+            setSelectedLectureId(arr[0]._id);
+          }
+        } else {
+          console.warn("Unexpected lecture response shape:", data);
+          setLectures([]);
+        }
+      } catch (err) {
+        console.error("Failed to fetch lectures:", err);
+        setError("Failed to load lectures");
       }
-    } catch (err) {
-      console.error("Failed to load slides:", err);
-      setSlides([]);
-    } finally {
-      setLoading(false);
-    }
-  };
-
-  loadSlides();
-}, [selectedLectureId]);
-
-
+    };
+    loadLectures();
+  }, []);
 
   /* ---------------------------------------------------------------------- */
-  /* ✅ Voice Engine — Speech playback per slide                            */
+  /* ✅ Load Slides for Selected Lecture                                    */
+  /* ---------------------------------------------------------------------- */
+  useEffect(() => {
+    if (!selectedLectureId) return;
+
+    const loadSlides = async () => {
+      setLoading(true);
+      try {
+        const res = await fetch(
+          `${import.meta.env.VITE_API_URL || "https://law-network.onrender.com/api"}/classroom/lectures/${selectedLectureId}/slides`
+        );
+        const data = await res.json();
+
+        if (Array.isArray(data.slides || data)) {
+          setSlides(data.slides || data);
+        } else {
+          console.warn("Unexpected slides shape:", data);
+          setSlides([]);
+        }
+      } catch (err) {
+        console.error("Failed to load slides:", err);
+        setError("Failed to fetch slides");
+        setSlides([]);
+      } finally {
+        setLoading(false);
+      }
+    };
+
+    loadSlides();
+  }, [selectedLectureId]);
+
+  /* ---------------------------------------------------------------------- */
+  /* ✅ Voice Engine — Play Speech for Current Slide                         */
   /* ---------------------------------------------------------------------- */
   useEffect(() => {
     if (!currentSlide) return;
 
-    // Stop any running speech first
+    // stop any existing speech
     stopClassroomSpeech(speechRef);
 
     if (!isPlaying || isMuted) return;
@@ -136,7 +109,6 @@ export default function ClassroomLivePage() {
       speechRef,
       setCurrentSentence,
       onComplete: () => {
-        // Auto-advance to next slide after a short delay
         setTimeout(() => {
           setCurrentIndex((prev) =>
             prev + 1 < slides.length ? prev + 1 : prev
@@ -145,7 +117,6 @@ export default function ClassroomLivePage() {
       },
     });
 
-    // Cleanup on unmount / slide change
     return () => stopClassroomSpeech(speechRef);
   }, [currentSlide?._id, isPlaying, isMuted, slides.length]);
 
@@ -196,10 +167,18 @@ export default function ClassroomLivePage() {
     );
   }
 
-  if (!currentSlide) {
+  if (error) {
+    return (
+      <div className="text-center text-red-400 p-10">
+        ⚠️ {error || "Something went wrong."}
+      </div>
+    );
+  }
+
+  if (!slides.length) {
     return (
       <div className="text-center text-slate-400 p-10">
-        No slides available.
+        No slides available for this lecture.
       </div>
     );
   }
@@ -212,7 +191,7 @@ export default function ClassroomLivePage() {
       {/* ---------- Header ---------- */}
       <header className="px-4 md:px-8 py-3 border-b border-slate-800 flex items-center justify-between">
         <div className="text-lg md:text-2xl font-semibold tracking-wide">
-          Classroom Live • {currentSlide.subject}
+          Classroom Live • {currentSlide.subject || "Lecture"}
         </div>
 
         <div className="flex items-center gap-2 text-xs md:text-sm">
@@ -234,14 +213,14 @@ export default function ClassroomLivePage() {
       {/* ---------- Main Content ---------- */}
       <main className="flex-1 px-4 md:px-8 py-4 md:py-6 flex flex-col gap-4">
         <div className="flex-1 grid grid-cols-1 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,2.4fr)_minmax(0,1.1fr)] gap-4">
-          {/* Teacher Avatar */}
+          {/* ---------- Teacher Avatar ---------- */}
           <TeacherAvatarCard
             teacher={currentSlide.teacher}
             subject={currentSlide.subject}
             isSpeaking={isPlaying && !isMuted}
           />
 
-          {/* Board: Teleprompter + Media */}
+          {/* ---------- Board (Teleprompter + Media) ---------- */}
           <section className="flex flex-col gap-3">
             <ClassroomTeleprompter
               slide={currentSlide}
@@ -250,6 +229,7 @@ export default function ClassroomLivePage() {
             />
 
             <MediaBoard media={currentSlide.media} />
+
             <MediaControlPanel
               active={{
                 audio: !!currentSlide.media?.audioUrl,
@@ -278,19 +258,31 @@ export default function ClassroomLivePage() {
             </div>
           </section>
 
-          {/* Lecture Playlist Sidebar */}
+          {/* ---------- Lecture Playlist Sidebar ---------- */}
           <LecturePlaylistSidebar
             lectures={lectures}
-            currentLectureId={lectures[0]?._id}
+            currentLectureId={selectedLectureId}
+            onSelectLecture={(lec) => {
+              if (lec?._id !== selectedLectureId) {
+                setSelectedLectureId(lec._id);
+                setCurrentIndex(0);
+              }
+            }}
           />
         </div>
 
-        {/* Students Row */}
+        {/* ---------- Students Row ---------- */}
         <StudentsRow
           onRaiseHand={handleRaiseHand}
           onReaction={handleReaction}
         />
       </main>
+
+      {/* ---------- Footer Debug ---------- */}
+      <footer className="text-xs text-slate-600 text-center py-3 border-t border-slate-800">
+        ClassroomLivePage • connected to API ({import.meta.env.VITE_API_URL ||
+          "https://law-network.onrender.com/api"})
+      </footer>
     </div>
   );
 }
