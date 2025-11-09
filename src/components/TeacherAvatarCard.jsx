@@ -3,9 +3,18 @@ import "./TeacherAvatarCard.css"; // 👈 Import the local CSS file
 
 export default function TeacherAvatarCard({ teacher, subject, isSpeaking }) {
   const [imgError, setImgError] = useState(false);
-  const avatarSrc = imgError
-    ? "/avatars/default.png"
-    : `/avatars/${teacher?.avatarType || "default"}.png`;
+   // ✅ Choose correct avatar URL
+const avatarSrc = imgError
+  ? "/avatars/default.png"
+  : teacher?.avatarUrl
+  ? teacher.avatarUrl.startsWith("http")
+    ? teacher.avatarUrl
+    : `${
+        import.meta.env.VITE_API_URL ||
+        "https://law-network.onrender.com/api"
+      }/uploads/avatars/${teacher.avatarUrl}`
+  : `/avatars/${teacher?.avatarType || "default"}.png`;
+
 
   return (
     <div className="bg-slate-900 text-slate-50 rounded-2xl p-4 md:p-5 shadow-lg flex flex-col items-center gap-3 border border-slate-700 teacher-avatar-container">
