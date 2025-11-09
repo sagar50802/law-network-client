@@ -77,7 +77,7 @@ const MOCK_SLIDES = [
 export default function ClassroomLivePage() {
   // ------------------------- State Management ------------------------------
   const [slides, setSlides] = useState([]);
-  const [lectures, setLectures] = useState(MOCK_LECTURES);
+  const [lectures, setLectures] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
   const [currentSentence, setCurrentSentence] = useState("");
   const [isPlaying, setIsPlaying] = useState(true);
@@ -92,21 +92,32 @@ export default function ClassroomLivePage() {
   /* ✅ Simulated API Fetch (Replace with real backend later)               */
   /* ---------------------------------------------------------------------- */
   useEffect(() => {
-    const loadSlides = async () => {
-      try {
-        // Future API example:
-        // const res = await fetch(`/api/classroom/lectures/${lectureId}/slides`);
-        // const data = await res.json();
-        // setSlides(Array.isArray(data) ? data : []);
-        setSlides(MOCK_SLIDES);
-      } catch (err) {
-        console.error("Failed to load slides:", err);
-      } finally {
-        setLoading(false);
+  const loadSlides = async () => {
+    try {
+      // Fetch the active lecture ID from the URL or state
+      const lectureId = selectedLectureId || "replace_with_actual_lecture_id";
+
+      const res = await fetch(`https://law-network.onrender.com/api/classroom/lectures/${lectureId}/slides`);
+      const data = await res.json();
+
+      if (Array.isArray(data.slides)) {
+        setSlides(data.slides);
+      } else {
+        console.warn("Unexpected API shape:", data);
+        setSlides([]);
       }
-    };
-    loadSlides();
-  }, []);
+    } catch (err) {
+      console.error("Failed to load slides:", err);
+      setSlides([]);
+    } finally {
+      setLoading(false);
+    }
+  };
+
+  loadSlides();
+}, [selectedLectureId]);
+
+
 
   /* ---------------------------------------------------------------------- */
   /* ✅ Voice Engine — Speech playback per slide                            */
