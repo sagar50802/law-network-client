@@ -255,10 +255,10 @@ export default function ClassroomLivePage() {
       </div>
     );
 
-  if (error || !slides.length) {
+   if (loading) {
   return (
     <div
-      className="flex items-center justify-center min-h-screen text-white transition-all duration-700"
+      className="flex items-center justify-center min-h-screen text-white"
       style={{
         backgroundImage: `url("/backgrounds/classroom-fallback.png")`,
         backgroundSize: "cover",
@@ -269,7 +269,31 @@ export default function ClassroomLivePage() {
     >
       <div className="bg-black/60 px-8 py-6 rounded-2xl text-center max-w-lg shadow-lg backdrop-blur-sm">
         <h1 className="text-2xl font-semibold mb-2 drop-shadow-md">
-          📡 Classroom Offline
+          📡 Loading Classroom…
+        </h1>
+        <p className="opacity-90 text-sm drop-shadow-sm">
+          Please wait, connecting to the live session.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+if (error || !slides.length) {
+  return (
+    <div
+      className="flex items-center justify-center min-h-screen text-white"
+      style={{
+        backgroundImage: `url("/backgrounds/classroom-fallback.png")`,
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        backgroundRepeat: "no-repeat",
+        backgroundColor: "#1a1a1a",
+      }}
+    >
+      <div className="bg-black/60 px-8 py-6 rounded-2xl text-center max-w-lg shadow-lg backdrop-blur-sm">
+        <h1 className="text-2xl font-semibold mb-2 drop-shadow-md">
+          ⚠️ Classroom Offline
         </h1>
         <p className="opacity-90 text-sm drop-shadow-sm">
           Please check your internet connection or try again later.
