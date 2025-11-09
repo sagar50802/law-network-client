@@ -1,4 +1,5 @@
 import React, { useEffect, useRef, useState } from "react";
+
 import TeacherAvatarCard from "../components/TeacherAvatarCard";
 import ClassroomTeleprompter from "../components/ClassroomTeleprompter";
 import { MediaBoard, MediaControlPanel } from "../components/MediaBoard";
@@ -9,23 +10,8 @@ import {
   waitForVoices,
   playClassroomSpeech,
   stopClassroomSpeech,
+  unlockSpeechOnUserClick, // ✅ imported from your VoiceEngine
 } from "../voice/ClassroomVoiceEngine.js";
-
-/* -------------------------------------------------------------------------- */
-/* ✅ Unlock Speech Autoplay (Browser Restriction)                            */
-/* -------------------------------------------------------------------------- */
-function unlockSpeechOnUserClick() {
-  document.body.addEventListener(
-    "click",
-    () => {
-      if (window.speechSynthesis && !window.speechSynthesis.speaking) {
-        window.speechSynthesis.resume();
-        console.log("🔊 Speech synthesis unlocked after user interaction");
-      }
-    },
-    { once: true }
-  );
-}
 
 /* -------------------------------------------------------------------------- */
 /* ✅ Main Component — ClassroomLivePage                                      */
@@ -49,10 +35,10 @@ export default function ClassroomLivePage() {
   const currentSlide = slides[currentIndex] || null;
 
   /* ---------------------------------------------------------------------- */
-  /* ✅ Unlock Voice Autoplay on First Click                                */
+  /* ✅ Unlock Voice Autoplay on First Click (Chrome / Edge fix)             */
   /* ---------------------------------------------------------------------- */
   useEffect(() => {
-    unlockSpeechOnUserClick();
+    unlockSpeechOnUserClick(); // ✅ imported helper; no need for local duplicate
   }, []);
 
   /* ---------------------------------------------------------------------- */
@@ -141,7 +127,6 @@ export default function ClassroomLivePage() {
     async function startSpeech() {
       if (!currentSlide || !mounted) return;
 
-      // Stop previous utterances
       stopClassroomSpeech(speechRef);
 
       await waitForVoices(3000);
@@ -158,7 +143,7 @@ export default function ClassroomLivePage() {
         isMuted,
         speechRef,
         setCurrentSentence,
-        onProgress: setProgress, // ✅ teleprompter sync
+        onProgress: setProgress,
         onStartSpeaking: () => setIsSpeaking(true),
         onStopSpeaking: () => setIsSpeaking(false),
         onComplete: () => {
@@ -281,7 +266,7 @@ export default function ClassroomLivePage() {
           <TeacherAvatarCard
             teacher={currentSlide.teacher}
             subject={currentSlide.subject}
-            isSpeaking={isSpeaking} // ✅ glow when talking
+            isSpeaking={isSpeaking}
           />
 
           {/* ---------- Teleprompter + Media Board ---------- */}
@@ -337,10 +322,7 @@ export default function ClassroomLivePage() {
         </div>
 
         {/* ---------- Students Row ---------- */}
-        <StudentsRow
-          onRaiseHand={handleRaiseHand}
-          onReaction={handleReaction}
-        />
+        <StudentsRow onRaiseHand={handleRaiseHand} onReaction={handleReaction} />
       </main>
 
       {/* ---------- Footer ---------- */}
