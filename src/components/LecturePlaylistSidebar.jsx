@@ -1,10 +1,26 @@
-import React from "react";
+import React, { useEffect, useRef } from "react";
 import "./LecturePlaylistSidebar.css";
 
 /**
- * LecturePlaylistSidebar — shows lecture list and statuses
+ * LecturePlaylistSidebar — displays lecture list with active state & click support
  */
-export default function LecturePlaylistSidebar({ lectures = [], currentLectureId }) {
+export default function LecturePlaylistSidebar({
+  lectures = [],
+  currentLectureId,
+  onSelectLecture,
+}) {
+  const activeRef = useRef(null);
+
+  // 🔄 Auto-scroll the active lecture into view when selected
+  useEffect(() => {
+    if (activeRef.current) {
+      activeRef.current.scrollIntoView({
+        behavior: "smooth",
+        block: "nearest",
+      });
+    }
+  }, [currentLectureId]);
+
   if (!lectures.length) {
     return (
       <aside className="bg-slate-900 text-slate-50 rounded-2xl p-4 md:p-5 border border-slate-700 min-w-[220px] flex items-center justify-center text-sm text-slate-400">
@@ -14,8 +30,8 @@ export default function LecturePlaylistSidebar({ lectures = [], currentLectureId
   }
 
   return (
-    <aside className="bg-slate-900 text-slate-50 rounded-2xl p-4 md:p-5 border border-slate-700 flex flex-col gap-3 min-w-[220px]">
-      <div className="font-semibold text-lg mb-1">Today&apos;s Lecture</div>
+    <aside className="bg-slate-900 text-slate-50 rounded-2xl p-4 md:p-5 border border-slate-700 flex flex-col gap-3 min-w-[220px] overflow-y-auto max-h-[80vh]">
+      <div className="font-semibold text-lg mb-1">Today&apos;s Lectures</div>
 
       <div className="flex flex-col gap-2">
         {lectures.map((lec, idx) => {
@@ -32,10 +48,12 @@ export default function LecturePlaylistSidebar({ lectures = [], currentLectureId
           return (
             <button
               key={lec._id}
-              className={`playlist-item w-full text-left px-3 py-2 rounded-xl text-sm flex items-center justify-between border border-transparent ${
+              ref={active ? activeRef : null}
+              onClick={() => onSelectLecture?.(lec)}
+              className={`playlist-item w-full text-left px-3 py-2 rounded-xl text-sm flex items-center justify-between border transition-colors duration-150 ${
                 active
                   ? "bg-emerald-500/20 text-emerald-100 border-emerald-400/40 shadow-inner"
-                  : "bg-slate-800/70 text-slate-200 hover:bg-slate-700"
+                  : "bg-slate-800/70 text-slate-200 hover:bg-slate-700 focus:bg-slate-700"
               }`}
             >
               <div>
@@ -46,14 +64,21 @@ export default function LecturePlaylistSidebar({ lectures = [], currentLectureId
                   {lec.status === "released"
                     ? "🔴 Live now"
                     : lec.status === "scheduled"
-                    ? `⏰ Starts at ${new Date(lec.releaseAt).toLocaleTimeString([], { hour: '2-digit', minute: '2-digit' })}`
+                    ? `⏰ Starts at ${new Date(
+                        lec.releaseAt
+                      ).toLocaleTimeString([], {
+                        hour: "2-digit",
+                        minute: "2-digit",
+                      })}`
                     : lec.status === "completed"
                     ? "✅ Completed"
                     : "📝 Draft"}
                 </div>
               </div>
 
-              <span className={`w-2 h-2 rounded-full ${dotClass}`} />
+              <span
+                className={`w-2 h-2 rounded-full flex-shrink-0 ${dotClass}`}
+              />
             </button>
           );
         })}
