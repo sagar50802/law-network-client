@@ -1,5 +1,4 @@
-import React, { useEffect, useRef, useState } from "react";
-
+import React, { useEffect, useRef, useState, useCallback } from "react";
 import TeacherAvatarCard from "../components/TeacherAvatarCard";
 import ClassroomTeleprompter from "../components/ClassroomTeleprompter";
 import { MediaBoard, MediaControlPanel } from "../components/MediaBoard";
@@ -10,7 +9,7 @@ import {
   waitForVoices,
   playClassroomSpeech,
   stopClassroomSpeech,
-  unlockSpeechOnUserClick, // ✅ imported from your VoiceEngine
+  unlockSpeechOnUserClick,
 } from "../voice/ClassroomVoiceEngine.js";
 
 /* -------------------------------------------------------------------------- */
@@ -26,7 +25,7 @@ export default function ClassroomLivePage() {
   const [progress, setProgress] = useState(0);
   const [isPlaying, setIsPlaying] = useState(true);
   const [isMuted, setIsMuted] = useState(false);
-  const [isSpeaking, setIsSpeaking] = useState(false); // ✅ for avatar glow
+  const [isSpeaking, setIsSpeaking] = useState(false);
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
@@ -35,10 +34,10 @@ export default function ClassroomLivePage() {
   const currentSlide = slides[currentIndex] || null;
 
   /* ---------------------------------------------------------------------- */
-  /* ✅ Unlock Voice Autoplay on First Click (Chrome / Edge fix)             */
+  /* ✅ Unlock Speech Autoplay (Chrome / Edge browser restriction)           */
   /* ---------------------------------------------------------------------- */
   useEffect(() => {
-    unlockSpeechOnUserClick(); // ✅ imported helper; no need for local duplicate
+    unlockSpeechOnUserClick();
   }, []);
 
   /* ---------------------------------------------------------------------- */
@@ -55,18 +54,18 @@ export default function ClassroomLivePage() {
         );
         const data = await res.json();
 
-        if (Array.isArray(data.data || data)) {
-          const arr = data.data || data;
-          setLectures(arr);
-          if (arr.length > 0 && !selectedLectureId) {
-            setSelectedLectureId(arr[0]._id);
+        const list = data.data || data;
+        if (Array.isArray(list)) {
+          setLectures(list);
+          if (list.length > 0 && !selectedLectureId) {
+            setSelectedLectureId(list[0]._id);
           }
         } else {
-          console.warn("Unexpected lecture response shape:", data);
+          console.warn("Unexpected lectures response:", data);
           setLectures([]);
         }
       } catch (err) {
-        console.error("Failed to fetch lectures:", err);
+        console.error("Failed to load lectures:", err);
         setError("Failed to load lectures");
       }
     };
@@ -79,7 +78,6 @@ export default function ClassroomLivePage() {
   /* ---------------------------------------------------------------------- */
   useEffect(() => {
     if (!selectedLectureId) return;
-
     const loadSlides = async () => {
       setLoading(true);
       try {
@@ -90,11 +88,10 @@ export default function ClassroomLivePage() {
           }/classroom/lectures/${selectedLectureId}/slides`
         );
         const data = await res.json();
-
-        if (Array.isArray(data.slides || data)) {
-          setSlides(data.slides || data);
-        } else {
-          console.warn("Unexpected slides shape:", data);
+        const list = data.slides || data;
+        if (Array.isArray(list)) setSlides(list);
+        else {
+          console.warn("Unexpected slides response:", data);
           setSlides([]);
         }
       } catch (err) {
@@ -110,13 +107,27 @@ export default function ClassroomLivePage() {
   }, [selectedLectureId]);
 
   /* ---------------------------------------------------------------------- */
-  /* ✅ Preload Voices (prevent silent first play)                          */
+  /* ✅ Preload Voices (prevents silent first play)                         */
   /* ---------------------------------------------------------------------- */
   useEffect(() => {
     waitForVoices(3000).then((voices) =>
       console.log(`✅ Voices preloaded (${voices.length})`)
     );
   }, []);
+
+  /* ---------------------------------------------------------------------- */
+  /* ✅ Handle Next Slide                                                    */
+  /* ---------------------------------------------------------------------- */
+  const handleNextSlide = useCallback(() => {
+    setProgress(0);
+    setCurrentSentence("");
+    setIsSpeaking(false);
+    setTimeout(() => {
+      setCurrentIndex((prev) =>
+        prev + 1 < slides.length ? prev + 1 : prev
+      );
+    }, 800);
+  }, [slides.length]);
 
   /* ---------------------------------------------------------------------- */
   /* ✅ Voice Engine — synchronized with Teleprompter                       */
@@ -128,8 +139,8 @@ export default function ClassroomLivePage() {
       if (!currentSlide || !mounted) return;
 
       stopClassroomSpeech(speechRef);
-
       await waitForVoices(3000);
+
       const voices = window.speechSynthesis.getVoices();
       if (!voices.length) {
         setCurrentSentence(currentSlide.content || "");
@@ -146,28 +157,19 @@ export default function ClassroomLivePage() {
         onProgress: setProgress,
         onStartSpeaking: () => setIsSpeaking(true),
         onStopSpeaking: () => setIsSpeaking(false),
-        onComplete: () => {
-          setIsSpeaking(false);
-          setProgress(0);
-          setTimeout(() => {
-            setCurrentIndex((prev) =>
-              prev + 1 < slides.length ? prev + 1 : prev
-            );
-          }, 1000);
-        },
+        onComplete: handleNextSlide,
       });
     }
 
     startSpeech();
-
     return () => {
       mounted = false;
       stopClassroomSpeech(speechRef);
     };
-  }, [currentSlide?._id, isPlaying, isMuted, slides.length]);
+  }, [currentSlide?._id, isPlaying, isMuted, slides.length, handleNextSlide]);
 
   /* ---------------------------------------------------------------------- */
-  /* ✅ Navigation + Controls                                               */
+  /* ✅ Navigation + Control Handlers                                       */
   /* ---------------------------------------------------------------------- */
   const goToSlide = (index) => {
     if (index < 0 || index >= slides.length) return;
@@ -233,7 +235,7 @@ export default function ClassroomLivePage() {
   }
 
   /* ---------------------------------------------------------------------- */
-  /* ✅ Render Layout                                                       */
+  /* ✅ Render Full Classroom Layout                                        */
   /* ---------------------------------------------------------------------- */
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50 flex flex-col">
@@ -266,7 +268,7 @@ export default function ClassroomLivePage() {
           <TeacherAvatarCard
             teacher={currentSlide.teacher}
             subject={currentSlide.subject}
-            isSpeaking={isSpeaking}
+            isSpeaking={isSpeaking} // ✅ avatar glow
           />
 
           {/* ---------- Teleprompter + Media Board ---------- */}
@@ -322,7 +324,10 @@ export default function ClassroomLivePage() {
         </div>
 
         {/* ---------- Students Row ---------- */}
-        <StudentsRow onRaiseHand={handleRaiseHand} onReaction={handleReaction} />
+        <StudentsRow
+          onRaiseHand={handleRaiseHand}
+          onReaction={handleReaction}
+        />
       </main>
 
       {/* ---------- Footer ---------- */}
