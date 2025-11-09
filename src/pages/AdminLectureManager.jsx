@@ -355,18 +355,21 @@ export default function AdminLectureManager() {
   });
 
   const loadLectures = async () => {
-    setLoading(true);
-    try {
-      const res = await fetch(`${API_BASE}/lectures`);
-      const data = await res.json();
-      setLectures(Array.isArray(data) ? data : []);
-    } catch (err) {
-      console.error("Failed to load lectures:", err);
-      alert("⚠️ Failed to fetch lectures");
-    } finally {
-      setLoading(false);
-    }
-  };
+  setLoading(true);
+  try {
+    const res = await fetch(`${API_BASE}/lectures`);
+    const json = await res.json();
+    // handle wrapped API response { success, data }
+    const data = Array.isArray(json.data) ? json.data : json;
+    setLectures(data);
+  } catch (err) {
+    console.error("Failed to load lectures:", err);
+    alert("⚠️ Failed to fetch lectures");
+  } finally {
+    setLoading(false);
+  }
+};
+
 
   useEffect(() => {
     loadLectures();
