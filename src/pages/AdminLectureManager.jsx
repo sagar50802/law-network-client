@@ -1,5 +1,5 @@
 import React, { useEffect, useState } from "react";
-import "./SlideEditorModal.css"; // ✅ Add this line
+import "./SlideEditorModal.css";
 import {
   Plus,
   Trash2,
@@ -18,7 +18,6 @@ const API_BASE = `${
   import.meta.env.VITE_API_URL || "http://localhost:5000/api"
 }/classroom`;
 
-// ✅ base for classroom access (share links + stats)
 const ACCESS_BASE = `${
   import.meta.env.VITE_API_URL || "http://localhost:5000/api"
 }/classroom-access`;
@@ -60,11 +59,9 @@ function SlideEditor({ open, onClose, lecture, onSaveSlides }) {
     }
   }, [lecture]);
 
-  // 🔼 Updated R2 Upload (pre-signed URL) version
   const handleFileUpload = async (index, field, file) => {
     if (!file) return;
     try {
-      // Step 1: Ask backend for pre-signed R2 upload URL
       const signRes = await fetch(`${API_BASE}/media/sign`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -77,7 +74,6 @@ function SlideEditor({ open, onClose, lecture, onSaveSlides }) {
       const signData = await signRes.json();
       if (!signData.success) throw new Error(signData.message || "Sign failed");
 
-      // Step 2: Upload directly to Cloudflare R2
       const uploadRes = await fetch(signData.uploadUrl, {
         method: "PUT",
         headers: { "Content-Type": file.type },
@@ -86,7 +82,6 @@ function SlideEditor({ open, onClose, lecture, onSaveSlides }) {
       if (!uploadRes.ok)
         throw new Error(`Upload failed (${uploadRes.status})`);
 
-      // Step 3: Store returned public R2 URL in slide
       handleMediaChange(index, field, signData.fileUrl);
     } catch (err) {
       console.error("Upload error:", err);
@@ -181,7 +176,6 @@ function SlideEditor({ open, onClose, lecture, onSaveSlides }) {
           />
 
           <div className="flex flex-col md:flex-row gap-3 mb-2">
-            {/* 🎥 Video */}
             <div className="flex flex-col gap-1 flex-1">
               <div className="flex items-center gap-2">
                 <Video className="w-4 h-4 text-slate-500" />
@@ -208,7 +202,6 @@ function SlideEditor({ open, onClose, lecture, onSaveSlides }) {
               </div>
             </div>
 
-            {/* 🎧 Audio */}
             <div className="flex flex-col gap-1 flex-1">
               <div className="flex items-center gap-2">
                 <Music2 className="w-4 h-4 text-slate-500" />
@@ -236,7 +229,6 @@ function SlideEditor({ open, onClose, lecture, onSaveSlides }) {
             </div>
           </div>
 
-          {/* 🖼️ Image */}
           <div className="flex flex-col gap-1 mb-3">
             <div className="flex items-center gap-2">
               <ImgIcon className="w-4 h-4 text-slate-500" />
@@ -295,7 +287,7 @@ function SlideEditor({ open, onClose, lecture, onSaveSlides }) {
   );
 }
 
-/* ------------------------ Stats modal (list links + visits) ------------------------ */
+/* ------------------------ Stats modal ------------------------ */
 function StatsModal({ open, onClose, lecture }) {
   const [links, setLinks] = useState([]);
   const [loading, setLoading] = useState(false);
@@ -387,8 +379,108 @@ function StatsModal({ open, onClose, lecture }) {
   );
 }
 
-/* ------------------------ Lecture Row (small sub-component) ------------------------ */
-function LectureRow({ lec, onToggle, onEditSlides, onDelete, onShowStats }) {
+/* ------------------------ Create Link Modal ------------------------ */
+function CreateLinkModal({ open, onClose, lecture }) {
+  const [type, setType] = useState("free");
+  const [hours, setHours] = useState(24);
+  const [creating, setCreating] = useState(false);
+
+  if (!open || !lecture) return null;
+
+  const hourOptions = [1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 24, 36, 48, 72];
+
+  const handleCreate = async () => {
+    try {
+      setCreating(true);
+      const permanent = hours <= 0;
+      const body = { lectureId: lecture._id, type, permanent };
+      if (!permanent) body.expiresInHours = hours;
+
+      const res = await fetch(`${ACCESS_BASE}/create-link`, {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+          Authorization: `Bearer ${localStorage.getItem("authToken") || ""}`,
+        },
+        body: JSON.stringify(body),
+      });
+
+      const data = await res.json();
+      if (data.success) {
+        navigator.clipboard.writeText(data.url);
+        alert(
+          "✅ Link created & copied:\n" +
+            data.url +
+            (data.expiresAt
+              ? `\n\nExpires at: ${new Date(data.expiresAt).toLocaleString()}`
+              : "\n\nNo expiry (permanent).")
+        );
+        onClose();
+      } else {
+        alert("❌ Failed: " + (data.error || "Unknown error"));
+      }
+    } catch (err) {
+      alert("Error: " + err.message);
+    } finally {
+      setCreating(false);
+    }
+  };
+
+  return (
+    <Modal open={open} onClose={onClose}>
+      <h2 className="text-lg font-semibold mb-4 text-slate-700">
+        🔗 Create Share Link – {lecture.title}
+      </h2>
+
+      <div className="flex flex-col gap-4">
+        <div>
+          <label className="block text-sm text-slate-600 mb-1">Link Type</label>
+          <select
+            value={type}
+            onChange={(e) => setType(e.target.value)}
+            className="w-full border border-slate-300 rounded-lg px-3 py-2"
+          >
+            <option value="free">Free</option>
+            <option value="paid">Paid</option>
+          </select>
+        </div>
+
+        <div>
+          <label className="block text-sm text-slate-600 mb-1">
+            Expiry (hours)
+          </label>
+          <select
+            value={hours}
+            onChange={(e) => setHours(parseInt(e.target.value))}
+            className="w-full border border-slate-300 rounded-lg px-3 py-2"
+          >
+            {hourOptions.map((h) => (
+              <option key={h} value={h}>
+                {h} hour{h > 1 ? "s" : ""}
+              </option>
+            ))}
+            <option value={0}>No expiry (permanent)</option>
+          </select>
+        </div>
+
+        <button
+          onClick={handleCreate}
+          disabled={creating}
+          className={`px-4 py-2 rounded-lg text-white font-medium ${
+            creating
+              ? "bg-gray-400 cursor-not-allowed"
+              : "bg-blue-600 hover:bg-blue-700"
+          }`}
+        >
+          {creating ? "Creating..." : "Create Link"}
+        </button>
+      </div>
+    </Modal>
+  );
+}
+
+/* ------------------------ Lecture Row ------------------------ */
+function LectureRow({ lec, onToggle, onEditSlides, onDelete, onShowStats, onShowCreateLink }) {
   const now = new Date();
   const releaseTime = new Date(lec.releaseAt);
   const isScheduled = lec.status !== "released" && releaseTime > now;
@@ -431,7 +523,6 @@ function LectureRow({ lec, onToggle, onEditSlides, onDelete, onShowStats }) {
       </td>
       <td className="p-2 text-center">
         <div className="flex items-center justify-center gap-3 text-slate-600">
-          {/* ▶️ Toggle Release */}
           <button title="Toggle Release" onClick={() => onToggle(lec)}>
             {lec.status === "released" ? (
               <PauseCircle className="w-5 h-5 text-amber-500 hover:text-amber-600 transition" />
@@ -440,17 +531,14 @@ function LectureRow({ lec, onToggle, onEditSlides, onDelete, onShowStats }) {
             )}
           </button>
 
-          {/* 📝 Edit Slides */}
           <button title="Edit Slides" onClick={() => onEditSlides(lec)}>
             <FileText className="w-5 h-5 text-blue-500 hover:text-blue-600 transition" />
           </button>
 
-          {/* 🗑️ Delete */}
           <button title="Delete Lecture" onClick={() => onDelete(lec._id)}>
             <Trash2 className="w-5 h-5 text-red-500 hover:text-red-600 transition" />
           </button>
 
-          {/* 📋 Copy Lecture ID */}
           <button
             title="Copy Lecture ID"
             onClick={() => {
@@ -462,77 +550,11 @@ function LectureRow({ lec, onToggle, onEditSlides, onDelete, onShowStats }) {
           </button>
 
           {/* 🔗 Generate Share Link */}
-          <button
-            title="Generate Share Link"
-            onClick={async () => {
-              try {
-                let type = prompt('Enter link type: "free" or "paid"', "free");
-                if (!type) return;
-                type = type.toLowerCase().trim();
-                if (type !== "free" && type !== "paid") {
-                  alert('Please enter either "free" or "paid"');
-                  return;
-                }
-
-                // 🕒 Ask expiry (hours) or 0 for permanent
-                let hoursAns = prompt(
-                  'For how many hours should this link work?\nExample: 24\nOr type 0 for "no expiry"',
-                  "24"
-                );
-                if (hoursAns === null) return; // cancelled
-
-                let expiresInHours = parseInt(hoursAns, 10);
-                const permanent =
-                  !Number.isFinite(expiresInHours) || expiresInHours <= 0;
-
-                const body = {
-                  lectureId: lec._id,
-                  type,
-                  permanent,
-                };
-                if (!permanent) {
-                  body.expiresInHours = expiresInHours;
-                }
-
-                const res = await fetch(`${ACCESS_BASE}/create-link`, {
-                  method: "POST",
-                  headers: {
-                    "Content-Type": "application/json",
-                    Authorization: `Bearer ${
-                      localStorage.getItem("authToken") || ""
-                    }`,
-                  },
-                  body: JSON.stringify(body),
-                });
-
-                const data = await res.json();
-                if (data.success) {
-                  navigator.clipboard.writeText(data.url);
-                  alert(
-                    "✅ Share link copied:\n" +
-                      data.url +
-                      (data.expiresAt
-                        ? `\n\nExpires at: ${new Date(
-                            data.expiresAt
-                          ).toLocaleString()}`
-                        : "\n\nThis link does not expire.")
-                  );
-                } else {
-                  alert("❌ Failed: " + (data.error || "Unknown error"));
-                }
-              } catch (err) {
-                alert("Error: " + err.message);
-              }
-            }}
-          >
+          <button title="Generate Share Link" onClick={() => onShowCreateLink(lec)}>
             🔗
           </button>
 
-          {/* 📊 View Links / Stats */}
-          <button
-            title="View Share Links & Visits"
-            onClick={() => onShowStats(lec)}
-          >
+          <button title="View Share Links & Visits" onClick={() => onShowStats(lec)}>
             📊
           </button>
         </div>
@@ -549,9 +571,11 @@ export default function AdminLectureManager() {
   const [showSlideModal, setShowSlideModal] = useState(false);
   const [loading, setLoading] = useState(false);
 
-  // for stats
   const [statsLecture, setStatsLecture] = useState(null);
   const [showStatsModal, setShowStatsModal] = useState(false);
+
+  const [createLinkLecture, setCreateLinkLecture] = useState(null);
+  const [showCreateLinkModal, setShowCreateLinkModal] = useState(false);
 
   const [formData, setFormData] = useState({
     title: "",
@@ -566,7 +590,6 @@ export default function AdminLectureManager() {
     try {
       const res = await fetch(`${API_BASE}/lectures`);
       const json = await res.json();
-      // handle wrapped API response { success, data }
       const data = Array.isArray(json.data) ? json.data : json;
       setLectures(data);
     } catch (err) {
@@ -640,9 +663,8 @@ export default function AdminLectureManager() {
   };
 
   const handleSaveSlides = async (lectureId, slides) => {
-    // 🧹 Clean slides before sending
     const cleanedSlides = slides
-      .filter((s) => s.topicTitle?.trim() || s.content?.trim()) // skip empty slides
+      .filter((s) => s.topicTitle?.trim() || s.content?.trim())
       .map((s) => ({
         topicTitle: s.topicTitle?.trim() || "Untitled Slide",
         content: s.content?.trim() || "",
@@ -659,7 +681,6 @@ export default function AdminLectureManager() {
     }
 
     try {
-      console.log("Sending slides to API:", cleanedSlides);
       const res = await fetch(`${API_BASE}/lectures/${lectureId}/slides`, {
         method: "PUT",
         headers: { "Content-Type": "application/json" },
@@ -681,7 +702,6 @@ export default function AdminLectureManager() {
 
   return (
     <div className="p-6 bg-slate-50 min-h-screen">
-      {/* Header */}
       <div className="flex items-center justify-between mb-6">
         <h1 className="text-2xl font-bold text-slate-800 flex items-center gap-2">
           🎓 Admin Lecture Manager
@@ -695,7 +715,6 @@ export default function AdminLectureManager() {
         </button>
       </div>
 
-      {/* Form */}
       {showForm && (
         <div className="bg-white p-5 rounded-xl shadow-md border border-slate-200 mb-8 transition-all">
           <h2 className="font-semibold text-lg mb-3 text-slate-700">
@@ -763,7 +782,6 @@ export default function AdminLectureManager() {
         </div>
       )}
 
-      {/* Table */}
       <div className="bg-white p-5 rounded-xl shadow-md border border-slate-200">
         <h2 className="font-semibold text-lg mb-4 text-slate-700 flex items-center gap-1">
           <FolderOpen className="w-5 h-5 text-slate-500" /> All Lectures
@@ -803,6 +821,10 @@ export default function AdminLectureManager() {
                     setStatsLecture(l);
                     setShowStatsModal(true);
                   }}
+                  onShowCreateLink={(l) => {
+                    setCreateLinkLecture(l);
+                    setShowCreateLinkModal(true);
+                  }}
                 />
               ))}
             </tbody>
@@ -810,7 +832,6 @@ export default function AdminLectureManager() {
         )}
       </div>
 
-      {/* Slide modal */}
       <SlideEditor
         open={showSlideModal}
         onClose={() => setShowSlideModal(false)}
@@ -818,11 +839,16 @@ export default function AdminLectureManager() {
         onSaveSlides={handleSaveSlides}
       />
 
-      {/* Stats modal */}
       <StatsModal
         open={showStatsModal}
         onClose={() => setShowStatsModal(false)}
         lecture={statsLecture}
+      />
+
+      <CreateLinkModal
+        open={showCreateLinkModal}
+        onClose={() => setShowCreateLinkModal(false)}
+        lecture={createLinkLecture}
       />
 
       <div className="mt-8 text-xs text-slate-500 text-center">
