@@ -44,12 +44,15 @@ import ResearchDraftingLab from "./pages/ResearchDraftingLab.jsx";
 import AdminResearchPanel from "./components/ResearchDrafting/AdminResearchPanel.jsx";
 
 /* ---------- LIVE Channel ---------- */
-import LiveChannelPage from "./pages/LiveChannelPage.jsx"; // ✅ already added
-import LiveAdminPage from "./pages/LiveAdminPage.jsx"; // ✅ newly added
+import LiveChannelPage from "./pages/LiveChannelPage.jsx";
+import LiveAdminPage from "./pages/LiveAdminPage.jsx";
 
 /* ---------- Classroom Feature ---------- */
 import ClassroomLivePage from "./pages/ClassroomLivePage.jsx";
 import AdminLectureManager from "./pages/AdminLectureManager.jsx";
+
+/* 🔐 NEW: Classroom share wrapper page */
+import ClassroomSharePage from "./pages/ClassroomSharePage.jsx";
 
 /* ---------- Helpers ---------- */
 function NotFound() {
@@ -138,6 +141,10 @@ export default function App() {
 
             {/* ✅ Classroom Routes */}
             <Route path="/classroom" element={<ClassroomLivePage />} />
+
+            {/* 🔐 NEW: shared classroom link route */}
+            <Route path="/classroom/share" element={<ClassroomSharePage />} />
+
             <Route
               path="/admin/classroom"
               element={
@@ -149,7 +156,10 @@ export default function App() {
 
             {/* ---------- Research Drafting ---------- */}
             <Route path="/research-drafting" element={<ResearchDrafting />} />
-            <Route path="/research-drafting/lab/:id" element={<ResearchDraftingLab />} />
+            <Route
+              path="/research-drafting/lab/:id"
+              element={<ResearchDraftingLab />}
+            />
             <Route
               path="/admin/research-drafting"
               element={
@@ -197,9 +207,18 @@ export default function App() {
 
             {/* ---------- Test Series ---------- */}
             <Route path="/tests" element={<TestDashboard />} />
-            <Route path="/tests/:code" element={<RouteWithCode Comp={TestIntro} />} />
-            <Route path="/tests/:code/play" element={<RouteWithCode Comp={TestPlayer} />} />
-            <Route path="/tests/result/:id" element={<RouteWithResultId Comp={ResultScreen} />} />
+            <Route
+              path="/tests/:code"
+              element={<RouteWithCode Comp={TestIntro} />}
+            />
+            <Route
+              path="/tests/:code/play"
+              element={<RouteWithCode Comp={TestPlayer} />}
+            />
+            <Route
+              path="/tests/result/:id"
+              element={<RouteWithResultId Comp={ResultScreen} />}
+            />
 
             {/* ---------- Admin Test Tools ---------- */}
             <Route
