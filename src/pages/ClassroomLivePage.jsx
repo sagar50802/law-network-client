@@ -1,3 +1,4 @@
+// src/pages/ClassroomLivePage.jsx
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import TeacherAvatarCard from "../components/TeacherAvatarCard";
 import ClassroomTeleprompter from "../components/ClassroomTeleprompter";
@@ -19,7 +20,7 @@ const API_BASE =
 let PAUSE_LOCK = false;
 
 /* -------------------------------------------------------------------------- */
-/* ✅ ClassroomLivePage Component                                            */
+/* ✅ ClassroomLivePage — production ready                                   */
 /* -------------------------------------------------------------------------- */
 export default function ClassroomLivePage() {
   const [slides, setSlides] = useState([]);
@@ -42,16 +43,16 @@ export default function ClassroomLivePage() {
   const currentLecture =
     lectures.find((l) => l._id === selectedLectureId) || null;
 
-  /* ---------------------------------------------------------------------- */
-  /* ✅ Unlock Speech Autoplay                                              */
-  /* ---------------------------------------------------------------------- */
+  /* ------------------------------------------------------------ */
+  /* Unlock Speech Autoplay                                       */
+  /* ------------------------------------------------------------ */
   useEffect(() => {
     unlockSpeechOnUserClick();
   }, []);
 
-  /* ---------------------------------------------------------------------- */
-  /* ✅ Load Lectures                                                      */
-  /* ---------------------------------------------------------------------- */
+  /* ------------------------------------------------------------ */
+  /* Load Lectures List                                           */
+  /* ------------------------------------------------------------ */
   useEffect(() => {
     const loadLectures = async () => {
       try {
@@ -60,12 +61,9 @@ export default function ClassroomLivePage() {
         const list = json.data || json;
         if (Array.isArray(list)) {
           setLectures(list);
-          if (list.length > 0 && !selectedLectureId) {
+          if (list.length > 0 && !selectedLectureId)
             setSelectedLectureId(list[0]._id);
-          }
-        } else {
-          setLectures([]);
-        }
+        } else setLectures([]);
       } catch (err) {
         console.error("Failed to load lectures:", err);
         setError("Failed to load lectures");
@@ -74,9 +72,9 @@ export default function ClassroomLivePage() {
     loadLectures();
   }, []);
 
-  /* ---------------------------------------------------------------------- */
-  /* ✅ Load Slides                                                        */
-  /* ---------------------------------------------------------------------- */
+  /* ------------------------------------------------------------ */
+  /* Load Slides for Selected Lecture                             */
+  /* ------------------------------------------------------------ */
   useEffect(() => {
     if (!selectedLectureId) return;
 
@@ -88,55 +86,50 @@ export default function ClassroomLivePage() {
         );
         const json = await res.json();
         const list = json.slides || json;
-
         if (Array.isArray(list)) {
           setSlides(list);
           setCurrentIndex(0);
-          console.log("📚 Slides loaded:", list.length);
-        } else {
-          setSlides([]);
-        }
+        } else setSlides([]);
       } catch (err) {
         console.error("Failed to load slides:", err);
         setError("Failed to fetch slides");
         setSlides([]);
       } finally {
-        // ✅ Smooth loader fade-out after data ready
         setTimeout(() => {
           const loader = document.getElementById("classroom-loader");
           if (loader) loader.classList.add("fade-out");
-          setTimeout(() => setLoading(false), 600);
-        }, 600);
+          setTimeout(() => setLoading(false), 500);
+        }, 500);
       }
     };
 
     loadSlides();
   }, [selectedLectureId]);
 
-  /* ---------------------------------------------------------------------- */
-  /* ✅ Preload Voices                                                     */
-  /* ---------------------------------------------------------------------- */
+  /* ------------------------------------------------------------ */
+  /* Preload Voices                                                */
+  /* ------------------------------------------------------------ */
   useEffect(() => {
-    waitForVoices(3000).then((voices) =>
-      console.log(`✅ Voices preloaded (${voices.length})`)
+    waitForVoices(3000).then((v) =>
+      console.log(`✅ Voices preloaded (${v.length})`)
     );
   }, []);
 
-  /* ---------------------------------------------------------------------- */
-  /* ✅ Handle Slide Progression                                           */
-  /* ---------------------------------------------------------------------- */
+  /* ------------------------------------------------------------ */
+  /* Auto Slide Progression                                        */
+  /* ------------------------------------------------------------ */
   const handleNextSlide = useCallback(() => {
     setProgress(0);
     setCurrentSentence("");
     setIsSpeaking(false);
     setTimeout(() => {
-      setCurrentIndex((prev) => (prev + 1 < slides.length ? prev + 1 : prev));
+      setCurrentIndex((p) => (p + 1 < slides.length ? p + 1 : p));
     }, 800);
   }, [slides.length]);
 
-  /* ---------------------------------------------------------------------- */
-  /* ✅ Voice Synchronization                                              */
-  /* ---------------------------------------------------------------------- */
+  /* ------------------------------------------------------------ */
+  /* Speech Sync — Avatar + Teleprompter                           */
+  /* ------------------------------------------------------------ */
   useEffect(() => {
     let mounted = true;
     async function startSpeech() {
@@ -166,6 +159,7 @@ export default function ClassroomLivePage() {
         onComplete: handleNextSlide,
       });
     }
+
     startSpeech();
     return () => {
       mounted = false;
@@ -173,9 +167,9 @@ export default function ClassroomLivePage() {
     };
   }, [currentSlide?._id, isPlaying, isMuted, slides.length, handleNextSlide]);
 
-  /* ---------------------------------------------------------------------- */
-  /* ✅ Controls                                                           */
-  /* ---------------------------------------------------------------------- */
+  /* ------------------------------------------------------------ */
+  /* Controls                                                      */
+  /* ------------------------------------------------------------ */
   const goToSlide = (index) => {
     if (index < 0 || index >= slides.length) return;
     stopClassroomSpeech(speechRef);
@@ -214,47 +208,56 @@ export default function ClassroomLivePage() {
     });
   };
 
-  /* ---------------------------------------------------------------------- */
-  /* ✅ Render Layout (flicker-free + safe)                                */
-  /* ---------------------------------------------------------------------- */
+  /* ------------------------------------------------------------ */
+  /* Render                                                       */
+  /* ------------------------------------------------------------ */
+  if (loading)
+    return (
+      <div
+        id="classroom-loader"
+        className="absolute inset-0 z-[9999] flex items-center justify-center bg-black/95 text-white transition-opacity duration-700 ease-in-out bg-center bg-cover"
+        style={{
+          backgroundImage: `url("/backgrounds/classroom-fallback.png")`,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+        }}
+      >
+        <div className="bg-black/70 px-8 py-6 rounded-2xl text-center max-w-lg shadow-lg backdrop-blur-sm animate-fade-in">
+          <div className="w-10 h-10 border-4 border-green-400 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+          <h1 className="text-2xl font-semibold mb-2">📡 Loading Classroom…</h1>
+          <p className="opacity-90 text-sm">
+            Please wait, connecting to the live session.
+          </p>
+        </div>
+      </div>
+    );
+
+  if (error || !slides.length)
+    return (
+      <div className="flex items-center justify-center min-h-screen text-white bg-slate-900">
+        <div className="bg-black/70 px-8 py-6 rounded-2xl text-center max-w-lg">
+          <h1 className="text-2xl font-semibold mb-2">⚠️ Classroom Offline</h1>
+          <p className="opacity-90 text-sm">
+            Please check your connection or try again later.
+          </p>
+        </div>
+      </div>
+    );
+
   return (
     <div className="relative min-h-screen bg-slate-950 text-slate-50 flex flex-col overflow-hidden">
-      {/* 🌄 Loader Overlay */}
-      {loading && (
-        <div
-          id="classroom-loader"
-          className="absolute inset-0 z-[9999] flex items-center justify-center bg-black/95 text-white transition-opacity duration-700 ease-in-out bg-center bg-cover"
-          style={{
-            backgroundImage: `url("/backgrounds/classroom-fallback.png")`,
-            backgroundSize: "cover",
-            backgroundPosition: "center",
-          }}
-        >
-          <div className="bg-black/70 px-8 py-6 rounded-2xl text-center max-w-lg shadow-lg backdrop-blur-sm animate-fade-in">
-            <div className="w-10 h-10 border-4 border-green-400 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
-            <h1 className="text-2xl font-semibold mb-2 drop-shadow-md">
-              📡 Loading Classroom…
-            </h1>
-            <p className="opacity-90 text-sm drop-shadow-sm">
-              Please wait, connecting to the live session.
-            </p>
-          </div>
-        </div>
-      )}
-
-      {/* ✅ Classroom UI */}
+      {/* Header */}
       <header className="px-4 md:px-8 py-3 border-b border-slate-800 flex items-center justify-between">
         <div className="text-lg md:text-2xl font-semibold tracking-wide">
           Classroom Live • {currentLecture?.subject || "Lecture"}
         </div>
 
-        <div className="flex items-center gap-2 text-xs md:text-sm">
+        {/* Desktop Controls */}
+        <div className="hidden md:flex items-center gap-2 text-xs md:text-sm">
           <button
             onClick={handlePlayPause}
             className={`px-3 py-1.5 rounded-full font-semibold text-xs ${
-              isPlaying
-                ? "bg-emerald-500 text-black"
-                : "bg-yellow-400 text-black"
+              isPlaying ? "bg-emerald-500 text-black" : "bg-yellow-400 text-black"
             }`}
           >
             {isPlaying ? "Pause" : "Resume"}
@@ -273,9 +276,10 @@ export default function ClassroomLivePage() {
         </div>
       </header>
 
+      {/* Main */}
       <main className="flex-1 px-4 md:px-8 py-4 md:py-6 flex flex-col gap-4">
-        <div className="flex-1 grid grid-cols-1 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,2.4fr)_minmax(0,1.1fr)] gap-4">
-          {/* ✅ Always show a valid avatar image */}
+        {/* Responsive layout: avatar first on mobile */}
+        <div className="flex flex-col-reverse md:grid md:grid-cols-[minmax(0,0.9fr)_minmax(0,2.4fr)_minmax(0,1.1fr)] gap-4">
           <TeacherAvatarCard
             teacher={{
               name:
@@ -289,7 +293,7 @@ export default function ClassroomLivePage() {
                 currentLecture?.teacher?.image ||
                 currentLecture?.photoUrl ||
                 currentLecture?.image ||
-                "/avatars/teacher1.png", // ✅ safe fallback
+                "/avatars/teacher1.png",
             }}
             subject={currentLecture?.subject || "Lecture"}
             isSpeaking={isSpeaking}
@@ -301,7 +305,6 @@ export default function ClassroomLivePage() {
               currentSentence={currentSentence}
               progress={progress}
             />
-
             <MediaBoard media={currentSlide?.media} />
             <MediaControlPanel
               active={{
@@ -310,7 +313,6 @@ export default function ClassroomLivePage() {
                 image: !!currentSlide?.media?.imageUrl,
               }}
             />
-
             <div className="mt-2 flex items-center justify-end gap-2 text-xs">
               <button
                 className="px-3 py-1 rounded-full bg-slate-800 border border-slate-600"
@@ -344,12 +346,25 @@ export default function ClassroomLivePage() {
         </div>
 
         <StudentsRow
-          onRaiseHand={() =>
-            alert("✋ Student raised hand — feature coming soon!")
-          }
-          onReaction={(emoji) => console.log("Student reaction:", emoji)}
+          onRaiseHand={() => alert("✋ Student raised hand — coming soon!")}
+          onReaction={(emoji) => console.log("Reaction:", emoji)}
         />
       </main>
+
+      {/* Floating Play Button (mobile) */}
+      <div className="md:hidden fixed bottom-5 right-5 z-50">
+        <button
+          onClick={handlePlayPause}
+          className={`p-4 rounded-full shadow-lg font-bold transition duration-200 ${
+            isPlaying
+              ? "bg-green-500 hover:bg-green-400"
+              : "bg-yellow-400 hover:bg-yellow-300"
+          } text-black`}
+          title={isPlaying ? "Pause Voice" : "Play Voice"}
+        >
+          {isPlaying ? "⏸" : "▶️"}
+        </button>
+      </div>
 
       <footer className="text-xs text-slate-600 text-center py-3 border-t border-slate-800">
         ClassroomLivePage • connected to API ({API_BASE})
