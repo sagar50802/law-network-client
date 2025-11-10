@@ -11,12 +11,7 @@
       rel="stylesheet"
     />
 
-    <!-- ✅ Preload fallback image and style to prevent white flash -->
-    <link
-      rel="preload"
-      as="image"
-      href="/backgrounds/classroom-fallback.png"
-    />
+    <!-- ✅ Cinematic fallback background before React loads -->
     <style>
       html,
       body {
@@ -24,18 +19,41 @@
         padding: 0;
         width: 100%;
         height: 100%;
-        background-color: #1a1a1a;
-        background-image: url('/backgrounds/classroom-fallback.png');
+        background: #000
+          url("/backgrounds/classroom-fallback.png")
+          no-repeat center center;
         background-size: cover;
-        background-position: center;
-        background-repeat: no-repeat;
-        transition: background 0.5s ease-in-out;
+        overflow-x: hidden;
+      }
+
+      /* Dim overlay for cinematic look */
+      body::before {
+        content: "";
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.55);
+        z-index: 0;
       }
 
       #root {
+        position: relative;
+        z-index: 1;
+        opacity: 0;
+        transition: opacity 0.6s ease-in-out;
         min-height: 100vh;
-        background-color: rgba(0, 0, 0, 0.55);
-        transition: opacity 0.4s ease-in-out;
+      }
+
+      /* Prevent white flash on some browsers */
+      @keyframes instant-paint {
+        from {
+          background-color: #000;
+        }
+        to {
+          background-color: #000;
+        }
+      }
+      html {
+        animation: instant-paint 0.001s;
       }
     </style>
   </head>
@@ -71,6 +89,12 @@
       window.addEventListener("unhandledrejection", (e) =>
         showBootError(String(e.reason), e.reason && e.reason.stack)
       );
+
+      // ✅ Smooth fade-in after load
+      window.addEventListener("load", () => {
+        const root = document.getElementById("root");
+        setTimeout(() => (root.style.opacity = "1"), 200);
+      });
     </script>
 
     <script type="module" src="/src/main.jsx"></script>
