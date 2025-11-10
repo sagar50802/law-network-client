@@ -101,17 +101,19 @@ export default function ClassroomLivePage() {
         setError("Failed to fetch slides");
         setSlides([]);
       } finally {
-        // ✅ Fade out loader as soon as slides are ready
-        const loader = document.getElementById("classroom-loader");
-        if (loader) {
-          loader.classList.add("fade-out");
-          setTimeout(() => {
-            loader.style.display = "none";
+        // ✅ Remove loader right after slides are ready (avoid blank)
+        setTimeout(() => {
+          const loader = document.getElementById("classroom-loader");
+          if (loader) {
+            loader.classList.add("fade-out");
+            setTimeout(() => {
+              loader.style.display = "none";
+              setLoading(false);
+            }, 500);
+          } else {
             setLoading(false);
-          }, 700);
-        } else {
-          setLoading(false);
-        }
+          }
+        }, 400); // small delay ensures smooth fade
       }
     };
 
@@ -220,7 +222,7 @@ export default function ClassroomLivePage() {
   };
 
   /* ---------------------------------------------------------------------- */
-  /* ✅ Fallback Loader                                                    */
+  /* ✅ Loader Screen                                                      */
   /* ---------------------------------------------------------------------- */
   if (loading) {
     return (
@@ -271,7 +273,7 @@ export default function ClassroomLivePage() {
   }
 
   /* ---------------------------------------------------------------------- */
-  /* ✅ Main Layout                                                        */
+  /* ✅ Classroom Layout                                                   */
   /* ---------------------------------------------------------------------- */
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50 flex flex-col">
