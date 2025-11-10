@@ -105,13 +105,13 @@ export default function ClassroomLivePage() {
         console.error("Failed to load slides:", err);
         setError("Failed to fetch slides");
         setSlides([]);
-      } finally {
+      }  finally {
   const loader = document.getElementById("classroom-loader");
   if (loader) {
     loader.classList.add("fade-out");
     setTimeout(() => {
       setLoading(false);
-      loader.style.display = "none"; // hide cleanly
+      loader.style.display = "none";
     }, 700);
   } else {
     setLoading(false);
@@ -255,9 +255,9 @@ export default function ClassroomLivePage() {
   };
 
 /* ---------------------------------------------------------------------- */
-/* ✅ Render States — Instant Loader Fix (no white screen)                */
+/* ✅ Render States — Fixed: no flicker, no white screen, classroom shows */
 /* ---------------------------------------------------------------------- */
-if (loading || slides.length === 0) {
+if (loading) {
   return (
     <div
       id="classroom-loader"
