@@ -36,7 +36,6 @@ export default function ClassroomLivePage() {
   const [isMuted, setIsMuted] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
 
-  // ✅ loader starts off false so it doesn't block other routes
   const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
@@ -162,8 +161,6 @@ export default function ClassroomLivePage() {
     async function startSpeech() {
       if (!currentSlide || !mounted) return;
 
-      console.log("▶️ Starting speech for slide:", currentSlide.topicTitle);
-
       stopClassroomSpeech(speechRef);
       setProgress(0);
       setCurrentSentence("");
@@ -224,13 +221,11 @@ export default function ClassroomLivePage() {
     if (isPlaying) {
       PAUSE_LOCK = true;
       if (synth.speaking && !synth.paused) synth.pause();
-      console.log("⏸ Paused voice + queue locked");
       setIsPlaying(false);
       setIsSpeaking(false);
     } else {
       PAUSE_LOCK = false;
       if (synth.paused) synth.resume();
-      console.log("▶ Resumed voice + queue unlocked");
       setIsPlaying(true);
     }
   };
@@ -241,10 +236,8 @@ export default function ClassroomLivePage() {
       const next = !prev;
       if (next) {
         if (synth.speaking) synth.pause();
-        console.log("🔇 Muted speech (paused)");
       } else {
         if (synth.paused && !PAUSE_LOCK) synth.resume();
-        console.log("🔈 Unmuted speech (resumed)");
       }
       return next;
     });
@@ -301,7 +294,7 @@ export default function ClassroomLivePage() {
   }
 
   /* ---------------------------------------------------------------------- */
-  /* ✅ Render Full Classroom Layout                                        */
+  /* ✅ Render Full Classroom Layout (safe guards for null)                 */
   /* ---------------------------------------------------------------------- */
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50 flex flex-col">
@@ -350,14 +343,23 @@ export default function ClassroomLivePage() {
               progress={progress}
             />
 
-            <MediaBoard media={currentSlide.media} />
-            <MediaControlPanel
-              active={{
-                audio: !!currentSlide.media?.audioUrl,
-                video: !!currentSlide.media?.videoUrl,
-                image: !!currentSlide.media?.imageUrl,
-              }}
-            />
+            {/* ✅ Prevent crash if slide is null */}
+            {currentSlide && currentSlide.media ? (
+              <>
+                <MediaBoard media={currentSlide.media} />
+                <MediaControlPanel
+                  active={{
+                    audio: !!currentSlide.media?.audioUrl,
+                    video: !!currentSlide.media?.videoUrl,
+                    image: !!currentSlide.media?.imageUrl,
+                  }}
+                />
+              </>
+            ) : (
+              <div className="text-center text-slate-400 py-10 italic">
+                Preparing classroom content…
+              </div>
+            )}
 
             <div className="mt-2 flex items-center justify-end gap-2 text-xs">
               <button
