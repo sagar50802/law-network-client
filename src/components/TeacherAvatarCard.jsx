@@ -1,5 +1,5 @@
 import React, { useState } from "react";
-import "./TeacherAvatarCard.css"; // 👈 Import local styles
+import "./TeacherAvatarCard.css";
 
 /**
  * 🎓 TeacherAvatarCard
@@ -9,17 +9,14 @@ import "./TeacherAvatarCard.css"; // 👈 Import local styles
 export default function TeacherAvatarCard({ teacher, subject, isSpeaking }) {
   const [imgError, setImgError] = useState(false);
 
-  // ✅ Resolve avatar source safely
+  // ✅ Resolve avatar path safely
   const avatarSrc = imgError
-    ? "/avatars/default.png"
-    : teacher?.avatarUrl
-    ? teacher.avatarUrl.startsWith("http")
-      ? teacher.avatarUrl
-      : `${
-          import.meta.env.VITE_API_URL ||
-          "https://law-network.onrender.com/api"
-        }/uploads/avatars/${teacher.avatarUrl}`
-    : `/avatars/${teacher?.avatarType || "default"}.png`;
+    ? "/avatars/teacher1.png" // fallback image in /public/avatars
+    : teacher?.avatarUrl?.startsWith("/")
+    ? teacher.avatarUrl // direct local path like /avatars/teacher1.png
+    : teacher?.avatarUrl?.startsWith("http")
+    ? teacher.avatarUrl
+    : `/avatars/${teacher?.avatarUrl || "teacher1.png"}`;
 
   return (
     <div className="teacher-avatar-container bg-slate-900 text-slate-50 rounded-2xl p-4 md:p-5 shadow-lg flex flex-col items-center gap-3 border border-slate-700">
@@ -38,8 +35,12 @@ export default function TeacherAvatarCard({ teacher, subject, isSpeaking }) {
 
       {/* 🧠 Teacher Info */}
       <div className="text-center">
-        <div className="font-semibold text-lg">{teacher?.name || "Teacher"}</div>
-        <div className="text-xs text-slate-300">{teacher?.role || "Faculty"}</div>
+        <div className="font-semibold text-lg">
+          {teacher?.name || "Teacher"}
+        </div>
+        <div className="text-xs text-slate-300">
+          {teacher?.role || "Faculty"}
+        </div>
 
         {/* 📘 Subject Tag */}
         {subject && (
