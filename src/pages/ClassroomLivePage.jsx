@@ -105,19 +105,20 @@ export default function ClassroomLivePage() {
         console.error("Failed to load slides:", err);
         setError("Failed to fetch slides");
         setSlides([]);
-      }  finally {
-  const loader = document.getElementById("classroom-loader");
-  if (loader) {
-    loader.classList.add("fade-out");
-    setTimeout(() => {
-      setLoading(false);
-      loader.style.display = "none";
-    }, 700);
-  } else {
-    setLoading(false);
-  }
-}
- };
+      } finally {
+        // ✅ Fade out loader smoothly once data is ready
+        const loader = document.getElementById("classroom-loader");
+        if (loader) {
+          loader.classList.add("fade-out");
+          setTimeout(() => {
+            setLoading(false);
+            loader.style.display = "none";
+          }, 700);
+        } else {
+          setLoading(false);
+        }
+      }
+    };
 
     loadSlides();
   }, [selectedLectureId]);
@@ -224,14 +225,12 @@ export default function ClassroomLivePage() {
     if (!synth) return;
 
     if (isPlaying) {
-      // Pause everything + lock new chunks
       PAUSE_LOCK = true;
       if (synth.speaking && !synth.paused) synth.pause();
       console.log("⏸ Paused voice + queue locked");
       setIsPlaying(false);
       setIsSpeaking(false);
     } else {
-      // Resume and unlock
       PAUSE_LOCK = false;
       if (synth.paused) synth.resume();
       console.log("▶ Resumed voice + queue unlocked");
@@ -254,61 +253,60 @@ export default function ClassroomLivePage() {
     });
   };
 
-/* ---------------------------------------------------------------------- */
-/* ✅ Render States — Fixed: no flicker, no white screen, classroom shows */
-/* ---------------------------------------------------------------------- */
-if (loading) {
-  return (
-    <div
-      id="classroom-loader"
-      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black text-white transition-opacity duration-700 ease-in-out bg-no-repeat bg-center bg-cover"
-      style={{
-        backgroundImage: `url("/backgrounds/classroom-fallback.png")`,
-        backgroundSize: "cover",
-        backgroundPosition: "center",
-      }}
-    >
-      <div className="bg-black/70 px-8 py-6 rounded-2xl text-center max-w-lg shadow-lg backdrop-blur-sm animate-fade-in">
-        <div className="w-10 h-10 border-4 border-green-400 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
-        <h1 className="text-2xl font-semibold mb-2 drop-shadow-md">
-          📡 Loading Classroom…
-        </h1>
-        <p className="opacity-90 text-sm drop-shadow-sm">
-          Please wait, connecting to the live session.
-        </p>
+  /* ---------------------------------------------------------------------- */
+  /* ✅ Render States — loader until content is ready                       */
+  /* ---------------------------------------------------------------------- */
+  if (loading) {
+    return (
+      <div
+        id="classroom-loader"
+        className="fixed inset-0 z-[9999] flex items-center justify-center bg-black text-white transition-opacity duration-700 ease-in-out bg-no-repeat bg-center bg-cover"
+        style={{
+          backgroundImage: `url("/backgrounds/classroom-fallback.png")`,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+        }}
+      >
+        <div className="bg-black/70 px-8 py-6 rounded-2xl text-center max-w-lg shadow-lg backdrop-blur-sm animate-fade-in">
+          <div className="w-10 h-10 border-4 border-green-400 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+          <h1 className="text-2xl font-semibold mb-2 drop-shadow-md">
+            📡 Loading Classroom…
+          </h1>
+          <p className="opacity-90 text-sm drop-shadow-sm">
+            Please wait, connecting to the live session.
+          </p>
+        </div>
       </div>
-    </div>
-  );
-}
+    );
+  }
 
-if (error) {
-  return (
-    <div
-      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black text-white bg-no-repeat bg-center bg-cover"
-      style={{
-        backgroundImage: `url("/backgrounds/classroom-fallback.png")`,
-        backgroundSize: "cover",
-        backgroundPosition: "center",
-      }}
-    >
-      <div className="bg-black/70 px-8 py-6 rounded-2xl text-center max-w-lg shadow-lg backdrop-blur-sm">
-        <h1 className="text-2xl font-semibold mb-2 drop-shadow-md">
-          ⚠️ Classroom Offline
-        </h1>
-        <p className="opacity-90 text-sm drop-shadow-sm">
-          Please check your internet connection or try again later.
-        </p>
+  if (error) {
+    return (
+      <div
+        className="fixed inset-0 z-[9999] flex items-center justify-center bg-black text-white bg-no-repeat bg-center bg-cover"
+        style={{
+          backgroundImage: `url("/backgrounds/classroom-fallback.png")`,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+        }}
+      >
+        <div className="bg-black/70 px-8 py-6 rounded-2xl text-center max-w-lg shadow-lg backdrop-blur-sm">
+          <h1 className="text-2xl font-semibold mb-2 drop-shadow-md">
+            ⚠️ Classroom Offline
+          </h1>
+          <p className="opacity-90 text-sm drop-shadow-sm">
+            Please check your internet connection or try again later.
+          </p>
+        </div>
       </div>
-    </div>
-  );
-}
+    );
+  }
 
   /* ---------------------------------------------------------------------- */
-  /* ✅ Render Full Layout                                                 */
+  /* ✅ Render Full Classroom Layout                                        */
   /* ---------------------------------------------------------------------- */
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50 flex flex-col">
-      {/* ---------- Header ---------- */}
       <header className="px-4 md:px-8 py-3 border-b border-slate-800 flex items-center justify-between">
         <div className="text-lg md:text-2xl font-semibold tracking-wide">
           Classroom Live • {currentLecture?.subject || "Lecture"}
@@ -339,17 +337,14 @@ if (error) {
         </div>
       </header>
 
-      {/* ---------- Main Section ---------- */}
       <main className="flex-1 px-4 md:px-8 py-4 md:py-6 flex flex-col gap-4">
         <div className="flex-1 grid grid-cols-1 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,2.4fr)_minmax(0,1.1fr)] gap-4">
-          {/* ---------- Teacher Avatar ---------- */}
           <TeacherAvatarCard
             teacher={currentLecture}
             subject={currentLecture?.subject}
             isSpeaking={isSpeaking}
           />
 
-          {/* ---------- Teleprompter + Media Board ---------- */}
           <section className="flex flex-col gap-3">
             <ClassroomTeleprompter
               slide={currentSlide}
@@ -385,7 +380,6 @@ if (error) {
             </div>
           </section>
 
-          {/* ---------- Playlist Sidebar ---------- */}
           <LecturePlaylistSidebar
             lectures={lectures}
             currentLectureId={selectedLectureId}
@@ -399,7 +393,6 @@ if (error) {
           />
         </div>
 
-        {/* ---------- Students Row ---------- */}
         <StudentsRow
           onRaiseHand={() =>
             alert("✋ Student raised hand — feature coming soon!")
