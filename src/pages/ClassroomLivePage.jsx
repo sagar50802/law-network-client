@@ -16,10 +16,11 @@ const API_BASE =
   (import.meta.env.VITE_API_URL || "https://law-network.onrender.com/api") +
   "/classroom";
 
+// 🧩 Global flag for safe pause control
 let PAUSE_LOCK = false;
 
 /* -------------------------------------------------------------------------- */
-/* ✅ ClassroomLivePage                                                      */
+/* ✅ ClassroomLivePage                                                       */
 /* -------------------------------------------------------------------------- */
 export default function ClassroomLivePage() {
   /* ------------------------- State Management ---------------------------- */
@@ -45,14 +46,14 @@ export default function ClassroomLivePage() {
     lectures.find((l) => l._id === selectedLectureId) || null;
 
   /* ---------------------------------------------------------------------- */
-  /* ✅ Unlock Speech Autoplay (browser policy)                             */
+  /* ✅ Unlock Speech Autoplay (browser policy)                              */
   /* ---------------------------------------------------------------------- */
   useEffect(() => {
     unlockSpeechOnUserClick();
   }, []);
 
   /* ---------------------------------------------------------------------- */
-  /* ✅ Load Lectures List                                                 */
+  /* ✅ Load Lectures List                                                  */
   /* ---------------------------------------------------------------------- */
   useEffect(() => {
     const loadLectures = async () => {
@@ -60,16 +61,17 @@ export default function ClassroomLivePage() {
         const res = await fetch(`${API_BASE}/lectures?status=released`);
         const json = await res.json();
         const list = json.data || json;
-
         if (Array.isArray(list)) {
           setLectures(list);
           if (list.length > 0 && !selectedLectureId) {
             setSelectedLectureId(list[0]._id);
           }
         } else {
+          console.warn("Unexpected lectures response:", json);
           setLectures([]);
         }
       } catch (err) {
+        console.error("Failed to load lectures:", err);
         setError("Failed to load lectures");
       }
     };
@@ -77,7 +79,7 @@ export default function ClassroomLivePage() {
   }, []);
 
   /* ---------------------------------------------------------------------- */
-  /* ✅ Load Slides for Selected Lecture                                   */
+  /* ✅ Load Slides for Selected Lecture                                    */
   /* ---------------------------------------------------------------------- */
   useEffect(() => {
     if (!selectedLectureId) return;
@@ -94,15 +96,17 @@ export default function ClassroomLivePage() {
         if (Array.isArray(list)) {
           setSlides(list);
           setCurrentIndex(0);
+          console.log("📚 Slides loaded:", list.length);
         } else {
+          console.warn("Unexpected slides response:", json);
           setSlides([]);
         }
       } catch (err) {
+        console.error("Failed to load slides:", err);
         setError("Failed to fetch slides");
         setSlides([]);
       } finally {
-        // Delay removal of loader to ensure smooth fade-in
-        setTimeout(() => setLoading(false), 500);
+        setLoading(false);
       }
     };
 
@@ -110,14 +114,16 @@ export default function ClassroomLivePage() {
   }, [selectedLectureId]);
 
   /* ---------------------------------------------------------------------- */
-  /* ✅ Preload Voices                                                     */
+  /* ✅ Preload Voices                                                      */
   /* ---------------------------------------------------------------------- */
   useEffect(() => {
-    waitForVoices(3000);
+    waitForVoices(3000).then((voices) =>
+      console.log(`✅ Voices preloaded (${voices.length})`)
+    );
   }, []);
 
   /* ---------------------------------------------------------------------- */
-  /* ✅ Move to next slide after voice completes                           */
+  /* ✅ Move to next slide after voice completes                            */
   /* ---------------------------------------------------------------------- */
   const handleNextSlide = useCallback(() => {
     setProgress(0);
@@ -130,7 +136,7 @@ export default function ClassroomLivePage() {
   }, [slides.length]);
 
   /* ---------------------------------------------------------------------- */
-  /* ✅ Voice Engine — sync Avatar + Teleprompter                          */
+  /* ✅ Voice Engine — sync Avatar + Teleprompter                           */
   /* ---------------------------------------------------------------------- */
   useEffect(() => {
     let mounted = true;
@@ -138,6 +144,9 @@ export default function ClassroomLivePage() {
     async function startSpeech() {
       if (!currentSlide || !mounted) return;
 
+      console.log("▶️ Starting speech for slide:", currentSlide.topicTitle);
+
+      // 🔄 Reset before playing
       stopClassroomSpeech(speechRef);
       setProgress(0);
       setCurrentSentence("");
@@ -150,7 +159,11 @@ export default function ClassroomLivePage() {
         return;
       }
 
-      if (!isPlaying || isMuted || PAUSE_LOCK) return;
+      // ✅ Block when paused, muted, or locked
+      if (!isPlaying || isMuted || PAUSE_LOCK) {
+        console.log("⏸ Skipped speech — paused, muted, or queue locked");
+        return;
+      }
 
       playClassroomSpeech({
         slide: currentSlide,
@@ -158,9 +171,18 @@ export default function ClassroomLivePage() {
         speechRef,
         setCurrentSentence,
         onProgress: setProgress,
-        onStartSpeaking: () => setIsSpeaking(true),
-        onStopSpeaking: () => setIsSpeaking(false),
-        onComplete: handleNextSlide,
+        onStartSpeaking: () => {
+          console.log("🔊 Avatar speaking ON");
+          setIsSpeaking(true);
+        },
+        onStopSpeaking: () => {
+          console.log("🔇 Avatar speaking OFF");
+          setIsSpeaking(false);
+        },
+        onComplete: () => {
+          console.log("✅ Slide speech complete");
+          handleNextSlide();
+        },
       });
     }
 
@@ -173,7 +195,7 @@ export default function ClassroomLivePage() {
   }, [currentSlide?._id, isPlaying, isMuted, slides.length, handleNextSlide]);
 
   /* ---------------------------------------------------------------------- */
-  /* ✅ Manual Navigation + Controls                                       */
+  /* ✅ Manual Navigation + Controls                                        */
   /* ---------------------------------------------------------------------- */
   const goToSlide = (index) => {
     if (index < 0 || index >= slides.length) return;
@@ -186,20 +208,24 @@ export default function ClassroomLivePage() {
   };
 
   /* ---------------------------------------------------------------------- */
-  /* ✅ Safe Play / Pause / Mute Controls                                  */
+  /* ✅ Safe Play / Pause / Mute Controls                                   */
   /* ---------------------------------------------------------------------- */
   const handlePlayPause = () => {
     const synth = window.speechSynthesis;
     if (!synth) return;
 
     if (isPlaying) {
+      // Pause everything + lock new chunks
       PAUSE_LOCK = true;
       if (synth.speaking && !synth.paused) synth.pause();
+      console.log("⏸ Paused voice + queue locked");
       setIsPlaying(false);
       setIsSpeaking(false);
     } else {
+      // Resume and unlock
       PAUSE_LOCK = false;
       if (synth.paused) synth.resume();
+      console.log("▶ Resumed voice + queue unlocked");
       setIsPlaying(true);
     }
   };
@@ -210,8 +236,10 @@ export default function ClassroomLivePage() {
       const next = !prev;
       if (next) {
         if (synth.speaking) synth.pause();
+        console.log("🔇 Muted speech (paused)");
       } else {
         if (synth.paused && !PAUSE_LOCK) synth.resume();
+        console.log("🔈 Unmuted speech (resumed)");
       }
       return next;
     });
@@ -220,60 +248,68 @@ export default function ClassroomLivePage() {
   /* ---------------------------------------------------------------------- */
   /* ✅ Render States                                                      */
   /* ---------------------------------------------------------------------- */
-  if (loading) {
+  if (loading)
     return (
-      <div
-        className="flex items-center justify-center min-h-screen text-white transition-opacity duration-700"
-        style={{
-          backgroundImage: `url("/backgrounds/classroom-fallback.png")`,
-          backgroundSize: "cover",
-          backgroundPosition: "center",
-          backgroundRepeat: "no-repeat",
-          backgroundColor: "#1a1a1a",
-        }}
-      >
-        <div className="bg-black/60 px-8 py-6 rounded-2xl text-center max-w-lg shadow-lg backdrop-blur-sm">
-          <div className="w-6 h-6 border-3 border-green-300 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
-          <h1 className="text-2xl font-semibold mb-2 drop-shadow-md">
-            📡 Loading Classroom…
-          </h1>
-          <p className="opacity-90 text-sm drop-shadow-sm">
-            Please wait, connecting to the live session.
-          </p>
-        </div>
+      <div className="text-center text-slate-100 p-10 animate-pulse">
+        Loading classroom…
       </div>
     );
-  }
 
-  if (error || !slides.length) {
-    return (
-      <div
-        className="flex items-center justify-center min-h-screen text-white"
-        style={{
-          backgroundImage: `url("/backgrounds/classroom-fallback.png")`,
-          backgroundSize: "cover",
-          backgroundPosition: "center",
-          backgroundRepeat: "no-repeat",
-          backgroundColor: "#1a1a1a",
-        }}
-      >
-        <div className="bg-black/60 px-8 py-6 rounded-2xl text-center max-w-lg shadow-lg backdrop-blur-sm">
-          <h1 className="text-2xl font-semibold mb-2 drop-shadow-md">
-            ⚠️ Classroom Offline
-          </h1>
-          <p className="opacity-90 text-sm drop-shadow-sm">
-            Please check your internet connection or try again later.
-          </p>
-        </div>
+   if (loading) {
+  return (
+    <div
+      className="flex items-center justify-center min-h-screen text-white"
+       style={{
+  backgroundImage: `url("/backgrounds/classroom-fallback.png")`,
+  backgroundSize: "contain",
+  backgroundPosition: "center",
+  backgroundRepeat: "no-repeat",
+  backgroundColor: "#000",
+  backgroundAttachment: "fixed",
+}}
+
+    >
+      <div className="bg-black/60 px-8 py-6 rounded-2xl text-center max-w-lg shadow-lg backdrop-blur-sm">
+        <h1 className="text-2xl font-semibold mb-2 drop-shadow-md">
+          📡 Loading Classroom…
+        </h1>
+        <p className="opacity-90 text-sm drop-shadow-sm">
+          Please wait, connecting to the live session.
+        </p>
       </div>
-    );
-  }
+    </div>
+  );
+}
+
+if (error || !slides.length) {
+  return (
+    <div
+      className="flex items-center justify-center min-h-screen text-white"
+      style={{
+        backgroundImage: `url("/backgrounds/classroom-fallback.png")`,
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        backgroundRepeat: "no-repeat",
+        backgroundColor: "#1a1a1a",
+      }}
+    >
+      <div className="bg-black/60 px-8 py-6 rounded-2xl text-center max-w-lg shadow-lg backdrop-blur-sm">
+        <h1 className="text-2xl font-semibold mb-2 drop-shadow-md">
+          ⚠️ Classroom Offline
+        </h1>
+        <p className="opacity-90 text-sm drop-shadow-sm">
+          Please check your internet connection or try again later.
+        </p>
+      </div>
+    </div>
+  );
+}
 
   /* ---------------------------------------------------------------------- */
   /* ✅ Render Full Layout                                                 */
   /* ---------------------------------------------------------------------- */
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-50 flex flex-col transition-opacity duration-700">
+    <div className="min-h-screen bg-slate-950 text-slate-50 flex flex-col">
       {/* ---------- Header ---------- */}
       <header className="px-4 md:px-8 py-3 border-b border-slate-800 flex items-center justify-between">
         <div className="text-lg md:text-2xl font-semibold tracking-wide">
@@ -308,18 +344,21 @@ export default function ClassroomLivePage() {
       {/* ---------- Main Section ---------- */}
       <main className="flex-1 px-4 md:px-8 py-4 md:py-6 flex flex-col gap-4">
         <div className="flex-1 grid grid-cols-1 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,2.4fr)_minmax(0,1.1fr)] gap-4">
+          {/* ---------- Teacher Avatar ---------- */}
           <TeacherAvatarCard
             teacher={currentLecture}
             subject={currentLecture?.subject}
             isSpeaking={isSpeaking}
           />
 
+          {/* ---------- Teleprompter + Media Board ---------- */}
           <section className="flex flex-col gap-3">
             <ClassroomTeleprompter
               slide={currentSlide}
               currentSentence={currentSentence}
               progress={progress}
             />
+
             <MediaBoard media={currentSlide.media} />
             <MediaControlPanel
               active={{
@@ -328,6 +367,7 @@ export default function ClassroomLivePage() {
                 image: !!currentSlide.media?.imageUrl,
               }}
             />
+
             <div className="mt-2 flex items-center justify-end gap-2 text-xs">
               <button
                 className="px-3 py-1 rounded-full bg-slate-800 border border-slate-600"
@@ -347,6 +387,7 @@ export default function ClassroomLivePage() {
             </div>
           </section>
 
+          {/* ---------- Playlist Sidebar ---------- */}
           <LecturePlaylistSidebar
             lectures={lectures}
             currentLectureId={selectedLectureId}
@@ -360,6 +401,7 @@ export default function ClassroomLivePage() {
           />
         </div>
 
+        {/* ---------- Students Row ---------- */}
         <StudentsRow
           onRaiseHand={() =>
             alert("✋ Student raised hand — feature coming soon!")
