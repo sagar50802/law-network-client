@@ -17,10 +17,13 @@ window.exitAdmin = () => {
   location.reload();
 };
 
-// 🚫 Removed all console.log (no hints, no status messages)
+// 🚫 Removed all console.log
 
 createRoot(document.getElementById('root')).render(
   <React.StrictMode>
     <App />
   </React.StrictMode>
 );
+
+// ✅ Tell index.html that the real app is ready (remove loader + fade in)
+if (window.__CLASSROOM_READY__) window.__CLASSROOM_READY__();
