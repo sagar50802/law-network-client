@@ -2,7 +2,7 @@
 let voiceCache = [];
 
 /* ------------------------------------------------------- */
-/* ⏳ Load available voices safely                         */
+/* ⏳ Load voices (waits until ready on all browsers)       */
 /* ------------------------------------------------------- */
 export function waitForVoices(timeout = 3000) {
   return new Promise((resolve) => {
@@ -21,66 +21,65 @@ export function waitForVoices(timeout = 3000) {
         resolve(v);
       }
     }, 100);
+
     setTimeout(() => clearInterval(id), timeout);
   });
 }
 
 /* ------------------------------------------------------- */
-/* 🧩 Detect language                                      */
+/* 🧠 Language detection                                    */
 /* ------------------------------------------------------- */
 function detectLang(text = "") {
   if (/[ऀ-ॿ]/.test(text)) return "hi-IN"; // Hindi
   if (/[a-zA-Z]/.test(text) && /[ंँेो]/.test(text)) return "hi-IN"; // Hinglish
-  return "en-IN"; // default to Indian English, not US
+  return "en-IN"; // Indian English default
 }
 
 /* ------------------------------------------------------- */
-/* 🧠 Smart voice picker: prefer natural Indian voices      */
+/* 🗣 Voice Picker (cross-browser)                          */
 /* ------------------------------------------------------- */
 function pickVoice(lang, teacher = {}) {
   if (!voiceCache.length)
     voiceCache = window.speechSynthesis?.getVoices() || [];
 
-  // teacher-specific name override
+  // 1️⃣ Teacher-specified override
   if (teacher.voiceName) {
     const named = voiceCache.find((v) => v.name === teacher.voiceName);
     if (named) return named;
   }
 
-  const priorities = [
+  // 2️⃣ Prioritized Indian voices list
+  const indianVoiceNames = [
     "en-IN",
     "hi-IN",
-    "en-GB",
-    "en-US",
-    "en-AU",
+    "Google हिन्दी",
+    "Google हिंदी",
+    "Google English (India)",
     "Google UK English Male",
-    "Google UK English Female",
     "Microsoft Ravi - English (India)",
     "Microsoft Heera - English (India)",
     "Microsoft Neerja - Hindi (India)",
+    "Sangeeta",
   ];
 
-  // exact match first
-  const exact = voiceCache.find((v) => v.lang === lang);
-  if (exact) return exact;
-
-  // try priorities list
-  for (const key of priorities) {
+  // Prefer Indian English voice
+  for (const key of indianVoiceNames) {
     const match = voiceCache.find(
       (v) =>
         v.lang === key ||
-        v.lang.startsWith(key.split("-")[0]) ||
+        v.lang?.startsWith(key.split("-")[0]) ||
         v.name.includes(key)
     );
     if (match) return match;
   }
 
-  // fallback to same language family
-  const fallback = voiceCache.find((v) =>
-    v.lang.startsWith(lang.split("-")[0])
-  );
+  // 3️⃣ Fallbacks: UK/US English
+  const fallback =
+    voiceCache.find((v) => v.lang === "en-GB") ||
+    voiceCache.find((v) => v.lang === "en-US") ||
+    voiceCache[0];
 
-  return fallback || voiceCache[0];
+  return fallback;
 }
 
 /* ------------------------------------------------------- */
@@ -97,7 +96,6 @@ export function playClassroomSpeech({
   onComplete,
 }) {
   if (!slide || isMuted) return;
-
   const synth = window.speechSynthesis;
   if (!synth) return console.error("Speech synthesis not supported");
 
@@ -126,15 +124,19 @@ export function playClassroomSpeech({
     utter.voice = pickVoice(lang, slide.teacher);
     utter.lang = lang;
 
-    // 🧡 Natural Indian tone adjustments
+    /* 🎚️ Browser-specific fine-tuning for natural tone */
+    const ua = navigator.userAgent.toLowerCase();
     if (lang.startsWith("en")) {
-      utter.rate = 0.93; // slightly slower
-      utter.pitch = 1.02; // softer and youthful
+      // English (Indian style)
+      utter.rate = /firefox/.test(ua) ? 0.9 : /edg/.test(ua) ? 0.94 : 0.92;
+      utter.pitch = 1.05; // young Indian male tone
+      utter.volume = 1;
     } else {
-      utter.rate = 0.95;
+      // Hindi
+      utter.rate = /firefox/.test(ua) ? 0.95 : 0.97;
       utter.pitch = 1.0;
+      utter.volume = 1;
     }
-    utter.volume = 1;
 
     let lastUpdate = 0;
 
@@ -164,7 +166,7 @@ export function playClassroomSpeech({
     };
 
     utter.onerror = (e) => {
-      console.error("Speech error:", e);
+      console.warn("Speech error:", e);
       onStopSpeaking?.();
       index++;
       speakNext();
@@ -201,7 +203,7 @@ export function stopClassroomSpeech(speechRef) {
 }
 
 /* ------------------------------------------------------- */
-/* 🔓 Unlock Speech on User Interaction (Chrome policy)     */
+/* 🔓 Unlock Speech on User Interaction                    */
 /* ------------------------------------------------------- */
 export function unlockSpeechOnUserClick() {
   const resume = () => {
