@@ -5,63 +5,136 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Law Network</title>
 
-    <!-- Handwritten-style font for notebook sections -->
+    <!-- Handwritten-style font -->
     <link
       href="https://fonts.googleapis.com/css2?family=Patrick+Hand&display=swap"
       rel="stylesheet"
     />
 
-    <!-- ✅ Cinematic fallback background before React loads -->
+    <!-- ✅ Cinematic background + smooth zoom animation -->
     <style>
+      /* Reset and base style */
       html,
       body {
         margin: 0;
         padding: 0;
         width: 100%;
         height: 100%;
-        background: #000
-          url("/backgrounds/classroom-fallback.png")
-          no-repeat center center;
-        background-size: cover;
-        overflow-x: hidden;
+        background: #000 no-repeat center center / cover;
+        overflow: hidden;
+        color-scheme: dark;
+        position: relative;
       }
 
-      /* Dim overlay for cinematic look */
+      /* ✅ Background image instantly visible (no white flash) */
       body::before {
         content: "";
         position: fixed;
         inset: 0;
-        background: rgba(0, 0, 0, 0.55);
-        z-index: 0;
+        background: url("/backgrounds/classroom-fallback.png") center center /
+          cover no-repeat;
+        z-index: -2;
+        transform: scale(1);
+        animation: zoomIn 8s ease-in-out forwards;
       }
 
+      /* ✅ Smooth cinematic overlay */
+      body::after {
+        content: "";
+        position: fixed;
+        inset: 0;
+        background: rgba(0, 0, 0, 0.45);
+        z-index: -1;
+      }
+
+      /* ✅ Soft background zoom animation */
+      @keyframes zoomIn {
+        0% {
+          transform: scale(1);
+        }
+        100% {
+          transform: scale(1.08);
+        }
+      }
+
+      /* ✅ React app fade-in */
       #root {
+        opacity: 0;
+        transition: opacity 0.7s ease-in-out;
+        min-height: 100vh;
         position: relative;
         z-index: 1;
-        opacity: 0;
-        transition: opacity 0.6s ease-in-out;
-        min-height: 100vh;
       }
 
-      /* Prevent white flash on some browsers */
-      @keyframes instant-paint {
+      /* ✅ Loader section (spinner + text) */
+      #preload-container {
+        position: fixed;
+        top: 50%;
+        left: 50%;
+        transform: translate(-50%, -50%);
+        display: flex;
+        align-items: center;
+        gap: 12px;
+        z-index: 3;
+        color: #10b981; /* Law Network green */
+        font-family: "Patrick Hand", sans-serif;
+        font-size: 1.8rem;
+        background: rgba(0, 0, 0, 0.45);
+        padding: 1rem 2rem;
+        border-radius: 12px;
+        animation: fade 1.4s ease-in-out infinite alternate;
+      }
+
+      @keyframes fade {
         from {
-          background-color: #000;
+          opacity: 0.4;
         }
         to {
-          background-color: #000;
+          opacity: 1;
         }
       }
-      html {
-        animation: instant-paint 0.001s;
+
+      /* ✅ Elegant green spinner */
+      .spinner {
+        width: 24px;
+        height: 24px;
+        border: 3px solid rgba(16, 185, 129, 0.3);
+        border-top-color: #10b981;
+        border-radius: 50%;
+        animation: spin 1s linear infinite;
+      }
+
+      @keyframes spin {
+        to {
+          transform: rotate(360deg);
+        }
       }
     </style>
+
+    <!-- ✅ JS to ensure background always loads on Render -->
+    <script>
+      document.addEventListener("DOMContentLoaded", () => {
+        const base = window.location.origin;
+        const bgUrl = `${base}/backgrounds/classroom-fallback.png`;
+        const img = new Image();
+        img.src = bgUrl;
+        img.onload = () => {
+          document.body.style.backgroundImage = `url('${bgUrl}')`;
+        };
+      });
+    </script>
   </head>
 
   <body>
+    <!-- ✅ Shown immediately -->
+    <div id="preload-container">
+      <div class="spinner"></div>
+      <div>Loading Classroom…</div>
+    </div>
+
     <div id="root"></div>
 
-    <!-- On-screen boot errors -->
+    <!-- Error box (in case React fails) -->
     <pre
       id="boot-error"
       style="
@@ -83,6 +156,7 @@
         box.textContent = `[Boot error]\n${msg}\n\n${stack || ""}`;
         console.error("[Boot error]", msg, stack);
       }
+
       window.addEventListener("error", (e) =>
         showBootError(e.message, e.error && e.error.stack)
       );
@@ -90,10 +164,12 @@
         showBootError(String(e.reason), e.reason && e.reason.stack)
       );
 
-      // ✅ Smooth fade-in after load
+      // ✅ Fade in React app, hide loader once content ready
       window.addEventListener("load", () => {
+        const preload = document.getElementById("preload-container");
         const root = document.getElementById("root");
-        setTimeout(() => (root.style.opacity = "1"), 200);
+        if (preload) preload.style.display = "none";
+        if (root) root.style.opacity = "1";
       });
     </script>
 
