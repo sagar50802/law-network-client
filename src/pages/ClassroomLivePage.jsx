@@ -19,7 +19,7 @@ const API_BASE =
 let PAUSE_LOCK = false;
 
 /* -------------------------------------------------------------------------- */
-/* ✅ ClassroomLivePage                                                       */
+/* ✅ ClassroomLivePage Component                                            */
 /* -------------------------------------------------------------------------- */
 export default function ClassroomLivePage() {
   const [slides, setSlides] = useState([]);
@@ -101,26 +101,20 @@ export default function ClassroomLivePage() {
         setError("Failed to fetch slides");
         setSlides([]);
       } finally {
-        // ✅ Smooth loader fade only when classroom content exists
+        // ✅ Fade out loader as soon as slides are ready
         const loader = document.getElementById("classroom-loader");
-        const waitForRender = () => {
-          const teleprompter = document.querySelector(".teleprompter");
-          const teacher = document.querySelector(".teacher-card");
-          if (teleprompter || teacher) {
-            if (loader) {
-              loader.classList.add("fade-out");
-              setTimeout(() => {
-                loader.style.display = "none";
-                setLoading(false);
-              }, 800);
-            } else setLoading(false);
-          } else {
-            setTimeout(waitForRender, 100);
-          }
-        };
-        requestAnimationFrame(waitForRender);
+        if (loader) {
+          loader.classList.add("fade-out");
+          setTimeout(() => {
+            loader.style.display = "none";
+            setLoading(false);
+          }, 700);
+        } else {
+          setLoading(false);
+        }
       }
     };
+
     loadSlides();
   }, [selectedLectureId]);
 
@@ -134,7 +128,7 @@ export default function ClassroomLivePage() {
   }, []);
 
   /* ---------------------------------------------------------------------- */
-  /* ✅ Next Slide after Speech                                            */
+  /* ✅ Handle Slide Progression                                           */
   /* ---------------------------------------------------------------------- */
   const handleNextSlide = useCallback(() => {
     setProgress(0);
@@ -146,7 +140,7 @@ export default function ClassroomLivePage() {
   }, [slides.length]);
 
   /* ---------------------------------------------------------------------- */
-  /* ✅ Voice Sync                                                         */
+  /* ✅ Voice Synchronization                                              */
   /* ---------------------------------------------------------------------- */
   useEffect(() => {
     let mounted = true;
@@ -226,7 +220,7 @@ export default function ClassroomLivePage() {
   };
 
   /* ---------------------------------------------------------------------- */
-  /* ✅ Loader Screen (Fallback Image)                                     */
+  /* ✅ Fallback Loader                                                    */
   /* ---------------------------------------------------------------------- */
   if (loading) {
     return (
