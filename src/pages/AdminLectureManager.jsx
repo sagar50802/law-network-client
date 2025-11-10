@@ -14,7 +14,14 @@ import {
   FolderOpen,
 } from "lucide-react";
 
-const API_BASE = `${import.meta.env.VITE_API_URL || "http://localhost:5000/api"}/classroom`;
+const API_BASE = `${
+  import.meta.env.VITE_API_URL || "http://localhost:5000/api"
+}/classroom`;
+
+// ✅ NEW: base for classroom access (share links)
+const ACCESS_BASE = `${
+  import.meta.env.VITE_API_URL || "http://localhost:5000/api"
+}/classroom-access`;
 
 /* ------------------------ Modal Wrapper ------------------------ */
 function Modal({ open, onClose, children }) {
@@ -288,7 +295,6 @@ function SlideEditor({ open, onClose, lecture, onSaveSlides }) {
   );
 }
 
-
 /* ------------------------ Lecture Row (small sub-component) ------------------------ */
 function LectureRow({ lec, onToggle, onEditSlides, onDelete }) {
   const now = new Date();
@@ -331,80 +337,105 @@ function LectureRow({ lec, onToggle, onEditSlides, onDelete }) {
           {status}
         </span>
       </td>
-       <td className="p-2 text-center">
-  <div className="flex items-center justify-center gap-3 text-slate-600">
-    {/* ▶️ Toggle Release */}
-    <button title="Toggle Release" onClick={() => onToggle(lec)}>
-      {lec.status === "released" ? (
-        <PauseCircle className="w-5 h-5 text-amber-500 hover:text-amber-600 transition" />
-      ) : (
-        <PlayCircle className="w-5 h-5 text-emerald-500 hover:text-emerald-600 transition" />
-      )}
-    </button>
+      <td className="p-2 text-center">
+        <div className="flex items-center justify-center gap-3 text-slate-600">
+          {/* ▶️ Toggle Release */}
+          <button title="Toggle Release" onClick={() => onToggle(lec)}>
+            {lec.status === "released" ? (
+              <PauseCircle className="w-5 h-5 text-amber-500 hover:text-amber-600 transition" />
+            ) : (
+              <PlayCircle className="w-5 h-5 text-emerald-500 hover:text-emerald-600 transition" />
+            )}
+          </button>
 
-    {/* 📝 Edit Slides */}
-    <button title="Edit Slides" onClick={() => onEditSlides(lec)}>
-      <FileText className="w-5 h-5 text-blue-500 hover:text-blue-600 transition" />
-    </button>
+          {/* 📝 Edit Slides */}
+          <button title="Edit Slides" onClick={() => onEditSlides(lec)}>
+            <FileText className="w-5 h-5 text-blue-500 hover:text-blue-600 transition" />
+          </button>
 
-    {/* 🗑️ Delete */}
-    <button title="Delete Lecture" onClick={() => onDelete(lec._id)}>
-      <Trash2 className="w-5 h-5 text-red-500 hover:text-red-600 transition" />
-    </button>
+          {/* 🗑️ Delete */}
+          <button title="Delete Lecture" onClick={() => onDelete(lec._id)}>
+            <Trash2 className="w-5 h-5 text-red-500 hover:text-red-600 transition" />
+          </button>
 
-    {/* 📋 Copy Lecture ID */}
-    <button
-      title="Copy Lecture ID"
-      onClick={() => {
-        navigator.clipboard.writeText(lec._id);
-        alert("Lecture ID copied: " + lec._id);
-      }}
-    >
-      📋
-    </button>
+          {/* 📋 Copy Lecture ID */}
+          <button
+            title="Copy Lecture ID"
+            onClick={() => {
+              navigator.clipboard.writeText(lec._id);
+              alert("Lecture ID copied: " + lec._id);
+            }}
+          >
+            📋
+          </button>
 
-    {/* 🔗 Generate Share Link */}
-    <button
-      title="Generate Share Link"
-      onClick={async () => {
-        try {
-          const type = prompt("Enter link type: free or paid", "free");
-          if (!type) return;
+          {/* 🔗 Generate Share Link */}
+          <button
+            title="Generate Share Link"
+            onClick={async () => {
+              try {
+                let type = prompt('Enter link type: "free" or "paid"', "free");
+                if (!type) return;
+                type = type.toLowerCase().trim();
+                if (type !== "free" && type !== "paid") {
+                  alert('Please enter either "free" or "paid"');
+                  return;
+                }
 
-          const res = await fetch(
-            `https://law-network.onrender.com/api/classroom-access/create-link`,
-            {
-              method: "POST",
-              headers: {
-                "Content-Type": "application/json",
-                Authorization: `Bearer ${localStorage.getItem("authToken")}`,
-              },
-              body: JSON.stringify({
-                lectureId: lec._id,
-                type: type.toLowerCase(),
-                expiresInHours: 24,
-              }),
-            }
-          );
+                // 🕒 Ask expiry (hours) or 0 for permanent
+                let hoursAns = prompt(
+                  'For how many hours should this link work?\nExample: 24\nOr type 0 for "no expiry"',
+                  "24"
+                );
+                if (hoursAns === null) return; // cancelled
 
-          const data = await res.json();
-          if (data.success) {
-            navigator.clipboard.writeText(data.url);
-            alert("✅ Share link copied:\n" + data.url);
-          } else {
-            alert("❌ Failed: " + data.error);
-          }
-        } catch (err) {
-          alert("Error: " + err.message);
-        }
-      }}
-    >
-      🔗
-    </button>
-  </div>
-</td>
- </tr>
- );
+                let expiresInHours = parseInt(hoursAns, 10);
+                const permanent = !Number.isFinite(expiresInHours) || expiresInHours <= 0;
+
+                const body = {
+                  lectureId: lec._id,
+                  type,
+                  permanent,
+                };
+                if (!permanent) {
+                  body.expiresInHours = expiresInHours;
+                }
+
+                const res = await fetch(`${ACCESS_BASE}/create-link`, {
+                  method: "POST",
+                  headers: {
+                    "Content-Type": "application/json",
+                    Authorization: `Bearer ${localStorage.getItem("authToken") || ""}`,
+                  },
+                  body: JSON.stringify(body),
+                });
+
+                const data = await res.json();
+                if (data.success) {
+                  navigator.clipboard.writeText(data.url);
+                  alert(
+                    "✅ Share link copied:\n" +
+                      data.url +
+                      (data.expiresAt
+                        ? `\n\nExpires at: ${new Date(
+                            data.expiresAt
+                          ).toLocaleString()}`
+                        : "\n\nThis link does not expire.")
+                  );
+                } else {
+                  alert("❌ Failed: " + (data.error || "Unknown error"));
+                }
+              } catch (err) {
+                alert("Error: " + err.message);
+              }
+            }}
+          >
+            🔗
+          </button>
+        </div>
+      </td>
+    </tr>
+  );
 }
 
 /* ------------------------ Main Admin Page ------------------------ */
@@ -424,21 +455,20 @@ export default function AdminLectureManager() {
   });
 
   const loadLectures = async () => {
-  setLoading(true);
-  try {
-    const res = await fetch(`${API_BASE}/lectures`);
-    const json = await res.json();
-    // handle wrapped API response { success, data }
-    const data = Array.isArray(json.data) ? json.data : json;
-    setLectures(data);
-  } catch (err) {
-    console.error("Failed to load lectures:", err);
-    alert("⚠️ Failed to fetch lectures");
-  } finally {
-    setLoading(false);
-  }
-};
-
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/lectures`);
+      const json = await res.json();
+      // handle wrapped API response { success, data }
+      const data = Array.isArray(json.data) ? json.data : json;
+      setLectures(data);
+    } catch (err) {
+      console.error("Failed to load lectures:", err);
+      alert("⚠️ Failed to fetch lectures");
+    } finally {
+      setLoading(false);
+    }
+  };
 
   useEffect(() => {
     loadLectures();
@@ -501,45 +531,44 @@ export default function AdminLectureManager() {
   };
 
   const handleSaveSlides = async (lectureId, slides) => {
-  // 🧹 Clean slides before sending
-  const cleanedSlides = slides
-    .filter(s => s.topicTitle?.trim() || s.content?.trim()) // skip empty slides
-    .map(s => ({
-      topicTitle: s.topicTitle?.trim() || "Untitled Slide",
-      content: s.content?.trim() || "",
-      media: {
-        videoUrl: s.media?.videoUrl?.trim() || "",
-        audioUrl: s.media?.audioUrl?.trim() || "",
-        imageUrl: s.media?.imageUrl?.trim() || "",
-      },
-    }));
+    // 🧹 Clean slides before sending
+    const cleanedSlides = slides
+      .filter((s) => s.topicTitle?.trim() || s.content?.trim()) // skip empty slides
+      .map((s) => ({
+        topicTitle: s.topicTitle?.trim() || "Untitled Slide",
+        content: s.content?.trim() || "",
+        media: {
+          videoUrl: s.media?.videoUrl?.trim() || "",
+          audioUrl: s.media?.audioUrl?.trim() || "",
+          imageUrl: s.media?.imageUrl?.trim() || "",
+        },
+      }));
 
-  if (cleanedSlides.length === 0) {
-    alert("❌ Please add at least one slide with title or content");
-    return;
-  }
-
-  try {
-    console.log("Sending slides to API:", cleanedSlides);
-    const res = await fetch(`${API_BASE}/lectures/${lectureId}/slides`, {
-      method: "PUT",
-      headers: { "Content-Type": "application/json" },
-      body: JSON.stringify({ slides: cleanedSlides }),
-    });
-
-    if (!res.ok) {
-      const text = await res.text();
-      throw new Error(`Server error (${res.status}): ${text}`);
+    if (cleanedSlides.length === 0) {
+      alert("❌ Please add at least one slide with title or content");
+      return;
     }
 
-    alert("✅ Slides saved successfully!");
-    await loadLectures();
-  } catch (err) {
-    console.error("Save error:", err);
-    alert("❌ Failed to save slides. Check console for details.");
-  }
-};
+    try {
+      console.log("Sending slides to API:", cleanedSlides);
+      const res = await fetch(`${API_BASE}/lectures/${lectureId}/slides`, {
+        method: "PUT",
+        headers: { "Content-Type": "application/json" },
+        body: JSON.stringify({ slides: cleanedSlides }),
+      });
 
+      if (!res.ok) {
+        const text = await res.text();
+        throw new Error(`Server error (${res.status}): ${text}`);
+      }
+
+      alert("✅ Slides saved successfully!");
+      await loadLectures();
+    } catch (err) {
+      console.error("Save error:", err);
+      alert("❌ Failed to save slides. Check console for details.");
+    }
+  };
 
   return (
     <div className="p-6 bg-slate-50 min-h-screen">
