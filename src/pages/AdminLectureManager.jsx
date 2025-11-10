@@ -18,7 +18,7 @@ const API_BASE = `${
   import.meta.env.VITE_API_URL || "http://localhost:5000/api"
 }/classroom`;
 
-// ✅ NEW: base for classroom access (share links)
+// ✅ base for classroom access (share links + stats)
 const ACCESS_BASE = `${
   import.meta.env.VITE_API_URL || "http://localhost:5000/api"
 }/classroom-access`;
@@ -295,8 +295,100 @@ function SlideEditor({ open, onClose, lecture, onSaveSlides }) {
   );
 }
 
+/* ------------------------ Stats modal (list links + visits) ------------------------ */
+function StatsModal({ open, onClose, lecture }) {
+  const [links, setLinks] = useState([]);
+  const [loading, setLoading] = useState(false);
+
+  useEffect(() => {
+    if (!open || !lecture?._id) return;
+    setLoading(true);
+    fetch(`${ACCESS_BASE}/stats?lectureId=${lecture._id}`)
+      .then((res) => res.json())
+      .then((data) => {
+        if (data.success) setLinks(data.links || []);
+        else setLinks([]);
+      })
+      .catch((err) => {
+        console.error("Stats fetch error:", err);
+        setLinks([]);
+      })
+      .finally(() => setLoading(false));
+  }, [open, lecture]);
+
+  if (!open || !lecture) return null;
+
+  return (
+    <Modal open={open} onClose={onClose}>
+      <h2 className="text-lg font-semibold mb-3 text-slate-700">
+        📊 Share Links – {lecture.title}
+      </h2>
+
+      {loading ? (
+        <p className="text-sm text-slate-500">Loading stats…</p>
+      ) : links.length === 0 ? (
+        <p className="text-sm text-slate-500">
+          No share links created yet for this lecture.
+        </p>
+      ) : (
+        <div className="space-y-3 text-sm">
+          {links.map((link) => (
+            <div
+              key={link._id}
+              className="border border-slate-200 rounded-lg p-3 bg-slate-50"
+            >
+              <div className="flex justify-between items-center mb-1">
+                <span className="font-mono text-xs break-all">
+                  token: {link.token}
+                </span>
+                <span
+                  className={`text-xs px-2 py-0.5 rounded-full ${
+                    link.isFree
+                      ? "bg-emerald-100 text-emerald-700"
+                      : "bg-indigo-100 text-indigo-700"
+                  }`}
+                >
+                  {link.isFree ? "free" : "paid"}
+                </span>
+              </div>
+
+              <div className="text-xs text-slate-600 mb-1">
+                Visits:{" "}
+                <strong>{link.visitCount != null ? link.visitCount : 0}</strong>
+                {" · "}
+                Last visit:{" "}
+                {link.lastVisitAt
+                  ? new Date(link.lastVisitAt).toLocaleString()
+                  : "—"}
+              </div>
+
+              <div className="text-xs text-slate-600 mb-1">
+                Expires:{" "}
+                {link.expiresAt
+                  ? new Date(link.expiresAt).toLocaleString()
+                  : "no expiry"}
+              </div>
+
+              <button
+                className="mt-1 text-xs underline text-blue-600"
+                onClick={() => {
+                  const url = `https://law-network-client.onrender.com/classroom/share?token=${link.token}`;
+                  navigator.clipboard.writeText(url);
+                  alert("Link copied:\n" + url);
+                }}
+              >
+                Copy link again
+              </button>
+            </div>
+          ))}
+        </div>
+      )}
+    </Modal>
+  );
+}
+
 /* ------------------------ Lecture Row (small sub-component) ------------------------ */
-function LectureRow({ lec, onToggle, onEditSlides, onDelete }) {
+function LectureRow({ lec, onToggle, onEditSlides, onDelete, onShowStats }) {
   const now = new Date();
   const releaseTime = new Date(lec.releaseAt);
   const isScheduled = lec.status !== "released" && releaseTime > now;
@@ -390,7 +482,8 @@ function LectureRow({ lec, onToggle, onEditSlides, onDelete }) {
                 if (hoursAns === null) return; // cancelled
 
                 let expiresInHours = parseInt(hoursAns, 10);
-                const permanent = !Number.isFinite(expiresInHours) || expiresInHours <= 0;
+                const permanent =
+                  !Number.isFinite(expiresInHours) || expiresInHours <= 0;
 
                 const body = {
                   lectureId: lec._id,
@@ -405,7 +498,9 @@ function LectureRow({ lec, onToggle, onEditSlides, onDelete }) {
                   method: "POST",
                   headers: {
                     "Content-Type": "application/json",
-                    Authorization: `Bearer ${localStorage.getItem("authToken") || ""}`,
+                    Authorization: `Bearer ${
+                      localStorage.getItem("authToken") || ""
+                    }`,
                   },
                   body: JSON.stringify(body),
                 });
@@ -432,6 +527,14 @@ function LectureRow({ lec, onToggle, onEditSlides, onDelete }) {
           >
             🔗
           </button>
+
+          {/* 📊 View Links / Stats */}
+          <button
+            title="View Share Links & Visits"
+            onClick={() => onShowStats(lec)}
+          >
+            📊
+          </button>
         </div>
       </td>
     </tr>
@@ -445,6 +548,10 @@ export default function AdminLectureManager() {
   const [selectedLecture, setSelectedLecture] = useState(null);
   const [showSlideModal, setShowSlideModal] = useState(false);
   const [loading, setLoading] = useState(false);
+
+  // for stats
+  const [statsLecture, setStatsLecture] = useState(null);
+  const [showStatsModal, setShowStatsModal] = useState(false);
 
   const [formData, setFormData] = useState({
     title: "",
@@ -506,7 +613,9 @@ export default function AdminLectureManager() {
   const handleDelete = async (id) => {
     if (!window.confirm("Delete this lecture?")) return;
     try {
-      const res = await fetch(`${API_BASE}/lectures/${id}`, { method: "DELETE" });
+      const res = await fetch(`${API_BASE}/lectures/${id}`, {
+        method: "DELETE",
+      });
       if (!res.ok) throw new Error();
       await loadLectures();
     } catch (err) {
@@ -690,6 +799,10 @@ export default function AdminLectureManager() {
                     setShowSlideModal(true);
                   }}
                   onDelete={handleDelete}
+                  onShowStats={(l) => {
+                    setStatsLecture(l);
+                    setShowStatsModal(true);
+                  }}
                 />
               ))}
             </tbody>
@@ -703,6 +816,13 @@ export default function AdminLectureManager() {
         onClose={() => setShowSlideModal(false)}
         lecture={selectedLecture}
         onSaveSlides={handleSaveSlides}
+      />
+
+      {/* Stats modal */}
+      <StatsModal
+        open={showStatsModal}
+        onClose={() => setShowStatsModal(false)}
+        lecture={statsLecture}
       />
 
       <div className="mt-8 text-xs text-slate-500 text-center">
