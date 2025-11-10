@@ -101,19 +101,12 @@ export default function ClassroomLivePage() {
         setError("Failed to fetch slides");
         setSlides([]);
       } finally {
-        // ✅ Remove loader right after slides are ready (avoid blank)
+        // ✅ Fade out loader after data ready
         setTimeout(() => {
           const loader = document.getElementById("classroom-loader");
-          if (loader) {
-            loader.classList.add("fade-out");
-            setTimeout(() => {
-              loader.style.display = "none";
-              setLoading(false);
-            }, 500);
-          } else {
-            setLoading(false);
-          }
-        }, 400); // small delay ensures smooth fade
+          if (loader) loader.classList.add("fade-out");
+          setTimeout(() => setLoading(false), 600);
+        }, 600);
       }
     };
 
@@ -222,62 +215,34 @@ export default function ClassroomLivePage() {
   };
 
   /* ---------------------------------------------------------------------- */
-  /* ✅ Loader Screen                                                      */
-  /* ---------------------------------------------------------------------- */
-  if (loading) {
-    return (
-      <div
-        id="classroom-loader"
-        className="fixed inset-0 z-[9999] flex items-center justify-center bg-black text-white transition-opacity duration-700 ease-in-out bg-center bg-cover"
-        style={{
-          backgroundImage: `url("/backgrounds/classroom-fallback.png")`,
-          backgroundSize: "cover",
-          backgroundPosition: "center",
-        }}
-      >
-        <div className="bg-black/70 px-8 py-6 rounded-2xl text-center max-w-lg shadow-lg backdrop-blur-sm animate-fade-in">
-          <div className="w-10 h-10 border-4 border-green-400 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
-          <h1 className="text-2xl font-semibold mb-2 drop-shadow-md">
-            📡 Loading Classroom…
-          </h1>
-          <p className="opacity-90 text-sm drop-shadow-sm">
-            Please wait, connecting to the live session.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  if (error || !slides.length) {
-    return (
-      <div
-        className="flex items-center justify-center min-h-screen text-white"
-        style={{
-          backgroundImage: `url("/backgrounds/classroom-fallback.png")`,
-          backgroundSize: "cover",
-          backgroundPosition: "center",
-          backgroundRepeat: "no-repeat",
-          backgroundColor: "#1a1a1a",
-        }}
-      >
-        <div className="bg-black/60 px-8 py-6 rounded-2xl text-center max-w-lg shadow-lg backdrop-blur-sm">
-          <h1 className="text-2xl font-semibold mb-2 drop-shadow-md">
-            ⚠️ Classroom Offline
-          </h1>
-          <p className="opacity-90 text-sm drop-shadow-sm">
-            Please check your internet connection or try again later.
-          </p>
-        </div>
-      </div>
-    );
-  }
-
-  /* ---------------------------------------------------------------------- */
-  /* ✅ Classroom Layout                                                   */
+  /* ✅ Render Layout (no flicker version)                                 */
   /* ---------------------------------------------------------------------- */
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-50 flex flex-col">
-      {/* Header */}
+    <div className="relative min-h-screen bg-slate-950 text-slate-50 flex flex-col overflow-hidden">
+      {/* 🌄 Loader Overlay */}
+      {loading && (
+        <div
+          id="classroom-loader"
+          className="absolute inset-0 z-[9999] flex items-center justify-center bg-black/95 text-white transition-opacity duration-700 ease-in-out bg-center bg-cover"
+          style={{
+            backgroundImage: `url("/backgrounds/classroom-fallback.png")`,
+            backgroundSize: "cover",
+            backgroundPosition: "center",
+          }}
+        >
+          <div className="bg-black/70 px-8 py-6 rounded-2xl text-center max-w-lg shadow-lg backdrop-blur-sm animate-fade-in">
+            <div className="w-10 h-10 border-4 border-green-400 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+            <h1 className="text-2xl font-semibold mb-2 drop-shadow-md">
+              📡 Loading Classroom…
+            </h1>
+            <p className="opacity-90 text-sm drop-shadow-sm">
+              Please wait, connecting to the live session.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* ✅ Classroom UI (always rendered, never hidden) */}
       <header className="px-4 md:px-8 py-3 border-b border-slate-800 flex items-center justify-between">
         <div className="text-lg md:text-2xl font-semibold tracking-wide">
           Classroom Live • {currentLecture?.subject || "Lecture"}
@@ -308,14 +273,12 @@ export default function ClassroomLivePage() {
         </div>
       </header>
 
-      {/* Main */}
       <main className="flex-1 px-4 md:px-8 py-4 md:py-6 flex flex-col gap-4">
         <div className="flex-1 grid grid-cols-1 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,2.4fr)_minmax(0,1.1fr)] gap-4">
           <TeacherAvatarCard
             teacher={currentLecture}
             subject={currentLecture?.subject}
             isSpeaking={isSpeaking}
-            className="teacher-card"
           />
 
           <section className="flex flex-col gap-3">
@@ -323,15 +286,14 @@ export default function ClassroomLivePage() {
               slide={currentSlide}
               currentSentence={currentSentence}
               progress={progress}
-              className="teleprompter"
             />
 
-            <MediaBoard media={currentSlide.media} />
+            <MediaBoard media={currentSlide?.media} />
             <MediaControlPanel
               active={{
-                audio: !!currentSlide.media?.audioUrl,
-                video: !!currentSlide.media?.videoUrl,
-                image: !!currentSlide.media?.imageUrl,
+                audio: !!currentSlide?.media?.audioUrl,
+                video: !!currentSlide?.media?.videoUrl,
+                image: !!currentSlide?.media?.imageUrl,
               }}
             />
 
