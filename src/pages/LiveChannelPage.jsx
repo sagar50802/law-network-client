@@ -1,5 +1,6 @@
 import { useEffect, useState, useRef, useCallback, useMemo } from "react";
 import React from "react";
+import { useNavigate } from "react-router-dom";
 
 import HeadlineBar from "../components/live/HeadlineBar.jsx";
 import BackgroundMotion from "../components/live/BackgroundMotion.jsx";
@@ -13,14 +14,16 @@ const API_URL =
   import.meta.env.VITE_API_URL || "https://law-network-server.onrender.com";
 
 /**
- * 📺 LawNetwork LIVE — Optimized Broadcast Studio Layout
- * --------------------------------------------------
- * ✅ Smooth animation / zero hang
- * ✅ Non-intrusive play/pause visual indicator
- * ✅ Keeps AnchorBox + Teleprompter fully intact
- * ✅ No logic or API changes
+ * 📺 LawNetwork LIVE — Broadcast Studio Layout
+ * --------------------------------------------
+ * ✅ Smooth animation / voice sync
+ * ✅ Keeps AnchorBox + Teleprompter intact
+ * ✅ Now includes navigation bar + back button
  */
 export default function LiveChannelPage() {
+  const navigate = useNavigate();
+
+  /* ------------------------- States ------------------------- */
   const [slides, setSlides] = useState([]);
   const [ticker, setTicker] = useState([]);
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -49,8 +52,8 @@ export default function LiveChannelPage() {
           tickerRes.json(),
         ]);
         if (mounted) {
-          setSlides(slidesData);
-          setTicker(tickerData);
+          setSlides(slidesData || []);
+          setTicker(tickerData || []);
           setCurrentIndex(0);
         }
       } catch (err) {
@@ -121,7 +124,7 @@ export default function LiveChannelPage() {
   }, [slides.length, ticker.length]);
 
   /* ============================================================
-     ▶️ Controls Handlers
+     ▶️ Control Handlers
   ============================================================ */
   const handleNext = useCallback(() => {
     stopSpeech(speechRef);
@@ -181,7 +184,7 @@ export default function LiveChannelPage() {
   }, [slides, currentIndex]);
 
   /* ============================================================
-     🧩 Memoized Computations
+     🧩 Memoized Values
   ============================================================ */
   const currentSlide = slides[currentIndex];
   const isSingleAnchor = useMemo(
@@ -190,18 +193,49 @@ export default function LiveChannelPage() {
   );
 
   /* ============================================================
-     🧩 MAIN RENDER
+     🧭 Top Navigation Bar
+  ============================================================ */
+  const handleBack = () => {
+    if (window.history.length > 1) navigate(-1);
+    else navigate("/"); // fallback
+  };
+
+  /* ============================================================
+     🧩 Main Render
   ============================================================ */
   return (
     <div className="relative min-h-screen overflow-hidden text-white bg-black">
+      {/* 🔝 Global Navigation Bar */}
+      <nav className="fixed top-0 left-0 w-full z-50 flex items-center justify-between px-4 py-3 bg-black/70 backdrop-blur-md border-b border-gray-800">
+        <div className="flex items-center gap-3">
+          <button
+            onClick={handleBack}
+            className="text-sm bg-gray-800 hover:bg-gray-700 text-white px-3 py-1.5 rounded-md border border-gray-700"
+          >
+            ⬅ Back
+          </button>
+          <h1 className="text-lg font-semibold tracking-wide text-yellow-400">
+            LawNetwork LIVE
+          </h1>
+        </div>
+
+        <div className="flex items-center gap-3 text-xs text-gray-300">
+          <span className="hidden sm:inline">Home</span>
+          <span>•</span>
+          <span>Studio</span>
+          <span>•</span>
+          <span>Broadcast</span>
+        </div>
+      </nav>
+
       {/* 📰 Overlay Header + Breaking News */}
       <TVOverlay breakingNews={ticker.map((t) => t.text)} />
 
       {/* 🎥 Animated Background */}
       <BackgroundMotion type={currentSlide?.programType} />
 
-      {/* ⚡ Small floating indicator for play/pause */}
-      <div className="absolute top-4 right-6 z-50 flex items-center gap-2">
+      {/* ⚡ Play/Pause Indicator */}
+      <div className="absolute top-4 right-6 z-40 flex items-center gap-2">
         <span
           className={`h-3 w-3 rounded-full ${
             isPlaying ? "bg-green-400 animate-pulse" : "bg-gray-500"
@@ -280,7 +314,7 @@ export default function LiveChannelPage() {
 }
 
 /* ============================================================
-   🎛 Controls Component (With Visual Feedback)
+   🎛 Controls Component
 =========================================================== */
 const Controls = React.memo(function Controls({
   isPlaying,
