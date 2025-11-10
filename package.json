@@ -8,6 +8,9 @@
     "build": "vite build && (copy public\\_redirects dist\\_redirects || cp public/_redirects dist/_redirects)",
     "preview": "vite preview"
   },
+  "engines": {
+    "node": ">=18 <21"
+  },
   "dependencies": {
     "axios": "^1.12.2",
     "dompurify": "^3.2.6",
