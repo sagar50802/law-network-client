@@ -17,72 +17,43 @@
         padding: 0;
         width: 100%;
         height: 100%;
-        background: #000 no-repeat center center / cover;
+        background: #000;
         overflow: hidden;
-        color-scheme: dark;
-        position: relative;
       }
 
-      /* ✅ Keep image visible until React actually fades in */
-      body::before {
-        content: "";
+      /* ✅ Full-screen fallback image always visible */
+      #startup-bg {
         position: fixed;
         inset: 0;
         background: url("/backgrounds/classroom-fallback.png") center center /
           cover no-repeat;
         z-index: -2;
-        transform: scale(1);
-        animation: zoomIn 8s ease-in-out forwards;
-        opacity: 1;
-        transition: opacity 1s ease-in-out;
+        filter: blur(6px) brightness(0.6);
+        transition: filter 1.5s ease-in-out, opacity 1s ease-in-out;
       }
 
-      body::after {
-        content: "";
-        position: fixed;
-        inset: 0;
-        background: rgba(0, 0, 0, 0.45);
-        z-index: -1;
-      }
-
-      @keyframes zoomIn {
-        0% {
-          transform: scale(1);
-        }
-        100% {
-          transform: scale(1.08);
-        }
-      }
-
-      #root {
-        opacity: 0;
-        transition: opacity 0.7s ease-in-out;
-        min-height: 100vh;
-        position: relative;
-        z-index: 1;
-      }
-
-      #preload-container {
+      /* ✅ Loader in the center */
+      #preload {
         position: fixed;
         top: 50%;
         left: 50%;
         transform: translate(-50%, -50%);
-        display: flex;
-        align-items: center;
-        gap: 12px;
-        z-index: 3;
         color: #10b981;
         font-family: "Patrick Hand", sans-serif;
         font-size: 1.8rem;
+        display: flex;
+        align-items: center;
+        gap: 10px;
         background: rgba(0, 0, 0, 0.45);
         padding: 1rem 2rem;
         border-radius: 12px;
-        animation: fade 1.4s ease-in-out infinite alternate;
+        animation: pulse 1.2s ease-in-out infinite alternate;
+        z-index: 2;
       }
 
-      @keyframes fade {
+      @keyframes pulse {
         from {
-          opacity: 0.4;
+          opacity: 0.5;
         }
         to {
           opacity: 1;
@@ -104,67 +75,61 @@
         }
       }
 
-      /* ✅ Smoothly hide image background only after React is visible */
-      body.fade-out::before {
+      /* React container fades in gently */
+      #root {
         opacity: 0;
+        transition: opacity 1s ease-in-out;
+        position: relative;
+        z-index: 1;
+      }
+
+      /* ✅ When ready, fade loader out & keep image faint in background */
+      body.ready #preload {
+        display: none;
+      }
+
+      body.ready #root {
+        opacity: 1;
+      }
+
+      /* Optional gentle zoom animation */
+      @keyframes zoomIn {
+        from {
+          transform: scale(1);
+        }
+        to {
+          transform: scale(1.05);
+        }
+      }
+
+      #startup-bg.zoom {
+        animation: zoomIn 10s ease-in-out forwards;
       }
     </style>
   </head>
 
   <body>
-    <div id="preload-container">
+    <div id="startup-bg" class="zoom"></div>
+
+    <div id="preload">
       <div class="spinner"></div>
       <div>Loading Classroom…</div>
     </div>
 
     <div id="root"></div>
 
-    <pre
-      id="boot-error"
-      style="
-        display: none;
-        white-space: pre-wrap;
-        font: 12px/1.4 ui-monospace, SFMono-Regular, Menlo, Consolas, monospace;
-        color: #b91c1c;
-        background: #fff3f3;
-        border: 1px solid #fecaca;
-        padding: 8px;
-        margin: 8px;
-      "
-    ></pre>
-
     <script>
-      const box = document.getElementById("boot-error");
-      function showBootError(msg, stack) {
-        box.style.display = "block";
-        box.textContent = `[Boot error]\n${msg}\n\n${stack || ""}`;
-        console.error("[Boot error]", msg, stack);
-      }
-
-      window.addEventListener("error", (e) =>
-        showBootError(e.message, e.error && e.error.stack)
-      );
-      window.addEventListener("unhandledrejection", (e) =>
-        showBootError(String(e.reason), e.reason && e.reason.stack)
-      );
-
-      // ✅ Keep image visible until React finishes its render
+      // ✅ Wait until React is ready, then fade content in
       window.addEventListener("load", () => {
-        const preload = document.getElementById("preload-container");
-        const root = document.getElementById("root");
         const body = document.body;
+        body.classList.add("ready");
 
-        // Fade out the loader first
-        if (preload) preload.style.display = "none";
-
-        // Fade in the React app
-        if (root) {
-          root.style.opacity = "1";
-
-          // ✅ After short delay, remove background image smoothly
+        // Slightly soften background when content visible
+        const bg = document.getElementById("startup-bg");
+        if (bg) {
           setTimeout(() => {
-            body.classList.add("fade-out");
-          }, 1200);
+            bg.style.filter = "blur(12px) brightness(0.4)";
+          }, 1500);
         }
       });
     </script>
