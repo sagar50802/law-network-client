@@ -16,12 +16,14 @@ const API_BASE =
   (import.meta.env.VITE_API_URL || "https://law-network.onrender.com/api") +
   "/classroom";
 
+// 🧩 Global flag for safe pause control
 let PAUSE_LOCK = false;
 
 /* -------------------------------------------------------------------------- */
 /* ✅ ClassroomLivePage                                                       */
 /* -------------------------------------------------------------------------- */
 export default function ClassroomLivePage() {
+  /* ------------------------- State Management ---------------------------- */
   const [slides, setSlides] = useState([]);
   const [lectures, setLectures] = useState([]);
   const [selectedLectureId, setSelectedLectureId] = useState(null);
@@ -37,21 +39,21 @@ export default function ClassroomLivePage() {
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState(null);
 
+  /* ------------------------- Refs ---------------------------------------- */
   const speechRef = useRef({ isPlaying: false, cancel: () => {} });
-
   const currentSlide = slides[currentIndex] || null;
   const currentLecture =
     lectures.find((l) => l._id === selectedLectureId) || null;
 
   /* ---------------------------------------------------------------------- */
-  /* ✅ Unlock Speech Autoplay                                              */
+  /* ✅ Unlock Speech Autoplay (browser policy)                              */
   /* ---------------------------------------------------------------------- */
   useEffect(() => {
     unlockSpeechOnUserClick();
   }, []);
 
   /* ---------------------------------------------------------------------- */
-  /* ✅ Load Lectures                                                      */
+  /* ✅ Load Lectures List                                                  */
   /* ---------------------------------------------------------------------- */
   useEffect(() => {
     const loadLectures = async () => {
@@ -65,6 +67,7 @@ export default function ClassroomLivePage() {
             setSelectedLectureId(list[0]._id);
           }
         } else {
+          console.warn("Unexpected lectures response:", json);
           setLectures([]);
         }
       } catch (err) {
@@ -76,7 +79,7 @@ export default function ClassroomLivePage() {
   }, []);
 
   /* ---------------------------------------------------------------------- */
-  /* ✅ Load Slides                                                        */
+  /* ✅ Load Slides for Selected Lecture                                    */
   /* ---------------------------------------------------------------------- */
   useEffect(() => {
     if (!selectedLectureId) return;
@@ -95,6 +98,7 @@ export default function ClassroomLivePage() {
           setCurrentIndex(0);
           console.log("📚 Slides loaded:", list.length);
         } else {
+          console.warn("Unexpected slides response:", json);
           setSlides([]);
         }
       } catch (err) {
@@ -102,29 +106,7 @@ export default function ClassroomLivePage() {
         setError("Failed to fetch slides");
         setSlides([]);
       } finally {
-        // ✅ Wait until classroom DOM (teleprompter + teacher) is ready before fade-out
-        const loader = document.getElementById("classroom-loader");
-
-        const waitForRender = () => {
-          const teleprompter = document.querySelector(".teleprompter");
-          const teacherCard = document.querySelector(".teacher-card");
-
-          if (teleprompter || teacherCard) {
-            if (loader) {
-              loader.classList.add("fade-out");
-              setTimeout(() => {
-                loader.style.display = "none";
-                setLoading(false);
-              }, 800);
-            } else {
-              setLoading(false);
-            }
-          } else {
-            setTimeout(waitForRender, 100);
-          }
-        };
-
-        requestAnimationFrame(waitForRender);
+        setLoading(false);
       }
     };
 
@@ -132,7 +114,7 @@ export default function ClassroomLivePage() {
   }, [selectedLectureId]);
 
   /* ---------------------------------------------------------------------- */
-  /* ✅ Preload Voices                                                     */
+  /* ✅ Preload Voices                                                      */
   /* ---------------------------------------------------------------------- */
   useEffect(() => {
     waitForVoices(3000).then((voices) =>
@@ -141,7 +123,7 @@ export default function ClassroomLivePage() {
   }, []);
 
   /* ---------------------------------------------------------------------- */
-  /* ✅ Next Slide after Speech                                            */
+  /* ✅ Move to next slide after voice completes                            */
   /* ---------------------------------------------------------------------- */
   const handleNextSlide = useCallback(() => {
     setProgress(0);
@@ -154,7 +136,7 @@ export default function ClassroomLivePage() {
   }, [slides.length]);
 
   /* ---------------------------------------------------------------------- */
-  /* ✅ Voice Sync                                                         */
+  /* ✅ Voice Engine — sync Avatar + Teleprompter                           */
   /* ---------------------------------------------------------------------- */
   useEffect(() => {
     let mounted = true;
@@ -162,6 +144,9 @@ export default function ClassroomLivePage() {
     async function startSpeech() {
       if (!currentSlide || !mounted) return;
 
+      console.log("▶️ Starting speech for slide:", currentSlide.topicTitle);
+
+      // 🔄 Reset before playing
       stopClassroomSpeech(speechRef);
       setProgress(0);
       setCurrentSentence("");
@@ -174,7 +159,11 @@ export default function ClassroomLivePage() {
         return;
       }
 
-      if (!isPlaying || isMuted || PAUSE_LOCK) return;
+      // ✅ Block when paused, muted, or locked
+      if (!isPlaying || isMuted || PAUSE_LOCK) {
+        console.log("⏸ Skipped speech — paused, muted, or queue locked");
+        return;
+      }
 
       playClassroomSpeech({
         slide: currentSlide,
@@ -182,9 +171,18 @@ export default function ClassroomLivePage() {
         speechRef,
         setCurrentSentence,
         onProgress: setProgress,
-        onStartSpeaking: () => setIsSpeaking(true),
-        onStopSpeaking: () => setIsSpeaking(false),
-        onComplete: handleNextSlide,
+        onStartSpeaking: () => {
+          console.log("🔊 Avatar speaking ON");
+          setIsSpeaking(true);
+        },
+        onStopSpeaking: () => {
+          console.log("🔇 Avatar speaking OFF");
+          setIsSpeaking(false);
+        },
+        onComplete: () => {
+          console.log("✅ Slide speech complete");
+          handleNextSlide();
+        },
       });
     }
 
@@ -197,7 +195,7 @@ export default function ClassroomLivePage() {
   }, [currentSlide?._id, isPlaying, isMuted, slides.length, handleNextSlide]);
 
   /* ---------------------------------------------------------------------- */
-  /* ✅ Controls                                                           */
+  /* ✅ Manual Navigation + Controls                                        */
   /* ---------------------------------------------------------------------- */
   const goToSlide = (index) => {
     if (index < 0 || index >= slides.length) return;
@@ -209,17 +207,25 @@ export default function ClassroomLivePage() {
     setIsPlaying(true);
   };
 
+  /* ---------------------------------------------------------------------- */
+  /* ✅ Safe Play / Pause / Mute Controls                                   */
+  /* ---------------------------------------------------------------------- */
   const handlePlayPause = () => {
     const synth = window.speechSynthesis;
     if (!synth) return;
+
     if (isPlaying) {
+      // Pause everything + lock new chunks
       PAUSE_LOCK = true;
       if (synth.speaking && !synth.paused) synth.pause();
+      console.log("⏸ Paused voice + queue locked");
       setIsPlaying(false);
       setIsSpeaking(false);
     } else {
+      // Resume and unlock
       PAUSE_LOCK = false;
       if (synth.paused) synth.resume();
+      console.log("▶ Resumed voice + queue unlocked");
       setIsPlaying(true);
     }
   };
@@ -230,63 +236,79 @@ export default function ClassroomLivePage() {
       const next = !prev;
       if (next) {
         if (synth.speaking) synth.pause();
+        console.log("🔇 Muted speech (paused)");
       } else {
         if (synth.paused && !PAUSE_LOCK) synth.resume();
+        console.log("🔈 Unmuted speech (resumed)");
       }
       return next;
     });
   };
 
   /* ---------------------------------------------------------------------- */
-  /* ✅ Loader Fallback                                                   */
+  /* ✅ Render States                                                      */
   /* ---------------------------------------------------------------------- */
-  if (loading || slides.length === 0) {
+  if (loading)
     return (
-      <div
-        id="classroom-loader"
-        className="fixed inset-0 z-[9999] flex items-center justify-center bg-black text-white transition-opacity duration-700 ease-in-out bg-center bg-cover"
-        style={{
-          backgroundImage: `url("/backgrounds/classroom-fallback.png")`,
-          backgroundSize: "cover",
-          backgroundPosition: "center",
-        }}
-      >
-        <div className="bg-black/70 px-8 py-6 rounded-2xl text-center max-w-lg shadow-lg backdrop-blur-sm animate-fade-in">
-          <div className="w-10 h-10 border-4 border-green-400 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
-          <h1 className="text-2xl font-semibold mb-2 drop-shadow-md">
-            📡 Loading Classroom…
-          </h1>
-          <p className="opacity-90 text-sm drop-shadow-sm">
-            Please wait, connecting to the live session.
-          </p>
-        </div>
+      <div className="text-center text-slate-100 p-10 animate-pulse">
+        Loading classroom…
       </div>
     );
-  }
 
-  /* ---------------------------------------------------------------------- */
-  /* ✅ Error                                                              */
-  /* ---------------------------------------------------------------------- */
-  if (error) {
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-black text-white">
-        ⚠️ {error}
-      </div>
-    );
-  }
-
-  /* ---------------------------------------------------------------------- */
-  /* ✅ Main Classroom Layout                                              */
-  /* ---------------------------------------------------------------------- */
+   if (loading) {
   return (
     <div
-      className="min-h-screen flex flex-col text-slate-50 transition-all duration-700"
+      className="flex items-center justify-center min-h-screen text-white"
       style={{
-        backgroundColor: "#0f172a",
-        position: "relative",
-        zIndex: 0,
+        backgroundImage: `url("/backgrounds/classroom-fallback.png")`,
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        backgroundRepeat: "no-repeat",
+        backgroundColor: "#1a1a1a",
       }}
     >
+      <div className="bg-black/60 px-8 py-6 rounded-2xl text-center max-w-lg shadow-lg backdrop-blur-sm">
+        <h1 className="text-2xl font-semibold mb-2 drop-shadow-md">
+          📡 Loading Classroom…
+        </h1>
+        <p className="opacity-90 text-sm drop-shadow-sm">
+          Please wait, connecting to the live session.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+if (error || !slides.length) {
+  return (
+    <div
+      className="flex items-center justify-center min-h-screen text-white"
+      style={{
+        backgroundImage: `url("/backgrounds/classroom-fallback.png")`,
+        backgroundSize: "cover",
+        backgroundPosition: "center",
+        backgroundRepeat: "no-repeat",
+        backgroundColor: "#1a1a1a",
+      }}
+    >
+      <div className="bg-black/60 px-8 py-6 rounded-2xl text-center max-w-lg shadow-lg backdrop-blur-sm">
+        <h1 className="text-2xl font-semibold mb-2 drop-shadow-md">
+          ⚠️ Classroom Offline
+        </h1>
+        <p className="opacity-90 text-sm drop-shadow-sm">
+          Please check your internet connection or try again later.
+        </p>
+      </div>
+    </div>
+  );
+}
+
+  /* ---------------------------------------------------------------------- */
+  /* ✅ Render Full Layout                                                 */
+  /* ---------------------------------------------------------------------- */
+  return (
+    <div className="min-h-screen bg-slate-950 text-slate-50 flex flex-col">
+      {/* ---------- Header ---------- */}
       <header className="px-4 md:px-8 py-3 border-b border-slate-800 flex items-center justify-between">
         <div className="text-lg md:text-2xl font-semibold tracking-wide">
           Classroom Live • {currentLecture?.subject || "Lecture"}
@@ -317,39 +339,32 @@ export default function ClassroomLivePage() {
         </div>
       </header>
 
+      {/* ---------- Main Section ---------- */}
       <main className="flex-1 px-4 md:px-8 py-4 md:py-6 flex flex-col gap-4">
         <div className="flex-1 grid grid-cols-1 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,2.4fr)_minmax(0,1.1fr)] gap-4">
+          {/* ---------- Teacher Avatar ---------- */}
           <TeacherAvatarCard
             teacher={currentLecture}
             subject={currentLecture?.subject}
             isSpeaking={isSpeaking}
-            className="teacher-card"
           />
 
+          {/* ---------- Teleprompter + Media Board ---------- */}
           <section className="flex flex-col gap-3">
             <ClassroomTeleprompter
               slide={currentSlide}
               currentSentence={currentSentence}
               progress={progress}
-              className="teleprompter"
             />
 
-            {currentSlide?.media ? (
-              <>
-                <MediaBoard media={currentSlide.media} />
-                <MediaControlPanel
-                  active={{
-                    audio: !!currentSlide.media?.audioUrl,
-                    video: !!currentSlide.media?.videoUrl,
-                    image: !!currentSlide.media?.imageUrl,
-                  }}
-                />
-              </>
-            ) : (
-              <div className="text-center text-slate-400 py-10 italic">
-                Preparing classroom content…
-              </div>
-            )}
+            <MediaBoard media={currentSlide.media} />
+            <MediaControlPanel
+              active={{
+                audio: !!currentSlide.media?.audioUrl,
+                video: !!currentSlide.media?.videoUrl,
+                image: !!currentSlide.media?.imageUrl,
+              }}
+            />
 
             <div className="mt-2 flex items-center justify-end gap-2 text-xs">
               <button
@@ -370,6 +385,7 @@ export default function ClassroomLivePage() {
             </div>
           </section>
 
+          {/* ---------- Playlist Sidebar ---------- */}
           <LecturePlaylistSidebar
             lectures={lectures}
             currentLectureId={selectedLectureId}
@@ -383,6 +399,7 @@ export default function ClassroomLivePage() {
           />
         </div>
 
+        {/* ---------- Students Row ---------- */}
         <StudentsRow
           onRaiseHand={() =>
             alert("✋ Student raised hand — feature coming soon!")
