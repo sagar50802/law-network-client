@@ -27,7 +27,7 @@ export function waitForVoices(timeout = 3000) {
 }
 
 /* ------------------------------------------------------- */
-/* 🧠 Language detection (Hindi / Hinglish / Indian English)*/
+/* 🧠 Language detection                                    */
 /* ------------------------------------------------------- */
 function detectLang(text = "") {
   if (/[ऀ-ॿ]/.test(text)) return "hi-IN"; // Hindi
@@ -36,39 +36,13 @@ function detectLang(text = "") {
 }
 
 /* ------------------------------------------------------- */
-/* 🔤 Light text normalization for smoother TTS             */
-/*    (law words, acronyms, etc.)                          */
-/* ------------------------------------------------------- */
-function normalizeForTTS(text = "", lang = "en-IN") {
-  let t = text;
-
-  // Expand common law abbreviations
-  t = t.replace(/\bIPC\b/g, " I P C ");
-  t = t.replace(/\bCrPC\b/gi, " C R P C ");
-  t = t.replace(/\bSC\b/g, " Supreme Court ");
-  t = t.replace(/\bHC\b/g, " High Court ");
-
-  // Expand a few short forms
-  t = t.replace(/\bsec\.\b/gi, " section ");
-  t = t.replace(/\bart\.\b/gi, " article ");
-
-  if (lang.startsWith("en")) {
-    // Soft “Indian English” tweaks without making it weird
-    t = t.replace(/\bthe\b/gi, "the"); // keep it neutral
-    t = t.replace(/\bstudy\b/gi, "study");
-  }
-
-  return t;
-}
-
-/* ------------------------------------------------------- */
-/* 🗣 Voice Picker (try best Indian / natural voices)       */
+/* 🗣 Voice Picker (cross-browser)                          */
 /* ------------------------------------------------------- */
 function pickVoice(lang, teacher = {}) {
   if (!voiceCache.length)
     voiceCache = window.speechSynthesis?.getVoices() || [];
 
-  // 1️⃣ Teacher override
+  // 1️⃣ Teacher-specified override
   if (teacher.voiceName) {
     const named = voiceCache.find((v) => v.name === teacher.voiceName);
     if (named) return named;
@@ -76,34 +50,40 @@ function pickVoice(lang, teacher = {}) {
 
   // 2️⃣ Prioritized Indian voices list
   const indianVoiceNames = [
-    "Google English (India)",
+    "en-IN",
+    "hi-IN",
     "Google हिन्दी",
     "Google हिंदी",
+    "Google English (India)",
+    "Google UK English Male",
     "Microsoft Ravi - English (India)",
     "Microsoft Heera - English (India)",
     "Microsoft Neerja - Hindi (India)",
     "Sangeeta",
   ];
 
+  // Prefer Indian English voice
   for (const key of indianVoiceNames) {
     const match = voiceCache.find(
-      (v) => v.name.includes(key) || v.lang === "en-IN" || v.lang === "hi-IN"
+      (v) =>
+        v.lang === key ||
+        v.lang?.startsWith(key.split("-")[0]) ||
+        v.name.includes(key)
     );
     if (match) return match;
   }
 
-  // 3️⃣ Fallbacks: any Indian-ish or English voice
-  const byLang =
-    voiceCache.find((v) => v.lang === "en-IN") ||
-    voiceCache.find((v) => v.lang === "hi-IN") ||
+  // 3️⃣ Fallbacks: UK/US English
+  const fallback =
     voiceCache.find((v) => v.lang === "en-GB") ||
-    voiceCache.find((v) => v.lang === "en-US");
+    voiceCache.find((v) => v.lang === "en-US") ||
+    voiceCache[0];
 
-  return byLang || voiceCache[0];
+  return fallback;
 }
 
 /* ------------------------------------------------------- */
-/* 🗣 Main Speech Player (smooth, Indian-style)             */
+/* 🗣 Main Speech Player                                   */
 /* ------------------------------------------------------- */
 export function playClassroomSpeech({
   slide,
@@ -121,8 +101,8 @@ export function playClassroomSpeech({
 
   stopClassroomSpeech(speechRef);
 
-  const rawContent = slide.content || "";
-  const sentences = rawContent
+  const content = slide.content || "";
+  const sentences = content
     .split(/(?<=[।!?\.])\s+/)
     .filter((s) => s.trim().length > 0);
 
@@ -136,41 +116,24 @@ export function playClassroomSpeech({
       return;
     }
 
-    const originalSentence = sentences[index];
-    const lang = detectLang(originalSentence);
+    const sentence = sentences[index];
+    setCurrentSentence(sentence);
 
-    // 🔊 Normalize + smoothen for TTS
-    const processedSentence = normalizeForTTS(originalSentence, lang);
+    const lang = detectLang(sentence);
+    const utter = new SpeechSynthesisUtterance(sentence);
+    utter.voice = pickVoice(lang, slide.teacher);
+    utter.lang = lang;
 
-    setCurrentSentence(originalSentence); // teleprompter shows original text
-
-    const utter = new SpeechSynthesisUtterance(processedSentence);
-    const voice = pickVoice(lang, slide.teacher);
-    utter.voice = voice;
-    utter.lang = voice?.lang || lang;
-
-    /* 🎚️ Browser-specific fine-tuning for natural Indian tone */
+    /* 🎚️ Browser-specific fine-tuning for natural tone */
     const ua = navigator.userAgent.toLowerCase();
-    const isAndroid = /android/.test(ua);
-    const isFirefox = /firefox/.test(ua);
-    const isEdge = /edg/.test(ua);
-
     if (lang.startsWith("en")) {
-      // Indian English: slower, warmer, less robotic
-      if (isAndroid) {
-        utter.rate = 0.88; // mobile engines are usually faster
-      } else if (isFirefox) {
-        utter.rate = 0.9;
-      } else if (isEdge) {
-        utter.rate = 0.93;
-      } else {
-        utter.rate = 0.9;
-      }
-      utter.pitch = 1.03; // young Indian tone
+      // English (Indian style)
+      utter.rate = /firefox/.test(ua) ? 0.9 : /edg/.test(ua) ? 0.94 : 0.92;
+      utter.pitch = 1.05; // young Indian male tone
       utter.volume = 1;
     } else {
-      // Hindi / Hinglish
-      utter.rate = isAndroid ? 0.92 : 0.95;
+      // Hindi
+      utter.rate = /firefox/.test(ua) ? 0.95 : 0.97;
       utter.pitch = 1.0;
       utter.volume = 1;
     }
@@ -182,18 +145,16 @@ export function playClassroomSpeech({
       onProgress?.(0);
     };
 
-    // Smooth progress for teleprompter
     utter.onboundary = (event) => {
-      if (event.charIndex == null) return;
+      if (event.name || event.charIndex == null) return;
       const now = performance.now();
-      // a bit more frequent => smoother typing
-      if (now - lastUpdate > 70) {
+      if (now - lastUpdate > 100) {
         lastUpdate = now;
         const progress = Math.min(
           1,
           event.charIndex / (utter.text.length || 1)
         );
-        onProgress?.((prev) => prev * 0.65 + progress * 0.35);
+        onProgress?.((prev) => prev * 0.7 + progress * 0.3);
       }
     };
 
@@ -201,8 +162,7 @@ export function playClassroomSpeech({
       onProgress?.(1);
       onStopSpeaking?.();
       index++;
-      // small pause between sentences
-      setTimeout(speakNext, 280);
+      setTimeout(speakNext, 300);
     };
 
     utter.onerror = (e) => {
