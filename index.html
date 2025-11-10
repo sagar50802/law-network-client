@@ -5,15 +5,12 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Law Network</title>
 
-    <!-- Handwritten-style font -->
     <link
       href="https://fonts.googleapis.com/css2?family=Patrick+Hand&display=swap"
       rel="stylesheet"
     />
 
-    <!-- ✅ Cinematic background + smooth zoom animation -->
     <style>
-      /* Reset and base style */
       html,
       body {
         margin: 0;
@@ -26,7 +23,7 @@
         position: relative;
       }
 
-      /* ✅ Background image instantly visible (no white flash) */
+      /* ✅ Keep image visible until React actually fades in */
       body::before {
         content: "";
         position: fixed;
@@ -36,9 +33,10 @@
         z-index: -2;
         transform: scale(1);
         animation: zoomIn 8s ease-in-out forwards;
+        opacity: 1;
+        transition: opacity 1s ease-in-out;
       }
 
-      /* ✅ Smooth cinematic overlay */
       body::after {
         content: "";
         position: fixed;
@@ -47,7 +45,6 @@
         z-index: -1;
       }
 
-      /* ✅ Soft background zoom animation */
       @keyframes zoomIn {
         0% {
           transform: scale(1);
@@ -57,7 +54,6 @@
         }
       }
 
-      /* ✅ React app fade-in */
       #root {
         opacity: 0;
         transition: opacity 0.7s ease-in-out;
@@ -66,7 +62,6 @@
         z-index: 1;
       }
 
-      /* ✅ Loader section (spinner + text) */
       #preload-container {
         position: fixed;
         top: 50%;
@@ -76,7 +71,7 @@
         align-items: center;
         gap: 12px;
         z-index: 3;
-        color: #10b981; /* Law Network green */
+        color: #10b981;
         font-family: "Patrick Hand", sans-serif;
         font-size: 1.8rem;
         background: rgba(0, 0, 0, 0.45);
@@ -94,7 +89,6 @@
         }
       }
 
-      /* ✅ Elegant green spinner */
       .spinner {
         width: 24px;
         height: 24px;
@@ -109,24 +103,15 @@
           transform: rotate(360deg);
         }
       }
-    </style>
 
-    <!-- ✅ JS to ensure background always loads on Render -->
-    <script>
-      document.addEventListener("DOMContentLoaded", () => {
-        const base = window.location.origin;
-        const bgUrl = `${base}/backgrounds/classroom-fallback.png`;
-        const img = new Image();
-        img.src = bgUrl;
-        img.onload = () => {
-          document.body.style.backgroundImage = `url('${bgUrl}')`;
-        };
-      });
-    </script>
+      /* ✅ Smoothly hide image background only after React is visible */
+      body.fade-out::before {
+        opacity: 0;
+      }
+    </style>
   </head>
 
   <body>
-    <!-- ✅ Shown immediately -->
     <div id="preload-container">
       <div class="spinner"></div>
       <div>Loading Classroom…</div>
@@ -134,7 +119,6 @@
 
     <div id="root"></div>
 
-    <!-- Error box (in case React fails) -->
     <pre
       id="boot-error"
       style="
@@ -164,12 +148,24 @@
         showBootError(String(e.reason), e.reason && e.reason.stack)
       );
 
-      // ✅ Fade in React app, hide loader once content ready
+      // ✅ Keep image visible until React finishes its render
       window.addEventListener("load", () => {
         const preload = document.getElementById("preload-container");
         const root = document.getElementById("root");
+        const body = document.body;
+
+        // Fade out the loader first
         if (preload) preload.style.display = "none";
-        if (root) root.style.opacity = "1";
+
+        // Fade in the React app
+        if (root) {
+          root.style.opacity = "1";
+
+          // ✅ After short delay, remove background image smoothly
+          setTimeout(() => {
+            body.classList.add("fade-out");
+          }, 1200);
+        }
       });
     </script>
 
