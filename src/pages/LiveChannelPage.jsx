@@ -14,7 +14,10 @@ const API_URL =
   import.meta.env.VITE_API_URL || "https://law-network-server.onrender.com";
 
 /**
- * 📺 LawNetwork LIVE — Broadcast Studio Layout
+ * 📺 LawNetwork LIVE — Final Clean Version (No X logo, All logic intact)
+ * - Keeps full voice, ticker, teleprompter, controls
+ * - Adds Back button & navbar
+ * - Adds LawPrepX header (empty logo box)
  */
 export default function LiveChannelPage() {
   const [slides, setSlides] = useState([]);
@@ -63,7 +66,7 @@ export default function LiveChannelPage() {
   }, []);
 
   /* ============================================================
-     🎙 Voice Playback (Optimized)
+     🎙 Voice Playback (precise sync)
   ============================================================ */
   useEffect(() => {
     if (!isPlaying || slides.length === 0) return;
@@ -97,7 +100,7 @@ export default function LiveChannelPage() {
   }, [isPlaying, currentIndex, slides, isMuted]);
 
   /* ============================================================
-     🔁 Auto Refresh (Every 5 Minutes)
+     🔁 Auto Refresh (5 min)
   ============================================================ */
   useEffect(() => {
     const interval = setInterval(async () => {
@@ -122,7 +125,7 @@ export default function LiveChannelPage() {
   }, [slides.length, ticker.length]);
 
   /* ============================================================
-     ▶️ Controls Handlers
+     ▶️ Controls
   ============================================================ */
   const handleNext = useCallback(() => {
     stopSpeech(speechRef);
@@ -182,7 +185,7 @@ export default function LiveChannelPage() {
   }, [slides, currentIndex]);
 
   /* ============================================================
-     🧩 Memoized Computations
+     🧩 Memoized Values
   ============================================================ */
   const currentSlide = slides[currentIndex];
   const isSingleAnchor = useMemo(
@@ -195,7 +198,7 @@ export default function LiveChannelPage() {
   ============================================================ */
   return (
     <div className="min-h-screen bg-black text-white flex flex-col">
-      {/* 🔙 Simple Back + mini nav */}
+      {/* 🔙 Global Navbar */}
       <nav className="z-[10000] bg-slate-950/95 border-b border-slate-800 backdrop-blur">
         <div className="max-w-6xl mx-auto flex items-center justify-between px-4 py-2 text-xs md:text-sm">
           <div className="flex items-center gap-3">
@@ -226,13 +229,11 @@ export default function LiveChannelPage() {
         </div>
       </nav>
 
-      {/* 🟡 LawPrepX Channel Header Bar */}
+      {/* 🟡 LawPrepX Channel Header (No "X" in box) */}
       <header className="z-[9998] w-full flex items-center justify-between px-6 py-2 bg-gradient-to-r from-yellow-500 via-yellow-400 to-yellow-300 text-black font-semibold border-b-4 border-black shadow-[0_4px_10px_rgba(0,0,0,0.5)]">
-        {/* Left: Channel Logo + Name */}
         <div className="flex items-center gap-3">
-          <div className="flex items-center justify-center w-12 h-12 rounded-md bg-yellow-400 border-4 border-black text-black font-extrabold text-lg shadow-lg">
-            X
-          </div>
+          {/* Clean empty logo box */}
+          <div className="flex items-center justify-center w-12 h-12 rounded-md bg-yellow-400 border-4 border-black shadow-lg"></div>
           <div className="flex flex-col leading-tight">
             <span className="text-md font-bold tracking-wide">
               LAWPREPX LIVE
@@ -243,7 +244,7 @@ export default function LiveChannelPage() {
           </div>
         </div>
 
-        {/* Right: LIVE Time */}
+        {/* Right: LIVE Clock */}
         <div className="flex items-center gap-2 bg-black text-yellow-400 px-3 py-1 rounded-md text-sm font-bold border border-yellow-400">
           <span>LIVE TIME</span>
           <span className="text-white font-mono">
@@ -252,15 +253,15 @@ export default function LiveChannelPage() {
         </div>
       </header>
 
-      {/* 🔴 Main LIVE canvas */}
+      {/* 🔴 LIVE Canvas */}
       <div className="relative flex-1 overflow-hidden text-white bg-black">
-        {/* 📰 Overlay Header + Breaking News */}
+        {/* 📰 Overlay */}
         <TVOverlay breakingNews={ticker.map((t) => t.text)} />
 
-        {/* 🎥 Animated Background */}
+        {/* 🎥 Background */}
         <BackgroundMotion type={currentSlide?.programType} />
 
-        {/* ⚡ Small floating indicator for play/pause */}
+        {/* ⚡ Status Indicator */}
         <div className="absolute top-4 right-6 z-50 flex items-center gap-2">
           <span
             className={`h-3 w-3 rounded-full ${
@@ -272,7 +273,7 @@ export default function LiveChannelPage() {
           </span>
         </div>
 
-        {/* 🧩 Content */}
+        {/* 📺 Main Layout */}
         <div className="relative z-10 flex flex-col items-center justify-between min-h-full pt-16 pb-20">
           <HeadlineBar slide={currentSlide} />
 
@@ -294,7 +295,7 @@ export default function LiveChannelPage() {
               />
             </div>
 
-            {/* 🎤 Floating Anchor Box */}
+            {/* 🎤 Anchor Box */}
             <div className="hidden sm:block absolute bottom-24 left-6 max-w-xs">
               <AnchorBox
                 slide={currentSlide}
@@ -313,7 +314,7 @@ export default function LiveChannelPage() {
             </div>
           </main>
 
-          {/* 📤 Share Button */}
+          {/* 📤 Share */}
           <div className="relative mt-6 mb-4">
             <button
               onClick={handleShareLive}
@@ -341,7 +342,7 @@ export default function LiveChannelPage() {
 }
 
 /* ============================================================
-   🎛 Controls Component (With Visual Feedback)
+   🎛 Controls
 =========================================================== */
 const Controls = React.memo(function Controls({
   isPlaying,
