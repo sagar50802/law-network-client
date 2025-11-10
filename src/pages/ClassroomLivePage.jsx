@@ -20,7 +20,7 @@ const API_BASE =
 let PAUSE_LOCK = false;
 
 /* -------------------------------------------------------------------------- */
-/* ✅ ClassroomLivePage — production ready                                   */
+/* ✅ ClassroomLivePage — polished + responsive                              */
 /* -------------------------------------------------------------------------- */
 export default function ClassroomLivePage() {
   const [slides, setSlides] = useState([]);
@@ -43,16 +43,16 @@ export default function ClassroomLivePage() {
   const currentLecture =
     lectures.find((l) => l._id === selectedLectureId) || null;
 
-  /* ------------------------------------------------------------ */
-  /* Unlock Speech Autoplay                                       */
-  /* ------------------------------------------------------------ */
+  /* ---------------------------------------------------------------------- */
+  /* Unlock Speech Autoplay (Chrome policy)                                 */
+  /* ---------------------------------------------------------------------- */
   useEffect(() => {
     unlockSpeechOnUserClick();
   }, []);
 
-  /* ------------------------------------------------------------ */
-  /* Load Lectures List                                           */
-  /* ------------------------------------------------------------ */
+  /* ---------------------------------------------------------------------- */
+  /* Load Lectures                                                         */
+  /* ---------------------------------------------------------------------- */
   useEffect(() => {
     const loadLectures = async () => {
       try {
@@ -61,8 +61,9 @@ export default function ClassroomLivePage() {
         const list = json.data || json;
         if (Array.isArray(list)) {
           setLectures(list);
-          if (list.length > 0 && !selectedLectureId)
+          if (list.length > 0 && !selectedLectureId) {
             setSelectedLectureId(list[0]._id);
+          }
         } else setLectures([]);
       } catch (err) {
         console.error("Failed to load lectures:", err);
@@ -72,12 +73,11 @@ export default function ClassroomLivePage() {
     loadLectures();
   }, []);
 
-  /* ------------------------------------------------------------ */
-  /* Load Slides for Selected Lecture                             */
-  /* ------------------------------------------------------------ */
+  /* ---------------------------------------------------------------------- */
+  /* Load Slides whenever Lecture changes                                  */
+  /* ---------------------------------------------------------------------- */
   useEffect(() => {
     if (!selectedLectureId) return;
-
     const loadSlides = async () => {
       setLoading(true);
       try {
@@ -89,6 +89,7 @@ export default function ClassroomLivePage() {
         if (Array.isArray(list)) {
           setSlides(list);
           setCurrentIndex(0);
+          setCurrentSentence("");
         } else setSlides([]);
       } catch (err) {
         console.error("Failed to load slides:", err);
@@ -102,34 +103,33 @@ export default function ClassroomLivePage() {
         }, 500);
       }
     };
-
     loadSlides();
   }, [selectedLectureId]);
 
-  /* ------------------------------------------------------------ */
-  /* Preload Voices                                                */
-  /* ------------------------------------------------------------ */
+  /* ---------------------------------------------------------------------- */
+  /* Preload Voices                                                        */
+  /* ---------------------------------------------------------------------- */
   useEffect(() => {
     waitForVoices(3000).then((v) =>
       console.log(`✅ Voices preloaded (${v.length})`)
     );
   }, []);
 
-  /* ------------------------------------------------------------ */
-  /* Auto Slide Progression                                        */
-  /* ------------------------------------------------------------ */
+  /* ---------------------------------------------------------------------- */
+  /* Move to Next Slide after speech completes                             */
+  /* ---------------------------------------------------------------------- */
   const handleNextSlide = useCallback(() => {
     setProgress(0);
     setCurrentSentence("");
     setIsSpeaking(false);
     setTimeout(() => {
       setCurrentIndex((p) => (p + 1 < slides.length ? p + 1 : p));
-    }, 800);
+    }, 700);
   }, [slides.length]);
 
-  /* ------------------------------------------------------------ */
-  /* Speech Sync — Avatar + Teleprompter                           */
-  /* ------------------------------------------------------------ */
+  /* ---------------------------------------------------------------------- */
+  /* Play current slide speech                                              */
+  /* ---------------------------------------------------------------------- */
   useEffect(() => {
     let mounted = true;
     async function startSpeech() {
@@ -159,7 +159,6 @@ export default function ClassroomLivePage() {
         onComplete: handleNextSlide,
       });
     }
-
     startSpeech();
     return () => {
       mounted = false;
@@ -167,9 +166,9 @@ export default function ClassroomLivePage() {
     };
   }, [currentSlide?._id, isPlaying, isMuted, slides.length, handleNextSlide]);
 
-  /* ------------------------------------------------------------ */
-  /* Controls                                                      */
-  /* ------------------------------------------------------------ */
+  /* ---------------------------------------------------------------------- */
+  /* User Controls                                                          */
+  /* ---------------------------------------------------------------------- */
   const goToSlide = (index) => {
     if (index < 0 || index >= slides.length) return;
     stopClassroomSpeech(speechRef);
@@ -208,9 +207,9 @@ export default function ClassroomLivePage() {
     });
   };
 
-  /* ------------------------------------------------------------ */
-  /* Render                                                       */
-  /* ------------------------------------------------------------ */
+  /* ---------------------------------------------------------------------- */
+  /* Loader & Error States                                                  */
+  /* ---------------------------------------------------------------------- */
   if (loading)
     return (
       <div
@@ -244,6 +243,9 @@ export default function ClassroomLivePage() {
       </div>
     );
 
+  /* ---------------------------------------------------------------------- */
+  /* ✅ Main Layout                                                        */
+  /* ---------------------------------------------------------------------- */
   return (
     <div className="relative min-h-screen bg-slate-950 text-slate-50 flex flex-col overflow-hidden">
       {/* Header */}
@@ -252,12 +254,13 @@ export default function ClassroomLivePage() {
           Classroom Live • {currentLecture?.subject || "Lecture"}
         </div>
 
-        {/* Desktop Controls */}
         <div className="hidden md:flex items-center gap-2 text-xs md:text-sm">
           <button
             onClick={handlePlayPause}
             className={`px-3 py-1.5 rounded-full font-semibold text-xs ${
-              isPlaying ? "bg-emerald-500 text-black" : "bg-yellow-400 text-black"
+              isPlaying
+                ? "bg-emerald-500 text-black"
+                : "bg-yellow-400 text-black"
             }`}
           >
             {isPlaying ? "Pause" : "Resume"}
@@ -276,30 +279,33 @@ export default function ClassroomLivePage() {
         </div>
       </header>
 
-      {/* Main */}
       <main className="flex-1 px-4 md:px-8 py-4 md:py-6 flex flex-col gap-4">
-        {/* Responsive layout: avatar first on mobile */}
-        <div className="flex flex-col-reverse md:grid md:grid-cols-[minmax(0,0.9fr)_minmax(0,2.4fr)_minmax(0,1.1fr)] gap-4">
-          <TeacherAvatarCard
-            teacher={{
-              name:
-                currentLecture?.teacher?.name ||
-                currentLecture?.teacherName ||
-                "Teacher",
-              role: currentLecture?.teacher?.role || "Faculty",
-              avatarUrl:
-                currentLecture?.teacher?.avatarUrl ||
-                currentLecture?.teacher?.photoUrl ||
-                currentLecture?.teacher?.image ||
-                currentLecture?.photoUrl ||
-                currentLecture?.image ||
-                "/avatars/teacher1.png",
-            }}
-            subject={currentLecture?.subject || "Lecture"}
-            isSpeaking={isSpeaking}
-          />
+        {/* 🧩 Responsive Layout */}
+        <div className="flex flex-col md:grid md:grid-cols-[minmax(0,0.9fr)_minmax(0,2.4fr)_minmax(0,1.1fr)] gap-4">
+          {/* 👩‍🏫 Avatar FIRST on mobile */}
+          <div className="order-1 md:order-none">
+            <TeacherAvatarCard
+              teacher={{
+                name:
+                  currentLecture?.teacher?.name ||
+                  currentLecture?.teacherName ||
+                  "Teacher",
+                role: currentLecture?.teacher?.role || "Faculty",
+                avatarUrl:
+                  currentLecture?.teacher?.avatarUrl ||
+                  currentLecture?.teacher?.photoUrl ||
+                  currentLecture?.teacher?.image ||
+                  currentLecture?.photoUrl ||
+                  currentLecture?.image ||
+                  "/avatars/teacher1.png",
+              }}
+              subject={currentLecture?.subject || "Lecture"}
+              isSpeaking={isSpeaking}
+            />
+          </div>
 
-          <section className="flex flex-col gap-3">
+          {/* 🧾 Teleprompter + Media */}
+          <section className="order-2 flex flex-col gap-3">
             <ClassroomTeleprompter
               slide={currentSlide}
               currentSentence={currentSentence}
@@ -332,26 +338,35 @@ export default function ClassroomLivePage() {
             </div>
           </section>
 
-          <LecturePlaylistSidebar
-            lectures={lectures}
-            currentLectureId={selectedLectureId}
-            onSelectLecture={(lec) => {
-              if (lec?._id !== selectedLectureId) {
-                setSelectedLectureId(lec._id);
-                setCurrentIndex(0);
-                setProgress(0);
-              }
-            }}
-          />
+          {/* 📚 Playlist Sidebar */}
+          <div className="order-3">
+            <LecturePlaylistSidebar
+              lectures={lectures}
+              currentLectureId={selectedLectureId}
+              onSelectLecture={(lec) => {
+                if (lec?._id !== selectedLectureId) {
+                  stopClassroomSpeech(speechRef);
+                  setSelectedLectureId(lec._id);
+                  setCurrentIndex(0);
+                  setCurrentSentence("");
+                  setProgress(0);
+                  setIsPlaying(true);
+                }
+              }}
+            />
+          </div>
         </div>
 
+        {/* 👨‍🎓 Students Row */}
         <StudentsRow
-          onRaiseHand={() => alert("✋ Student raised hand — coming soon!")}
-          onReaction={(emoji) => console.log("Reaction:", emoji)}
+          onRaiseHand={() =>
+            alert("✋ Student raised hand — feature coming soon!")
+          }
+          onReaction={(emoji) => console.log("Student reaction:", emoji)}
         />
       </main>
 
-      {/* Floating Play Button (mobile) */}
+      {/* 🎛 Floating Play Button on Mobile */}
       <div className="md:hidden fixed bottom-5 right-5 z-50">
         <button
           onClick={handlePlayPause}
