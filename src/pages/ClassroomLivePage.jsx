@@ -101,7 +101,7 @@ export default function ClassroomLivePage() {
         setError("Failed to fetch slides");
         setSlides([]);
       } finally {
-        // ✅ Fade out loader after data ready
+        // ✅ Fade-out loader after data ready
         setTimeout(() => {
           const loader = document.getElementById("classroom-loader");
           if (loader) loader.classList.add("fade-out");
@@ -275,8 +275,19 @@ export default function ClassroomLivePage() {
 
       <main className="flex-1 px-4 md:px-8 py-4 md:py-6 flex flex-col gap-4">
         <div className="flex-1 grid grid-cols-1 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,2.4fr)_minmax(0,1.1fr)] gap-4">
+          {/* ✅ FIXED AVATAR DATA PASSING */}
           <TeacherAvatarCard
-            teacher={currentLecture}
+            teacher={
+              currentLecture?.teacher
+                ? currentLecture.teacher
+                : {
+                    name: currentLecture?.teacherName || "Teacher",
+                    photoUrl:
+                      currentLecture?.photoUrl ||
+                      currentLecture?.image ||
+                      "/avatars/default-teacher.png",
+                  }
+            }
             subject={currentLecture?.subject}
             isSpeaking={isSpeaking}
           />
