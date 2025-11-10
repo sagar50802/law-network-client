@@ -36,7 +36,8 @@ export default function ClassroomLivePage() {
   const [isMuted, setIsMuted] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
 
-  const [loading, setLoading] = useState(true);
+  // ✅ loader starts off false so it doesn't block other routes
+  const [loading, setLoading] = useState(false);
   const [error, setError] = useState(null);
 
   /* ------------------------- Refs ---------------------------------------- */
@@ -121,6 +122,13 @@ export default function ClassroomLivePage() {
     };
 
     loadSlides();
+
+    // ✅ Cleanup: hide loader if leaving the page
+    return () => {
+      setLoading(false);
+      const loader = document.getElementById("classroom-loader");
+      if (loader) loader.style.display = "none";
+    };
   }, [selectedLectureId]);
 
   /* ---------------------------------------------------------------------- */
@@ -156,7 +164,6 @@ export default function ClassroomLivePage() {
 
       console.log("▶️ Starting speech for slide:", currentSlide.topicTitle);
 
-      // 🔄 Reset before playing
       stopClassroomSpeech(speechRef);
       setProgress(0);
       setCurrentSentence("");
@@ -169,7 +176,6 @@ export default function ClassroomLivePage() {
         return;
       }
 
-      // ✅ Block when paused, muted, or locked
       if (!isPlaying || isMuted || PAUSE_LOCK) {
         console.log("⏸ Skipped speech — paused, muted, or queue locked");
         return;
@@ -181,18 +187,9 @@ export default function ClassroomLivePage() {
         speechRef,
         setCurrentSentence,
         onProgress: setProgress,
-        onStartSpeaking: () => {
-          console.log("🔊 Avatar speaking ON");
-          setIsSpeaking(true);
-        },
-        onStopSpeaking: () => {
-          console.log("🔇 Avatar speaking OFF");
-          setIsSpeaking(false);
-        },
-        onComplete: () => {
-          console.log("✅ Slide speech complete");
-          handleNextSlide();
-        },
+        onStartSpeaking: () => setIsSpeaking(true),
+        onStopSpeaking: () => setIsSpeaking(false),
+        onComplete: handleNextSlide,
       });
     }
 
@@ -254,12 +251,13 @@ export default function ClassroomLivePage() {
   };
 
   /* ---------------------------------------------------------------------- */
-  /* ✅ Render States — loader until content is ready                       */
+  /* ✅ Render States — loader only when classroom is loading               */
   /* ---------------------------------------------------------------------- */
   if (loading) {
     return (
       <div
         id="classroom-loader"
+        data-page="classroom"
         className="fixed inset-0 z-[9999] flex items-center justify-center bg-black text-white transition-opacity duration-700 ease-in-out bg-no-repeat bg-center bg-cover"
         style={{
           backgroundImage: `url("/backgrounds/classroom-fallback.png")`,
