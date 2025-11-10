@@ -5,6 +5,7 @@
     <meta name="viewport" content="width=device-width, initial-scale=1.0" />
     <title>Law Network</title>
 
+    <!-- Handwritten-style font for notebook UI -->
     <link
       href="https://fonts.googleapis.com/css2?family=Patrick+Hand&display=swap"
       rel="stylesheet"
@@ -21,7 +22,7 @@
         overflow: hidden;
       }
 
-      /* Background image always visible during loading */
+      /* ✅ Fullscreen fallback image stays visible during load */
       #startup-bg {
         position: fixed;
         inset: 0;
@@ -29,10 +30,10 @@
           cover no-repeat;
         z-index: -2;
         filter: blur(4px) brightness(0.6);
-        transition: opacity 1.5s ease-in-out, filter 1.5s ease-in-out;
+        transition: opacity 1.2s ease-in-out, filter 1.5s ease-in-out;
       }
 
-      /* Spinner and text in the middle */
+      /* ✅ Spinner text centered */
       #preload {
         position: fixed;
         top: 50%;
@@ -75,25 +76,28 @@
         }
       }
 
+      /* React root starts invisible */
       #root {
         opacity: 0;
-        transition: opacity 1s ease-in-out;
+        transition: opacity 0.8s ease-in-out;
         position: relative;
         z-index: 1;
       }
 
-      /* When app is fully loaded */
-      body.ready #startup-bg {
-        opacity: 0.15;
-        filter: blur(12px) brightness(0.3);
-      }
-
+      /* When React signals ready */
       body.ready #preload {
-        display: none;
+        opacity: 0;
+        pointer-events: none;
+        transition: opacity 0.8s ease-in-out;
       }
 
       body.ready #root {
         opacity: 1;
+      }
+
+      body.ready #startup-bg {
+        opacity: 0.2;
+        filter: blur(12px) brightness(0.3);
       }
     </style>
   </head>
@@ -109,15 +113,15 @@
     <div id="root"></div>
 
     <script>
-      // Wait until the React app explicitly signals readiness
+      // 🧠 React will call this when it's fully mounted
       window.__CLASSROOM_READY__ = () => {
         document.body.classList.add("ready");
       };
 
-      // Safety fallback: hide after 12s anyway (if something goes wrong)
+      // ⏳ Emergency timeout (just in case React fails to mount)
       setTimeout(() => {
         document.body.classList.add("ready");
-      }, 12000);
+      }, 15000);
     </script>
 
     <script type="module" src="/src/main.jsx"></script>
