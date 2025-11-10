@@ -331,25 +331,80 @@ function LectureRow({ lec, onToggle, onEditSlides, onDelete }) {
           {status}
         </span>
       </td>
-      <td className="p-2 text-center">
-        <div className="flex items-center justify-center gap-3 text-slate-600">
-          <button title="Toggle Release" onClick={() => onToggle(lec)}>
-            {lec.status === "released" ? (
-              <PauseCircle className="w-5 h-5 text-amber-500 hover:text-amber-600 transition" />
-            ) : (
-              <PlayCircle className="w-5 h-5 text-emerald-500 hover:text-emerald-600 transition" />
-            )}
-          </button>
-          <button title="Edit Slides" onClick={() => onEditSlides(lec)}>
-            <FileText className="w-5 h-5 text-blue-500 hover:text-blue-600 transition" />
-          </button>
-          <button title="Delete Lecture" onClick={() => onDelete(lec._id)}>
-            <Trash2 className="w-5 h-5 text-red-500 hover:text-red-600 transition" />
-          </button>
-        </div>
-      </td>
-    </tr>
-  );
+       <td className="p-2 text-center">
+  <div className="flex items-center justify-center gap-3 text-slate-600">
+    {/* ▶️ Toggle Release */}
+    <button title="Toggle Release" onClick={() => onToggle(lec)}>
+      {lec.status === "released" ? (
+        <PauseCircle className="w-5 h-5 text-amber-500 hover:text-amber-600 transition" />
+      ) : (
+        <PlayCircle className="w-5 h-5 text-emerald-500 hover:text-emerald-600 transition" />
+      )}
+    </button>
+
+    {/* 📝 Edit Slides */}
+    <button title="Edit Slides" onClick={() => onEditSlides(lec)}>
+      <FileText className="w-5 h-5 text-blue-500 hover:text-blue-600 transition" />
+    </button>
+
+    {/* 🗑️ Delete */}
+    <button title="Delete Lecture" onClick={() => onDelete(lec._id)}>
+      <Trash2 className="w-5 h-5 text-red-500 hover:text-red-600 transition" />
+    </button>
+
+    {/* 📋 Copy Lecture ID */}
+    <button
+      title="Copy Lecture ID"
+      onClick={() => {
+        navigator.clipboard.writeText(lec._id);
+        alert("Lecture ID copied: " + lec._id);
+      }}
+    >
+      📋
+    </button>
+
+    {/* 🔗 Generate Share Link */}
+    <button
+      title="Generate Share Link"
+      onClick={async () => {
+        try {
+          const type = prompt("Enter link type: free or paid", "free");
+          if (!type) return;
+
+          const res = await fetch(
+            `https://law-network.onrender.com/api/classroom-access/create-link`,
+            {
+              method: "POST",
+              headers: {
+                "Content-Type": "application/json",
+                Authorization: `Bearer ${localStorage.getItem("authToken")}`,
+              },
+              body: JSON.stringify({
+                lectureId: lec._id,
+                type: type.toLowerCase(),
+                expiresInHours: 24,
+              }),
+            }
+          );
+
+          const data = await res.json();
+          if (data.success) {
+            navigator.clipboard.writeText(data.url);
+            alert("✅ Share link copied:\n" + data.url);
+          } else {
+            alert("❌ Failed: " + data.error);
+          }
+        } catch (err) {
+          alert("Error: " + err.message);
+        }
+      }}
+    >
+      🔗
+    </button>
+  </div>
+</td>
+ </tr>
+ );
 }
 
 /* ------------------------ Main Admin Page ------------------------ */
