@@ -1,6 +1,9 @@
 // src/voice/ClassroomVoiceEngine.js
 let voiceCache = [];
 
+/* ------------------------------------------------------- */
+/* ⏳ Load available voices safely                         */
+/* ------------------------------------------------------- */
 export function waitForVoices(timeout = 3000) {
   return new Promise((resolve) => {
     const voices = window.speechSynthesis?.getVoices() || [];
@@ -23,23 +26,61 @@ export function waitForVoices(timeout = 3000) {
 }
 
 /* ------------------------------------------------------- */
-/* 🧩 Helper: detect language + pick voice                 */
+/* 🧩 Detect language                                      */
 /* ------------------------------------------------------- */
 function detectLang(text = "") {
   if (/[ऀ-ॿ]/.test(text)) return "hi-IN"; // Hindi
   if (/[a-zA-Z]/.test(text) && /[ंँेो]/.test(text)) return "hi-IN"; // Hinglish
-  return "en-US";
+  return "en-IN"; // default to Indian English, not US
 }
 
+/* ------------------------------------------------------- */
+/* 🧠 Smart voice picker: prefer natural Indian voices      */
+/* ------------------------------------------------------- */
 function pickVoice(lang, teacher = {}) {
   if (!voiceCache.length)
     voiceCache = window.speechSynthesis?.getVoices() || [];
+
+  // teacher-specific name override
+  if (teacher.voiceName) {
+    const named = voiceCache.find((v) => v.name === teacher.voiceName);
+    if (named) return named;
+  }
+
+  const priorities = [
+    "en-IN",
+    "hi-IN",
+    "en-GB",
+    "en-US",
+    "en-AU",
+    "Google UK English Male",
+    "Google UK English Female",
+    "Microsoft Ravi - English (India)",
+    "Microsoft Heera - English (India)",
+    "Microsoft Neerja - Hindi (India)",
+  ];
+
+  // exact match first
   const exact = voiceCache.find((v) => v.lang === lang);
-  const fallback = voiceCache.find((v) => v.lang.startsWith(lang.split("-")[0]));
-  const named = teacher.voiceName
-    ? voiceCache.find((v) => v.name === teacher.voiceName)
-    : null;
-  return named || exact || fallback || voiceCache[0];
+  if (exact) return exact;
+
+  // try priorities list
+  for (const key of priorities) {
+    const match = voiceCache.find(
+      (v) =>
+        v.lang === key ||
+        v.lang.startsWith(key.split("-")[0]) ||
+        v.name.includes(key)
+    );
+    if (match) return match;
+  }
+
+  // fallback to same language family
+  const fallback = voiceCache.find((v) =>
+    v.lang.startsWith(lang.split("-")[0])
+  );
+
+  return fallback || voiceCache[0];
 }
 
 /* ------------------------------------------------------- */
@@ -79,18 +120,25 @@ export function playClassroomSpeech({
 
     const sentence = sentences[index];
     setCurrentSentence(sentence);
+
     const lang = detectLang(sentence);
     const utter = new SpeechSynthesisUtterance(sentence);
     utter.voice = pickVoice(lang, slide.teacher);
     utter.lang = lang;
-    utter.rate = lang.startsWith("hi") ? 0.95 : 1.0;
-    utter.pitch = 1;
+
+    // 🧡 Natural Indian tone adjustments
+    if (lang.startsWith("en")) {
+      utter.rate = 0.93; // slightly slower
+      utter.pitch = 1.02; // softer and youthful
+    } else {
+      utter.rate = 0.95;
+      utter.pitch = 1.0;
+    }
     utter.volume = 1;
 
     let lastUpdate = 0;
 
     utter.onstart = () => {
-      console.log("Started:", sentence);
       onStartSpeaking?.();
       onProgress?.(0);
     };
@@ -98,24 +146,21 @@ export function playClassroomSpeech({
     utter.onboundary = (event) => {
       if (event.name || event.charIndex == null) return;
       const now = performance.now();
-      // Throttle to once per 100 ms for smooth teleprompter typing
       if (now - lastUpdate > 100) {
         lastUpdate = now;
         const progress = Math.min(
           1,
           event.charIndex / (utter.text.length || 1)
         );
-        // Smooth easing interpolation
         onProgress?.((prev) => prev * 0.7 + progress * 0.3);
       }
     };
 
     utter.onend = () => {
-      console.log("✅ Done:", sentence);
       onProgress?.(1);
       onStopSpeaking?.();
       index++;
-      setTimeout(speakNext, 300); // short gap before next sentence
+      setTimeout(speakNext, 300);
     };
 
     utter.onerror = (e) => {
@@ -130,7 +175,6 @@ export function playClassroomSpeech({
 
   speakNext();
 
-  // Store cancel ref
   speechRef.current = {
     isPlaying: true,
     cancel: () => {
@@ -157,7 +201,7 @@ export function stopClassroomSpeech(speechRef) {
 }
 
 /* ------------------------------------------------------- */
-/* 🔓 Unlock Speech after User Interaction (Chrome policy) */
+/* 🔓 Unlock Speech on User Interaction (Chrome policy)     */
 /* ------------------------------------------------------- */
 export function unlockSpeechOnUserClick() {
   const resume = () => {
