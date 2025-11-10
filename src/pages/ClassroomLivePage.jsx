@@ -275,8 +275,8 @@ export default function ClassroomLivePage() {
 
       <main className="flex-1 px-4 md:px-8 py-4 md:py-6 flex flex-col gap-4">
         <div className="flex-1 grid grid-cols-1 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,2.4fr)_minmax(0,1.1fr)] gap-4">
-          {/* ✅ FIXED AVATAR DATA PASSING */}
-           <TeacherAvatarCard
+          {/* ✅ Always show a valid avatar image */}
+<TeacherAvatarCard
   teacher={{
     name:
       currentLecture?.teacher?.name ||
@@ -284,15 +284,20 @@ export default function ClassroomLivePage() {
       "Teacher",
     role: currentLecture?.teacher?.role || "Faculty",
 
-    // 👇 Pick a matching file name from /public/avatars/
+    // ✅ Guaranteed image source from your /public/avatars folder
     avatarUrl:
       currentLecture?.teacher?.avatarUrl ||
-      currentLecture?.teacher?.avatarType ||
-      "teacher1.png", // 👈 choose teacher1.png, teacher2.png, etc.
+      currentLecture?.teacher?.photoUrl ||
+      currentLecture?.teacher?.image ||
+      currentLecture?.photoUrl ||
+      currentLecture?.image ||
+      // 👇 default to teacher1.png if nothing else found
+      "teacher1.png",
   }}
   subject={currentLecture?.subject || "Lecture"}
   isSpeaking={isSpeaking}
 />
+
 
 
           <section className="flex flex-col gap-3">
