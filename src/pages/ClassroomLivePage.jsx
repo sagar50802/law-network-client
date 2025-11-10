@@ -101,7 +101,7 @@ export default function ClassroomLivePage() {
         setError("Failed to fetch slides");
         setSlides([]);
       } finally {
-        // ✅ Fade-out loader after data ready
+        // ✅ Smooth loader fade-out after data ready
         setTimeout(() => {
           const loader = document.getElementById("classroom-loader");
           if (loader) loader.classList.add("fade-out");
@@ -215,7 +215,7 @@ export default function ClassroomLivePage() {
   };
 
   /* ---------------------------------------------------------------------- */
-  /* ✅ Render Layout (no flicker version)                                 */
+  /* ✅ Render Layout (flicker-free + safe)                                */
   /* ---------------------------------------------------------------------- */
   return (
     <div className="relative min-h-screen bg-slate-950 text-slate-50 flex flex-col overflow-hidden">
@@ -242,7 +242,7 @@ export default function ClassroomLivePage() {
         </div>
       )}
 
-      {/* ✅ Classroom UI (always rendered, never hidden) */}
+      {/* ✅ Classroom UI */}
       <header className="px-4 md:px-8 py-3 border-b border-slate-800 flex items-center justify-between">
         <div className="text-lg md:text-2xl font-semibold tracking-wide">
           Classroom Live • {currentLecture?.subject || "Lecture"}
@@ -277,18 +277,19 @@ export default function ClassroomLivePage() {
         <div className="flex-1 grid grid-cols-1 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,2.4fr)_minmax(0,1.1fr)] gap-4">
           {/* ✅ FIXED AVATAR DATA PASSING */}
           <TeacherAvatarCard
-            teacher={
-              currentLecture?.teacher
-                ? currentLecture.teacher
-                : {
-                    name: currentLecture?.teacherName || "Teacher",
-                    photoUrl:
-                      currentLecture?.photoUrl ||
-                      currentLecture?.image ||
-                      "/avatars/default-teacher.png",
-                  }
-            }
-            subject={currentLecture?.subject}
+            teacher={{
+              name:
+                currentLecture?.teacher?.name ||
+                currentLecture?.teacherName ||
+                "Teacher",
+              photoUrl:
+                currentLecture?.teacher?.photoUrl ||
+                currentLecture?.photoUrl ||
+                currentLecture?.teacher?.image ||
+                currentLecture?.image ||
+                "/avatars/default-teacher.png",
+            }}
+            subject={currentLecture?.subject || "Lecture"}
             isSpeaking={isSpeaking}
           />
 
