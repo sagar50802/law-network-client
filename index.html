@@ -21,18 +21,18 @@
         overflow: hidden;
       }
 
-      /* ✅ Full-screen fallback image always visible */
+      /* Background image always visible during loading */
       #startup-bg {
         position: fixed;
         inset: 0;
         background: url("/backgrounds/classroom-fallback.png") center center /
           cover no-repeat;
         z-index: -2;
-        filter: blur(6px) brightness(0.6);
-        transition: filter 1.5s ease-in-out, opacity 1s ease-in-out;
+        filter: blur(4px) brightness(0.6);
+        transition: opacity 1.5s ease-in-out, filter 1.5s ease-in-out;
       }
 
-      /* ✅ Loader in the center */
+      /* Spinner and text in the middle */
       #preload {
         position: fixed;
         top: 50%;
@@ -53,7 +53,7 @@
 
       @keyframes pulse {
         from {
-          opacity: 0.5;
+          opacity: 0.6;
         }
         to {
           opacity: 1;
@@ -75,7 +75,6 @@
         }
       }
 
-      /* React container fades in gently */
       #root {
         opacity: 0;
         transition: opacity 1s ease-in-out;
@@ -83,7 +82,12 @@
         z-index: 1;
       }
 
-      /* ✅ When ready, fade loader out & keep image faint in background */
+      /* When app is fully loaded */
+      body.ready #startup-bg {
+        opacity: 0.15;
+        filter: blur(12px) brightness(0.3);
+      }
+
       body.ready #preload {
         display: none;
       }
@@ -91,25 +95,11 @@
       body.ready #root {
         opacity: 1;
       }
-
-      /* Optional gentle zoom animation */
-      @keyframes zoomIn {
-        from {
-          transform: scale(1);
-        }
-        to {
-          transform: scale(1.05);
-        }
-      }
-
-      #startup-bg.zoom {
-        animation: zoomIn 10s ease-in-out forwards;
-      }
     </style>
   </head>
 
   <body>
-    <div id="startup-bg" class="zoom"></div>
+    <div id="startup-bg"></div>
 
     <div id="preload">
       <div class="spinner"></div>
@@ -119,19 +109,15 @@
     <div id="root"></div>
 
     <script>
-      // ✅ Wait until React is ready, then fade content in
-      window.addEventListener("load", () => {
-        const body = document.body;
-        body.classList.add("ready");
+      // Wait until the React app explicitly signals readiness
+      window.__CLASSROOM_READY__ = () => {
+        document.body.classList.add("ready");
+      };
 
-        // Slightly soften background when content visible
-        const bg = document.getElementById("startup-bg");
-        if (bg) {
-          setTimeout(() => {
-            bg.style.filter = "blur(12px) brightness(0.4)";
-          }, 1500);
-        }
-      });
+      // Safety fallback: hide after 12s anyway (if something goes wrong)
+      setTimeout(() => {
+        document.body.classList.add("ready");
+      }, 12000);
     </script>
 
     <script type="module" src="/src/main.jsx"></script>
