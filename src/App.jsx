@@ -51,8 +51,11 @@ import LiveAdminPage from "./pages/LiveAdminPage.jsx";
 import ClassroomLivePage from "./pages/ClassroomLivePage.jsx";
 import AdminLectureManager from "./pages/AdminLectureManager.jsx";
 
-/* 🔐 NEW: Classroom share wrapper page */
+/* 🔐 Shared Classroom link viewer */
 import ClassroomSharePage from "./pages/ClassroomSharePage.jsx";
+
+/* 🆕 NEW: Admin Classroom Link Generator (safe standalone) */
+import ClassroomLinkCreator from "./pages/ClassroomLinkCreator.jsx";
 
 /* ---------- Helpers ---------- */
 function NotFound() {
@@ -142,9 +145,20 @@ export default function App() {
             {/* ✅ Classroom Routes */}
             <Route path="/classroom" element={<ClassroomLivePage />} />
 
-            {/* 🔐 NEW: shared classroom link route */}
+            {/* 🔐 Shared classroom link */}
             <Route path="/classroom/share" element={<ClassroomSharePage />} />
 
+            {/* 🆕 Admin classroom link creator (new safe route) */}
+            <Route
+              path="/admin/classroom-link"
+              element={
+                <AdminRoute>
+                  <ClassroomLinkCreator />
+                </AdminRoute>
+              }
+            />
+
+            {/* Admin classroom manager */}
             <Route
               path="/admin/classroom"
               element={
