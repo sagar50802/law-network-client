@@ -106,18 +106,18 @@ export default function ClassroomLivePage() {
         setError("Failed to fetch slides");
         setSlides([]);
       } finally {
-  const loader = document.querySelector(".loading-screen");
+  const loader = document.getElementById("classroom-loader");
   if (loader) {
-    loader.classList.add("fade-out"); // fade out effect
+    loader.classList.add("fade-out");
     setTimeout(() => {
-      setLoading(false); // hide after fade
+      setLoading(false);
+      loader.style.display = "none"; // hide cleanly
     }, 700);
   } else {
     setLoading(false);
   }
 }
-
-  };
+ };
 
     loadSlides();
   }, [selectedLectureId]);
@@ -255,18 +255,17 @@ export default function ClassroomLivePage() {
   };
 
 /* ---------------------------------------------------------------------- */
-/* ✅ Render States — with smooth fallback loader                         */
+/* ✅ Render States — Instant Loader Fix (no white screen)                */
 /* ---------------------------------------------------------------------- */
-if (loading) {
+if (loading || slides.length === 0) {
   return (
     <div
-      className="loading-screen flex items-center justify-center min-h-screen text-white transition-opacity duration-700 ease-in-out bg-black bg-no-repeat bg-center bg-cover"
+      id="classroom-loader"
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black text-white transition-opacity duration-700 ease-in-out bg-no-repeat bg-center bg-cover"
       style={{
         backgroundImage: `url("/backgrounds/classroom-fallback.png")`,
-        backgroundAttachment: "fixed",
         backgroundSize: "cover",
         backgroundPosition: "center",
-        backgroundColor: "#000",
       }}
     >
       <div className="bg-black/70 px-8 py-6 rounded-2xl text-center max-w-lg shadow-lg backdrop-blur-sm animate-fade-in">
@@ -282,19 +281,17 @@ if (loading) {
   );
 }
 
-if (error || !slides.length) {
+if (error) {
   return (
     <div
-      className="flex items-center justify-center min-h-screen text-white"
+      className="fixed inset-0 z-[9999] flex items-center justify-center bg-black text-white bg-no-repeat bg-center bg-cover"
       style={{
         backgroundImage: `url("/backgrounds/classroom-fallback.png")`,
         backgroundSize: "cover",
         backgroundPosition: "center",
-        backgroundRepeat: "no-repeat",
-        backgroundColor: "#1a1a1a",
       }}
     >
-      <div className="bg-black/60 px-8 py-6 rounded-2xl text-center max-w-lg shadow-lg backdrop-blur-sm">
+      <div className="bg-black/70 px-8 py-6 rounded-2xl text-center max-w-lg shadow-lg backdrop-blur-sm">
         <h1 className="text-2xl font-semibold mb-2 drop-shadow-md">
           ⚠️ Classroom Offline
         </h1>
@@ -305,7 +302,6 @@ if (error || !slides.length) {
     </div>
   );
 }
-
 
   /* ---------------------------------------------------------------------- */
   /* ✅ Render Full Layout                                                 */
