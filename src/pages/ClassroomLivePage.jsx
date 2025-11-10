@@ -106,15 +106,17 @@ export default function ClassroomLivePage() {
         setError("Failed to fetch slides");
         setSlides([]);
       } finally {
-      // ✅ Smooth fade-out effect
-      const loader = document.querySelector(".loading-screen");
-      if (loader) {
-        loader.classList.add("fade-out");
-        setTimeout(() => setLoading(false), 700);
-      } else {
-        setLoading(false);
-      }
-    }
+  const loader = document.querySelector(".loading-screen");
+  if (loader) {
+    loader.classList.add("fade-out"); // fade out effect
+    setTimeout(() => {
+      setLoading(false); // hide after fade
+    }, 700);
+  } else {
+    setLoading(false);
+  }
+}
+
   };
 
     loadSlides();
@@ -252,24 +254,18 @@ export default function ClassroomLivePage() {
     });
   };
 
-  /* ---------------------------------------------------------------------- */
-  /* ✅ Render States                                                      */
-  /* ---------------------------------------------------------------------- */
-  if (loading)
-    return (
-      <div className="text-center text-slate-100 p-10 animate-pulse">
-        Loading classroom…
-      </div>
-    );
-
-  if (loading) {
+/* ---------------------------------------------------------------------- */
+/* ✅ Render States — with smooth fallback loader                         */
+/* ---------------------------------------------------------------------- */
+if (loading) {
   return (
     <div
-      className="flex items-center justify-center min-h-screen text-white transition-opacity duration-700 ease-in-out bg-black bg-no-repeat bg-center md:bg-cover bg-contain"
+      className="loading-screen flex items-center justify-center min-h-screen text-white transition-opacity duration-700 ease-in-out bg-black bg-no-repeat bg-center bg-cover"
       style={{
         backgroundImage: `url("/backgrounds/classroom-fallback.png")`,
         backgroundAttachment: "fixed",
-        backgroundSize: "contain",
+        backgroundSize: "cover",
+        backgroundPosition: "center",
         backgroundColor: "#000",
       }}
     >
@@ -285,7 +281,6 @@ export default function ClassroomLivePage() {
     </div>
   );
 }
-
 
 if (error || !slides.length) {
   return (
@@ -310,6 +305,7 @@ if (error || !slides.length) {
     </div>
   );
 }
+
 
   /* ---------------------------------------------------------------------- */
   /* ✅ Render Full Layout                                                 */
