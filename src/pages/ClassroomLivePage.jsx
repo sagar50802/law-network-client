@@ -255,21 +255,20 @@ export default function ClassroomLivePage() {
       </div>
     );
 
-  if (loading) {
+   if (loading) {
   return (
     <div
-      className="flex items-center justify-center min-h-screen text-white transition-opacity duration-700 bg-black bg-no-repeat bg-center md:bg-cover bg-contain"
+      className="flex items-center justify-center min-h-screen text-white bg-black bg-no-repeat bg-center md:bg-cover bg-contain transition-opacity duration-700"
       style={{
         backgroundImage: `url("/backgrounds/classroom-fallback.png")`,
         backgroundAttachment: "fixed",
+        backgroundColor: "#000",
       }}
     >
-      <div className="bg-black/60 px-8 py-6 rounded-2xl text-center max-w-lg shadow-lg backdrop-blur-sm animate-fade-in">
-        <div className="w-8 h-8 border-4 border-green-400 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
-        <h1 className="text-2xl font-semibold mb-2 drop-shadow-md">
-          📡 Loading Classroom…
-        </h1>
-        <p className="opacity-90 text-sm drop-shadow-sm">
+      <div className="bg-black/70 px-8 py-6 rounded-2xl text-center max-w-lg shadow-lg backdrop-blur-sm">
+        <div className="w-10 h-10 border-4 border-green-400 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
+        <h1 className="text-2xl font-semibold mb-2">📡 Loading Classroom…</h1>
+        <p className="opacity-90 text-sm">
           Please wait, connecting to the live session.
         </p>
       </div>
