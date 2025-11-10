@@ -2,88 +2,93 @@
 let voiceCache = [];
 
 /* ------------------------------------------------------- */
-/* ⏳ Load voices (waits until ready on all browsers)       */
+/* Wait for voices                                         */
 /* ------------------------------------------------------- */
 export function waitForVoices(timeout = 3000) {
   return new Promise((resolve) => {
-    const voices = window.speechSynthesis?.getVoices() || [];
-    if (voices.length) {
-      voiceCache = voices;
-      return resolve(voices);
+    const existing = window.speechSynthesis?.getVoices() || [];
+    if (existing.length) {
+      voiceCache = existing;
+      return resolve(existing);
     }
 
-    let attempts = 0;
+    let tries = 0;
     const id = setInterval(() => {
       const v = window.speechSynthesis.getVoices();
-      if (v.length || attempts++ > 30) {
+      if (v.length || tries++ > 30) {
         clearInterval(id);
         voiceCache = v;
         resolve(v);
       }
     }, 100);
-
     setTimeout(() => clearInterval(id), timeout);
   });
 }
 
 /* ------------------------------------------------------- */
-/* 🧠 Language detection                                    */
+/* Detect language                                         */
 /* ------------------------------------------------------- */
 function detectLang(text = "") {
   if (/[ऀ-ॿ]/.test(text)) return "hi-IN"; // Hindi
   if (/[a-zA-Z]/.test(text) && /[ंँेो]/.test(text)) return "hi-IN"; // Hinglish
-  return "en-IN"; // Indian English default
+  return "en-IN";
 }
 
 /* ------------------------------------------------------- */
-/* 🗣 Voice Picker (cross-browser)                          */
+/* Pick most natural Indian voice                          */
 /* ------------------------------------------------------- */
 function pickVoice(lang, teacher = {}) {
   if (!voiceCache.length)
     voiceCache = window.speechSynthesis?.getVoices() || [];
 
-  // 1️⃣ Teacher-specified override
   if (teacher.voiceName) {
     const named = voiceCache.find((v) => v.name === teacher.voiceName);
     if (named) return named;
   }
 
-  // 2️⃣ Prioritized Indian voices list
-  const indianVoiceNames = [
+  // Priority for Indian voices
+  const indianPriority = [
     "en-IN",
     "hi-IN",
     "Google हिन्दी",
-    "Google हिंदी",
     "Google English (India)",
-    "Google UK English Male",
     "Microsoft Ravi - English (India)",
     "Microsoft Heera - English (India)",
-    "Microsoft Neerja - Hindi (India)",
     "Sangeeta",
+    "Neerja",
   ];
 
-  // Prefer Indian English voice
-  for (const key of indianVoiceNames) {
+  for (const key of indianPriority) {
     const match = voiceCache.find(
-      (v) =>
-        v.lang === key ||
-        v.lang?.startsWith(key.split("-")[0]) ||
-        v.name.includes(key)
+      (v) => v.name.includes(key) || v.lang === key
     );
     if (match) return match;
   }
 
-  // 3️⃣ Fallbacks: UK/US English
-  const fallback =
+  // fallback to most human-sounding English
+  return (
     voiceCache.find((v) => v.lang === "en-GB") ||
     voiceCache.find((v) => v.lang === "en-US") ||
-    voiceCache[0];
-
-  return fallback;
+    voiceCache[0]
+  );
 }
 
 /* ------------------------------------------------------- */
-/* 🗣 Main Speech Player                                   */
+/* ✨ Indian Accent Simulation                              */
+/* ------------------------------------------------------- */
+function indianizeText(text = "") {
+  // lightweight phonetic tweaks (for mobile)
+  return text
+    .replace(/\bthe\b/gi, "thuh")
+    .replace(/\bcan\b/gi, "kaan")
+    .replace(/\bteacher\b/gi, "tee-cher")
+    .replace(/\blecture\b/gi, "lek-chur")
+    .replace(/\bpeople\b/gi, "pee-pul")
+    .replace(/\bclass\b/gi, "klaas");
+}
+
+/* ------------------------------------------------------- */
+/* Main Player                                             */
 /* ------------------------------------------------------- */
 export function playClassroomSpeech({
   slide,
@@ -96,6 +101,7 @@ export function playClassroomSpeech({
   onComplete,
 }) {
   if (!slide || isMuted) return;
+
   const synth = window.speechSynthesis;
   if (!synth) return console.error("Speech synthesis not supported");
 
@@ -116,27 +122,31 @@ export function playClassroomSpeech({
       return;
     }
 
-    const sentence = sentences[index];
+    let sentence = sentences[index];
+    const lang = detectLang(sentence);
+
+    // Apply "Indianized" fallback when no en-IN voice available
+    const voice = pickVoice(lang, slide.teacher);
+    if (voice && !/en-IN|hi-IN/.test(voice.lang)) {
+      sentence = indianizeText(sentence);
+    }
+
     setCurrentSentence(sentence);
 
-    const lang = detectLang(sentence);
     const utter = new SpeechSynthesisUtterance(sentence);
-    utter.voice = pickVoice(lang, slide.teacher);
-    utter.lang = lang;
+    utter.voice = voice;
+    utter.lang = voice?.lang || lang;
 
-    /* 🎚️ Browser-specific fine-tuning for natural tone */
+    // Cross-browser tuning
     const ua = navigator.userAgent.toLowerCase();
     if (lang.startsWith("en")) {
-      // English (Indian style)
-      utter.rate = /firefox/.test(ua) ? 0.9 : /edg/.test(ua) ? 0.94 : 0.92;
-      utter.pitch = 1.05; // young Indian male tone
-      utter.volume = 1;
+      utter.rate = /firefox/.test(ua) ? 0.88 : /android/.test(ua) ? 0.9 : 0.93;
+      utter.pitch = 1.03;
     } else {
-      // Hindi
-      utter.rate = /firefox/.test(ua) ? 0.95 : 0.97;
+      utter.rate = 0.96;
       utter.pitch = 1.0;
-      utter.volume = 1;
     }
+    utter.volume = 1;
 
     let lastUpdate = 0;
 
@@ -146,7 +156,7 @@ export function playClassroomSpeech({
     };
 
     utter.onboundary = (event) => {
-      if (event.name || event.charIndex == null) return;
+      if (event.charIndex == null) return;
       const now = performance.now();
       if (now - lastUpdate > 100) {
         lastUpdate = now;
@@ -167,7 +177,6 @@ export function playClassroomSpeech({
 
     utter.onerror = (e) => {
       console.warn("Speech error:", e);
-      onStopSpeaking?.();
       index++;
       speakNext();
     };
@@ -181,14 +190,14 @@ export function playClassroomSpeech({
     isPlaying: true,
     cancel: () => {
       cancelled = true;
-      synth.cancel();
+      window.speechSynthesis.cancel();
       onStopSpeaking?.();
     },
   };
 }
 
 /* ------------------------------------------------------- */
-/* ⏹ Stop Helper                                           */
+/* Stop Helper                                             */
 /* ------------------------------------------------------- */
 export function stopClassroomSpeech(speechRef) {
   try {
@@ -203,7 +212,7 @@ export function stopClassroomSpeech(speechRef) {
 }
 
 /* ------------------------------------------------------- */
-/* 🔓 Unlock Speech on User Interaction                    */
+/* Unlock Chrome/Android Audio Policy                      */
 /* ------------------------------------------------------- */
 export function unlockSpeechOnUserClick() {
   const resume = () => {
