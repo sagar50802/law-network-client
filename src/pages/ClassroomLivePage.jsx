@@ -106,9 +106,16 @@ export default function ClassroomLivePage() {
         setError("Failed to fetch slides");
         setSlides([]);
       } finally {
+      // ✅ Smooth fade-out effect
+      const loader = document.querySelector(".loading-screen");
+      if (loader) {
+        loader.classList.add("fade-out");
+        setTimeout(() => setLoading(false), 700);
+      } else {
         setLoading(false);
       }
-    };
+    }
+  };
 
     loadSlides();
   }, [selectedLectureId]);
