@@ -18,7 +18,7 @@ const API_URL =
  * --------------------------------------------
  * ✅ Smooth animation / voice sync
  * ✅ Keeps AnchorBox + Teleprompter intact
- * ✅ Now includes navigation bar + back button
+ * ✅ Includes top navbar + back button
  */
 export default function LiveChannelPage() {
   const navigate = useNavigate();
@@ -193,38 +193,51 @@ export default function LiveChannelPage() {
   );
 
   /* ============================================================
-     🧭 Top Navigation Bar
-  ============================================================ */
-  const handleBack = () => {
-    if (window.history.length > 1) navigate(-1);
-    else navigate("/"); // fallback
-  };
-
-  /* ============================================================
      🧩 Main Render
   ============================================================ */
   return (
-    <div className="relative min-h-screen overflow-hidden text-white bg-black">
-      {/* 🔝 Global Navigation Bar */}
-      <nav className="fixed top-0 left-0 w-full z-50 flex items-center justify-between px-4 py-3 bg-black/70 backdrop-blur-md border-b border-gray-800">
+    <div className="relative min-h-screen overflow-hidden text-white bg-black z-0">
+      {/* 🔝 Global Navigation Bar (LawNetwork Style) */}
+      <nav
+        className="fixed top-0 left-0 w-full z-[9999] flex items-center justify-between 
+        px-6 py-3 bg-black/90 border-b border-yellow-500 shadow-lg backdrop-blur-md"
+      >
+        {/* ◀ Back + Title */}
         <div className="flex items-center gap-3">
           <button
-            onClick={handleBack}
-            className="text-sm bg-gray-800 hover:bg-gray-700 text-white px-3 py-1.5 rounded-md border border-gray-700"
+            onClick={() =>
+              window.history.length > 1 ? navigate(-1) : navigate("/")
+            }
+            className="flex items-center gap-1 text-yellow-400 hover:text-yellow-300 font-semibold text-sm"
           >
             ⬅ Back
           </button>
-          <h1 className="text-lg font-semibold tracking-wide text-yellow-400">
-            LawNetwork LIVE
+          <h1 className="text-lg font-bold tracking-wide text-yellow-400">
+            LAWTNETWORK LIVE
           </h1>
+          <span className="ml-2 text-red-500 font-semibold text-xs">● LIVE</span>
         </div>
 
-        <div className="flex items-center gap-3 text-xs text-gray-300">
-          <span className="hidden sm:inline">Home</span>
-          <span>•</span>
-          <span>Studio</span>
-          <span>•</span>
-          <span>Broadcast</span>
+        {/* 🔗 Quick Links */}
+        <div className="hidden sm:flex items-center gap-4 text-xs text-gray-300">
+          <a
+            href="/"
+            className="hover:text-yellow-400 transition-colors duration-200"
+          >
+            Home
+          </a>
+          <a
+            href="/classroom"
+            className="hover:text-yellow-400 transition-colors duration-200"
+          >
+            Classroom
+          </a>
+          <a
+            href="/admin"
+            className="hover:text-yellow-400 transition-colors duration-200"
+          >
+            Admin
+          </a>
         </div>
       </nav>
 
