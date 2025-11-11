@@ -4,34 +4,50 @@ import ClassroomLivePage from "./ClassroomLivePage";
 export default function ClassroomSharePage() {
   const [allowed, setAllowed] = useState(false);
   const [loading, setLoading] = useState(true);
+  const [reason, setReason] = useState("");
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const token = params.get("token");
     const authToken = localStorage.getItem("authToken") || "";
 
-    fetch(
-      `https://law-network.onrender.com/api/classroom-access/check?token=${token}`,
-      {
-        headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
-      }
-    )
+    if (!token) {
+      alert("Missing classroom token.");
+      window.location.href = "/";
+      return;
+    }
+
+    fetch(`https://law-network.onrender.com/api/classroom-access/check?token=${token}`, {
+      headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+    })
       .then((res) => res.json())
       .then((data) => {
-        if (data.allowed) setAllowed(true);
-        else throw new Error("not allowed");
+        if (data.allowed) {
+          setAllowed(true);
+        } else {
+          console.warn("Access denied:", data.reason);
+          setReason(data.reason || "expired_or_not_allowed");
+          throw new Error("not allowed");
+        }
       })
       .catch(() => {
-        alert("This classroom link is expired or not allowed.");
+        // 🔁 Optional: show different messages for clarity
+        let msg = "This classroom link is expired or not allowed.";
+        if (reason === "expired") msg = "⏰ This classroom link has expired.";
+        else if (reason === "no_user") msg = "🔐 Please log in to access this classroom.";
+        else if (reason === "not_in_list")
+          msg = "🚫 You are not authorized to view this private classroom.";
+        alert(msg);
         window.location.href = "/";
       })
       .finally(() => setLoading(false));
-  }, []);
+  }, [reason]);
 
   if (loading)
     return (
-      <div className="flex items-center justify-center h-screen bg-black text-white">
-        Checking access…
+      <div className="flex items-center justify-center h-screen bg-black text-white text-center flex-col gap-3">
+        <div className="animate-spin w-10 h-10 border-4 border-green-500 border-t-transparent rounded-full"></div>
+        <p>Checking access…</p>
       </div>
     );
 
