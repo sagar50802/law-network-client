@@ -1,7 +1,7 @@
 // src/voice/ClassroomVoiceEngine.js
 
 let voiceCache = [];
-let activeSessionId = 0; // 🔑 identifies the currently playing lecture
+let activeSessionId = 0;
 
 /* ------------------------------------------------------- */
 /* ⏳ Load voices (waits until ready on all browsers)       */
@@ -35,25 +35,23 @@ export function waitForVoices(timeout = 3000) {
 /* 🧠 Language detection                                    */
 /* ------------------------------------------------------- */
 function detectLang(text = "") {
-  if (/[ऀ-ॿ]/.test(text)) return "hi-IN"; // Hindi
-  if (/[a-zA-Z]/.test(text) && /[ंँेो]/.test(text)) return "hi-IN"; // Hinglish
-  return "en-IN"; // Indian English default
+  if (/[ऀ-ॿ]/.test(text)) return "hi-IN";
+  if (/[a-zA-Z]/.test(text) && /[ंँेो]/.test(text)) return "hi-IN";
+  return "en-IN";
 }
 
 /* ------------------------------------------------------- */
-/* 🗣 Voice Picker (cross-browser)                          */
+/* 🗣 Voice Picker                                          */
 /* ------------------------------------------------------- */
 function pickVoice(lang, teacher = {}) {
   if (!voiceCache.length)
     voiceCache = window.speechSynthesis?.getVoices() || [];
 
-  // 1️⃣ Teacher override
   if (teacher.voiceName) {
     const named = voiceCache.find((v) => v.name === teacher.voiceName);
     if (named) return named;
   }
 
-  // 2️⃣ Prioritized Indian voices
   const priorities = [
     "hi-IN",
     "en-IN",
@@ -75,7 +73,6 @@ function pickVoice(lang, teacher = {}) {
     if (found) return found;
   }
 
-  // 3️⃣ Fallback: English voices
   return (
     voiceCache.find((v) => v.lang === "en-GB") ||
     voiceCache.find((v) => v.lang === "en-US") ||
@@ -84,7 +81,7 @@ function pickVoice(lang, teacher = {}) {
 }
 
 /* ------------------------------------------------------- */
-/* 🗣 Main Speech Player – session-safe                     */
+/* 🗣 Main Speech Player – session-safe + teleprompter sync */
 /* ------------------------------------------------------- */
 export async function playClassroomSpeech({
   slide,
@@ -95,21 +92,28 @@ export async function playClassroomSpeech({
   onStartSpeaking,
   onStopSpeaking,
   onComplete,
+  onTeleprompterScroll, // 👈 new optional callback
 }) {
   const synth = window.speechSynthesis;
   if (!slide || isMuted || !synth) return;
 
-  // 🔄 Cancel any previous playback (and mark its session as dead)
+  // Stop previous speech cleanly
   stopClassroomSpeech(speechRef);
 
-  // New session id for this lecture/slide
   const mySessionId = ++activeSessionId;
-
   await waitForVoices(1500);
+
+  // 🖼️ Ensure media is visible instantly
+  if (typeof slide.preloadMedia === "function") {
+    try {
+      slide.preloadMedia(); // React side handles video/audio/image preload
+    } catch {}
+  }
 
   const content = (slide.content || "").trim();
   if (!content) return;
 
+  // ✂ Split by punctuation and preserve full text for teleprompter
   const sentences = content
     .split(/(?<=[।!?\.])\s+/)
     .filter((s) => s.trim().length > 0);
@@ -118,7 +122,6 @@ export async function playClassroomSpeech({
   let cancelled = false;
 
   const speakNext = () => {
-    // 🔒 If this session is no longer active, just stop quietly
     if (cancelled || mySessionId !== activeSessionId) return;
 
     if (index >= sentences.length) {
@@ -136,13 +139,13 @@ export async function playClassroomSpeech({
     }
 
     setCurrentSentence(sentence);
+    onTeleprompterScroll?.(sentence, index, sentences); // 👈 scroll entire teleprompter
 
     const lang = detectLang(sentence);
     const utter = new SpeechSynthesisUtterance(sentence);
     utter.voice = pickVoice(lang, slide.teacher);
     utter.lang = lang;
 
-    // 🎚️ Voice tuning
     const ua = navigator.userAgent.toLowerCase();
     if (lang.startsWith("en")) {
       utter.rate = /firefox/.test(ua) ? 0.9 : /edg/.test(ua) ? 0.94 : 0.92;
@@ -164,12 +167,16 @@ export async function playClassroomSpeech({
     utter.onboundary = (event) => {
       if (cancelled || mySessionId !== activeSessionId) return;
       if (event.charIndex == null) return;
+
       const now = performance.now();
       if (now - lastUpdate > 100) {
         lastUpdate = now;
         const progress = Math.min(1, event.charIndex / utter.text.length);
         onProgress?.((prev) => prev * 0.7 + progress * 0.3);
       }
+
+      // 🔁 Smooth teleprompter scroll during speech
+      onTeleprompterScroll?.(sentence, index, sentences, event.charIndex);
     };
 
     utter.onend = () => {
@@ -179,29 +186,21 @@ export async function playClassroomSpeech({
     };
 
     utter.onerror = (e) => {
-      // "interrupted" happens when we cancel on purpose — ignore it
-      if (e.error !== "interrupted") {
-        console.warn("Speech error:", e.error);
-      }
+      if (e.error !== "interrupted") console.warn("Speech error:", e.error);
       if (cancelled || mySessionId !== activeSessionId) return;
       index++;
       setTimeout(speakNext, 200);
     };
 
-    // Speak immediately — we already canceled previous speech above
     synth.speak(utter);
   };
 
-  // expose cancel for React side
   speechRef.current = {
     isPlaying: true,
     cancel: () => {
       if (cancelled) return;
       cancelled = true;
-      // kill this session
-      if (activeSessionId === mySessionId) {
-        activeSessionId++;
-      }
+      if (activeSessionId === mySessionId) activeSessionId++;
       try {
         synth.cancel();
       } catch (e) {
@@ -215,10 +214,9 @@ export async function playClassroomSpeech({
 }
 
 /* ------------------------------------------------------- */
-/* ⏹ Stop Helper – calls the session cancel                */
+/* ⏹ Stop Helper                                           */
 /* ------------------------------------------------------- */
 export function stopClassroomSpeech(speechRef) {
-  // ✅ Use the real cancel function so internal `cancelled` flag is set
   if (speechRef?.current && typeof speechRef.current.cancel === "function") {
     try {
       speechRef.current.cancel();
