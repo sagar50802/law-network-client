@@ -1,4 +1,9 @@
-import React, { useEffect, useRef, useState, useCallback } from "react";
+import React, {
+  useEffect,
+  useRef,
+  useState,
+  useCallback,
+} from "react";
 import TeacherAvatarCard from "../components/TeacherAvatarCard";
 import ClassroomTeleprompter from "../components/ClassroomTeleprompter";
 import { MediaBoard, MediaControlPanel } from "../components/MediaBoard";
@@ -13,17 +18,17 @@ import {
 } from "../voice/ClassroomVoiceEngine.js";
 
 const API_BASE =
-  (import.meta.env.VITE_API_URL || "https://law-network.onrender.com/api") +
-  "/classroom";
+  (import.meta.env.VITE_API_URL ||
+    "https://law-network.onrender.com/api") + "/classroom";
 
 let PAUSE_LOCK = false;
 
 /* -------------------------------------------------------------------------- */
-/* ✅ ClassroomLivePage — Final Clean Production Version                     */
+/* ✅ ClassroomLivePage Component                                            */
 /* -------------------------------------------------------------------------- */
 export default function ClassroomLivePage() {
-  const [lectures, setLectures] = useState([]);
   const [slides, setSlides] = useState([]);
+  const [lectures, setLectures] = useState([]);
   const [selectedLectureId, setSelectedLectureId] = useState(null);
 
   const [currentIndex, setCurrentIndex] = useState(0);
@@ -34,297 +39,299 @@ export default function ClassroomLivePage() {
   const [isMuted, setIsMuted] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
 
-  const [loading, setLoading] = useState(true);
+  const [lecturesLoading, setLecturesLoading] = useState(true);
+  const [slidesLoading, setSlidesLoading] = useState(false);
   const [error, setError] = useState(null);
 
-  const speechRef = useRef({ cancel: () => {}, isPlaying: false });
-  const currentLecture = lectures.find((l) => l._id === selectedLectureId);
+  const speechRef = useRef({ isPlaying: false, cancel: () => {} });
+
   const currentSlide = slides[currentIndex] || null;
+  const currentLecture =
+    lectures.find((l) => l._id === selectedLectureId) || null;
+
+  const loading = lecturesLoading || slidesLoading;
 
   /* ---------------------------------------------------------------------- */
-  /* Utility: Safe Cancel                                                   */
+  /* 🧹 Safe cancel helper (no overlapping speech)                           */
   /* ---------------------------------------------------------------------- */
   const safeCancelSpeech = useCallback(() => {
     try {
-      window.speechSynthesis.cancel();
-      stopClassroomSpeech(speechRef);
+      window.speechSynthesis?.cancel();
     } catch (e) {
       console.warn("Speech cancel failed:", e);
     }
+    stopClassroomSpeech(speechRef);
+    setIsSpeaking(false);
   }, []);
 
   /* ---------------------------------------------------------------------- */
-  /* Unlock Speech Autoplay                                                 */
+  /* 🔓 Unlock speech autoplay after first user click                       */
   /* ---------------------------------------------------------------------- */
-  useEffect(() => unlockSpeechOnUserClick(), []);
+  useEffect(() => {
+    unlockSpeechOnUserClick();
+  }, []);
 
   /* ---------------------------------------------------------------------- */
-  /* Load Lectures (with no-cache headers + filtering)                      */
+  /* 📚 Load lectures (released only)                                       */
   /* ---------------------------------------------------------------------- */
-  const loadLectures = async () => {
-    try {
-      const res = await fetch(`${API_BASE}/lectures?status=released`, {
-        headers: {
-          "Cache-Control": "no-cache, no-store, must-revalidate",
-          Pragma: "no-cache",
-          Expires: "0",
-        },
-      });
-      if (!res.ok) throw new Error(`Server error: ${res.status}`);
-      const json = await res.json();
-      const all = Array.isArray(json.data) ? json.data : [];
+  useEffect(() => {
+    let active = true;
 
-      const filtered = all.filter(
-        (lec) => lec.accessType === "public" || lec.accessType === "protected"
-      );
+    async function loadLectures() {
+      setLecturesLoading(true);
+      try {
+        const res = await fetch(`${API_BASE}/lectures?status=released`);
+        if (!res.ok) throw new Error(`Server error ${res.status}`);
+        const json = await res.json();
+        const list = Array.isArray(json.data) ? json.data : [];
 
-      setLectures(filtered);
-      setError(null);
+        if (!active) return;
 
-      if (!selectedLectureId && filtered[0]?._id) {
-        setSelectedLectureId(filtered[0]._id);
-        await loadSlidesForLecture(filtered[0]._id);
+        setLectures(list);
+
+        // Select first lecture by default
+        if (!selectedLectureId && list[0]?._id) {
+          setSelectedLectureId(list[0]._id);
+        }
+      } catch (err) {
+        console.error("Failed to load lectures:", err);
+        if (active) setError("Failed to load lectures");
+      } finally {
+        if (active) setLecturesLoading(false);
       }
-    } catch (err) {
-      console.error("❌ loadLectures:", err);
-      setError("Failed to load classroom lectures. Please try again later.");
-    } finally {
-      setLoading(false);
     }
-  };
 
-  // Initial load
-  useEffect(() => {
     loadLectures();
-  }, []);
+    return () => {
+      active = false;
+    };
+  }, [selectedLectureId]);
 
-  // Auto-refresh every 30s (in case admin updates)
+  /* ---------------------------------------------------------------------- */
+  /* 📝 Load slides for selected lecture                                    */
+  /* ---------------------------------------------------------------------- */
   useEffect(() => {
-    const interval = setInterval(() => loadLectures(), 30000);
-    return () => clearInterval(interval);
-  }, []);
+    if (!selectedLectureId) return;
+    let active = true;
 
-  /* ---------------------------------------------------------------------- */
-  /* Load Slides for Selected Lecture (token protected)                     */
-  /* ---------------------------------------------------------------------- */
-  const loadSlidesForLecture = useCallback(
-    async (lectureId) => {
-      if (!lectureId) return;
+    async function loadSlides() {
+      setSlidesLoading(true);
       safeCancelSpeech();
       setSlides([]);
       setCurrentIndex(0);
       setCurrentSentence("");
       setProgress(0);
-      setLoading(true);
-
-      const token = Date.now();
-      loadSlidesForLecture.lastToken = token;
 
       try {
-        const res = await fetch(`${API_BASE}/lectures/${lectureId}/slides`, {
-          headers: {
-            "Cache-Control": "no-cache, no-store, must-revalidate",
-          },
-        });
-        if (!res.ok) throw new Error(`Server error: ${res.status}`);
+        const res = await fetch(
+          `${API_BASE}/lectures/${selectedLectureId}/slides`
+        );
+        if (!res.ok) throw new Error(`Server error ${res.status}`);
         const json = await res.json();
 
-        if (loadSlidesForLecture.lastToken !== token) return; // ignore stale
-        const slidesData = json.data?.slides || json.slides || [];
-        setSlides(Array.isArray(slidesData) ? slidesData : []);
-        setError(null);
+        // ✅ API returns { success, data: { slides: [...] } }
+        const list =
+          json?.data?.slides ||
+          json.slides ||
+          [];
+
+        if (!active) return;
+
+        setSlides(Array.isArray(list) ? list : []);
+        setCurrentIndex(0);
+        console.log("📚 Slides loaded:", Array.isArray(list) ? list.length : 0);
       } catch (err) {
-        console.error("❌ loadSlides:", err);
-        if (loadSlidesForLecture.lastToken === token)
-          setError("Failed to load slides for this lecture.");
-        setSlides([]);
+        console.error("Failed to load slides:", err);
+        if (active) {
+          setError("Failed to fetch slides");
+          setSlides([]);
+        }
       } finally {
-        setTimeout(() => {
-          if (loadSlidesForLecture.lastToken === token) setLoading(false);
-        }, 250);
+        if (active) setSlidesLoading(false);
       }
-    },
-    [safeCancelSpeech]
-  );
+    }
 
-  useEffect(() => {
-    if (selectedLectureId) loadSlidesForLecture(selectedLectureId);
-  }, [selectedLectureId, loadSlidesForLecture]);
+    loadSlides();
+    return () => {
+      active = false;
+    };
+  }, [selectedLectureId, safeCancelSpeech]);
 
   /* ---------------------------------------------------------------------- */
-  /* Preload Voices                                                         */
+  /* 🔊 Preload voices (once)                                               */
   /* ---------------------------------------------------------------------- */
   useEffect(() => {
-    waitForVoices(3000).then((v) =>
-      console.log(`✅ Voices preloaded (${v.length})`)
+    waitForVoices(3000).then((voices) =>
+      console.log(`✅ Voices preloaded (${voices.length})`)
     );
   }, []);
 
   /* ---------------------------------------------------------------------- */
-  /* Handle Next Slide                                                      */
+  /* ⏭ Slide progression                                                    */
   /* ---------------------------------------------------------------------- */
   const handleNextSlide = useCallback(() => {
     safeCancelSpeech();
-    setProgress(0);
     setCurrentSentence("");
-    setIsSpeaking(false);
+    setProgress(0);
 
-    setTimeout(() => {
-      setCurrentIndex((prev) => {
-        if (prev + 1 < slides.length) return prev + 1;
-        setIsPlaying(false);
-        return prev;
-      });
-    }, 250);
+    setCurrentIndex((prev) => {
+      const next = prev + 1;
+      if (next < slides.length) {
+        return next;
+      }
+      // Last slide reached → stop auto-play
+      setIsPlaying(false);
+      return prev;
+    });
   }, [slides.length, safeCancelSpeech]);
 
   /* ---------------------------------------------------------------------- */
-  /* Voice Playback Logic (auto language, debounce)                         */
+  /* 🗣 Voice synchronisation with slide + lecture                           */
   /* ---------------------------------------------------------------------- */
   useEffect(() => {
-    if (loading || !slides.length || !isPlaying || isMuted) return;
-    safeCancelSpeech();
+    let active = true;
 
-    const slide = currentSlide;
-    if (!slide) return;
+    async function startSpeech() {
+      if (!currentSlide || !slides.length) return;
 
-    const timeout = setTimeout(() => {
-      if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
-        setTimeout(() => {
-          playClassroomSpeech({
-            slide,
-            isMuted,
-            speechRef,
-            setCurrentSentence,
-            onProgress: setProgress,
-            onStartSpeaking: () => setIsSpeaking(true),
-            onStopSpeaking: () => setIsSpeaking(false),
-            onComplete: handleNextSlide,
-          });
-        }, 300);
-      } else {
-        playClassroomSpeech({
-          slide,
-          isMuted,
-          speechRef,
-          setCurrentSentence,
-          onProgress: setProgress,
-          onStartSpeaking: () => setIsSpeaking(true),
-          onStopSpeaking: () => setIsSpeaking(false),
-          onComplete: handleNextSlide,
-        });
+      // If user paused or muted, don't speak
+      if (!isPlaying || isMuted || PAUSE_LOCK) return;
+
+      safeCancelSpeech();
+
+      await waitForVoices(3000);
+      if (!active) return;
+
+      const voices = window.speechSynthesis?.getVoices() || [];
+      if (!voices.length) {
+        // Fallback: just show text in teleprompter
+        setCurrentSentence(currentSlide.content || "");
+        return;
       }
-    }, 400);
+
+      // Ensure no overlapping utterances
+      if (
+        window.speechSynthesis.speaking ||
+        window.speechSynthesis.pending
+      ) {
+        window.speechSynthesis.cancel();
+      }
+
+      playClassroomSpeech({
+        slide: currentSlide,
+        isMuted,
+        speechRef,
+        setCurrentSentence,
+        onProgress: setProgress,
+        onStartSpeaking: () => setIsSpeaking(true),
+        onStopSpeaking: () => setIsSpeaking(false),
+        onComplete: handleNextSlide,
+      });
+    }
+
+    startSpeech();
 
     return () => {
-      clearTimeout(timeout);
+      active = false;
       safeCancelSpeech();
     };
   }, [
     currentSlide?._id,
+    slides.length,
     isPlaying,
     isMuted,
-    slides.length,
     handleNextSlide,
-    loading,
     safeCancelSpeech,
   ]);
 
   /* ---------------------------------------------------------------------- */
-  /* Controls: Play / Pause / Mute / Slide Nav                              */
+  /* 🎮 Controls                                                            */
   /* ---------------------------------------------------------------------- */
+  const goToSlide = (index) => {
+    if (index < 0 || index >= slides.length) return;
+    safeCancelSpeech();
+    setCurrentSentence("");
+    setProgress(0);
+    setCurrentIndex(index);
+    setIsPlaying(true);
+  };
+
   const handlePlayPause = () => {
-    const synth = window.speechSynthesis;
-    if (!synth) return;
     if (isPlaying) {
+      // Pause → really stop current reading
       PAUSE_LOCK = true;
-      safeCancelSpeech();
       setIsPlaying(false);
-      setIsSpeaking(false);
-    } else {
-      PAUSE_LOCK = false;
       safeCancelSpeech();
+    } else {
+      // Resume → read current slide from start
+      PAUSE_LOCK = false;
       setIsPlaying(true);
     }
   };
 
   const handleMuteToggle = () => {
-    const synth = window.speechSynthesis;
     setIsMuted((prev) => {
       const next = !prev;
       if (next) {
-        synth.cancel();
-        stopClassroomSpeech(speechRef);
-        setIsSpeaking(false);
-      } else if (!PAUSE_LOCK) {
-        setIsPlaying(true);
+        // becoming muted -> stop speech
+        safeCancelSpeech();
+      } else if (!PAUSE_LOCK && isPlaying) {
+        // unmuted while playing -> effect will restart automatically
       }
       return next;
     });
   };
 
-  const goToSlide = (index) => {
-    if (index < 0 || index >= slides.length) return;
-    safeCancelSpeech();
-    setCurrentIndex(index);
-    setCurrentSentence("");
-    setProgress(0);
-    setIsSpeaking(false);
-    setIsPlaying(true);
-  };
+  /* ---------------------------------------------------------------------- */
+  /* 🧾 Derived values                                                      */
+  /* ---------------------------------------------------------------------- */
+  const accessType =
+    currentLecture?.accessType || currentLecture?.access_type;
 
   /* ---------------------------------------------------------------------- */
-  /* Loader + Error States                                                  */
-  /* ---------------------------------------------------------------------- */
-  if (loading)
-    return (
-      <div className="absolute inset-0 flex items-center justify-center bg-black/95 text-white">
-        <div className="text-center">
-          <div className="w-10 h-10 border-4 border-green-400 border-t-transparent rounded-full animate-spin mx-auto mb-3"></div>
-          <p className="text-lg font-semibold">Loading lecture…</p>
-        </div>
-      </div>
-    );
-
-  if (error || !slides.length)
-    return (
-      <div className="flex items-center justify-center min-h-screen bg-slate-900 text-white">
-        <p>⚠️ {error || "No slides available for this lecture."}</p>
-      </div>
-    );
-
-  /* ---------------------------------------------------------------------- */
-  /* Layout                                                                 */
+  /* 🖥 Render                                                              */
   /* ---------------------------------------------------------------------- */
   return (
-    <div className="min-h-screen bg-slate-950 text-slate-50 flex flex-col overflow-hidden">
-      {/* Header */}
+    <div className="relative min-h-screen bg-slate-950 text-slate-50 flex flex-col overflow-hidden">
+      {/* 🔄 Loader overlay */}
+      {loading && (
+        <div
+          id="classroom-loader"
+          className="absolute inset-0 z-[9999] flex items-center justify-center bg-black/95 text-white transition-opacity duration-500"
+        >
+          <div className="bg-black/70 px-8 py-6 rounded-2xl text-center max-w-lg shadow-lg backdrop-blur-sm">
+            <div className="w-10 h-10 border-4 border-green-400 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
+            <h1 className="text-2xl font-semibold mb-2">
+              📡 Loading classroom…
+            </h1>
+            <p className="opacity-90 text-sm">
+              Please wait, connecting to the live session.
+            </p>
+          </div>
+        </div>
+      )}
+
+      {/* HEADER */}
       <header className="px-4 md:px-8 py-3 border-b border-slate-800 flex items-center justify-between">
         <div className="flex items-center gap-3">
-          <div className="text-lg md:text-2xl font-semibold">
+          <div className="text-lg md:text-2xl font-semibold tracking-wide">
             Classroom Live • {currentLecture?.subject || "Lecture"}
           </div>
-          {currentLecture?.accessType && (
+
+          {accessType && (
             <span
               className={`px-2 py-0.5 text-xs rounded-full font-semibold ${
-                currentLecture.accessType === "public"
+                accessType === "public"
                   ? "bg-emerald-600/20 text-emerald-400 border border-emerald-700"
-                  : "bg-slate-700/40 text-slate-300 border-slate-600 border"
+                  : "bg-slate-700/40 text-slate-300 border border-slate-600"
               }`}
             >
-              {currentLecture.accessType === "public" ? "Public" : "Private"}
+              {accessType === "public" ? "Public" : "Private"}
             </span>
           )}
-          <button
-            onClick={loadLectures}
-            className="ml-2 px-2 py-1 border border-slate-600 rounded text-xs hover:bg-slate-700"
-            title="Refresh lectures"
-          >
-            ⟳
-          </button>
         </div>
 
-        <div className="hidden md:flex items-center gap-2 text-xs md:text-sm">
+        <div className="flex items-center gap-2 text-xs md:text-sm">
           <button
             onClick={handlePlayPause}
             className={`px-3 py-1.5 rounded-full font-semibold text-xs transition-all ${
@@ -335,6 +342,7 @@ export default function ClassroomLivePage() {
           >
             {isPlaying ? "Pause" : "Resume"}
           </button>
+
           <button
             onClick={handleMuteToggle}
             className={`px-3 py-1.5 rounded-full text-xs border transition-all ${
@@ -348,79 +356,94 @@ export default function ClassroomLivePage() {
         </div>
       </header>
 
-      {/* Main */}
-      <main className="flex-1 px-4 md:px-8 py-5 grid grid-cols-1 md:grid-cols-[0.9fr_2.4fr_1.1fr] gap-5 items-start">
-        <TeacherAvatarCard
-          teacher={{
-            name:
-              currentLecture?.teacher?.name ||
-              currentLecture?.teacherName ||
-              "Teacher",
-            role: currentLecture?.teacher?.role || "Faculty",
-            avatarUrl:
-              currentLecture?.teacher?.avatarUrl ||
-              currentLecture?.teacher?.photoUrl ||
-              currentLecture?.teacher?.image ||
-              currentLecture?.photoUrl ||
-              currentLecture?.image ||
-              "/avatars/teacher1.png",
-          }}
-          subject={currentLecture?.subject || "Lecture"}
-          isSpeaking={isSpeaking}
-        />
-
-        <section className="flex flex-col gap-3">
-          <ClassroomTeleprompter
-            slide={currentSlide}
-            currentSentence={currentSentence}
-            progress={progress}
+      {/* MAIN */}
+      <main className="flex-1 px-4 md:px-8 py-4 md:py-6 flex flex-col gap-4">
+        <div className="flex-1 grid grid-cols-1 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,2.4fr)_minmax(0,1.1fr)] gap-4">
+          {/* LEFT: Teacher avatar */}
+          <TeacherAvatarCard
+            teacher={{
+              name:
+                currentLecture?.teacher?.name ||
+                currentLecture?.teacherName ||
+                "Teacher",
+              role: currentLecture?.teacher?.role || "Faculty",
+              avatarUrl:
+                currentLecture?.teacher?.avatarUrl ||
+                currentLecture?.teacher?.photoUrl ||
+                currentLecture?.teacher?.image ||
+                currentLecture?.photoUrl ||
+                currentLecture?.image ||
+                "/avatars/teacher1.png",
+            }}
+            subject={currentLecture?.subject || "Lecture"}
+            isSpeaking={isSpeaking}
           />
-          <MediaBoard media={currentSlide?.media} />
-          <MediaControlPanel
-            active={{
-              audio: !!currentSlide?.media?.audioUrl,
-              video: !!currentSlide?.media?.videoUrl,
-              image: !!currentSlide?.media?.imageUrl,
+
+          {/* CENTER: Teleprompter + media */}
+          <section className="flex flex-col gap-3">
+            <ClassroomTeleprompter
+              slide={currentSlide}
+              currentSentence={currentSentence}
+              progress={progress}
+            />
+
+            <MediaBoard media={currentSlide?.media} />
+            <MediaControlPanel
+              active={{
+                audio: !!currentSlide?.media?.audioUrl,
+                video: !!currentSlide?.media?.videoUrl,
+                image: !!currentSlide?.media?.imageUrl,
+              }}
+            />
+
+            <div className="mt-2 flex items-center justify-end gap-2 text-xs">
+              <button
+                className="px-3 py-1 rounded-full bg-slate-800 border border-slate-600"
+                onClick={() => goToSlide(currentIndex - 1)}
+                disabled={currentIndex === 0}
+              >
+                ◀ Prev
+              </button>
+              <span className="text-slate-300">
+                Slide {slides.length ? currentIndex + 1 : 0} / {slides.length}
+              </span>
+              <button
+                className="px-3 py-1 rounded-full bg-slate-800 border border-slate-600"
+                onClick={() => goToSlide(currentIndex + 1)}
+                disabled={currentIndex + 1 >= slides.length}
+              >
+                Next ▶
+              </button>
+            </div>
+          </section>
+
+          {/* RIGHT: Today's lectures playlist */}
+          <LecturePlaylistSidebar
+            lectures={lectures}
+            currentLectureId={selectedLectureId}
+            onSelectLecture={(lec) => {
+              if (!lec?._id || lec._id === selectedLectureId) return;
+              safeCancelSpeech();
+              setSlides([]);
+              setCurrentIndex(0);
+              setCurrentSentence("");
+              setProgress(0);
+              setIsSpeaking(false);
+              setIsPlaying(true);
+              setSelectedLectureId(lec._id);
             }}
           />
-          <div className="mt-2 flex justify-end items-center gap-2 text-xs">
-            <button
-              className="px-3 py-1 rounded-full bg-slate-800 border border-slate-600"
-              onClick={() => goToSlide(currentIndex - 1)}
-            >
-              ◀ Prev
-            </button>
-            <span className="text-slate-300">
-              Slide {currentIndex + 1} / {slides.length}
-            </span>
-            <button
-              className="px-3 py-1 rounded-full bg-slate-800 border border-slate-600"
-              onClick={() => goToSlide(currentIndex + 1)}
-            >
-              Next ▶
-            </button>
-          </div>
-        </section>
+        </div>
 
-        <LecturePlaylistSidebar
-          lectures={lectures}
-          currentLectureId={selectedLectureId}
-          onSelectLecture={async (lec) => {
-            if (!lec?._id || lec._id === selectedLectureId) return;
-            safeCancelSpeech();
-            setIsPlaying(false);
-            await loadSlidesForLecture(lec._id);
-            setSelectedLectureId(lec._id);
-            setIsPlaying(true);
-          }}
+        <StudentsRow
+          onRaiseHand={() =>
+            alert("✋ Student raised hand — feature coming soon!")
+          }
+          onReaction={(emoji) => console.log("Student reaction:", emoji)}
         />
       </main>
 
-      <StudentsRow
-        onRaiseHand={() => alert("✋ Student raised hand")}
-        onReaction={(emoji) => console.log("Reaction:", emoji)}
-      />
-
+      {/* FOOTER */}
       <footer className="text-xs text-slate-600 text-center py-3 border-t border-slate-800">
         ClassroomLivePage • connected to API ({API_BASE})
       </footer>
