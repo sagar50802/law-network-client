@@ -17,7 +17,6 @@ export function MediaBoard({ media = {}, autoPlay = false, isPlaying = true }) {
     const vid = videoRef.current;
     const aud = audioRef.current;
 
-    // ✅ Don’t auto-play; only pause if global play state stops
     if (!isPlaying) {
       if (vid && !vid.paused) vid.pause();
       if (aud && !aud.paused) {
@@ -64,8 +63,8 @@ export function MediaBoard({ media = {}, autoPlay = false, isPlaying = true }) {
             controls
             playsInline
             preload="metadata"
-            controlsList="nodownload" /* 🚫 hides download button */
-            disablePictureInPicture /* 🚫 disables PiP */
+            controlsList="nodownload"
+            disablePictureInPicture
           />
         ) : (
           <div className="w-full aspect-video rounded-xl bg-slate-800 flex items-center justify-center text-slate-500 text-sm">
@@ -78,9 +77,10 @@ export function MediaBoard({ media = {}, autoPlay = false, isPlaying = true }) {
           <audio
             ref={audioRef}
             src={audioUrl}
-            className="w-full mt-3" /* ✅ visible bar below video */
+            className="w-full mt-3"
             preload="metadata"
-            controls /* ✅ user can play manually */
+            controls
+            controlsList="nodownload noplaybackrate" /* 🚫 remove download & playback speed */
           />
         )}
 
