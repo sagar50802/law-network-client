@@ -1,20 +1,24 @@
 // src/voice/ClassroomVoiceEngine.js
 let voiceCache = [];
+let SPEECH_LOCK = false; // prevents overlapping playbacks
 
 /* ------------------------------------------------------- */
 /* ⏳ Load voices (waits until ready on all browsers)       */
 /* ------------------------------------------------------- */
 export function waitForVoices(timeout = 3000) {
   return new Promise((resolve) => {
-    const voices = window.speechSynthesis?.getVoices() || [];
-    if (voices.length) {
-      voiceCache = voices;
-      return resolve(voices);
+    const synth = window.speechSynthesis;
+    if (!synth) return resolve([]);
+
+    const existing = synth.getVoices();
+    if (existing.length) {
+      voiceCache = existing;
+      return resolve(existing);
     }
 
     let attempts = 0;
     const id = setInterval(() => {
-      const v = window.speechSynthesis.getVoices();
+      const v = synth.getVoices();
       if (v.length || attempts++ > 30) {
         clearInterval(id);
         voiceCache = v;
@@ -42,50 +46,46 @@ function pickVoice(lang, teacher = {}) {
   if (!voiceCache.length)
     voiceCache = window.speechSynthesis?.getVoices() || [];
 
-  // 1️⃣ Teacher-specified override
+  // 1️⃣ Teacher override
   if (teacher.voiceName) {
     const named = voiceCache.find((v) => v.name === teacher.voiceName);
     if (named) return named;
   }
 
-  // 2️⃣ Prioritized Indian voices list
-  const indianVoiceNames = [
-    "en-IN",
+  // 2️⃣ Prioritized Indian voices
+  const priorities = [
     "hi-IN",
-    "Google हिन्दी",
+    "en-IN",
     "Google हिंदी",
-    "Google English (India)",
-    "Google UK English Male",
+    "Google हिन्दी",
+    "Microsoft Neerja - Hindi (India)",
     "Microsoft Ravi - English (India)",
     "Microsoft Heera - English (India)",
-    "Microsoft Neerja - Hindi (India)",
     "Sangeeta",
   ];
 
-  // Prefer Indian English voice
-  for (const key of indianVoiceNames) {
-    const match = voiceCache.find(
+  for (const key of priorities) {
+    const found = voiceCache.find(
       (v) =>
         v.lang === key ||
-        v.lang?.startsWith(key.split("-")[0]) ||
-        v.name.includes(key)
+        v.name?.includes(key) ||
+        v.lang?.startsWith(key.split("-")[0])
     );
-    if (match) return match;
+    if (found) return found;
   }
 
-  // 3️⃣ Fallbacks: UK/US English
-  const fallback =
+  // 3️⃣ Fallback: English voices
+  return (
     voiceCache.find((v) => v.lang === "en-GB") ||
     voiceCache.find((v) => v.lang === "en-US") ||
-    voiceCache[0];
-
-  return fallback;
+    voiceCache[0]
+  );
 }
 
 /* ------------------------------------------------------- */
 /* 🗣 Main Speech Player                                   */
 /* ------------------------------------------------------- */
-export function playClassroomSpeech({
+export async function playClassroomSpeech({
   slide,
   isMuted = false,
   speechRef,
@@ -95,13 +95,20 @@ export function playClassroomSpeech({
   onStopSpeaking,
   onComplete,
 }) {
-  if (!slide || isMuted) return;
+  if (!slide || isMuted || SPEECH_LOCK) return;
   const synth = window.speechSynthesis;
   if (!synth) return console.error("Speech synthesis not supported");
 
+  SPEECH_LOCK = true; // prevent reentry
   stopClassroomSpeech(speechRef);
+  await waitForVoices(1500);
 
-  const content = slide.content || "";
+  const content = (slide.content || "").trim();
+  if (!content) {
+    SPEECH_LOCK = false;
+    return;
+  }
+
   const sentences = content
     .split(/(?<=[।!?\.])\s+/)
     .filter((s) => s.trim().length > 0);
@@ -111,12 +118,19 @@ export function playClassroomSpeech({
 
   const speakNext = () => {
     if (cancelled || index >= sentences.length) {
+      SPEECH_LOCK = false;
       onStopSpeaking?.();
       onComplete?.();
       return;
     }
 
-    const sentence = sentences[index];
+    const sentence = sentences[index].trim();
+    if (!sentence) {
+      index++;
+      speakNext();
+      return;
+    }
+
     setCurrentSentence(sentence);
 
     const lang = detectLang(sentence);
@@ -124,19 +138,16 @@ export function playClassroomSpeech({
     utter.voice = pickVoice(lang, slide.teacher);
     utter.lang = lang;
 
-    /* 🎚️ Browser-specific fine-tuning for natural tone */
+    // 🎚️ Voice tone & rate tuning
     const ua = navigator.userAgent.toLowerCase();
     if (lang.startsWith("en")) {
-      // English (Indian style)
       utter.rate = /firefox/.test(ua) ? 0.9 : /edg/.test(ua) ? 0.94 : 0.92;
-      utter.pitch = 1.05; // young Indian male tone
-      utter.volume = 1;
+      utter.pitch = 1.05;
     } else {
-      // Hindi
       utter.rate = /firefox/.test(ua) ? 0.95 : 0.97;
       utter.pitch = 1.0;
-      utter.volume = 1;
     }
+    utter.volume = 1;
 
     let lastUpdate = 0;
 
@@ -146,14 +157,11 @@ export function playClassroomSpeech({
     };
 
     utter.onboundary = (event) => {
-      if (event.name || event.charIndex == null) return;
+      if (!event.charIndex) return;
       const now = performance.now();
       if (now - lastUpdate > 100) {
         lastUpdate = now;
-        const progress = Math.min(
-          1,
-          event.charIndex / (utter.text.length || 1)
-        );
+        const progress = Math.min(1, event.charIndex / utter.text.length);
         onProgress?.((prev) => prev * 0.7 + progress * 0.3);
       }
     };
@@ -162,17 +170,24 @@ export function playClassroomSpeech({
       onProgress?.(1);
       onStopSpeaking?.();
       index++;
-      setTimeout(speakNext, 300);
+      setTimeout(speakNext, 350); // small gap for clarity
     };
 
     utter.onerror = (e) => {
-      console.warn("Speech error:", e);
-      onStopSpeaking?.();
+      console.warn("Speech error:", e.error);
       index++;
-      speakNext();
+      setTimeout(speakNext, 200);
     };
 
-    synth.speak(utter);
+    // Guard: wait until no speech is pending
+    const waitAndSpeak = () => {
+      if (synth.speaking || synth.pending) {
+        setTimeout(waitAndSpeak, 150);
+      } else {
+        synth.speak(utter);
+      }
+    };
+    waitAndSpeak();
   };
 
   speakNext();
@@ -182,6 +197,7 @@ export function playClassroomSpeech({
     cancel: () => {
       cancelled = true;
       synth.cancel();
+      SPEECH_LOCK = false;
       onStopSpeaking?.();
     },
   };
@@ -192,7 +208,8 @@ export function playClassroomSpeech({
 /* ------------------------------------------------------- */
 export function stopClassroomSpeech(speechRef) {
   try {
-    window.speechSynthesis.cancel();
+    const synth = window.speechSynthesis;
+    if (synth.speaking || synth.pending) synth.cancel();
   } catch (e) {
     console.warn("speech cancel failed:", e);
   }
@@ -200,6 +217,7 @@ export function stopClassroomSpeech(speechRef) {
     speechRef.current.isPlaying = false;
     speechRef.current.cancel = () => {};
   }
+  SPEECH_LOCK = false;
 }
 
 /* ------------------------------------------------------- */
