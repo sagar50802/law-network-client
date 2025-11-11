@@ -43,12 +43,12 @@ export default function ClassroomLivePage() {
 
   const [loading, setLoading] = useState(true);
   const [isSwitching, setIsSwitching] = useState(false);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState(null);        // ✅ fatal (lectures) error
+  const [slidesError, setSlidesError] = useState(null); // ✅ per-lecture slides error
 
   const [playSeed, setPlaySeed] = useState(0);
 
   const speechRef = useRef({ isPlaying: false, cancel: () => {} });
-  const switchTimer = useRef(null);
   const speechPaused = useRef(false);
   const isPlayingRef = useRef(true);
 
@@ -96,6 +96,7 @@ export default function ClassroomLivePage() {
       if (!selectedLectureId && list[0]?._id) {
         setSelectedLectureId(list[0]._id);
       }
+      setError(null); // ✅ clear any previous lecture error
       setLoading(false);
     } catch (err) {
       console.error("Failed to load lectures:", err);
@@ -116,20 +117,37 @@ export default function ClassroomLivePage() {
       if (!lectureId) return;
       setLoading(true);
       hardStopSpeech();
+      setSlidesError(null); // ✅ clear previous slides error
 
       try {
         const res = await fetch(`${API_BASE}/lectures/${lectureId}/slides`);
         if (!res.ok) throw new Error(`Server error: ${res.status}`);
         const json = await res.json();
-        const slidesData = json.data?.slides || json.slides || [];
-        setSlides(Array.isArray(slidesData) ? slidesData : []);
+
+        // 🩹 Flexible parsing: supports multiple API formats
+        let slidesData = [];
+        if (Array.isArray(json.data?.slides)) slidesData = json.data.slides;
+        else if (Array.isArray(json.data)) slidesData = json.data;
+        else if (Array.isArray(json.slides)) slidesData = json.slides;
+        else if (Array.isArray(json)) slidesData = json;
+        else slidesData = [];
+
+        if (!slidesData.length) {
+          console.warn("⚠️ No slides found for lecture:", lectureId, json);
+          setSlidesError("No slides available for this lecture yet.");
+        } else {
+          setSlidesError(null);
+        }
+
+        setSlides(slidesData);
         setCurrentIndex(0);
         setCurrentSentence("");
         setProgress(0);
       } catch (err) {
         console.error("Failed to load slides:", err);
-        setError("Failed to fetch slides");
         setSlides([]);
+        // ❌ do NOT set global `error` here, or whole page goes blank
+        setSlidesError("⚠️ Could not load slides for this lecture.");
       } finally {
         setLoading(false);
       }
@@ -163,6 +181,7 @@ export default function ClassroomLivePage() {
       setActiveSentenceIndex(0);
     } else {
       setSentences([]);
+      setActiveSentenceIndex(0);
     }
   }, [currentSlide?._id]);
 
@@ -206,7 +225,8 @@ export default function ClassroomLivePage() {
     return () => {
       cancelled = true;
     };
-  }, [currentSlide?._id, slides.length, isMuted, loading, playSeed]);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentSlide?._id, slides.length, isMuted, loading, playSeed, sentences]);
 
   /* ---------------------------------------------------------------------- */
   /* 🧭 Auto-scroll teleprompter when active sentence changes              */
@@ -275,7 +295,7 @@ export default function ClassroomLivePage() {
   };
 
   /* ---------------------------------------------------------------------- */
-  /* 🧾 Error Fallback                                                     */
+  /* 🧾 Fatal Error Fallback (lectures only)                               */
   /* ---------------------------------------------------------------------- */
   if (error && !loading) {
     return (
@@ -294,8 +314,12 @@ export default function ClassroomLivePage() {
         <div className="absolute inset-0 z-[9999] flex items-center justify-center bg-black/95 text-white">
           <div className="bg-black/70 px-8 py-6 rounded-2xl text-center shadow-lg backdrop-blur-sm">
             <div className="w-10 h-10 border-4 border-green-400 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-            <h1 className="text-2xl font-semibold mb-2">📡 Loading classroom…</h1>
-            <p className="opacity-90 text-sm">Please wait, connecting to the live session.</p>
+            <h1 className="text-2xl font-semibold mb-2">
+              📡 Loading classroom…
+            </h1>
+            <p className="opacity-90 text-sm">
+              Please wait, connecting to the live session.
+            </p>
           </div>
         </div>
       )}
@@ -309,12 +333,14 @@ export default function ClassroomLivePage() {
           {(currentLecture?.accessType || currentLecture?.access_type) && (
             <span
               className={`px-2 py-0.5 text-xs rounded-full font-semibold ${
-                (currentLecture.accessType || currentLecture.access_type) === "public"
+                (currentLecture.accessType || currentLecture.access_type) ===
+                "public"
                   ? "bg-emerald-600/20 text-emerald-400 border border-emerald-700"
                   : "bg-slate-700/40 text-slate-300 border border-slate-600"
               }`}
             >
-              {(currentLecture.accessType || currentLecture.access_type) === "public"
+              {(currentLecture.accessType || currentLecture.access_type) ===
+              "public"
                 ? "Public"
                 : "Private"}
             </span>
@@ -368,8 +394,14 @@ export default function ClassroomLivePage() {
             isSpeaking={isSpeaking}
           />
 
-          {/* 🟩 Teleprompter */}
+          {/* 🟩 Teleprompter + media */}
           <section className="flex flex-col gap-3">
+            {slidesError && (
+              <div className="text-center text-amber-400 text-sm font-medium mb-1">
+                {slidesError}
+              </div>
+            )}
+
             <div
               id="teleprompter"
               className="overflow-y-auto max-h-[250px] p-4 bg-slate-900 rounded-xl border border-slate-700 text-slate-200 leading-relaxed tracking-wide scroll-smooth"
@@ -387,6 +419,11 @@ export default function ClassroomLivePage() {
                   {line}
                 </p>
               ))}
+              {!sentences.length && !slidesError && (
+                <p className="text-slate-500 text-sm italic">
+                  No content available for this slide.
+                </p>
+              )}
             </div>
 
             <MediaBoard media={currentSlide?.media} />
@@ -425,7 +462,9 @@ export default function ClassroomLivePage() {
         </div>
 
         <StudentsRow
-          onRaiseHand={() => alert("✋ Student raised hand — feature coming soon!")}
+          onRaiseHand={() =>
+            alert("✋ Student raised hand — feature coming soon!")
+          }
           onReaction={(emoji) => console.log("Student reaction:", emoji)}
         />
       </main>
