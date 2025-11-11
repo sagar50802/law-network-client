@@ -8,7 +8,7 @@ export default function Navbar() {
   const [open, setOpen] = useState(false);
   const [adminKey, setAdminKey] = useState(localStorage.getItem("ADMIN_KEY") || "");
 
-  // 🔄 Auto-refresh ADMIN_KEY every second (reactive without reload)
+  // 🔄 Auto-refresh ADMIN_KEY every second
   useEffect(() => {
     const interval = setInterval(() => {
       const current = localStorage.getItem("ADMIN_KEY") || "";
@@ -150,6 +150,14 @@ export default function Navbar() {
                 </a>
               )}
 
+              {/* ⭐ NEW: Footer & Terms Editor */}
+              <a
+                href="/admin/footer"
+                className="px-2 py-1 rounded-md bg-blue-200 text-blue-900 font-semibold hover:bg-blue-300 transition"
+              >
+                📝 Edit Footer
+              </a>
+
               <button
                 className="ml-2 text-xs border px-2 py-1 rounded"
                 onClick={() => {
@@ -230,6 +238,14 @@ export default function Navbar() {
                 className="px-2 py-1 rounded-md bg-green-200 text-green-900 font-semibold text-center hover:bg-green-300 transition"
               >
                 🎓 Classroom Manager
+              </a>
+
+              {/* ⭐ NEW: Footer & Terms Editor */}
+              <a
+                href="/admin/footer"
+                className="px-2 py-1 rounded-md bg-blue-200 text-blue-900 font-semibold text-center hover:bg-blue-300 transition"
+              >
+                📝 Edit Footer
               </a>
 
               {showLiveAdmin && (
