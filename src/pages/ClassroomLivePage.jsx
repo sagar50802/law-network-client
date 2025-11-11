@@ -1,4 +1,3 @@
-// src/pages/ClassroomLivePage.jsx
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import TeacherAvatarCard from "../components/TeacherAvatarCard";
 import ClassroomTeleprompter from "../components/ClassroomTeleprompter";
@@ -20,7 +19,7 @@ const API_BASE =
 let PAUSE_LOCK = false;
 
 /* -------------------------------------------------------------------------- */
-/* ✅ ClassroomLivePage (fixed pause + pulsing play button)                  */
+/* ✅ ClassroomLivePage (Isolated lectures + Access Tag + Voice fixed)       */
 /* -------------------------------------------------------------------------- */
 export default function ClassroomLivePage() {
   const [slides, setSlides] = useState([]);
@@ -44,72 +43,82 @@ export default function ClassroomLivePage() {
     lectures.find((l) => l._id === selectedLectureId) || null;
 
   /* ---------------------------------------------------------------------- */
-  /* Unlock Speech Autoplay (browser policy)                                */
+  /* Unlock Speech Autoplay                                                 */
   /* ---------------------------------------------------------------------- */
   useEffect(() => {
     unlockSpeechOnUserClick();
   }, []);
 
   /* ---------------------------------------------------------------------- */
-  /* Load Lectures                                                         */
+  /* Load Lectures (fetch + first lecture auto-select)                      */
   /* ---------------------------------------------------------------------- */
-  useEffect(() => {
-    const loadLectures = async () => {
-      try {
-        const res = await fetch(`${API_BASE}/lectures?status=released`);
-        const json = await res.json();
-        const list = json.data || json;
-        if (Array.isArray(list)) {
-          setLectures(list);
-          if (list.length > 0 && !selectedLectureId) {
-            setSelectedLectureId(list[0]._id);
-          }
-        } else setLectures([]);
-      } catch (err) {
-        console.error("Failed to load lectures:", err);
-        setError("Failed to load lectures");
+  const loadLectures = async () => {
+    try {
+      const res = await fetch(`${API_BASE}/lectures?status=released`);
+      const json = await res.json();
+      const list = json.data || json;
+      if (Array.isArray(list)) {
+        setLectures(list);
+
+        // Auto-select the first lecture if none selected
+        const firstLecture = list[0];
+        if (!selectedLectureId && firstLecture?._id) {
+          setSelectedLectureId(firstLecture._id);
+        }
+
+        // Load slides for the selected lecture only
+        const activeId = selectedLectureId || firstLecture?._id;
+        if (activeId) {
+          await loadSlidesForLecture(activeId);
+        }
+      } else {
+        setLectures([]);
+        setSlides([]);
       }
-    };
+    } catch (err) {
+      console.error("Failed to load lectures:", err);
+      setError("Failed to load classroom data");
+    }
+  };
+
+  /* ---------------------------------------------------------------------- */
+  /* Load Slides (per lecture)                                              */
+  /* ---------------------------------------------------------------------- */
+  const loadSlidesForLecture = async (lectureId) => {
+    setLoading(true);
+    try {
+      const res = await fetch(`${API_BASE}/lectures/${lectureId}/slides`);
+      const json = await res.json();
+      const list = json.slides || json;
+      setSlides(Array.isArray(list) ? list : []);
+      setCurrentIndex(0);
+      setCurrentSentence("");
+      setProgress(0);
+    } catch (err) {
+      console.error("Failed to load slides:", err);
+      setError("Failed to load slides");
+      setSlides([]);
+    } finally {
+      setTimeout(() => {
+        const loader = document.getElementById("classroom-loader");
+        if (loader) loader.classList.add("fade-out");
+        setTimeout(() => setLoading(false), 400);
+      }, 400);
+    }
+  };
+
+  useEffect(() => {
     loadLectures();
   }, []);
 
-  /* ---------------------------------------------------------------------- */
-  /* Load Slides whenever Lecture changes                                  */
-  /* ---------------------------------------------------------------------- */
   useEffect(() => {
-    if (!selectedLectureId) return;
-
-    const loadSlides = async () => {
-      setLoading(true);
-      try {
-        const res = await fetch(
-          `${API_BASE}/lectures/${selectedLectureId}/slides`
-        );
-        const json = await res.json();
-        const list = json.slides || json;
-        if (Array.isArray(list)) {
-          setSlides(list);
-          setCurrentIndex(0);
-          setCurrentSentence("");
-        } else setSlides([]);
-      } catch (err) {
-        console.error("Failed to load slides:", err);
-        setError("Failed to fetch slides");
-        setSlides([]);
-      } finally {
-        setTimeout(() => {
-          const loader = document.getElementById("classroom-loader");
-          if (loader) loader.classList.add("fade-out");
-          setTimeout(() => setLoading(false), 400);
-        }, 400);
-      }
-    };
-
-    loadSlides();
+    if (selectedLectureId) {
+      loadSlidesForLecture(selectedLectureId);
+    }
   }, [selectedLectureId]);
 
   /* ---------------------------------------------------------------------- */
-  /* Preload Voices                                                        */
+  /* Preload Voices                                                         */
   /* ---------------------------------------------------------------------- */
   useEffect(() => {
     waitForVoices(3000).then((v) =>
@@ -118,7 +127,7 @@ export default function ClassroomLivePage() {
   }, []);
 
   /* ---------------------------------------------------------------------- */
-  /* Handle Slide Progression                                              */
+  /* Handle Slide Progression                                               */
   /* ---------------------------------------------------------------------- */
   const handleNextSlide = useCallback(() => {
     setProgress(0);
@@ -130,7 +139,7 @@ export default function ClassroomLivePage() {
   }, [slides.length]);
 
   /* ---------------------------------------------------------------------- */
-  /* Voice Player Logic                                                    */
+  /* Voice Player Logic                                                     */
   /* ---------------------------------------------------------------------- */
   useEffect(() => {
     let mounted = true;
@@ -170,21 +179,19 @@ export default function ClassroomLivePage() {
   }, [currentSlide?._id, isPlaying, isMuted, slides.length, handleNextSlide]);
 
   /* ---------------------------------------------------------------------- */
-  /* Play / Pause (Fixed)                                                  */
+  /* Play / Pause Toggle                                                    */
   /* ---------------------------------------------------------------------- */
   const handlePlayPause = () => {
     const synth = window.speechSynthesis;
     if (!synth) return;
 
     if (isPlaying) {
-      // 🔇 Pause
       PAUSE_LOCK = true;
-      synth.cancel(); // cancel instead of pause — safer cross-browser
+      synth.cancel();
       stopClassroomSpeech(speechRef);
       setIsPlaying(false);
       setIsSpeaking(false);
     } else {
-      // ▶️ Resume
       PAUSE_LOCK = false;
       stopClassroomSpeech(speechRef);
       setIsPlaying(true);
@@ -192,7 +199,7 @@ export default function ClassroomLivePage() {
   };
 
   /* ---------------------------------------------------------------------- */
-  /* Mute Toggle                                                           */
+  /* Mute Toggle                                                            */
   /* ---------------------------------------------------------------------- */
   const handleMuteToggle = () => {
     const synth = window.speechSynthesis;
@@ -210,7 +217,7 @@ export default function ClassroomLivePage() {
   };
 
   /* ---------------------------------------------------------------------- */
-  /* Go to Slide                                                            */
+  /* Go To Specific Slide                                                   */
   /* ---------------------------------------------------------------------- */
   const goToSlide = (index) => {
     if (index < 0 || index >= slides.length) return;
@@ -223,7 +230,7 @@ export default function ClassroomLivePage() {
   };
 
   /* ---------------------------------------------------------------------- */
-  /* Loader + Error states                                                 */
+  /* Loader + Error States                                                  */
   /* ---------------------------------------------------------------------- */
   if (loading)
     return (
@@ -243,16 +250,32 @@ export default function ClassroomLivePage() {
     );
 
   /* ---------------------------------------------------------------------- */
-  /* ✅ Layout                                                             */
+  /* ✅ Layout                                                              */
   /* ---------------------------------------------------------------------- */
   return (
     <div className="relative min-h-screen bg-slate-950 text-slate-50 flex flex-col overflow-hidden">
       {/* Header */}
       <header className="px-4 md:px-8 py-3 border-b border-slate-800 flex items-center justify-between">
-        <div className="text-lg md:text-2xl font-semibold tracking-wide">
-          Classroom Live • {currentLecture?.subject || "Lecture"}
+        <div className="flex items-center gap-3">
+          <div className="text-lg md:text-2xl font-semibold tracking-wide">
+            Classroom Live • {currentLecture?.subject || "Lecture"}
+          </div>
+
+          {/* 🏷 Access Type Tag */}
+          {currentLecture?.accessType && (
+            <span
+              className={`px-2 py-0.5 text-xs rounded-full font-semibold ${
+                currentLecture.accessType === "public"
+                  ? "bg-emerald-600/20 text-emerald-400 border border-emerald-700"
+                  : "bg-slate-700/40 text-slate-300 border border-slate-600"
+              }`}
+            >
+              {currentLecture.accessType === "public" ? "Public" : "Private"}
+            </span>
+          )}
         </div>
 
+        {/* Controls */}
         <div className="hidden md:flex items-center gap-2 text-xs md:text-sm">
           <button
             onClick={handlePlayPause}
@@ -281,7 +304,7 @@ export default function ClassroomLivePage() {
       {/* Main */}
       <main className="flex-1 px-4 md:px-8 py-4 md:py-6 flex flex-col gap-4">
         <div className="flex flex-col md:grid md:grid-cols-[minmax(0,0.9fr)_minmax(0,2.4fr)_minmax(0,1.1fr)] gap-4">
-          {/* Avatar (Top on mobile) */}
+          {/* Avatar */}
           <div className="order-1 md:order-none">
             <TeacherAvatarCard
               teacher={{
@@ -364,7 +387,7 @@ export default function ClassroomLivePage() {
         />
       </main>
 
-      {/* 🎛 Floating Play Button (now pulses when speaking) */}
+      {/* 🎛 Floating Play Button (mobile) */}
       <div className="md:hidden fixed bottom-5 right-5 z-50">
         <button
           onClick={handlePlayPause}
