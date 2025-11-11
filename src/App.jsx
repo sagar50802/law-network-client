@@ -2,6 +2,7 @@ import { BrowserRouter as Router, Routes, Route, useLocation, useParams } from "
 import { useEffect } from "react";
 
 import Navbar from "./components/layout/Navbar";
+import Footer from "./components/layout/Footer.jsx"; // ⭐ NEW
 import AdminRoute from "./components/common/AdminRoute.jsx";
 import IfOwnerOnly from "./components/common/IfOwnerOnly.jsx";
 import "./styles/ui.css";
@@ -110,7 +111,7 @@ function RouteWithResultId({ Comp }) {
 export default function App() {
   return (
     <Router>
-      <div className="bg-gradient-to-br from-[#f8fafc] to-[#e6edf5] text-[#0b1220] min-h-screen font-inter antialiased">
+      <div className="bg-gradient-to-br from-[#f8fafc] to-[#e6edf5] text-[#0b1220] min-h-screen font-inter antialiased flex flex-col">
         {/* Sticky Navbar */}
         <nav className="bg-white/70 backdrop-blur-md shadow-md sticky top-0 z-50">
           <Navbar />
@@ -118,7 +119,8 @@ export default function App() {
 
         <ScrollToHash />
 
-        <div className="animate-fadeIn">
+        {/* Main content area */}
+        <div className="animate-fadeIn flex-1">
           <Routes>
             {/* ---------- Public Pages ---------- */}
             <Route path="/" element={<HomePage />} />
@@ -283,6 +285,9 @@ export default function App() {
             <Route path="*" element={<NotFound />} />
           </Routes>
         </div>
+
+        {/* ⭐ Footer visible on all pages */}
+        <Footer />
       </div>
     </Router>
   );
