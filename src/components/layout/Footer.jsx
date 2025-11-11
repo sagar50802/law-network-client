@@ -35,6 +35,12 @@ const Footer = () => {
 
   const year = new Date().getFullYear();
 
+  // Clean email for display if it comes as "mailto:..."
+  const rawEmail = footerData.email || "info@lawnetwork.in";
+  const displayEmail = rawEmail.replace(/^mailto:/i, "");
+
+  const phone = footerData.phone || "+91-9876543210";
+
   return (
     <>
       {/* Footer */}
@@ -69,6 +75,7 @@ const Footer = () => {
               ))}
               <li>
                 <button
+                  type="button"
                   onClick={() => setShowTerms(true)}
                   className="hover:text-white transition-colors duration-200"
                 >
@@ -81,9 +88,27 @@ const Footer = () => {
           {/* Contact */}
           <div>
             <h4 className="text-lg font-semibold text-white mb-2">Contact</h4>
-            <p>Email: {footerData.email || "info@lawnetwork.in"}</p>
-            <p>Phone: {footerData.phone || "+91-9876543210"}</p>
-            <p className="mt-2 text-gray-400">{footerData.address || "New Delhi, India"}</p>
+            <p>
+              Email:{" "}
+              <a
+                href={rawEmail.startsWith("mailto:") ? rawEmail : `mailto:${rawEmail}`}
+                className="hover:text-white underline-offset-2 hover:underline"
+              >
+                {displayEmail}
+              </a>
+            </p>
+            <p>
+              Phone:{" "}
+              <a
+                href={`tel:${phone.replace(/\s+/g, "")}`}
+                className="hover:text-white underline-offset-2 hover:underline"
+              >
+                {phone}
+              </a>
+            </p>
+            <p className="mt-2 text-gray-400">
+              {footerData.address || "New Delhi, India"}
+            </p>
           </div>
         </div>
 
@@ -99,6 +124,7 @@ const Footer = () => {
             <div className="flex justify-between items-center p-4 border-b">
               <h2 className="text-xl font-semibold">Terms & Conditions</h2>
               <button
+                type="button"
                 onClick={() => setShowTerms(false)}
                 className="text-gray-500 hover:text-gray-700 text-lg"
               >
