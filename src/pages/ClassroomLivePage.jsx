@@ -19,7 +19,7 @@ const API_BASE =
 let PAUSE_LOCK = false;
 
 /* -------------------------------------------------------------------------- */
-/* ✅ ClassroomLivePage - Fixed Voice, Slide Isolation, and Access Tag        */
+/* ✅ ClassroomLivePage — Fixed Voice + API Handling + Access Tag             */
 /* -------------------------------------------------------------------------- */
 export default function ClassroomLivePage() {
   const [slides, setSlides] = useState([]);
@@ -50,26 +50,27 @@ export default function ClassroomLivePage() {
   }, []);
 
   /* ---------------------------------------------------------------------- */
-  /* Load Lectures + first lecture selection                                */
+  /* Load Lectures (with proper JSON handling)                              */
   /* ---------------------------------------------------------------------- */
   const loadLectures = async () => {
     try {
       const res = await fetch(`${API_BASE}/lectures?status=released`);
+      if (!res.ok) throw new Error(`Server error: ${res.status}`);
       const json = await res.json();
-      const list = json.data || json;
 
-      if (Array.isArray(list)) {
-        setLectures(list);
+      const list = Array.isArray(json.data) ? json.data : [];
+      if (!list.length) throw new Error("No released lectures found");
 
-        const first = list[0];
-        if (!selectedLectureId && first?._id) {
-          setSelectedLectureId(first._id);
-          await loadSlidesForLecture(first._id);
-        }
+      setLectures(list);
+
+      if (!selectedLectureId && list[0]?._id) {
+        setSelectedLectureId(list[0]._id);
+        await loadSlidesForLecture(list[0]._id);
       }
     } catch (err) {
-      console.error("Failed to load lectures:", err);
-      setError("Failed to load classroom data");
+      console.error("❌ Failed to load lectures:", err);
+      setError("Failed to load classroom lectures. Please try again later.");
+      setLoading(false);
     }
   };
 
@@ -83,21 +84,21 @@ export default function ClassroomLivePage() {
 
     try {
       const res = await fetch(`${API_BASE}/lectures/${lectureId}/slides`);
+      if (!res.ok) throw new Error(`Server error: ${res.status}`);
       const json = await res.json();
-      const list = json.slides || json;
 
-      setSlides(Array.isArray(list) ? list : []);
+      const slidesData = json.data?.slides || json.slides || [];
+      setSlides(Array.isArray(slidesData) ? slidesData : []);
+
       setCurrentIndex(0);
       setCurrentSentence("");
       setProgress(0);
     } catch (err) {
-      console.error("Failed to load slides:", err);
-      setError("Failed to load slides");
+      console.error("❌ Failed to load slides:", err);
+      setError("Failed to load slides for this lecture.");
       setSlides([]);
     } finally {
-      setTimeout(() => {
-        setLoading(false);
-      }, 400);
+      setTimeout(() => setLoading(false), 400);
     }
   };
 
@@ -121,11 +122,12 @@ export default function ClassroomLivePage() {
   }, []);
 
   /* ---------------------------------------------------------------------- */
-  /* Slide Progression (Stops at end)                                       */
+  /* Slide Progression (Stops properly at last)                             */
   /* ---------------------------------------------------------------------- */
   const handleNextSlide = useCallback(() => {
     stopClassroomSpeech(speechRef);
     window.speechSynthesis?.cancel();
+
     setProgress(0);
     setCurrentSentence("");
     setIsSpeaking(false);
@@ -133,17 +135,18 @@ export default function ClassroomLivePage() {
     setTimeout(() => {
       setCurrentIndex((prev) => {
         if (prev + 1 < slides.length) return prev + 1;
-        setIsPlaying(false);
-        return prev; // stop at last slide
+        setIsPlaying(false); // stop at last slide
+        return prev;
       });
     }, 500);
   }, [slides.length]);
 
   /* ---------------------------------------------------------------------- */
-  /* Voice Playback (Stops properly on pause, switch, or end)               */
+  /* Voice Playback Logic (debounced + hard stop)                           */
   /* ---------------------------------------------------------------------- */
   useEffect(() => {
     let active = true;
+    let timer;
 
     async function startSpeech() {
       if (!currentSlide || !isPlaying || isMuted || PAUSE_LOCK || !active)
@@ -163,29 +166,32 @@ export default function ClassroomLivePage() {
         return;
       }
 
-      playClassroomSpeech({
-        slide: currentSlide,
-        isMuted,
-        speechRef,
-        setCurrentSentence,
-        onProgress: setProgress,
-        onStartSpeaking: () => setIsSpeaking(true),
-        onStopSpeaking: () => setIsSpeaking(false),
-        onComplete: handleNextSlide,
-      });
+      timer = setTimeout(() => {
+        playClassroomSpeech({
+          slide: currentSlide,
+          isMuted,
+          speechRef,
+          setCurrentSentence,
+          onProgress: setProgress,
+          onStartSpeaking: () => setIsSpeaking(true),
+          onStopSpeaking: () => setIsSpeaking(false),
+          onComplete: handleNextSlide,
+        });
+      }, 300); // debounce 300ms to avoid double-speak
     }
 
     startSpeech();
 
     return () => {
       active = false;
+      clearTimeout(timer);
       stopClassroomSpeech(speechRef);
       window.speechSynthesis?.cancel();
     };
   }, [currentSlide?._id, isPlaying, isMuted, slides.length, handleNextSlide]);
 
   /* ---------------------------------------------------------------------- */
-  /* Play / Pause Fix (now stops properly)                                  */
+  /* Play / Pause (Safe stop + resume)                                      */
   /* ---------------------------------------------------------------------- */
   const handlePlayPause = () => {
     const synth = window.speechSynthesis;
@@ -199,14 +205,13 @@ export default function ClassroomLivePage() {
       setIsSpeaking(false);
     } else {
       PAUSE_LOCK = false;
-      stopClassroomSpeech(speechRef);
       synth.cancel();
       setIsPlaying(true);
     }
   };
 
   /* ---------------------------------------------------------------------- */
-  /* Mute Toggle Fix                                                        */
+  /* Mute Toggle                                                            */
   /* ---------------------------------------------------------------------- */
   const handleMuteToggle = () => {
     const synth = window.speechSynthesis;
@@ -216,8 +221,8 @@ export default function ClassroomLivePage() {
         synth.cancel();
         stopClassroomSpeech(speechRef);
         setIsSpeaking(false);
-      } else {
-        if (!PAUSE_LOCK) setIsPlaying(true);
+      } else if (!PAUSE_LOCK) {
+        setIsPlaying(true);
       }
       return next;
     });
@@ -253,7 +258,7 @@ export default function ClassroomLivePage() {
   if (error || !slides.length)
     return (
       <div className="flex items-center justify-center min-h-screen bg-slate-900 text-white">
-        <p>⚠️ Unable to load classroom. Please try again later.</p>
+        <p>⚠️ {error || "Unable to load classroom. Please try again later."}</p>
       </div>
     );
 
