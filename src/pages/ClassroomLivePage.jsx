@@ -6,7 +6,6 @@ import React, {
 } from "react";
 
 import TeacherAvatarCard from "../components/TeacherAvatarCard";
-import ClassroomTeleprompter from "../components/ClassroomTeleprompter";
 import { MediaBoard, MediaControlPanel } from "../components/MediaBoard";
 import LecturePlaylistSidebar from "../components/LecturePlaylistSidebar";
 import StudentsRow from "../components/StudentsRow";
@@ -35,13 +34,17 @@ export default function ClassroomLivePage() {
   const [currentSentence, setCurrentSentence] = useState("");
   const [progress, setProgress] = useState(0);
 
+  const [sentences, setSentences] = useState([]); // ✅ all sentences for teleprompter
+  const [activeSentenceIndex, setActiveSentenceIndex] = useState(0); // ✅ highlight tracker
+
   const [isPlaying, setIsPlaying] = useState(true);
   const [isMuted, setIsMuted] = useState(false);
   const [isSpeaking, setIsSpeaking] = useState(false);
 
   const [loading, setLoading] = useState(true);
   const [isSwitching, setIsSwitching] = useState(false);
-  const [error, setError] = useState(null);
+  const [error, setError] = useState(null);          // global (lectures) error
+  const [slidesError, setSlidesError] = useState(null); // ✅ slides-only error
 
   const [playSeed, setPlaySeed] = useState(0);
 
@@ -114,20 +117,38 @@ export default function ClassroomLivePage() {
       if (!lectureId) return;
       setLoading(true);
       hardStopSpeech();
+      setSlidesError(null); // ✅ clear previous slides error
 
       try {
         const res = await fetch(`${API_BASE}/lectures/${lectureId}/slides`);
         if (!res.ok) throw new Error(`Server error: ${res.status}`);
         const json = await res.json();
-        const slidesData = json.data?.slides || json.slides || [];
-        setSlides(Array.isArray(slidesData) ? slidesData : []);
+
+        // 🔍 Flexible parsing: support multiple possible backend shapes
+        let slidesData = [];
+        if (Array.isArray(json.data?.slides)) slidesData = json.data.slides;
+        else if (Array.isArray(json.data)) slidesData = json.data;
+        else if (Array.isArray(json.slides)) slidesData = json.slides;
+        else if (Array.isArray(json.lectureSlides)) slidesData = json.lectureSlides;
+        else if (Array.isArray(json.lecture?.slides)) slidesData = json.lecture.slides;
+        else if (Array.isArray(json)) slidesData = json;
+        else slidesData = [];
+
+        if (!slidesData.length) {
+          console.warn("⚠️ No slides found for lecture:", lectureId, json);
+          setSlidesError("No slides available for this lecture yet.");
+        } else {
+          setSlidesError(null);
+        }
+
+        setSlides(slidesData);
         setCurrentIndex(0);
         setCurrentSentence("");
         setProgress(0);
       } catch (err) {
         console.error("Failed to load slides:", err);
-        setError("Failed to fetch slides");
         setSlides([]);
+        setSlidesError("⚠️ Failed to fetch slides for this lecture.");
       } finally {
         setLoading(false);
       }
@@ -148,6 +169,21 @@ export default function ClassroomLivePage() {
       console.log(`✅ Voices preloaded (${voices.length})`)
     );
   }, []);
+
+  /* ---------------------------------------------------------------------- */
+  /* 🧾 Split slide text into sentences for teleprompter                   */
+  /* ---------------------------------------------------------------------- */
+  useEffect(() => {
+    if (currentSlide?.content) {
+      const all = currentSlide.content
+        .split(/(?<=[।!?\.])\s+/)
+        .filter((s) => s.trim().length > 0);
+      setSentences(all);
+      setActiveSentenceIndex(0);
+    } else {
+      setSentences([]);
+    }
+  }, [currentSlide?._id]);
 
   /* ---------------------------------------------------------------------- */
   /* ⏭ Slide Progression                                                   */
@@ -183,11 +219,17 @@ export default function ClassroomLivePage() {
         slide: currentSlide,
         isMuted,
         speechRef,
-        setCurrentSentence,
+        setCurrentSentence: (sentence) => {
+          setCurrentSentence(sentence);
+          const idx = sentences.findIndex(
+            (s) => s.trim() === sentence.trim()
+          );
+          if (idx >= 0) setActiveSentenceIndex(idx);
+        },
         onProgress: setProgress,
         onStartSpeaking: () => setIsSpeaking(true),
         onStopSpeaking: () => setIsSpeaking(false),
-        onComplete: handleNextSlide,
+        onComplete: () => handleNextSlide(),
       });
     }
 
@@ -195,7 +237,28 @@ export default function ClassroomLivePage() {
     return () => {
       cancelled = true;
     };
-  }, [currentSlide?._id, slides.length, isMuted, loading, handleNextSlide, playSeed]);
+  }, [
+    currentSlide?._id,
+    slides.length,
+    isMuted,
+    loading,
+    playSeed,
+    sentences,
+    handleNextSlide,
+  ]);
+
+  /* ---------------------------------------------------------------------- */
+  /* 🧭 Auto-scroll teleprompter when active sentence changes              */
+  /* ---------------------------------------------------------------------- */
+  useEffect(() => {
+    const container = document.getElementById("teleprompter");
+    const active = container?.querySelector(
+      `[data-line="${activeSentenceIndex}"]`
+    );
+    if (active && container) {
+      active.scrollIntoView({ behavior: "smooth", block: "center" });
+    }
+  }, [activeSentenceIndex]);
 
   /* ---------------------------------------------------------------------- */
   /* 🎮 Controls                                                           */
@@ -239,58 +302,7 @@ export default function ClassroomLivePage() {
   };
 
   /* ---------------------------------------------------------------------- */
-  /* 🎯 Smooth Lecture Switching                                           */
-  /* ---------------------------------------------------------------------- */
-  const smoothSwitchLecture = async (lec) => {
-    if (!lec?._id || isSwitching) return;
-    setIsSwitching(true);
-
-    // 1️⃣ Stop current
-    hardStopSpeech();
-    setIsPlaying(false);
-    setIsSpeaking(false);
-
-    // 2️⃣ Show temporary message
-    setCurrentSentence("🔄 Switching to next lecture…");
-    setSlides([]);
-
-    // 3️⃣ Load new slides silently
-    try {
-      const res = await fetch(`${API_BASE}/lectures/${lec._id}/slides`);
-      const json = await res.json();
-      const slidesData = json.data?.slides || json.slides || [];
-      setSlides(slidesData);
-      setCurrentIndex(0);
-      setCurrentSentence("");
-      setProgress(0);
-      setSelectedLectureId(lec._id);
-    } catch (err) {
-      console.error("Failed to switch lecture:", err);
-      setCurrentSentence("⚠️ Failed to load next lecture. Try again.");
-    }
-
-    // 4️⃣ Restart voice smoothly
-    clearTimeout(switchTimer.current);
-    switchTimer.current = setTimeout(() => {
-      setIsPlaying(true);
-      setPlaySeed((s) => s + 1);
-      setIsSwitching(false);
-    }, 600);
-  };
-
-  const handleLectureSelect = (lec) => {
-    if (!lec?._id) return;
-
-    if (lec._id === selectedLectureId && isSpeaking) {
-      setCurrentSentence("🔔 Current lecture still running. Click again to switch.");
-      return;
-    }
-
-    smoothSwitchLecture(lec);
-  };
-
-  /* ---------------------------------------------------------------------- */
-  /* 🧾 Error Fallback                                                     */
+  /* 🧾 Error Fallback (lectures only)                                     */
   /* ---------------------------------------------------------------------- */
   if (error && !loading) {
     return (
@@ -305,13 +317,16 @@ export default function ClassroomLivePage() {
   /* ---------------------------------------------------------------------- */
   return (
     <div className="relative min-h-screen bg-slate-950 text-slate-50 flex flex-col overflow-hidden">
-      {/* Loader */}
       {loading && !isSwitching && (
-        <div className="absolute inset-0 z-[9999] flex items-center justify-center bg-black/95 text-white transition-opacity duration-700 ease-in-out">
-          <div className="bg-black/70 px-8 py-6 rounded-2xl text-center max-w-lg shadow-lg backdrop-blur-sm">
+        <div className="absolute inset-0 z-[9999] flex items-center justify-center bg-black/95 text-white">
+          <div className="bg-black/70 px-8 py-6 rounded-2xl text-center shadow-lg backdrop-blur-sm">
             <div className="w-10 h-10 border-4 border-green-400 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-            <h1 className="text-2xl font-semibold mb-2">📡 Loading classroom…</h1>
-            <p className="opacity-90 text-sm">Please wait, connecting to the live session.</p>
+            <h1 className="text-2xl font-semibold mb-2">
+              📡 Loading classroom…
+            </h1>
+            <p className="opacity-90 text-sm">
+              Please wait, connecting to the live session.
+            </p>
           </div>
         </div>
       )}
@@ -367,7 +382,6 @@ export default function ClassroomLivePage() {
       {/* Main */}
       <main className="flex-1 px-4 md:px-8 py-4 md:py-6 flex flex-col gap-4">
         <div className="flex-1 grid grid-cols-1 lg:grid-cols-[minmax(0,0.9fr)_minmax(0,2.4fr)_minmax(0,1.1fr)] gap-4">
-          {/* Avatar */}
           <TeacherAvatarCard
             teacher={{
               name:
@@ -387,13 +401,38 @@ export default function ClassroomLivePage() {
             isSpeaking={isSpeaking}
           />
 
-          {/* Teleprompter + Media */}
+          {/* 🟩 Teleprompter + Media */}
           <section className="flex flex-col gap-3">
-            <ClassroomTeleprompter
-              slide={currentSlide}
-              currentSentence={currentSentence}
-              progress={progress}
-            />
+            {/* Teleprompter / Slides state */}
+            {slidesError && !slides.length ? (
+              <div className="flex items-center justify-center h-[220px] bg-slate-900 rounded-xl border border-amber-400/60 text-amber-300 text-sm px-4 text-center">
+                {slidesError}
+              </div>
+            ) : (
+              <div
+                id="teleprompter"
+                className="overflow-y-auto max-h-[250px] p-4 bg-slate-900 rounded-xl border border-slate-700 text-slate-200 leading-relaxed tracking-wide scroll-smooth"
+              >
+                {sentences.map((line, i) => (
+                  <p
+                    key={i}
+                    data-line={i}
+                    className={`transition-all duration-200 my-1 ${
+                      i === activeSentenceIndex
+                        ? "text-emerald-300 font-semibold bg-slate-800/60 px-2 py-1 rounded-md"
+                        : "text-slate-400 opacity-70"
+                    }`}
+                  >
+                    {line}
+                  </p>
+                ))}
+                {!sentences.length && !slidesError && (
+                  <p className="text-slate-500 text-sm italic">
+                    No content for this slide yet.
+                  </p>
+                )}
+              </div>
+            )}
 
             <MediaBoard media={currentSlide?.media} />
             <MediaControlPanel
@@ -423,11 +462,10 @@ export default function ClassroomLivePage() {
             </div>
           </section>
 
-          {/* Playlist Sidebar */}
           <LecturePlaylistSidebar
             lectures={lectures}
             currentLectureId={selectedLectureId}
-            onSelectLecture={handleLectureSelect}
+            onSelectLecture={setSelectedLectureId}
           />
         </div>
 
