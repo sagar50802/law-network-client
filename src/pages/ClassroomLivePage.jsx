@@ -19,7 +19,7 @@ const API_BASE =
 let PAUSE_LOCK = false;
 
 /* -------------------------------------------------------------------------- */
-/* ✅ ClassroomLivePage (Isolated lectures + Access Tag + Voice fixed)       */
+/* ✅ ClassroomLivePage - Fixed Voice, Slide Isolation, and Access Tag        */
 /* -------------------------------------------------------------------------- */
 export default function ClassroomLivePage() {
   const [slides, setSlides] = useState([]);
@@ -50,30 +50,22 @@ export default function ClassroomLivePage() {
   }, []);
 
   /* ---------------------------------------------------------------------- */
-  /* Load Lectures (fetch + first lecture auto-select)                      */
+  /* Load Lectures + first lecture selection                                */
   /* ---------------------------------------------------------------------- */
   const loadLectures = async () => {
     try {
       const res = await fetch(`${API_BASE}/lectures?status=released`);
       const json = await res.json();
       const list = json.data || json;
+
       if (Array.isArray(list)) {
         setLectures(list);
 
-        // Auto-select the first lecture if none selected
-        const firstLecture = list[0];
-        if (!selectedLectureId && firstLecture?._id) {
-          setSelectedLectureId(firstLecture._id);
+        const first = list[0];
+        if (!selectedLectureId && first?._id) {
+          setSelectedLectureId(first._id);
+          await loadSlidesForLecture(first._id);
         }
-
-        // Load slides for the selected lecture only
-        const activeId = selectedLectureId || firstLecture?._id;
-        if (activeId) {
-          await loadSlidesForLecture(activeId);
-        }
-      } else {
-        setLectures([]);
-        setSlides([]);
       }
     } catch (err) {
       console.error("Failed to load lectures:", err);
@@ -82,14 +74,18 @@ export default function ClassroomLivePage() {
   };
 
   /* ---------------------------------------------------------------------- */
-  /* Load Slides (per lecture)                                              */
+  /* Load Slides for selected lecture only                                  */
   /* ---------------------------------------------------------------------- */
   const loadSlidesForLecture = async (lectureId) => {
     setLoading(true);
+    stopClassroomSpeech(speechRef);
+    window.speechSynthesis?.cancel();
+
     try {
       const res = await fetch(`${API_BASE}/lectures/${lectureId}/slides`);
       const json = await res.json();
       const list = json.slides || json;
+
       setSlides(Array.isArray(list) ? list : []);
       setCurrentIndex(0);
       setCurrentSentence("");
@@ -100,9 +96,7 @@ export default function ClassroomLivePage() {
       setSlides([]);
     } finally {
       setTimeout(() => {
-        const loader = document.getElementById("classroom-loader");
-        if (loader) loader.classList.add("fade-out");
-        setTimeout(() => setLoading(false), 400);
+        setLoading(false);
       }, 400);
     }
   };
@@ -127,27 +121,39 @@ export default function ClassroomLivePage() {
   }, []);
 
   /* ---------------------------------------------------------------------- */
-  /* Handle Slide Progression                                               */
+  /* Slide Progression (Stops at end)                                       */
   /* ---------------------------------------------------------------------- */
   const handleNextSlide = useCallback(() => {
+    stopClassroomSpeech(speechRef);
+    window.speechSynthesis?.cancel();
     setProgress(0);
     setCurrentSentence("");
     setIsSpeaking(false);
+
     setTimeout(() => {
-      setCurrentIndex((p) => (p + 1 < slides.length ? p + 1 : p));
-    }, 600);
+      setCurrentIndex((prev) => {
+        if (prev + 1 < slides.length) return prev + 1;
+        setIsPlaying(false);
+        return prev; // stop at last slide
+      });
+    }, 500);
   }, [slides.length]);
 
   /* ---------------------------------------------------------------------- */
-  /* Voice Player Logic                                                     */
+  /* Voice Playback (Stops properly on pause, switch, or end)               */
   /* ---------------------------------------------------------------------- */
   useEffect(() => {
-    let mounted = true;
+    let active = true;
+
     async function startSpeech() {
-      if (!currentSlide || !mounted) return;
+      if (!currentSlide || !isPlaying || isMuted || PAUSE_LOCK || !active)
+        return;
+
       stopClassroomSpeech(speechRef);
-      setProgress(0);
+      window.speechSynthesis?.cancel();
+
       setCurrentSentence("");
+      setProgress(0);
       setIsSpeaking(false);
 
       await waitForVoices(3000);
@@ -156,8 +162,6 @@ export default function ClassroomLivePage() {
         setCurrentSentence(currentSlide.content || "");
         return;
       }
-
-      if (!isPlaying || isMuted || PAUSE_LOCK) return;
 
       playClassroomSpeech({
         slide: currentSlide,
@@ -170,16 +174,18 @@ export default function ClassroomLivePage() {
         onComplete: handleNextSlide,
       });
     }
+
     startSpeech();
 
     return () => {
-      mounted = false;
+      active = false;
       stopClassroomSpeech(speechRef);
+      window.speechSynthesis?.cancel();
     };
   }, [currentSlide?._id, isPlaying, isMuted, slides.length, handleNextSlide]);
 
   /* ---------------------------------------------------------------------- */
-  /* Play / Pause Toggle                                                    */
+  /* Play / Pause Fix (now stops properly)                                  */
   /* ---------------------------------------------------------------------- */
   const handlePlayPause = () => {
     const synth = window.speechSynthesis;
@@ -194,12 +200,13 @@ export default function ClassroomLivePage() {
     } else {
       PAUSE_LOCK = false;
       stopClassroomSpeech(speechRef);
+      synth.cancel();
       setIsPlaying(true);
     }
   };
 
   /* ---------------------------------------------------------------------- */
-  /* Mute Toggle                                                            */
+  /* Mute Toggle Fix                                                        */
   /* ---------------------------------------------------------------------- */
   const handleMuteToggle = () => {
     const synth = window.speechSynthesis;
@@ -217,11 +224,12 @@ export default function ClassroomLivePage() {
   };
 
   /* ---------------------------------------------------------------------- */
-  /* Go To Specific Slide                                                   */
+  /* Go To Slide                                                            */
   /* ---------------------------------------------------------------------- */
   const goToSlide = (index) => {
     if (index < 0 || index >= slides.length) return;
     stopClassroomSpeech(speechRef);
+    window.speechSynthesis?.cancel();
     setCurrentSentence("");
     setProgress(0);
     setIsSpeaking(false);
@@ -230,7 +238,7 @@ export default function ClassroomLivePage() {
   };
 
   /* ---------------------------------------------------------------------- */
-  /* Loader + Error States                                                  */
+  /* Loader + Error                                                         */
   /* ---------------------------------------------------------------------- */
   if (loading)
     return (
@@ -368,6 +376,7 @@ export default function ClassroomLivePage() {
               onSelectLecture={(lec) => {
                 if (lec?._id !== selectedLectureId) {
                   stopClassroomSpeech(speechRef);
+                  window.speechSynthesis?.cancel();
                   setSelectedLectureId(lec._id);
                   setCurrentIndex(0);
                   setCurrentSentence("");
@@ -387,7 +396,7 @@ export default function ClassroomLivePage() {
         />
       </main>
 
-      {/* 🎛 Floating Play Button (mobile) */}
+      {/* 🎛 Floating Play Button */}
       <div className="md:hidden fixed bottom-5 right-5 z-50">
         <button
           onClick={handlePlayPause}
