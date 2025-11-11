@@ -9,6 +9,7 @@ export default function LecturePlaylistSidebar({
   currentLectureId,
   onSelectLecture,
   isSwitching = false, // ✅ optional prop for “Upcoming…” indicator
+  userRole = "student", // 🧠 optional prop if you want to unlock for admin/teacher
 }) {
   const activeRef = useRef(null);
 
@@ -37,6 +38,12 @@ export default function LecturePlaylistSidebar({
       <div className="flex flex-col gap-2">
         {lectures.map((lec, idx) => {
           const active = lec._id === currentLectureId;
+
+          // 🧩 Determine access (public / private / paid)
+          const accessType = lec.accessType || "public"; // "public" | "private" | "paid"
+          const isLocked =
+            accessType !== "public" && userRole !== "admin" && !lec.isAllowed;
+
           const dotClass =
             lec.status === "released"
               ? "dot-live"
@@ -50,23 +57,40 @@ export default function LecturePlaylistSidebar({
             <button
               key={lec._id}
               ref={active ? activeRef : null}
-              onClick={() => onSelectLecture?.(lec)}
-              className={`playlist-item w-full text-left px-3 py-2 rounded-xl text-sm flex items-center justify-between border transition-colors duration-150 ${
-                active
-                  ? "bg-emerald-500/20 text-emerald-100 border-emerald-400/40 shadow-inner"
-                  : "bg-slate-800/70 text-slate-200 hover:bg-slate-700 focus:bg-slate-700"
-              }`}
+              onClick={() => !isLocked && onSelectLecture?.(lec)}
+              disabled={isLocked}
+              title={
+                isLocked
+                  ? accessType === "paid"
+                    ? "🔒 Paid — please purchase access"
+                    : "🔒 Private — not accessible"
+                  : ""
+              }
+              className={`playlist-item w-full text-left px-3 py-2 rounded-xl text-sm flex items-center justify-between border transition-colors duration-150
+                ${
+                  active
+                    ? "bg-emerald-500/20 text-emerald-100 border-emerald-400/40 shadow-inner"
+                    : isLocked
+                    ? "bg-slate-800/30 text-slate-500 border-slate-700 cursor-not-allowed opacity-60"
+                    : "bg-slate-800/70 text-slate-200 hover:bg-slate-700 focus:bg-slate-700"
+                }`}
             >
               <div>
                 <div className="font-medium truncate flex items-center">
                   Lecture {idx + 1} • {lec.title}
-                  {/* ✅ Added upcoming indicator */}
+                  {/* ✅ Upcoming indicator */}
                   {isSwitching && lec._id !== currentLectureId && (
                     <span className="ml-2 text-[10px] text-yellow-400 animate-pulse">
                       Upcoming…
                     </span>
                   )}
+                  {isLocked && (
+                    <span className="ml-2 text-[12px] text-yellow-400 flex items-center">
+                      🔒
+                    </span>
+                  )}
                 </div>
+
                 <div className="text-[11px] text-slate-400">
                   {lec.status === "released"
                     ? "🔴 Live now"
