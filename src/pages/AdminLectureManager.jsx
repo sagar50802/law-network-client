@@ -51,7 +51,14 @@ function SlideEditor({ open, onClose, lecture, onSaveSlides }) {
         try {
           const res = await fetch(`${API_BASE}/lectures/${lecture._id}/slides`);
           const data = await res.json();
-          setSlides(Array.isArray(data) ? data : []);
+          // backend returns { success, slides }
+          if (Array.isArray(data.slides)) {
+            setSlides(data.slides);
+          } else if (Array.isArray(data)) {
+            setSlides(data);
+          } else {
+            setSlides([]);
+          }
         } catch (err) {
           console.error("Failed to load slides", err);
         }
@@ -176,6 +183,7 @@ function SlideEditor({ open, onClose, lecture, onSaveSlides }) {
           />
 
           <div className="flex flex-col md:flex-row gap-3 mb-2">
+            {/* 🎥 Video */}
             <div className="flex flex-col gap-1 flex-1">
               <div className="flex items-center gap-2">
                 <Video className="w-4 h-4 text-slate-500" />
@@ -202,6 +210,7 @@ function SlideEditor({ open, onClose, lecture, onSaveSlides }) {
               </div>
             </div>
 
+            {/* 🎧 Audio */}
             <div className="flex flex-col gap-1 flex-1">
               <div className="flex items-center gap-2">
                 <Music2 className="w-4 h-4 text-slate-500" />
@@ -229,6 +238,7 @@ function SlideEditor({ open, onClose, lecture, onSaveSlides }) {
             </div>
           </div>
 
+          {/* 🖼 Image */}
           <div className="flex flex-col gap-1 mb-3">
             <div className="flex items-center gap-2">
               <ImgIcon className="w-4 h-4 text-slate-500" />
@@ -480,7 +490,14 @@ function CreateLinkModal({ open, onClose, lecture }) {
 }
 
 /* ------------------------ Lecture Row ------------------------ */
-function LectureRow({ lec, onToggle, onEditSlides, onDelete, onShowStats, onShowCreateLink }) {
+function LectureRow({
+  lec,
+  onToggle,
+  onEditSlides,
+  onDelete,
+  onShowStats,
+  onShowCreateLink,
+}) {
   const now = new Date();
   const releaseTime = new Date(lec.releaseAt);
   const isScheduled = lec.status !== "released" && releaseTime > now;
@@ -550,11 +567,17 @@ function LectureRow({ lec, onToggle, onEditSlides, onDelete, onShowStats, onShow
           </button>
 
           {/* 🔗 Generate Share Link */}
-          <button title="Generate Share Link" onClick={() => onShowCreateLink(lec)}>
+          <button
+            title="Generate Share Link"
+            onClick={() => onShowCreateLink(lec)}
+          >
             🔗
           </button>
 
-          <button title="View Share Links & Visits" onClick={() => onShowStats(lec)}>
+          <button
+            title="View Share Links & Visits"
+            onClick={() => onShowStats(lec)}
+          >
             📊
           </button>
         </div>
@@ -583,6 +606,7 @@ export default function AdminLectureManager() {
     avatarType: "teacher1",
     releaseAt: new Date().toISOString().slice(0, 16),
     status: "draft",
+    accessType: "public", // ✅ new field for public/protected
   });
 
   const loadLectures = async () => {
@@ -614,7 +638,7 @@ export default function AdminLectureManager() {
       const res = await fetch(`${API_BASE}/lectures`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
-        body: JSON.stringify(formData),
+        body: JSON.stringify(formData), // includes accessType
       });
       if (!res.ok) throw new Error("Failed to create lecture");
       await loadLectures();
@@ -625,6 +649,7 @@ export default function AdminLectureManager() {
         avatarType: "teacher1",
         releaseAt: new Date().toISOString().slice(0, 16),
         status: "draft",
+        accessType: "public",
       });
       alert("✅ Lecture created successfully");
     } catch (err) {
@@ -769,6 +794,21 @@ export default function AdminLectureManager() {
                 onChange={handleChange}
                 className="w-full rounded-lg border border-slate-300 px-3 py-2"
               />
+            </div>
+            {/* ✅ Access Type */}
+            <div>
+              <label className="block text-sm text-slate-600 mb-1">
+                Access Type
+              </label>
+              <select
+                name="accessType"
+                value={formData.accessType}
+                onChange={handleChange}
+                className="w-full rounded-lg border border-slate-300 px-3 py-2"
+              >
+                <option value="public">Public (visible to all)</option>
+                <option value="protected">Protected (share link only)</option>
+              </select>
             </div>
           </div>
           <div className="mt-4">
