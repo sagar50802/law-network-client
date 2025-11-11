@@ -1,4 +1,3 @@
-// src/pages/ClassroomLivePage.jsx
 import React, { useEffect, useRef, useState, useCallback } from "react";
 import TeacherAvatarCard from "../components/TeacherAvatarCard";
 import ClassroomTeleprompter from "../components/ClassroomTeleprompter";
@@ -17,10 +16,9 @@ const API_BASE =
   "/classroom";
 
 let PAUSE_LOCK = false;
-let SWITCH_LOCK = false;
 
 /* -------------------------------------------------------------------------- */
-/* ✅ ClassroomLivePage — Final Production-Safe Version                       */
+/* ✅ ClassroomLivePage — FINAL, Production Safe                              */
 /* -------------------------------------------------------------------------- */
 export default function ClassroomLivePage() {
   const [lectures, setLectures] = useState([]);
@@ -43,38 +41,47 @@ export default function ClassroomLivePage() {
   const currentSlide = slides[currentIndex] || null;
 
   /* ---------------------------------------------------------------------- */
-  /* Cancel any ongoing speech                                              */
+  /* 🧩 Utility: Safe cancel (prevents interrupted errors)                  */
   /* ---------------------------------------------------------------------- */
   const safeCancelSpeech = useCallback(() => {
     try {
       window.speechSynthesis.cancel();
       stopClassroomSpeech(speechRef);
     } catch (e) {
-      console.warn("Cancel speech failed", e);
+      console.warn("Speech cancel failed:", e);
     }
   }, []);
 
   /* ---------------------------------------------------------------------- */
-  /* Unlock Speech Autoplay                                                 */
+  /* 🔓 Unlock Speech Autoplay once                                         */
   /* ---------------------------------------------------------------------- */
   useEffect(() => unlockSpeechOnUserClick(), []);
 
   /* ---------------------------------------------------------------------- */
-  /* Load Lectures List                                                     */
+  /* 📦 Load Lectures (filter + default select)                             */
   /* ---------------------------------------------------------------------- */
   const loadLectures = async () => {
     try {
       const res = await fetch(`${API_BASE}/lectures?status=released`);
-      if (!res.ok) throw new Error("Failed to load lectures");
+      if (!res.ok) throw new Error(`Server error: ${res.status}`);
       const json = await res.json();
-      const list = Array.isArray(json.data) ? json.data : [];
-      setLectures(list);
-      if (!selectedLectureId && list[0]?._id) {
-        setSelectedLectureId(list[0]._id);
+      const all = Array.isArray(json.data) ? json.data : [];
+
+      // ✅ Keep only visible access types
+      const filtered = all.filter(
+        (lec) => lec.accessType === "public" || lec.accessType === "protected"
+      );
+
+      if (!filtered.length) throw new Error("No released lectures found.");
+      setLectures(filtered);
+
+      if (!selectedLectureId && filtered[0]?._id) {
+        setSelectedLectureId(filtered[0]._id);
+        await loadSlidesForLecture(filtered[0]._id);
       }
-    } catch (e) {
-      console.error(e);
-      setError("Failed to load classroom lectures.");
+    } catch (err) {
+      console.error("❌ loadLectures:", err);
+      setError("Failed to load classroom lectures. Try again later.");
     } finally {
       setLoading(false);
     }
@@ -85,45 +92,52 @@ export default function ClassroomLivePage() {
   }, []);
 
   /* ---------------------------------------------------------------------- */
-  /* Load Slides per Lecture — fully isolated, clears old state first       */
+  /* 🧠 Load Slides (with fetch-token protection)                           */
   /* ---------------------------------------------------------------------- */
-  const loadSlidesForLecture = useCallback(async (lectureId) => {
-    if (!lectureId) return;
-    if (SWITCH_LOCK) return;
-    SWITCH_LOCK = true;
-
-    safeCancelSpeech();
-    setSlides([]);
-    setCurrentSentence("");
-    setProgress(0);
-    setLoading(true);
-
-    try {
-      const res = await fetch(`${API_BASE}/lectures/${lectureId}/slides`);
-      if (!res.ok) throw new Error(`Failed to fetch slides (${res.status})`);
-      const json = await res.json();
-      const newSlides = json.data?.slides || [];
-      setSlides(newSlides);
+  const loadSlidesForLecture = useCallback(
+    async (lectureId) => {
+      if (!lectureId) return;
+      safeCancelSpeech();
+      setSlides([]);
       setCurrentIndex(0);
-      setError(null);
-    } catch (e) {
-      console.error("❌ Slide load error:", e);
-      setError("Failed to load slides for this lecture.");
-    } finally {
-      setTimeout(() => {
-        setLoading(false);
-        SWITCH_LOCK = false;
-      }, 400);
-    }
-  }, [safeCancelSpeech]);
+      setCurrentSentence("");
+      setProgress(0);
+      setLoading(true);
 
-  /* When lecture changes, fetch slides cleanly */
+      const token = Date.now();
+      loadSlidesForLecture.lastToken = token;
+
+      try {
+        const res = await fetch(`${API_BASE}/lectures/${lectureId}/slides`);
+        if (!res.ok) throw new Error(`Server error: ${res.status}`);
+        const json = await res.json();
+
+        if (loadSlidesForLecture.lastToken !== token) return; // ignore stale
+        const slidesData = json.data?.slides || json.slides || [];
+
+        setSlides(Array.isArray(slidesData) ? slidesData : []);
+        setError(null);
+      } catch (err) {
+        console.error("❌ loadSlides:", err);
+        if (loadSlidesForLecture.lastToken === token)
+          setError("Failed to load slides for this lecture.");
+        setSlides([]);
+      } finally {
+        setTimeout(() => {
+          if (loadSlidesForLecture.lastToken === token) setLoading(false);
+        }, 300);
+      }
+    },
+    [safeCancelSpeech]
+  );
+
+  /* Reload slides when lecture changes */
   useEffect(() => {
     if (selectedLectureId) loadSlidesForLecture(selectedLectureId);
   }, [selectedLectureId, loadSlidesForLecture]);
 
   /* ---------------------------------------------------------------------- */
-  /* Preload Voices Once                                                    */
+  /* 🎙️ Preload Voices once                                                */
   /* ---------------------------------------------------------------------- */
   useEffect(() => {
     waitForVoices(3000).then((v) =>
@@ -132,60 +146,86 @@ export default function ClassroomLivePage() {
   }, []);
 
   /* ---------------------------------------------------------------------- */
-  /* Speech Engine Guarded                                                  */
-  /* ---------------------------------------------------------------------- */
-  useEffect(() => {
-    if (loading || !slides.length || !isPlaying || isMuted) return;
-
-    safeCancelSpeech();
-
-    const slide = currentSlide;
-    if (!slide) return;
-
-    const timeout = setTimeout(() => {
-      playClassroomSpeech({
-        slide,
-        isMuted,
-        speechRef,
-        setCurrentSentence,
-        onProgress: setProgress,
-        onStartSpeaking: () => setIsSpeaking(true),
-        onStopSpeaking: () => setIsSpeaking(false),
-        onComplete: () => handleNextSlide(),
-      });
-    }, 300);
-
-    return () => {
-      clearTimeout(timeout);
-      safeCancelSpeech();
-    };
-  }, [currentSlide?._id, isPlaying, isMuted, slides.length, loading]);
-
-  /* ---------------------------------------------------------------------- */
-  /* Slide Progression                                                      */
+  /* 🎞️ Slide Auto Progression                                             */
   /* ---------------------------------------------------------------------- */
   const handleNextSlide = useCallback(() => {
     safeCancelSpeech();
     setProgress(0);
     setCurrentSentence("");
     setIsSpeaking(false);
+
     setTimeout(() => {
       setCurrentIndex((prev) => {
         if (prev + 1 < slides.length) return prev + 1;
         setIsPlaying(false);
         return prev;
       });
-    }, 200);
+    }, 250);
   }, [slides.length, safeCancelSpeech]);
 
   /* ---------------------------------------------------------------------- */
-  /* Controls                                                               */
+  /* 🔊 Speech Engine Guarded                                              */
+  /* ---------------------------------------------------------------------- */
+  useEffect(() => {
+    if (loading || !slides.length || !isPlaying || isMuted) return;
+    safeCancelSpeech();
+
+    const slide = currentSlide;
+    if (!slide) return;
+
+    const timeout = setTimeout(() => {
+      if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
+        // Wait for clear channel
+        setTimeout(() => {
+          playClassroomSpeech({
+            slide,
+            isMuted,
+            speechRef,
+            setCurrentSentence,
+            onProgress: setProgress,
+            onStartSpeaking: () => setIsSpeaking(true),
+            onStopSpeaking: () => setIsSpeaking(false),
+            onComplete: handleNextSlide,
+          });
+        }, 300);
+      } else {
+        playClassroomSpeech({
+          slide,
+          isMuted,
+          speechRef,
+          setCurrentSentence,
+          onProgress: setProgress,
+          onStartSpeaking: () => setIsSpeaking(true),
+          onStopSpeaking: () => setIsSpeaking(false),
+          onComplete: handleNextSlide,
+        });
+      }
+    }, 400); // delay ensures correct lecture context
+
+    return () => {
+      clearTimeout(timeout);
+      safeCancelSpeech();
+    };
+  }, [
+    currentSlide?._id,
+    isPlaying,
+    isMuted,
+    slides.length,
+    handleNextSlide,
+    loading,
+    safeCancelSpeech,
+  ]);
+
+  /* ---------------------------------------------------------------------- */
+  /* ▶️ Play / ⏸ Pause Controls                                            */
   /* ---------------------------------------------------------------------- */
   const handlePlayPause = () => {
     const synth = window.speechSynthesis;
+    if (!synth) return;
+
     if (isPlaying) {
       PAUSE_LOCK = true;
-      synth.cancel();
+      safeCancelSpeech();
       setIsPlaying(false);
       setIsSpeaking(false);
     } else {
@@ -195,6 +235,9 @@ export default function ClassroomLivePage() {
     }
   };
 
+  /* ---------------------------------------------------------------------- */
+  /* 🔇 Mute Toggle                                                        */
+  /* ---------------------------------------------------------------------- */
   const handleMuteToggle = () => {
     const synth = window.speechSynthesis;
     setIsMuted((prev) => {
@@ -210,6 +253,9 @@ export default function ClassroomLivePage() {
     });
   };
 
+  /* ---------------------------------------------------------------------- */
+  /* ⏩ Manual Slide Navigation                                             */
+  /* ---------------------------------------------------------------------- */
   const goToSlide = (index) => {
     if (index < 0 || index >= slides.length) return;
     safeCancelSpeech();
@@ -221,7 +267,7 @@ export default function ClassroomLivePage() {
   };
 
   /* ---------------------------------------------------------------------- */
-  /* Loading & Error Screens                                                */
+  /* 🌀 Loader + Error States                                               */
   /* ---------------------------------------------------------------------- */
   if (loading)
     return (
@@ -233,15 +279,15 @@ export default function ClassroomLivePage() {
       </div>
     );
 
-  if (error)
+  if (error || !slides.length)
     return (
       <div className="flex items-center justify-center min-h-screen bg-slate-900 text-white">
-        <p>⚠️ {error}</p>
+        <p>⚠️ {error || "No slides available for this lecture."}</p>
       </div>
     );
 
   /* ---------------------------------------------------------------------- */
-  /* Layout — restored column balance (left=teacher, center=teleprompter, right=playlist) */
+  /* 🧱 Layout                                                              */
   /* ---------------------------------------------------------------------- */
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50 flex flex-col overflow-hidden">
