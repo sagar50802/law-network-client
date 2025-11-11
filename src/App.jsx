@@ -22,6 +22,7 @@ import Plagiarism from "./pages/Plagiarism.jsx";
 import AdminDashboard from "./pages/AdminDashboard.jsx";
 import AdminLogin from "./pages/AdminLogin.jsx";
 import AdminConsultancyEditor from "./components/Admin/AdminConsultancyEditor.jsx";
+import AdminFooterTermsEditor from "./pages/AdminFooterTermsEditor.jsx"; // ⭐ NEW
 
 /* ---------- Exam Prep ---------- */
 import PrepList from "./pages/prep/PrepList.jsx";
@@ -277,6 +278,15 @@ export default function App() {
               element={
                 <AdminRoute>
                   <AdminConsultancyEditor />
+                </AdminRoute>
+              }
+            />
+            {/* ⭐ NEW Admin Footer & Terms editor */}
+            <Route
+              path="/admin/footer"
+              element={
+                <AdminRoute>
+                  <AdminFooterTermsEditor />
                 </AdminRoute>
               }
             />
