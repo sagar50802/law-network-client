@@ -1,6 +1,7 @@
 // src/voice/ClassroomVoiceEngine.js
+
 let voiceCache = [];
-let SPEECH_LOCK = false; // prevents overlapping playbacks
+let activeSessionId = 0; // 🔑 identifies the currently playing lecture
 
 /* ------------------------------------------------------- */
 /* ⏳ Load voices (waits until ready on all browsers)       */
@@ -83,7 +84,7 @@ function pickVoice(lang, teacher = {}) {
 }
 
 /* ------------------------------------------------------- */
-/* 🗣 Main Speech Player                                   */
+/* 🗣 Main Speech Player – session-safe                     */
 /* ------------------------------------------------------- */
 export async function playClassroomSpeech({
   slide,
@@ -95,19 +96,19 @@ export async function playClassroomSpeech({
   onStopSpeaking,
   onComplete,
 }) {
-  if (!slide || isMuted || SPEECH_LOCK) return;
   const synth = window.speechSynthesis;
-  if (!synth) return console.error("Speech synthesis not supported");
+  if (!slide || isMuted || !synth) return;
 
-  SPEECH_LOCK = true; // prevent reentry
+  // 🔄 Cancel any previous playback (and mark its session as dead)
   stopClassroomSpeech(speechRef);
+
+  // New session id for this lecture/slide
+  const mySessionId = ++activeSessionId;
+
   await waitForVoices(1500);
 
   const content = (slide.content || "").trim();
-  if (!content) {
-    SPEECH_LOCK = false;
-    return;
-  }
+  if (!content) return;
 
   const sentences = content
     .split(/(?<=[।!?\.])\s+/)
@@ -117,8 +118,11 @@ export async function playClassroomSpeech({
   let cancelled = false;
 
   const speakNext = () => {
-    if (cancelled || index >= sentences.length) {
-      SPEECH_LOCK = false;
+    // 🔒 If this session is no longer active, just stop quietly
+    if (cancelled || mySessionId !== activeSessionId) return;
+
+    if (index >= sentences.length) {
+      onProgress?.(1);
       onStopSpeaking?.();
       onComplete?.();
       return;
@@ -138,7 +142,7 @@ export async function playClassroomSpeech({
     utter.voice = pickVoice(lang, slide.teacher);
     utter.lang = lang;
 
-    // 🎚️ Voice tone & rate tuning
+    // 🎚️ Voice tuning
     const ua = navigator.userAgent.toLowerCase();
     if (lang.startsWith("en")) {
       utter.rate = /firefox/.test(ua) ? 0.9 : /edg/.test(ua) ? 0.94 : 0.92;
@@ -152,12 +156,14 @@ export async function playClassroomSpeech({
     let lastUpdate = 0;
 
     utter.onstart = () => {
+      if (cancelled || mySessionId !== activeSessionId) return;
       onStartSpeaking?.();
       onProgress?.(0);
     };
 
     utter.onboundary = (event) => {
-      if (!event.charIndex) return;
+      if (cancelled || mySessionId !== activeSessionId) return;
+      if (event.charIndex == null) return;
       const now = performance.now();
       if (now - lastUpdate > 100) {
         lastUpdate = now;
@@ -167,57 +173,70 @@ export async function playClassroomSpeech({
     };
 
     utter.onend = () => {
-      onProgress?.(1);
-      onStopSpeaking?.();
+      if (cancelled || mySessionId !== activeSessionId) return;
       index++;
-      setTimeout(speakNext, 350); // small gap for clarity
+      setTimeout(speakNext, 250);
     };
 
     utter.onerror = (e) => {
-      console.warn("Speech error:", e.error);
+      // "interrupted" happens when we cancel on purpose — ignore it
+      if (e.error !== "interrupted") {
+        console.warn("Speech error:", e.error);
+      }
+      if (cancelled || mySessionId !== activeSessionId) return;
       index++;
       setTimeout(speakNext, 200);
     };
 
-    // Guard: wait until no speech is pending
-    const waitAndSpeak = () => {
-      if (synth.speaking || synth.pending) {
-        setTimeout(waitAndSpeak, 150);
-      } else {
-        synth.speak(utter);
-      }
-    };
-    waitAndSpeak();
+    // Speak immediately — we already canceled previous speech above
+    synth.speak(utter);
   };
 
-  speakNext();
-
+  // expose cancel for React side
   speechRef.current = {
     isPlaying: true,
     cancel: () => {
+      if (cancelled) return;
       cancelled = true;
-      synth.cancel();
-      SPEECH_LOCK = false;
+      // kill this session
+      if (activeSessionId === mySessionId) {
+        activeSessionId++;
+      }
+      try {
+        synth.cancel();
+      } catch (e) {
+        console.warn("speech cancel failed:", e);
+      }
       onStopSpeaking?.();
     },
   };
+
+  speakNext();
 }
 
 /* ------------------------------------------------------- */
-/* ⏹ Stop Helper                                           */
+/* ⏹ Stop Helper – calls the session cancel                */
 /* ------------------------------------------------------- */
 export function stopClassroomSpeech(speechRef) {
-  try {
-    const synth = window.speechSynthesis;
-    if (synth.speaking || synth.pending) synth.cancel();
-  } catch (e) {
-    console.warn("speech cancel failed:", e);
+  // ✅ Use the real cancel function so internal `cancelled` flag is set
+  if (speechRef?.current && typeof speechRef.current.cancel === "function") {
+    try {
+      speechRef.current.cancel();
+    } catch (e) {
+      console.warn("speechRef cancel failed:", e);
+    }
+  } else {
+    try {
+      window.speechSynthesis.cancel();
+    } catch (e) {
+      console.warn("speech cancel failed:", e);
+    }
   }
+
   if (speechRef?.current) {
     speechRef.current.isPlaying = false;
     speechRef.current.cancel = () => {};
   }
-  SPEECH_LOCK = false;
 }
 
 /* ------------------------------------------------------- */
