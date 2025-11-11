@@ -8,6 +8,7 @@ export default function LecturePlaylistSidebar({
   lectures = [],
   currentLectureId,
   onSelectLecture,
+  isSwitching = false, // ✅ optional prop for “Upcoming…” indicator
 }) {
   const activeRef = useRef(null);
 
@@ -57,8 +58,14 @@ export default function LecturePlaylistSidebar({
               }`}
             >
               <div>
-                <div className="font-medium truncate">
+                <div className="font-medium truncate flex items-center">
                   Lecture {idx + 1} • {lec.title}
+                  {/* ✅ Added upcoming indicator */}
+                  {isSwitching && lec._id !== currentLectureId && (
+                    <span className="ml-2 text-[10px] text-yellow-400 animate-pulse">
+                      Upcoming…
+                    </span>
+                  )}
                 </div>
                 <div className="text-[11px] text-slate-400">
                   {lec.status === "released"
