@@ -4,6 +4,7 @@ import ClassroomTeleprompter from "../components/ClassroomTeleprompter";
 import { MediaBoard, MediaControlPanel } from "../components/MediaBoard";
 import LecturePlaylistSidebar from "../components/LecturePlaylistSidebar";
 import StudentsRow from "../components/StudentsRow";
+
 import {
   waitForVoices,
   playClassroomSpeech,
@@ -18,7 +19,7 @@ const API_BASE =
 let PAUSE_LOCK = false;
 
 /* -------------------------------------------------------------------------- */
-/* ✅ ClassroomLivePage — FINAL, Production Safe                              */
+/* ✅ ClassroomLivePage — Final Clean Production Version                     */
 /* -------------------------------------------------------------------------- */
 export default function ClassroomLivePage() {
   const [lectures, setLectures] = useState([]);
@@ -41,7 +42,7 @@ export default function ClassroomLivePage() {
   const currentSlide = slides[currentIndex] || null;
 
   /* ---------------------------------------------------------------------- */
-  /* 🧩 Utility: Safe cancel (prevents interrupted errors)                  */
+  /* Utility: Safe Cancel                                                   */
   /* ---------------------------------------------------------------------- */
   const safeCancelSpeech = useCallback(() => {
     try {
@@ -53,27 +54,32 @@ export default function ClassroomLivePage() {
   }, []);
 
   /* ---------------------------------------------------------------------- */
-  /* 🔓 Unlock Speech Autoplay once                                         */
+  /* Unlock Speech Autoplay                                                 */
   /* ---------------------------------------------------------------------- */
   useEffect(() => unlockSpeechOnUserClick(), []);
 
   /* ---------------------------------------------------------------------- */
-  /* 📦 Load Lectures (filter + default select)                             */
+  /* Load Lectures (with no-cache headers + filtering)                      */
   /* ---------------------------------------------------------------------- */
   const loadLectures = async () => {
     try {
-      const res = await fetch(`${API_BASE}/lectures?status=released`);
+      const res = await fetch(`${API_BASE}/lectures?status=released`, {
+        headers: {
+          "Cache-Control": "no-cache, no-store, must-revalidate",
+          Pragma: "no-cache",
+          Expires: "0",
+        },
+      });
       if (!res.ok) throw new Error(`Server error: ${res.status}`);
       const json = await res.json();
       const all = Array.isArray(json.data) ? json.data : [];
 
-      // ✅ Keep only visible access types
       const filtered = all.filter(
         (lec) => lec.accessType === "public" || lec.accessType === "protected"
       );
 
-      if (!filtered.length) throw new Error("No released lectures found.");
       setLectures(filtered);
+      setError(null);
 
       if (!selectedLectureId && filtered[0]?._id) {
         setSelectedLectureId(filtered[0]._id);
@@ -81,18 +87,25 @@ export default function ClassroomLivePage() {
       }
     } catch (err) {
       console.error("❌ loadLectures:", err);
-      setError("Failed to load classroom lectures. Try again later.");
+      setError("Failed to load classroom lectures. Please try again later.");
     } finally {
       setLoading(false);
     }
   };
 
+  // Initial load
   useEffect(() => {
     loadLectures();
   }, []);
 
+  // Auto-refresh every 30s (in case admin updates)
+  useEffect(() => {
+    const interval = setInterval(() => loadLectures(), 30000);
+    return () => clearInterval(interval);
+  }, []);
+
   /* ---------------------------------------------------------------------- */
-  /* 🧠 Load Slides (with fetch-token protection)                           */
+  /* Load Slides for Selected Lecture (token protected)                     */
   /* ---------------------------------------------------------------------- */
   const loadSlidesForLecture = useCallback(
     async (lectureId) => {
@@ -108,13 +121,16 @@ export default function ClassroomLivePage() {
       loadSlidesForLecture.lastToken = token;
 
       try {
-        const res = await fetch(`${API_BASE}/lectures/${lectureId}/slides`);
+        const res = await fetch(`${API_BASE}/lectures/${lectureId}/slides`, {
+          headers: {
+            "Cache-Control": "no-cache, no-store, must-revalidate",
+          },
+        });
         if (!res.ok) throw new Error(`Server error: ${res.status}`);
         const json = await res.json();
 
         if (loadSlidesForLecture.lastToken !== token) return; // ignore stale
         const slidesData = json.data?.slides || json.slides || [];
-
         setSlides(Array.isArray(slidesData) ? slidesData : []);
         setError(null);
       } catch (err) {
@@ -125,19 +141,18 @@ export default function ClassroomLivePage() {
       } finally {
         setTimeout(() => {
           if (loadSlidesForLecture.lastToken === token) setLoading(false);
-        }, 300);
+        }, 250);
       }
     },
     [safeCancelSpeech]
   );
 
-  /* Reload slides when lecture changes */
   useEffect(() => {
     if (selectedLectureId) loadSlidesForLecture(selectedLectureId);
   }, [selectedLectureId, loadSlidesForLecture]);
 
   /* ---------------------------------------------------------------------- */
-  /* 🎙️ Preload Voices once                                                */
+  /* Preload Voices                                                         */
   /* ---------------------------------------------------------------------- */
   useEffect(() => {
     waitForVoices(3000).then((v) =>
@@ -146,7 +161,7 @@ export default function ClassroomLivePage() {
   }, []);
 
   /* ---------------------------------------------------------------------- */
-  /* 🎞️ Slide Auto Progression                                             */
+  /* Handle Next Slide                                                      */
   /* ---------------------------------------------------------------------- */
   const handleNextSlide = useCallback(() => {
     safeCancelSpeech();
@@ -164,7 +179,7 @@ export default function ClassroomLivePage() {
   }, [slides.length, safeCancelSpeech]);
 
   /* ---------------------------------------------------------------------- */
-  /* 🔊 Speech Engine Guarded                                              */
+  /* Voice Playback Logic (auto language, debounce)                         */
   /* ---------------------------------------------------------------------- */
   useEffect(() => {
     if (loading || !slides.length || !isPlaying || isMuted) return;
@@ -175,7 +190,6 @@ export default function ClassroomLivePage() {
 
     const timeout = setTimeout(() => {
       if (window.speechSynthesis.speaking || window.speechSynthesis.pending) {
-        // Wait for clear channel
         setTimeout(() => {
           playClassroomSpeech({
             slide,
@@ -200,7 +214,7 @@ export default function ClassroomLivePage() {
           onComplete: handleNextSlide,
         });
       }
-    }, 400); // delay ensures correct lecture context
+    }, 400);
 
     return () => {
       clearTimeout(timeout);
@@ -217,12 +231,11 @@ export default function ClassroomLivePage() {
   ]);
 
   /* ---------------------------------------------------------------------- */
-  /* ▶️ Play / ⏸ Pause Controls                                            */
+  /* Controls: Play / Pause / Mute / Slide Nav                              */
   /* ---------------------------------------------------------------------- */
   const handlePlayPause = () => {
     const synth = window.speechSynthesis;
     if (!synth) return;
-
     if (isPlaying) {
       PAUSE_LOCK = true;
       safeCancelSpeech();
@@ -235,9 +248,6 @@ export default function ClassroomLivePage() {
     }
   };
 
-  /* ---------------------------------------------------------------------- */
-  /* 🔇 Mute Toggle                                                        */
-  /* ---------------------------------------------------------------------- */
   const handleMuteToggle = () => {
     const synth = window.speechSynthesis;
     setIsMuted((prev) => {
@@ -253,9 +263,6 @@ export default function ClassroomLivePage() {
     });
   };
 
-  /* ---------------------------------------------------------------------- */
-  /* ⏩ Manual Slide Navigation                                             */
-  /* ---------------------------------------------------------------------- */
   const goToSlide = (index) => {
     if (index < 0 || index >= slides.length) return;
     safeCancelSpeech();
@@ -267,7 +274,7 @@ export default function ClassroomLivePage() {
   };
 
   /* ---------------------------------------------------------------------- */
-  /* 🌀 Loader + Error States                                               */
+  /* Loader + Error States                                                  */
   /* ---------------------------------------------------------------------- */
   if (loading)
     return (
@@ -287,7 +294,7 @@ export default function ClassroomLivePage() {
     );
 
   /* ---------------------------------------------------------------------- */
-  /* 🧱 Layout                                                              */
+  /* Layout                                                                 */
   /* ---------------------------------------------------------------------- */
   return (
     <div className="min-h-screen bg-slate-950 text-slate-50 flex flex-col overflow-hidden">
@@ -302,14 +309,22 @@ export default function ClassroomLivePage() {
               className={`px-2 py-0.5 text-xs rounded-full font-semibold ${
                 currentLecture.accessType === "public"
                   ? "bg-emerald-600/20 text-emerald-400 border border-emerald-700"
-                  : "bg-slate-700/40 text-slate-300 border border-slate-600"
+                  : "bg-slate-700/40 text-slate-300 border-slate-600 border"
               }`}
             >
               {currentLecture.accessType === "public" ? "Public" : "Private"}
             </span>
           )}
+          <button
+            onClick={loadLectures}
+            className="ml-2 px-2 py-1 border border-slate-600 rounded text-xs hover:bg-slate-700"
+            title="Refresh lectures"
+          >
+            ⟳
+          </button>
         </div>
-        <div className="hidden md:flex items-center gap-2">
+
+        <div className="hidden md:flex items-center gap-2 text-xs md:text-sm">
           <button
             onClick={handlePlayPause}
             className={`px-3 py-1.5 rounded-full font-semibold text-xs transition-all ${
@@ -335,7 +350,6 @@ export default function ClassroomLivePage() {
 
       {/* Main */}
       <main className="flex-1 px-4 md:px-8 py-5 grid grid-cols-1 md:grid-cols-[0.9fr_2.4fr_1.1fr] gap-5 items-start">
-        {/* Left: Teacher */}
         <TeacherAvatarCard
           teacher={{
             name:
@@ -355,7 +369,6 @@ export default function ClassroomLivePage() {
           isSpeaking={isSpeaking}
         />
 
-        {/* Center: Teleprompter */}
         <section className="flex flex-col gap-3">
           <ClassroomTeleprompter
             slide={currentSlide}
@@ -389,7 +402,6 @@ export default function ClassroomLivePage() {
           </div>
         </section>
 
-        {/* Right: Playlist */}
         <LecturePlaylistSidebar
           lectures={lectures}
           currentLectureId={selectedLectureId}
