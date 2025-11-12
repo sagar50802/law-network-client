@@ -20,7 +20,7 @@ export default function ClassroomSharePage() {
       return;
     }
 
-    // 🔑 retrieve hidden group key (if user came via /bridge/gk/...)
+    // 🔑 retrieve hidden group key (if user came via /bridge/gk/…)
     const hiddenGroupKey =
       sessionStorage.getItem(`gk:${token}`) ||
       sessionStorage.getItem("gk") ||
@@ -93,6 +93,6 @@ export default function ClassroomSharePage() {
       </div>
     );
 
-  // Pass lectures (with unlocked ones) to live classroom viewer
-  return allowed ? <ClassroomLivePage lectures={lectures} /> : null;
+  // ✅ Pass unlocked list using the prop ClassroomLivePage expects
+  return allowed ? <ClassroomLivePage sharedLectures={lectures} /> : null;
 }
