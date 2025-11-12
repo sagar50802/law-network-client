@@ -3,15 +3,14 @@
 export function applySavedTheme() {
   window.addEventListener("DOMContentLoaded", () => {
     try {
-      // ✅ Load saved theme and focus mode
+      // 🧠 Load saved theme + focus
       const savedTheme = localStorage.getItem("lnx_theme") || "default";
       const focus = localStorage.getItem("lnx_focus") === "true";
 
-      // ✅ Apply dataset to body (CSS from classroomTheme.css will respond)
       document.body.dataset.theme = savedTheme;
       document.body.dataset.focus = focus ? "on" : "off";
 
-      // ✅ Show badge only if inside classroom route
+      // 🎓 Show focus badge only inside classroom
       const isInClassroom = window.location.pathname.startsWith("/classroom");
       if (isInClassroom && focus) {
         showFocusBadge();
@@ -25,14 +24,13 @@ export function applySavedTheme() {
 }
 
 function showFocusBadge() {
-  // Remove any existing one first
   removeFocusBadge();
 
   const badge = document.createElement("div");
   badge.id = "focus-mode-badge";
   badge.textContent = "🧘 Focus Mode: ON";
+  badge.title = "You’re in Focus Mode — distractions minimized";
 
-  // ✨ Styling
   Object.assign(badge.style, {
     position: "fixed",
     bottom: "1.5rem",
@@ -58,7 +56,7 @@ function removeFocusBadge() {
   if (existing) existing.remove();
 }
 
-// Optional pulse animation (only if CSS missing)
+// Inject animation if CSS not loaded yet
 const style = document.createElement("style");
 style.textContent = `
 @keyframes focusBadgePulse {
