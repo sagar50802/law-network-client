@@ -24,7 +24,7 @@ const API_BASE =
 /* -------------------------------------------------------------------------- */
 /* ✅ ClassroomLivePage Component                                            */
 /* -------------------------------------------------------------------------- */
-export default function ClassroomLivePage() {
+export default function ClassroomLivePage({ sharedLectures = [] }) {   // 👈 NEW PROP
   /* ----------------------------- STATE ---------------------------------- */
   const [lectures, setLectures] = useState([]);
   const [slides, setSlides] = useState([]);
@@ -51,6 +51,9 @@ export default function ClassroomLivePage() {
   const switchTimer = useRef(null);
   const speechPaused = useRef(false);
   const isPlayingRef = useRef(true);
+
+  // 👇 tracks whether we already hydrated from a share link so we don't overwrite it
+  const [hydratedFromShare, setHydratedFromShare] = useState(false);
 
   const currentSlide = slides[currentIndex] || null;
   const currentLecture =
@@ -83,9 +86,26 @@ export default function ClassroomLivePage() {
   }, []);
 
   /* ---------------------------------------------------------------------- */
-  /* 📚 Load Lectures                                                      */
+  /* 🧲 Prefer unlocked list from share link                                */
+  /* ---------------------------------------------------------------------- */
+  useEffect(() => {
+    if (sharedLectures && sharedLectures.length > 0) {
+      setLectures(sharedLectures);
+      // pick the first lecture if none selected or previous selection not present
+      const firstId = sharedLectures[0]?._id || null;
+      setSelectedLectureId((prev) =>
+        prev && sharedLectures.some((l) => l._id === prev) ? prev : firstId
+      );
+      setHydratedFromShare(true);
+      setLoading(false);
+    }
+  }, [sharedLectures]);
+
+  /* ---------------------------------------------------------------------- */
+  /* 📚 Load Lectures (public) — only if we didn't hydrate from share       */
   /* ---------------------------------------------------------------------- */
   const fetchLectures = useCallback(async () => {
+    if (hydratedFromShare) return; // 👈 do not overwrite unlocked list
     try {
       const res = await fetch(`${API_BASE}/lectures?status=released`);
       if (!res.ok) throw new Error(`Server error: ${res.status}`);
@@ -102,7 +122,7 @@ export default function ClassroomLivePage() {
       setError("Failed to load lectures");
       setLoading(false);
     }
-  }, [selectedLectureId]);
+  }, [selectedLectureId, hydratedFromShare]);
 
   useEffect(() => {
     fetchLectures();
@@ -486,7 +506,7 @@ export default function ClassroomLivePage() {
           <LecturePlaylistSidebar
             lectures={lectures}
             currentLectureId={selectedLectureId}
-            onSelectLecture={handleLectureSelect} // ✅ restored
+            onSelectLecture={handleLectureSelect}
           />
         </div>
 
