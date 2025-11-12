@@ -5,8 +5,20 @@ export default function ClassroomLinkCreator() {
   const [type, setType] = useState("free");
   const [expiresInHours, setExpiresInHours] = useState(0);
   const [expiresInMinutes, setExpiresInMinutes] = useState(1); // default 1 min for quick test
+  const [groupKeys, setGroupKeys] = useState([
+    { label: "WhatsApp", key: "" },
+    { label: "Telegram", key: "" },
+  ]);
   const [link, setLink] = useState("");
   const [loading, setLoading] = useState(false);
+
+  const updateKey = (i, field, val) => {
+    setGroupKeys((prev) => {
+      const copy = [...prev];
+      copy[i] = { ...copy[i], [field]: val };
+      return copy;
+    });
+  };
 
   async function createLink() {
     if (!lectureId) {
@@ -35,6 +47,7 @@ export default function ClassroomLinkCreator() {
             type,
             expiresInHours: Number(expiresInHours),
             expiresInMinutes: Number(expiresInMinutes),
+            groupKeys: groupKeys.filter((g) => g.key.trim().length > 0),
           }),
         }
       );
@@ -83,7 +96,7 @@ export default function ClassroomLinkCreator() {
             className="w-full border px-3 py-2 rounded-lg"
           >
             <option value="free">Free (public)</option>
-            <option value="paid">Paid (restricted)</option>
+            <option value="paid">Paid (restricted/group-only)</option>
           </select>
         </div>
 
@@ -111,6 +124,40 @@ export default function ClassroomLinkCreator() {
           </div>
         </div>
 
+        {/* Group Keys (only visible for paid links) */}
+        {type === "paid" && (
+          <div className="space-y-2">
+            <div className="font-medium text-sm">Group Keys (optional)</div>
+            {groupKeys.map((g, i) => (
+              <div key={i} className="flex gap-2">
+                <input
+                  type="text"
+                  placeholder="Label (e.g., WhatsApp)"
+                  value={g.label}
+                  onChange={(e) => updateKey(i, "label", e.target.value)}
+                  className="w-1/3 border px-3 py-2 rounded-lg"
+                />
+                <input
+                  type="text"
+                  placeholder="Secret key for this group"
+                  value={g.key}
+                  onChange={(e) => updateKey(i, "key", e.target.value)}
+                  className="w-2/3 border px-3 py-2 rounded-lg"
+                />
+              </div>
+            ))}
+            <button
+              type="button"
+              onClick={() =>
+                setGroupKeys((prev) => [...prev, { label: "", key: "" }])
+              }
+              className="text-sm text-emerald-700 underline"
+            >
+              + Add another group
+            </button>
+          </div>
+        )}
+
         <button
           onClick={createLink}
           disabled={loading}
@@ -131,6 +178,13 @@ export default function ClassroomLinkCreator() {
           >
             {link}
           </a>
+          <p className="text-xs mt-2 text-gray-600">
+            For WhatsApp: share{" "}
+            <code>/bridge/gk/&lt;whatsappKey&gt;/t/&lt;token&gt;</code>
+            <br />
+            For Telegram: share{" "}
+            <code>/bridge/gk/&lt;telegramKey&gt;/t/&lt;token&gt;</code>
+          </p>
         </div>
       )}
     </div>
