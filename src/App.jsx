@@ -177,6 +177,7 @@ export default function App() {
 
             {/* 🆕 NEW: Ambience route */}
             <Route path="/classroom/ambience" element={<AmbiencePage />} />
+            <Route path="/classroom/theme" element={<ThemeFocusPage />} />
 
             <Route
               path="/admin/classroom-link"
