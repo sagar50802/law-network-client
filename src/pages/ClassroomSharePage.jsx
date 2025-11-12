@@ -5,11 +5,13 @@ export default function ClassroomSharePage() {
   const [allowed, setAllowed] = useState(false);
   const [loading, setLoading] = useState(true);
   const [reason, setReason] = useState("");
+  const [lectures, setLectures] = useState([]);
+  const [expired, setExpired] = useState(false);
 
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const token = params.get("token");
-    const key = params.get("key"); // ✅ new group key support
+    const key = params.get("key");
     const authToken = localStorage.getItem("authToken") || "";
 
     if (!token) {
@@ -18,11 +20,11 @@ export default function ClassroomSharePage() {
       return;
     }
 
-    // 🔒 Try to get hidden group key (set by GroupKeyBridge)
+    // 🔑 retrieve hidden group key (if user came via /bridge/gk/...)
     const hiddenGroupKey =
       sessionStorage.getItem(`gk:${token}`) ||
       sessionStorage.getItem("gk") ||
-      key || // fallback from query
+      key ||
       "";
 
     const headers = {
@@ -30,27 +32,37 @@ export default function ClassroomSharePage() {
       ...(hiddenGroupKey ? { "X-Group-Key": hiddenGroupKey } : {}),
     };
 
-    // ✅ Include both token and key in the request
+    // STEP 1️⃣ — check if link is valid
     fetch(
       `https://law-network.onrender.com/api/classroom-access/check?token=${token}${
         hiddenGroupKey ? `&key=${hiddenGroupKey}` : ""
       }`,
-      {
-        headers,
-        credentials: "include",
-      }
+      { headers, credentials: "include" }
     )
       .then((res) => res.json())
       .then((data) => {
         if (data.allowed) {
           setAllowed(true);
+          // STEP 2️⃣ — load visible lectures (public + unlocked)
+          return fetch(
+            `https://law-network.onrender.com/api/classroom-access/available?token=${token}`,
+            { headers, credentials: "include" }
+          );
         } else {
           setReason(data.reason || "expired_or_not_allowed");
           throw new Error("not allowed");
         }
       })
+      .then((res) => (res ? res.json() : null))
+      .then((data) => {
+        if (data?.success) {
+          setLectures(data.lectures || []);
+        } else if (data?.reason === "expired") {
+          setExpired(true);
+        }
+      })
       .catch(() => {
-        // 🧠 Clear, user-friendly error messages
+        // 🎯 clear, user-friendly errors
         let msg = "This classroom link is expired or not allowed.";
         if (reason === "expired") msg = "⏰ This classroom link has expired.";
         else if (reason === "bad_group_key" || reason === "invalid_group_key")
@@ -74,5 +86,13 @@ export default function ClassroomSharePage() {
       </div>
     );
 
-  return allowed ? <ClassroomLivePage /> : null;
+  if (expired)
+    return (
+      <div className="flex items-center justify-center h-screen bg-black text-white text-center flex-col gap-3">
+        <p className="text-xl">⏰ This classroom link has expired.</p>
+      </div>
+    );
+
+  // Pass lectures (with unlocked ones) to live classroom viewer
+  return allowed ? <ClassroomLivePage lectures={lectures} /> : null;
 }
