@@ -1,45 +1,54 @@
 // src/utils/themeInitializer.js
+
 export function applySavedTheme() {
-  try {
-    const savedTheme = localStorage.getItem("lnx_theme") || "default";
-    document.body.dataset.theme = savedTheme;
+  window.addEventListener("DOMContentLoaded", () => {
+    try {
+      // ✅ Load saved theme and focus mode
+      const savedTheme = localStorage.getItem("lnx_theme") || "default";
+      const focus = localStorage.getItem("lnx_focus") === "true";
 
-    const focus = localStorage.getItem("lnx_focus") === "true";
-    document.body.dataset.focus = focus ? "on" : "off";
+      // ✅ Apply dataset to body (CSS from classroomTheme.css will respond)
+      document.body.dataset.theme = savedTheme;
+      document.body.dataset.focus = focus ? "on" : "off";
 
-    // ✅ Show Focus Mode tag only inside classroom routes
-    const isInClassroom = window.location.pathname.startsWith("/classroom");
-    if (isInClassroom) {
-      updateFocusBadge(focus);
-    } else {
-      removeFocusBadge();
+      // ✅ Show badge only if inside classroom route
+      const isInClassroom = window.location.pathname.startsWith("/classroom");
+      if (isInClassroom && focus) {
+        showFocusBadge();
+      } else {
+        removeFocusBadge();
+      }
+    } catch (err) {
+      console.warn("Theme initializer failed:", err);
     }
-  } catch (e) {
-    console.warn("Theme initializer failed:", e);
-  }
+  });
 }
 
-function updateFocusBadge(isOn) {
-  removeFocusBadge(); // clear any old instance
-
-  if (!isOn) return;
+function showFocusBadge() {
+  // Remove any existing one first
+  removeFocusBadge();
 
   const badge = document.createElement("div");
   badge.id = "focus-mode-badge";
   badge.textContent = "🧘 Focus Mode: ON";
-  badge.style.position = "fixed";
-  badge.style.bottom = "1.2rem";
-  badge.style.right = "1.2rem";
-  badge.style.padding = "8px 14px";
-  badge.style.borderRadius = "9999px";
-  badge.style.fontWeight = "600";
-  badge.style.fontSize = "0.9rem";
-  badge.style.background = "var(--theme-accent, #10b981)";
-  badge.style.color = "white";
-  badge.style.boxShadow = "0 0 15px var(--theme-glow, rgba(16,185,129,0.4))";
-  badge.style.zIndex = "9999";
-  badge.style.transition = "opacity 0.4s ease";
-  badge.style.opacity = "0.95";
+
+  // ✨ Styling
+  Object.assign(badge.style, {
+    position: "fixed",
+    bottom: "1.5rem",
+    right: "1.5rem",
+    padding: "10px 18px",
+    borderRadius: "9999px",
+    fontWeight: "600",
+    fontSize: "0.95rem",
+    background: "var(--theme-accent, #10b981)",
+    color: "white",
+    boxShadow: "0 0 15px var(--theme-glow, rgba(16,185,129,0.4))",
+    zIndex: "9999",
+    opacity: "0.95",
+    animation: "focusBadgePulse 3s infinite ease-in-out",
+    transition: "opacity 0.3s ease"
+  });
 
   document.body.appendChild(badge);
 }
@@ -48,3 +57,13 @@ function removeFocusBadge() {
   const existing = document.getElementById("focus-mode-badge");
   if (existing) existing.remove();
 }
+
+// Optional pulse animation (only if CSS missing)
+const style = document.createElement("style");
+style.textContent = `
+@keyframes focusBadgePulse {
+  0%, 100% { transform: scale(1); opacity: 0.9; }
+  50% { transform: scale(1.07); opacity: 1; }
+}
+`;
+document.head.appendChild(style);
