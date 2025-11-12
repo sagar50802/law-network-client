@@ -39,10 +39,23 @@ export default function LecturePlaylistSidebar({
         {lectures.map((lec, idx) => {
           const active = lec._id === currentLectureId;
 
-          // 🧩 Determine access (public / private / paid)
-          const accessType = lec.accessType || "public"; // "public" | "private" | "paid"
+          // 🧩 Determine access type
+          const accessType = lec.accessType || lec.access_type || "public"; // "public" | "private" | "paid"
+
+          // ✅ IMPORTANT:
+          // When coming from a share link, the backend `/available` already filtered/unlocked items.
+          // Consider the lecture unlocked if:
+          //  - it arrived in this list, OR
+          //  - it has any of these flags: unlocked / isAllowed / tempUnlocked
+          const unlockedFlag =
+            lec.unlocked === true ||
+            lec.isAllowed === true ||
+            lec.tempUnlocked === true ||
+            false;
+
+          // 🔒 Lock only if it's not public, user isn't admin, and we didn't mark it unlocked
           const isLocked =
-            accessType !== "public" && userRole !== "admin" && !lec.isAllowed;
+            accessType !== "public" && userRole !== "admin" && !unlockedFlag;
 
           const dotClass =
             lec.status === "released"
