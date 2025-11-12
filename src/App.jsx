@@ -16,6 +16,9 @@ import "./styles/ui.css";
 /* ---------- NEW: Classroom Drawer Menu (Slide-out) ---------- */
 import ClassroomDrawerMenu from "./components/ClassroomDrawerMenu.jsx";
 
+/* ---------- 🆕 NEW: Ambience Page ---------- */
+import AmbiencePage from "./pages/classroom/AmbiencePage.jsx";
+
 /* ---------- Main Pages ---------- */
 import HomePage from "./pages/HomePage.jsx";
 import ArticlesPage from "./pages/ArticlesPage.jsx";
@@ -171,6 +174,10 @@ export default function App() {
               }
             />
             <Route path="/classroom/share" element={<ClassroomSharePage />} />
+
+            {/* 🆕 NEW: Ambience route */}
+            <Route path="/classroom/ambience" element={<AmbiencePage />} />
+
             <Route
               path="/admin/classroom-link"
               element={
