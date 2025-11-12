@@ -1,131 +1,260 @@
-import React, { useState, useRef, useEffect } from "react";
-import { Play, Pause } from "lucide-react";
-import { motion } from "framer-motion";
+import React, { useEffect, useMemo, useRef, useState } from "react";
 
 /**
- * 🎵 Background Ambience
- * Lets students pick and loop relaxing background sounds
- * (rain, café, birds, library, tanpura, etc.)
+ * 🎵 Background Ambience — Classroom addon (frontend-only)
+ * - Plays a selected looping ambience
+ * - Remembers selection + volume via localStorage
+ * - Smooth volume ramp, safe cleanup
+ *
+ * Drop this at: src/pages/classroom/AmbiencePage.jsx
+ * Make sure your audio files exist (see ambienceTracks below).
  */
 
+const LS_KEY = "lnx_ambience_v1";
+
+const ambienceTracks = [
+  { id: "none",   emoji: "🔘", name: "None",                src: null },
+  { id: "rain",   emoji: "🌧️", name: "Rainy Library",      src: "/ambience/rain.mp3" },
+  { id: "birds",  emoji: "🐦", name: "Morning Birds",       src: "/ambience/birds.mp3" },
+  { id: "cafe",   emoji: "☕", name: "Café Study Mode",     src: "/ambience/cafe.mp3" },
+  { id: "library",emoji: "🏛️", name: "Old Library",        src: "/ambience/old-library.mp3" },
+  { id: "tanpura",emoji: "🪔", name: "Indian Tanpura",      src: "/ambience/tanpura.mp3" },
+  { id: "night",  emoji: "🌃", name: "Midnight Focus",      src: "/ambience/midnight.mp3" },
+];
+
 export default function AmbiencePage() {
-  const [selected, setSelected] = useState("None");
-  const [isPlaying, setIsPlaying] = useState(false);
+  const initial = useMemo(() => {
+    try {
+      const saved = JSON.parse(localStorage.getItem(LS_KEY) || "{}");
+      return {
+        id: saved.id ?? "none",
+        volume: typeof saved.volume === "number" ? saved.volume : 0.35,
+        isOn: saved.id && saved.id !== "none" ? true : false,
+      };
+    } catch {
+      return { id: "none", volume: 0.35, isOn: false };
+    }
+  }, []);
+
+  const [currentId, setCurrentId] = useState(initial.id);
+  const [volume, setVolume] = useState(initial.volume);
+  const [isOn, setIsOn] = useState(initial.isOn);
+  const [errorMsg, setErrorMsg] = useState("");
+
   const audioRef = useRef(null);
+  const fadeRef = useRef(null);
 
-  // 🔊 Predefined ambience sounds (can be expanded)
-  const ambienceOptions = [
-    { label: "🔘 None", value: "None", src: null },
-    {
-      label: "🌧️ Rainy Library",
-      value: "rain",
-      src: "https://cdn.pixabay.com/download/audio/2021/09/30/audio_bec06e9b3c.mp3?filename=rain-ambient-110997.mp3",
-    },
-    {
-      label: "🐦 Morning Birds",
-      value: "birds",
-      src: "https://cdn.pixabay.com/download/audio/2021/10/01/audio_43d8453a9c.mp3?filename=morning-birds-116199.mp3",
-    },
-    {
-      label: "☕ Café Study Mode",
-      value: "cafe",
-      src: "https://cdn.pixabay.com/download/audio/2021/10/05/audio_56b6a7985c.mp3?filename=coffee-shop-ambience-12546.mp3",
-    },
-    {
-      label: "🏛️ Old Library",
-      value: "library",
-      src: "https://cdn.pixabay.com/download/audio/2021/10/05/audio_44f896da64.mp3?filename=library-room-ambient-12568.mp3",
-    },
-    {
-      label: "🪔 Indian Tanpura",
-      value: "tanpura",
-      src: "https://cdn.pixabay.com/download/audio/2023/02/17/audio_759dd8df59.mp3?filename=tanpura-137072.mp3",
-    },
-    {
-      label: "🌃 Midnight Focus",
-      value: "midnight",
-      src: "https://cdn.pixabay.com/download/audio/2023/02/28/audio_9043213d61.mp3?filename=calm-midnight-ambient-139012.mp3",
-    },
-  ];
+  const current = ambienceTracks.find((t) => t.id === currentId) || ambienceTracks[0];
 
-  /** 🎛️ Handle ambience selection */
+  /* Persist to localStorage */
+  useEffect(() => {
+    localStorage.setItem(LS_KEY, JSON.stringify({ id: currentId, volume, isOn }));
+  }, [currentId, volume, isOn]);
+
+  /* Create or update audio element when preset / power changes */
+  useEffect(() => {
+    // clear previous fade interval
+    if (fadeRef.current) clearInterval(fadeRef.current);
+
+    // Stop & cleanup if off or "None"
+    if (!isOn || !current?.src) {
+      if (audioRef.current) {
+        try {
+          audioRef.current.pause();
+          audioRef.current.src = "";
+        } catch {}
+      }
+      return;
+    }
+
+    // (Re)create audio element
+    const audio = new Audio(current.src);
+    audio.loop = true;
+    audio.preload = "auto";
+    audio.crossOrigin = "anonymous"; // safe if files are public
+    audio.volume = 0; // fade-in from 0 → target
+    audioRef.current = audio;
+
+    setErrorMsg("");
+    audio
+      .play()
+      .then(() => {
+        // Fade in smoothly to target volume
+        smoothSetVolume(volume, 350);
+      })
+      .catch((err) => {
+        setErrorMsg("Tap anywhere to allow audio (browser autoplay policy).");
+        console.warn("Ambience play blocked:", err);
+      });
+
+    // Cleanup on change/unmount
+    return () => {
+      if (fadeRef.current) clearInterval(fadeRef.current);
+      try {
+        audio.pause();
+        audio.src = "";
+      } catch {}
+    };
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [currentId, isOn]);
+
+  /* Apply volume changes with gentle ramp */
   useEffect(() => {
     if (!audioRef.current) return;
-    if (selected === "None") {
-      audioRef.current.pause();
-      setIsPlaying(false);
-    } else if (isPlaying) {
-      playSelectedAudio();
-    }
-  }, [selected]);
+    smoothSetVolume(volume, 200);
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [volume]);
 
-  const playSelectedAudio = () => {
-    const selectedAudio = ambienceOptions.find((a) => a.value === selected);
-    if (!selectedAudio?.src) return;
-    audioRef.current.src = selectedAudio.src;
-    audioRef.current.loop = true;
-    audioRef.current.volume = 0.6;
-    audioRef.current.play().catch((err) =>
-      console.warn("Audio autoplay blocked:", err)
-    );
-  };
+  /* Unlock on first user interaction (mobile autoplay) */
+  useEffect(() => {
+    const unlock = () => {
+      if (audioRef.current) {
+        audioRef.current
+          .play()
+          .then(() => setErrorMsg(""))
+          .catch(() => {});
+      }
+      window.removeEventListener("click", unlock);
+      window.removeEventListener("touchstart", unlock);
+    };
+    window.addEventListener("click", unlock, { once: true });
+    window.addEventListener("touchstart", unlock, { once: true });
+    return () => {
+      window.removeEventListener("click", unlock);
+      window.removeEventListener("touchstart", unlock);
+    };
+  }, []);
 
-  /** ▶️ Play / ⏸ Pause */
-  const togglePlay = () => {
+  function smoothSetVolume(target, ms = 250) {
     if (!audioRef.current) return;
-    if (isPlaying) {
-      audioRef.current.pause();
-      setIsPlaying(false);
+    if (fadeRef.current) clearInterval(fadeRef.current);
+
+    const a = audioRef.current;
+    const start = a.volume;
+    const diff = target - start;
+    const steps = Math.max(6, Math.round(ms / 25));
+    let i = 0;
+
+    fadeRef.current = setInterval(() => {
+      i++;
+      const t = i / steps;
+      // ease-out
+      const eased = 1 - Math.pow(1 - t, 2);
+      a.volume = clamp01(start + diff * eased);
+      if (i >= steps) {
+        a.volume = clamp01(target);
+        clearInterval(fadeRef.current);
+      }
+    }, ms / steps);
+  }
+
+  function clamp01(v) {
+    return Math.max(0, Math.min(1, v));
+  }
+
+  function togglePower() {
+    // If selecting off
+    if (isOn && currentId !== "none") {
+      smoothSetVolume(0, 200);
+      setTimeout(() => setIsOn(false), 180);
     } else {
-      playSelectedAudio();
-      setIsPlaying(true);
+      setIsOn(true);
+      if (currentId === "none") {
+        setCurrentId("rain"); // default to rain when turning on
+      }
     }
-  };
+  }
+
+  function pick(id) {
+    setCurrentId(id);
+    if (id === "none") {
+      setIsOn(false);
+    } else {
+      setIsOn(true);
+    }
+  }
 
   return (
-    <div className="min-h-screen bg-slate-900 text-white flex flex-col items-center justify-center p-6">
-      <motion.h1
-        className="text-3xl font-bold mb-3"
-        initial={{ opacity: 0, y: -10 }}
-        animate={{ opacity: 1, y: 0 }}
-      >
-        🎵 Background Ambience
-      </motion.h1>
+    <div className="min-h-screen bg-slate-950 text-white flex flex-col gap-6 md:gap-8 px-4 md:px-8 py-6 md:py-10">
+      {/* Header */}
+      <div className="flex items-center justify-between">
+        <div>
+          <h1 className="text-2xl md:text-3xl font-bold tracking-tight">🎵 Background Ambience</h1>
+          <p className="text-slate-300 text-sm md:text-base">
+            Create your study vibe with subtle looping ambience. Runs quietly while you learn.
+          </p>
+        </div>
 
-      <p className="text-slate-400 text-center max-w-md mb-8">
-        Set your ideal study atmosphere with relaxing background sounds.
-      </p>
+        {/* Power toggle with glow */}
+        <button
+          onClick={togglePower}
+          className={`relative px-4 py-2 rounded-full font-semibold text-sm transition
+            ${isOn ? "bg-emerald-400 text-black" : "bg-slate-800 text-slate-200 border border-slate-600"}
+          `}
+        >
+          {isOn ? "On" : "Off"}
+          {isOn && (
+            <span className="absolute -inset-1 rounded-full blur-md bg-emerald-400/30 pointer-events-none" />
+          )}
+        </button>
+      </div>
 
-      {/* Dropdown selector */}
-      <select
-        value={selected}
-        onChange={(e) => setSelected(e.target.value)}
-        className="bg-slate-800 text-white px-4 py-2 rounded-lg border border-slate-700 shadow focus:outline-none focus:ring focus:ring-cyan-400"
-      >
-        {ambienceOptions.map((opt) => (
-          <option key={opt.value} value={opt.value}>
-            {opt.label}
-          </option>
-        ))}
-      </select>
+      {/* Error / hint */}
+      {errorMsg && (
+        <div className="text-amber-300 text-sm bg-amber-900/20 border border-amber-600/40 rounded-lg px-3 py-2">
+          {errorMsg}
+        </div>
+      )}
 
-      {/* Play / Pause button */}
-      <motion.button
-        onClick={togglePlay}
-        className="mt-6 flex items-center gap-2 bg-cyan-500 hover:bg-cyan-600 text-white font-medium px-6 py-3 rounded-full shadow-lg transition-all duration-300"
-        whileTap={{ scale: 0.9 }}
-      >
-        {isPlaying ? <Pause size={18} /> : <Play size={18} />}
-        {isPlaying ? "Pause" : "Play"} Ambience
-      </motion.button>
+      {/* Presets */}
+      <div className="grid grid-cols-2 sm:grid-cols-3 lg:grid-cols-6 gap-3 md:gap-4">
+        {ambienceTracks.map((t) => {
+          const active = isOn && t.id === currentId && t.id !== "none";
+          return (
+            <button
+              key={t.id}
+              onClick={() => pick(t.id)}
+              className={`group relative rounded-2xl border p-3 md:p-4 text-left transition
+                ${active ? "border-emerald-400/70 bg-emerald-400/10" : "border-slate-700 bg-slate-900/60 hover:bg-slate-900"}
+              `}
+            >
+              <div className="text-2xl">{t.emoji}</div>
+              <div className="mt-1 font-medium">{t.name}</div>
+              {active && (
+                <>
+                  <div className="mt-1 text-emerald-300 text-xs">Playing…</div>
+                  <span className="absolute -inset-px rounded-2xl ring-2 ring-emerald-400/40 animate-pulse pointer-events-none" />
+                </>
+              )}
+            </button>
+          );
+        })}
+      </div>
 
-      {/* Hidden audio element */}
-      <audio ref={audioRef} />
+      {/* Volume */}
+      <div className="mt-2 md:mt-4">
+        <label className="text-sm text-slate-300 mb-1 block">Volume</label>
+        <div className="flex items-center gap-3">
+          <input
+            type="range"
+            min={0}
+            max={1}
+            step={0.01}
+            value={volume}
+            onChange={(e) => setVolume(parseFloat(e.target.value))}
+            className="w-full accent-emerald-400"
+          />
+          <div className="w-12 text-right text-slate-300 text-sm">{Math.round(volume * 100)}%</div>
+        </div>
+        <p className="text-xs text-slate-500 mt-1">
+          Tip: keep ambience between <span className="text-slate-300">20–40%</span> so it doesn’t overpower your lecture.
+        </p>
+      </div>
 
-      {/* Tip */}
-      <p className="text-xs text-slate-500 mt-4">
-        (Tip: Ambience keeps playing in the background while you browse Classroom)
-      </p>
+      {/* Info */}
+      <div className="mt-2 text-xs text-slate-500">
+        Uses your browser audio only. No external API. Files served from <code className="text-slate-300">/ambience/*</code>.
+      </div>
     </div>
   );
 }
