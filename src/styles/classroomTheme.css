@@ -83,3 +83,12 @@ body[data-focus="off"] footer {
 body[data-theme] .classroom-glow {
   animation: slowPulse 5s infinite ease-in-out;
 }
+
+#focus-mode-badge {
+  animation: gentlePulse 3s infinite ease-in-out;
+}
+
+@keyframes gentlePulse {
+  0%, 100% { transform: scale(1); opacity: 0.95; }
+  50% { transform: scale(1.05); opacity: 1; }
+}
