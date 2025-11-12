@@ -1,11 +1,20 @@
-import { BrowserRouter as Router, Routes, Route, useLocation, useParams } from "react-router-dom";
+import {
+  BrowserRouter as Router,
+  Routes,
+  Route,
+  useLocation,
+  useParams,
+} from "react-router-dom";
 import { useEffect } from "react";
 
 import Navbar from "./components/layout/Navbar";
-import Footer from "./components/layout/Footer.jsx"; // ⭐ NEW
+import Footer from "./components/layout/Footer.jsx";
 import AdminRoute from "./components/common/AdminRoute.jsx";
 import IfOwnerOnly from "./components/common/IfOwnerOnly.jsx";
 import "./styles/ui.css";
+
+/* ---------- NEW: Classroom Menu ---------- */
+import ClassroomHamburgerMenu from "./components/ClassroomHamburgerMenu.jsx";
 
 /* ---------- Main Pages ---------- */
 import HomePage from "./pages/HomePage.jsx";
@@ -22,7 +31,7 @@ import Plagiarism from "./pages/Plagiarism.jsx";
 import AdminDashboard from "./pages/AdminDashboard.jsx";
 import AdminLogin from "./pages/AdminLogin.jsx";
 import AdminConsultancyEditor from "./components/Admin/AdminConsultancyEditor.jsx";
-import AdminFooterTermsEditor from "./pages/AdminFooterTermsEditor.jsx"; // ⭐ NEW
+import AdminFooterTermsEditor from "./pages/AdminFooterTermsEditor.jsx";
 
 /* ---------- Exam Prep ---------- */
 import PrepList from "./pages/prep/PrepList.jsx";
@@ -52,11 +61,7 @@ import LiveAdminPage from "./pages/LiveAdminPage.jsx";
 /* ---------- Classroom Feature ---------- */
 import ClassroomLivePage from "./pages/ClassroomLivePage.jsx";
 import AdminLectureManager from "./pages/AdminLectureManager.jsx";
-
-/* 🔐 Shared Classroom link viewer */
 import ClassroomSharePage from "./pages/ClassroomSharePage.jsx";
-
-/* 🆕 NEW: Admin Classroom Link Generator (safe standalone) */
 import ClassroomLinkCreator from "./pages/ClassroomLinkCreator.jsx";
 
 /* ---------- Helpers ---------- */
@@ -108,6 +113,19 @@ function RouteWithResultId({ Comp }) {
   return <Comp id={id} />;
 }
 
+/* ---------- Wrapper to Show Menu Only on Classroom Routes ---------- */
+function ConditionalMenuWrapper({ children }) {
+  const location = useLocation();
+  const isClassroom = location.pathname.startsWith("/classroom");
+
+  return (
+    <>
+      {isClassroom && <ClassroomHamburgerMenu />}
+      {children}
+    </>
+  );
+}
+
 /* ---------- Main ---------- */
 export default function App() {
   return (
@@ -120,183 +138,169 @@ export default function App() {
 
         <ScrollToHash />
 
-        {/* Main content area */}
-        <div className="animate-fadeIn flex-1">
-          <Routes>
-            {/* ---------- Public Pages ---------- */}
-            <Route path="/" element={<HomePage />} />
-            <Route path="/articles" element={<ArticlesPage />} />
-            <Route path="/news" element={<NewsPage />} />
-            <Route path="/videos" element={<VideosPage />} />
-            <Route path="/podcasts" element={<PodcastsPage />} />
-            <Route path="/notebook" element={<NotebookPage />} />
-            <Route path="/scholar" element={<ScholarPage />} />
-            <Route path="/plagiarism" element={<Plagiarism />} />
-            <Route path="/pdfdemo" element={<PdfDemo />} />
+        {/* ✅ Conditional Menu Wrapper */}
+        <ConditionalMenuWrapper>
+          <div className="animate-fadeIn flex-1">
+            <Routes>
+              {/* ---------- Public Pages ---------- */}
+              <Route path="/" element={<HomePage />} />
+              <Route path="/articles" element={<ArticlesPage />} />
+              <Route path="/news" element={<NewsPage />} />
+              <Route path="/videos" element={<VideosPage />} />
+              <Route path="/podcasts" element={<PodcastsPage />} />
+              <Route path="/notebook" element={<NotebookPage />} />
+              <Route path="/scholar" element={<ScholarPage />} />
+              <Route path="/plagiarism" element={<Plagiarism />} />
+              <Route path="/pdfdemo" element={<PdfDemo />} />
 
-            {/* ✅ LIVE Channel Routes */}
-            <Route path="/live" element={<LiveChannelPage />} />
-            <Route
-              path="/admin/live"
-              element={
-                <AdminRoute>
-                  <LiveAdminPage />
-                </AdminRoute>
-              }
-            />
+              {/* ✅ LIVE Channel */}
+              <Route path="/live" element={<LiveChannelPage />} />
+              <Route
+                path="/admin/live"
+                element={
+                  <AdminRoute>
+                    <LiveAdminPage />
+                  </AdminRoute>
+                }
+              />
 
-            {/* ✅ Classroom Routes */}
-            <Route path="/classroom" element={<ClassroomLivePage />} />
+              {/* ✅ Classroom */}
+              <Route path="/classroom" element={<ClassroomLivePage />} />
+              <Route path="/classroom/share" element={<ClassroomSharePage />} />
+              <Route
+                path="/admin/classroom-link"
+                element={
+                  <AdminRoute>
+                    <ClassroomLinkCreator />
+                  </AdminRoute>
+                }
+              />
+              <Route
+                path="/admin/classroom"
+                element={
+                  <AdminRoute>
+                    <AdminLectureManager />
+                  </AdminRoute>
+                }
+              />
 
-            {/* 🔐 Shared classroom link */}
-            <Route path="/classroom/share" element={<ClassroomSharePage />} />
+              {/* ✅ Research Drafting */}
+              <Route path="/research-drafting" element={<ResearchDrafting />} />
+              <Route
+                path="/research-drafting/lab/:id"
+                element={<ResearchDraftingLab />}
+              />
+              <Route
+                path="/admin/research-drafting"
+                element={
+                  <IfOwnerOnly>
+                    <AdminResearchPanel />
+                  </IfOwnerOnly>
+                }
+              />
 
-            {/* 🆕 Admin classroom link creator (new safe route) */}
-            <Route
-              path="/admin/classroom-link"
-              element={
-                <AdminRoute>
-                  <ClassroomLinkCreator />
-                </AdminRoute>
-              }
-            />
+              {/* ✅ Exam Prep */}
+              <Route path="/prep" element={<PrepList />} />
+              <Route path="/prep/:examId" element={<PrepWizard />} />
+              <Route
+                path="/admin/prep"
+                element={
+                  <AdminRoute>
+                    <AdminPrepPanel />
+                  </AdminRoute>
+                }
+              />
+              <Route
+                path="/admin/prep-overlay"
+                element={
+                  <AdminRoute>
+                    <PrepOverlayEditor />
+                  </AdminRoute>
+                }
+              />
+              <Route
+                path="/admin/prep-access"
+                element={
+                  <AdminRoute>
+                    <PrepAccessAdmin />
+                  </AdminRoute>
+                }
+              />
 
-            {/* Admin classroom manager */}
-            <Route
-              path="/admin/classroom"
-              element={
-                <AdminRoute>
-                  <AdminLectureManager />
-                </AdminRoute>
-              }
-            />
+              {/* ✅ Test Series */}
+              <Route path="/tests" element={<TestDashboard />} />
+              <Route
+                path="/tests/:code"
+                element={<RouteWithCode Comp={TestIntro} />}
+              />
+              <Route
+                path="/tests/:code/play"
+                element={<RouteWithCode Comp={TestPlayer} />}
+              />
+              <Route
+                path="/tests/result/:id"
+                element={<RouteWithResultId Comp={ResultScreen} />}
+              />
 
-            {/* ---------- Research Drafting ---------- */}
-            <Route path="/research-drafting" element={<ResearchDrafting />} />
-            <Route
-              path="/research-drafting/lab/:id"
-              element={<ResearchDraftingLab />}
-            />
-            <Route
-              path="/admin/research-drafting"
-              element={
-                <IfOwnerOnly>
-                  <AdminResearchPanel />
-                </IfOwnerOnly>
-              }
-            />
+              {/* ✅ Admin Test Tools */}
+              <Route
+                path="/owner/tests/import"
+                element={
+                  <IfOwnerOnly>
+                    <AdminTestImporter />
+                  </IfOwnerOnly>
+                }
+              />
+              <Route
+                path="/owner/tests/results"
+                element={
+                  <IfOwnerOnly>
+                    <AdminTestResults />
+                  </IfOwnerOnly>
+                }
+              />
+              <Route
+                path="/owner/tests"
+                element={
+                  <IfOwnerOnly>
+                    <AdminTestManager />
+                  </IfOwnerOnly>
+                }
+              />
 
-            {/* ---------- Exam Prep ---------- */}
-            <Route path="/prep" element={<PrepList />} />
-            <Route path="/prep/:examId" element={<PrepWizard />} />
-            <Route
-              path="/admin/prep"
-              element={
-                <AdminRoute>
-                  <AdminPrepPanel />
-                </AdminRoute>
-              }
-            />
-            <Route
-              path="/admin/prep-overlay"
-              element={
-                <AdminRoute>
-                  <PrepOverlayEditor />
-                </AdminRoute>
-              }
-            />
-            <Route
-              path="/admin/prep/overlay"
-              element={
-                <AdminRoute>
-                  <PrepOverlayEditor />
-                </AdminRoute>
-              }
-            />
-            <Route
-              path="/admin/prep-access"
-              element={
-                <AdminRoute>
-                  <PrepAccessAdmin />
-                </AdminRoute>
-              }
-            />
+              {/* ✅ Admin Pages */}
+              <Route path="/admin/login" element={<AdminLogin />} />
+              <Route
+                path="/admin/dashboard"
+                element={
+                  <AdminRoute>
+                    <AdminDashboard />
+                  </AdminRoute>
+                }
+              />
+              <Route
+                path="/admin/consultancy"
+                element={
+                  <AdminRoute>
+                    <AdminConsultancyEditor />
+                  </AdminRoute>
+                }
+              />
+              <Route
+                path="/admin/footer"
+                element={
+                  <AdminRoute>
+                    <AdminFooterTermsEditor />
+                  </AdminRoute>
+                }
+              />
 
-            {/* ---------- Test Series ---------- */}
-            <Route path="/tests" element={<TestDashboard />} />
-            <Route
-              path="/tests/:code"
-              element={<RouteWithCode Comp={TestIntro} />}
-            />
-            <Route
-              path="/tests/:code/play"
-              element={<RouteWithCode Comp={TestPlayer} />}
-            />
-            <Route
-              path="/tests/result/:id"
-              element={<RouteWithResultId Comp={ResultScreen} />}
-            />
+              {/* 404 */}
+              <Route path="*" element={<NotFound />} />
+            </Routes>
+          </div>
+        </ConditionalMenuWrapper>
 
-            {/* ---------- Admin Test Tools ---------- */}
-            <Route
-              path="/owner/tests/import"
-              element={
-                <IfOwnerOnly>
-                  <AdminTestImporter />
-                </IfOwnerOnly>
-              }
-            />
-            <Route
-              path="/owner/tests/results"
-              element={
-                <IfOwnerOnly>
-                  <AdminTestResults />
-                </IfOwnerOnly>
-              }
-            />
-            <Route
-              path="/owner/tests"
-              element={
-                <IfOwnerOnly>
-                  <AdminTestManager />
-                </IfOwnerOnly>
-              }
-            />
-
-            {/* ---------- Admin ---------- */}
-            <Route path="/admin/login" element={<AdminLogin />} />
-            <Route
-              path="/admin/dashboard"
-              element={
-                <AdminRoute>
-                  <AdminDashboard />
-                </AdminRoute>
-              }
-            />
-            <Route
-              path="/admin/consultancy"
-              element={
-                <AdminRoute>
-                  <AdminConsultancyEditor />
-                </AdminRoute>
-              }
-            />
-            {/* ⭐ NEW Admin Footer & Terms editor */}
-            <Route
-              path="/admin/footer"
-              element={
-                <AdminRoute>
-                  <AdminFooterTermsEditor />
-                </AdminRoute>
-              }
-            />
-
-            {/* ---------- 404 ---------- */}
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </div>
-
-        {/* ⭐ Footer visible on all pages */}
         <Footer />
       </div>
     </Router>
