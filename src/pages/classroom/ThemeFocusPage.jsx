@@ -1,11 +1,13 @@
+// src/pages/classroom/ThemeFocusPage.jsx
 import React, { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 
 const THEMES = [
   { id: "default", name: "Default Night", colors: "from-slate-900 to-slate-800" },
-  { id: "forest", name: "Forest Calm", colors: "from-green-900 to-emerald-700" },
-  { id: "sunrise", name: "Sunrise Glow", colors: "from-orange-500 to-pink-600" },
-  { id: "ocean", name: "Ocean Blue", colors: "from-cyan-700 to-blue-800" },
-  { id: "white", name: "Minimal White", colors: "from-gray-100 to-gray-300 text-slate-900" },
+  { id: "forest",  name: "Forest Calm",   colors: "from-green-900 to-emerald-700" },
+  { id: "sunrise", name: "Sunrise Glow",  colors: "from-orange-500 to-pink-600" },
+  { id: "ocean",   name: "Ocean Blue",    colors: "from-cyan-700 to-blue-800" },
+  { id: "white",   name: "Minimal White", colors: "from-gray-100 to-gray-300 text-slate-900" },
 ];
 
 export default function ThemeFocusPage() {
@@ -20,10 +22,16 @@ export default function ThemeFocusPage() {
   }, [theme, focus]);
 
   return (
-    <div className={`min-h-screen text-white bg-gradient-to-br ${THEMES.find(t => t.id === theme)?.colors} transition-all`}>
+    <div
+      className={`min-h-screen text-white bg-gradient-to-br ${
+        THEMES.find((t) => t.id === theme)?.colors
+      } transition-all`}
+    >
       <div className="max-w-4xl mx-auto py-10 px-6">
         <h1 className="text-2xl font-bold mb-4">🎨 Visual Theme & Focus Mode</h1>
-        <p className="text-slate-200 mb-8">Personalize your classroom look and reduce distractions while studying.</p>
+        <p className="text-slate-200 mb-8">
+          Personalize your classroom look and reduce distractions while studying.
+        </p>
 
         {/* Theme Picker */}
         <div className="grid grid-cols-2 sm:grid-cols-3 gap-4 mb-10">
@@ -46,7 +54,9 @@ export default function ThemeFocusPage() {
         <div className="flex items-center justify-between bg-slate-800/60 rounded-xl p-4 border border-slate-700">
           <div>
             <h3 className="font-semibold text-lg">🧘 Focus Mode</h3>
-            <p className="text-slate-400 text-sm">Hide distractions and keep only your classroom content visible.</p>
+            <p className="text-slate-400 text-sm">
+              Hide distractions and keep only your classroom content visible.
+            </p>
           </div>
           <button
             onClick={() => setFocus(!focus)}
@@ -61,10 +71,23 @@ export default function ThemeFocusPage() {
         </div>
 
         {/* Tip */}
-        <p className="text-xs text-slate-400 mt-4">
+        <p className="text-xs text-slate-200/80 mt-4">
           Your selections are saved locally and applied across all classroom pages.
         </p>
       </div>
+
+      {/* ✅ Floating Back-to-Classroom FAB (glowing yellow) */}
+      <Link
+        to="/classroom"
+        aria-label="Back to Classroom"
+        className="fixed bottom-5 right-5 z-[60] group"
+      >
+        <span className="relative inline-flex items-center gap-2 px-5 py-3 rounded-full font-semibold bg-yellow-400 text-black shadow-lg group-hover:scale-105 transition-transform">
+          ⬅ Back to Classroom
+          {/* soft glow */}
+          <span className="absolute -inset-1 rounded-full blur-md bg-yellow-400/40 animate-pulse pointer-events-none"></span>
+        </span>
+      </Link>
     </div>
   );
 }
