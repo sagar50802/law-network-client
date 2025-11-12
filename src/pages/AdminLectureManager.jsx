@@ -390,21 +390,31 @@ function StatsModal({ open, onClose, lecture }) {
 }
 
 /* ------------------------ Create Link Modal ------------------------ */
+/* ------------------------ Create Link Modal ------------------------ */
 function CreateLinkModal({ open, onClose, lecture }) {
   const [type, setType] = useState("free");
-  const [hours, setHours] = useState(24);
+  const [expiryType, setExpiryType] = useState("hours");
+  const [expiryValue, setExpiryValue] = useState(24);
   const [creating, setCreating] = useState(false);
 
   if (!open || !lecture) return null;
 
-  const hourOptions = [1, 2, 3, 4, 5, 6, 8, 10, 12, 16, 20, 24, 36, 48, 72];
-
   const handleCreate = async () => {
     try {
       setCreating(true);
-      const permanent = hours <= 0;
-      const body = { lectureId: lecture._id, type, permanent };
-      if (!permanent) body.expiresInHours = hours;
+
+      const permanent = expiryValue <= 0;
+      const body = {
+        lectureId: lecture._id,
+        type,
+        permanent,
+      };
+
+      // send hours/minutes properly
+      if (!permanent) {
+        if (expiryType === "hours") body.expiresInHours = expiryValue;
+        if (expiryType === "minutes") body.expiresInMinutes = expiryValue;
+      }
 
       const res = await fetch(`${ACCESS_BASE}/create-link`, {
         method: "POST",
@@ -443,6 +453,7 @@ function CreateLinkModal({ open, onClose, lecture }) {
       </h2>
 
       <div className="flex flex-col gap-4">
+        {/* Link Type */}
         <div>
           <label className="block text-sm text-slate-600 mb-1">Link Type</label>
           <select
@@ -455,22 +466,30 @@ function CreateLinkModal({ open, onClose, lecture }) {
           </select>
         </div>
 
+        {/* Expiry Selection */}
         <div>
-          <label className="block text-sm text-slate-600 mb-1">
-            Expiry (hours)
-          </label>
-          <select
-            value={hours}
-            onChange={(e) => setHours(parseInt(e.target.value))}
-            className="w-full border border-slate-300 rounded-lg px-3 py-2"
-          >
-            {hourOptions.map((h) => (
-              <option key={h} value={h}>
-                {h} hour{h > 1 ? "s" : ""}
-              </option>
-            ))}
-            <option value={0}>No expiry (permanent)</option>
-          </select>
+          <label className="block text-sm text-slate-600 mb-1">Expiry</label>
+          <div className="flex gap-2">
+            <select
+              value={expiryType}
+              onChange={(e) => setExpiryType(e.target.value)}
+              className="w-1/2 border border-slate-300 rounded-lg px-3 py-2"
+            >
+              <option value="minutes">Minutes</option>
+              <option value="hours">Hours</option>
+            </select>
+            <input
+              type="number"
+              min="0"
+              value={expiryValue}
+              onChange={(e) => setExpiryValue(parseInt(e.target.value))}
+              placeholder="Enter duration"
+              className="w-1/2 border border-slate-300 rounded-lg px-3 py-2"
+            />
+          </div>
+          <p className="text-xs text-slate-500 mt-1">
+            Set 0 for permanent (no expiry)
+          </p>
         </div>
 
         <button
@@ -488,6 +507,7 @@ function CreateLinkModal({ open, onClose, lecture }) {
     </Modal>
   );
 }
+
 
 /* ------------------------ Lecture Row ------------------------ */
 function LectureRow({
