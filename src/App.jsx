@@ -19,6 +19,9 @@ import ClassroomDrawerMenu from "./components/ClassroomDrawerMenu.jsx";
 /* ---------- 🆕 NEW: Ambience Page ---------- */
 import AmbiencePage from "./pages/classroom/AmbiencePage.jsx";
 
+/* ---------- 🆕 NEW: Group Key Bridge ---------- */
+import GroupKeyBridge from "./pages/classroom/GroupKeyBridge.jsx";
+
 /* ---------- Main Pages ---------- */
 import HomePage from "./pages/HomePage.jsx";
 import ArticlesPage from "./pages/ArticlesPage.jsx";
@@ -66,6 +69,9 @@ import ClassroomLivePage from "./pages/ClassroomLivePage.jsx";
 import AdminLectureManager from "./pages/AdminLectureManager.jsx";
 import ClassroomSharePage from "./pages/ClassroomSharePage.jsx";
 import ClassroomLinkCreator from "./pages/ClassroomLinkCreator.jsx";
+
+/* ---------- Theme Page ---------- */
+import ThemeFocusPage from "./pages/classroom/ThemeFocusPage.jsx";
 
 /* ---------- Helpers ---------- */
 function NotFound() {
@@ -178,6 +184,12 @@ export default function App() {
             {/* 🆕 NEW: Ambience route */}
             <Route path="/classroom/ambience" element={<AmbiencePage />} />
             <Route path="/classroom/theme" element={<ThemeFocusPage />} />
+
+            {/* 🆕 NEW: Group Key Bridge route */}
+            <Route
+              path="/bridge/gk/:key/t/:token"
+              element={<GroupKeyBridge />}
+            />
 
             <Route
               path="/admin/classroom-link"
