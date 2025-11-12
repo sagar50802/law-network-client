@@ -13,8 +13,8 @@ import AdminRoute from "./components/common/AdminRoute.jsx";
 import IfOwnerOnly from "./components/common/IfOwnerOnly.jsx";
 import "./styles/ui.css";
 
-/* ---------- NEW: Classroom Menu ---------- */
-import ClassroomHamburgerMenu from "./components/ClassroomHamburgerMenu.jsx";
+/* ---------- NEW: Classroom Drawer Menu (Slide-out) ---------- */
+import ClassroomDrawerMenu from "./components/ClassroomDrawerMenu.jsx";
 
 /* ---------- Main Pages ---------- */
 import HomePage from "./pages/HomePage.jsx";
@@ -113,14 +113,14 @@ function RouteWithResultId({ Comp }) {
   return <Comp id={id} />;
 }
 
-/* ---------- Wrapper to Show Menu Only on Classroom Routes ---------- */
+/* ---------- Wrapper: Show Drawer Only on Classroom Routes ---------- */
 function ConditionalMenuWrapper({ children }) {
   const location = useLocation();
   const isClassroom = location.pathname.startsWith("/classroom");
 
   return (
     <>
-      {isClassroom && <ClassroomHamburgerMenu />}
+      {isClassroom && <ClassroomDrawerMenu />}
       {children}
     </>
   );
@@ -138,7 +138,7 @@ export default function App() {
 
         <ScrollToHash />
 
-        {/* ✅ Conditional Menu Wrapper */}
+        {/* ✅ Conditional Drawer Menu (Classroom only) */}
         <ConditionalMenuWrapper>
           <div className="animate-fadeIn flex-1">
             <Routes>
