@@ -1,23 +1,22 @@
 // src/utils/themeInitializer.js
-// Handles saved theme + focus mode across classroom
-// Auto applies theme and creates a floating "Focus Mode ON" badge.
+// Handles theme + focus mode across pages
+// Now includes live update sync — no reload needed
 
 export function applySavedTheme() {
   try {
     const savedTheme = localStorage.getItem("lnx_theme") || "default";
     const focus = localStorage.getItem("lnx_focus") === "true";
 
-    // Apply immediately on page load
     document.body.dataset.theme = savedTheme;
     document.body.dataset.focus = focus ? "on" : "off";
 
     const isClassroom = window.location.pathname.startsWith("/classroom");
     if (isClassroom && focus) showFocusBadge();
   } catch (err) {
-    console.warn("Theme initialization failed:", err);
+    console.warn("Theme init failed:", err);
   }
 
-  // React to storage updates (live sync between pages)
+  // ✅ Live sync: detect changes to localStorage (no refresh needed)
   window.addEventListener("storage", (e) => {
     if (e.key === "lnx_focus" || e.key === "lnx_theme") {
       const theme = localStorage.getItem("lnx_theme") || "default";
@@ -34,21 +33,20 @@ export function applySavedTheme() {
 }
 
 /* -----------------------------
-   🧘 Focus Mode Floating Badge
+   🧘 Floating Badge
 ------------------------------ */
 function showFocusBadge() {
-  removeFocusBadge(); // avoid duplicates
+  removeFocusBadge();
 
   const badge = document.createElement("div");
   badge.id = "focus-mode-badge";
   badge.textContent = "🧘 Focus Mode: ON";
-  badge.title = "Click to turn off Focus Mode";
+  badge.title = "Click to disable Focus Mode";
 
-  // ✨ Style (responsive, glowing, avoids hamburger overlap)
   Object.assign(badge.style, {
     position: "fixed",
-    bottom: window.innerWidth < 640 ? "5.5rem" : "4rem", // above bottom
-    right: window.innerWidth < 640 ? "5rem" : "6rem",   // left of hamburger
+    bottom: window.innerWidth < 640 ? "5.5rem" : "4rem",
+    right: window.innerWidth < 640 ? "5rem" : "6rem",
     padding: "10px 18px",
     borderRadius: "9999px",
     fontWeight: "600",
@@ -63,36 +61,16 @@ function showFocusBadge() {
     cursor: "pointer",
   });
 
-  // 🖱️ Click → disable Focus Mode instantly
+  // 🖱️ Disable instantly on click
   badge.addEventListener("click", () => {
     localStorage.setItem("lnx_focus", "false");
     document.body.dataset.focus = "off";
     removeFocusBadge();
-
-    // ✅ Small feedback toast
-    const toast = document.createElement("div");
-    toast.textContent = "Focus Mode Disabled 👀";
-    Object.assign(toast.style, {
-      position: "fixed",
-      bottom: "2rem",
-      right: "2rem",
-      padding: "10px 16px",
-      background: "#1e293b",
-      color: "#fff",
-      borderRadius: "8px",
-      boxShadow: "0 0 10px rgba(0,0,0,0.3)",
-      opacity: "0",
-      transition: "opacity 0.4s ease",
-      zIndex: "10051",
-    });
-    document.body.appendChild(toast);
-    setTimeout(() => (toast.style.opacity = "1"), 50);
-    setTimeout(() => toast.remove(), 2500);
   });
 
   document.body.appendChild(badge);
 
-  // Responsive reposition on resize
+  // Responsive reposition
   window.addEventListener("resize", () => {
     const b = document.getElementById("focus-mode-badge");
     if (!b) return;
@@ -101,17 +79,12 @@ function showFocusBadge() {
   });
 }
 
-/* -----------------------------
-   🧹 Remove badge safely
------------------------------- */
 function removeFocusBadge() {
-  const existing = document.getElementById("focus-mode-badge");
-  if (existing) existing.remove();
+  const badge = document.getElementById("focus-mode-badge");
+  if (badge) badge.remove();
 }
 
-/* -----------------------------
-   🎨 Animation
------------------------------- */
+// 🔆 Animation
 const style = document.createElement("style");
 style.textContent = `
 @keyframes focusBadgePulse {
