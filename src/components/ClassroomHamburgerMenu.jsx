@@ -3,45 +3,42 @@ import { motion, AnimatePresence } from "framer-motion";
 import { Menu, X } from "lucide-react";
 import { Link } from "react-router-dom";
 
-/**
- * 🎨 ClassroomHamburgerMenu
- * Floating colorful menu with navigation links
- * Works standalone — no modification to ClassroomLivePage.jsx
- */
-
 export default function ClassroomHamburgerMenu() {
   const [open, setOpen] = useState(false);
   const menuRef = useRef(null);
 
-  // close when clicking outside
+  // 🧩 Close when clicked outside
   useEffect(() => {
     const handleClickOutside = (e) => {
-      if (menuRef.current && !menuRef.current.contains(e.target)) setOpen(false);
+      if (menuRef.current && !menuRef.current.contains(e.target)) {
+        setOpen(false);
+      }
     };
     document.addEventListener("mousedown", handleClickOutside);
     return () => document.removeEventListener("mousedown", handleClickOutside);
   }, []);
 
+  // 🌈 Classroom Features
   const features = [
-    { emoji: "🎵", label: "Background Ambience", path: "/ambience", color: "from-cyan-500 to-blue-500" },
-    { emoji: "🎨", label: "Visual Theme & Focus Mode", path: "/theme", color: "from-pink-400 to-rose-500" },
-    { emoji: "💬", label: "Motivational Flip Book", path: "/flipbook", color: "from-yellow-400 to-orange-500" },
-    { emoji: "🧠", label: "Study Focus & Timer Tools", path: "/focus", color: "from-green-400 to-emerald-500" },
-    { emoji: "📚", label: "Quick Revision Notebook", path: "/notebook", color: "from-indigo-400 to-blue-500" },
-    { emoji: "⚖️", label: "Interactive Case Laws Timeline", path: "/timeline", color: "from-purple-400 to-fuchsia-500" },
-    { emoji: "🎧", label: "Voice Personalization", path: "/voice", color: "from-amber-400 to-yellow-500" },
-    { emoji: "💪", label: "Motivation & Rewards", path: "/rewards", color: "from-pink-500 to-rose-500" },
-    { emoji: "🧭", label: "Learning Analytics", path: "/analytics", color: "from-emerald-400 to-green-500" },
-    { emoji: "☀️", label: "Mind Refresh Zone", path: "/refresh", color: "from-yellow-400 to-lime-500" },
-    { emoji: "🧘", label: "Mind-Reset Mode", path: "/calm", color: "from-teal-400 to-cyan-500" },
+    { emoji: "🎵", label: "Background Ambience", path: "/classroom/ambience", color: "from-cyan-500 to-blue-500" },
+    { emoji: "🎨", label: "Visual Theme & Focus Mode", path: "/classroom/theme", color: "from-pink-400 to-rose-500" },
+    { emoji: "💬", label: "Motivational Flip Book", path: "/classroom/flipbook", color: "from-yellow-400 to-orange-500" },
+    { emoji: "🧠", label: "Study Focus & Timer Tools", path: "/classroom/focus", color: "from-green-400 to-emerald-500" },
+    { emoji: "📚", label: "Quick Revision Notebook", path: "/classroom/notebook", color: "from-indigo-400 to-blue-500" },
+    { emoji: "⚖️", label: "Interactive Case Laws Timeline", path: "/classroom/timeline", color: "from-purple-400 to-fuchsia-500" },
+    { emoji: "🎧", label: "Voice Personalization", path: "/classroom/voice", color: "from-amber-400 to-yellow-500" },
+    { emoji: "💪", label: "Motivation & Rewards", path: "/classroom/rewards", color: "from-pink-500 to-rose-500" },
+    { emoji: "🧭", label: "Learning Analytics", path: "/classroom/analytics", color: "from-emerald-400 to-green-500" },
+    { emoji: "☀️", label: "Mind Refresh Zone", path: "/classroom/refresh", color: "from-yellow-400 to-lime-500" },
+    { emoji: "🧘", label: "Mind-Reset Mode", path: "/classroom/calm", color: "from-teal-400 to-cyan-500" },
   ];
 
   return (
     <div
       ref={menuRef}
-      className="fixed top-4 right-4 z-[9999] flex flex-col items-end"
+      className="fixed top-[5.5rem] right-3 z-[9999] flex flex-col items-end" // 👈 moved lower below site navbar
     >
-      {/* 🔘 Hamburger Toggle Button */}
+      {/* Floating Button */}
       <motion.button
         onClick={() => setOpen((o) => !o)}
         className={`rounded-full p-3 shadow-lg border border-white/20 
@@ -53,7 +50,7 @@ export default function ClassroomHamburgerMenu() {
         {open ? <X size={22} /> : <Menu size={22} />}
       </motion.button>
 
-      {/* 🪄 Expanding Menu */}
+      {/* Expanding Panel */}
       <AnimatePresence>
         {open && (
           <motion.div
@@ -61,11 +58,12 @@ export default function ClassroomHamburgerMenu() {
             animate={{ opacity: 1, y: 0, scale: 1 }}
             exit={{ opacity: 0, y: -10, scale: 0.9 }}
             transition={{ duration: 0.25 }}
-            className="mt-3 w-72 bg-slate-900/90 border border-slate-700 backdrop-blur-xl rounded-2xl shadow-2xl p-3"
+            className="mt-3 w-72 bg-slate-900/95 border border-slate-700 backdrop-blur-xl rounded-2xl shadow-2xl p-3"
           >
             <div className="text-xs text-slate-400 font-semibold mb-2 px-2 uppercase tracking-wider">
-              Classroom Features
+              Classroom Tools
             </div>
+
             <div className="grid grid-cols-1 sm:grid-cols-2 gap-2">
               {features.map((f, i) => (
                 <Link
