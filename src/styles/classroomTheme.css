@@ -1,7 +1,9 @@
-/* 🎨 classroomTheme.css */
-/* Global Theme System for Classroom (auto-applies to Classroom Live + ThemeFocusPage) */
+/* classroomTheme.css */
+/* Clean and validated — no emoji or special Unicode characters */
 
-/* THEME VARIABLES */
+/* =========================
+   THEME VARIABLES
+   ========================= */
 body[data-theme="default"] {
   --theme-bg: #0f172a; /* slate-900 */
   --theme-accent: #10b981; /* emerald */
@@ -32,13 +34,15 @@ body[data-theme="white"] {
   --theme-glow: rgba(15, 23, 42, 0.15);
 }
 
-/* Global Background and Smooth Transition */
+/* =========================
+   GLOBAL BACKGROUND + TRANSITION
+   ========================= */
 body {
   background-color: var(--theme-bg);
   transition: background-color 0.6s ease;
 }
 
-/* Accent text + glow utilities */
+/* Accent Text + Glow Utilities */
 .theme-accent {
   color: var(--theme-accent);
 }
@@ -47,7 +51,9 @@ body {
   box-shadow: 0 0 12px 3px var(--theme-glow);
 }
 
-/* Focus Mode */
+/* =========================
+   FOCUS MODE
+   ========================= */
 body[data-focus="on"] nav,
 body[data-focus="on"] footer {
   opacity: 0.1;
@@ -62,10 +68,16 @@ body[data-focus="off"] footer {
   filter: none;
 }
 
-/* Animated classroom glow */
+/* =========================
+   ANIMATED CLASSROOM GLOW
+   ========================= */
 @keyframes slowPulse {
-  0%, 100% { box-shadow: 0 0 30px 5px var(--theme-glow); }
-  50% { box-shadow: 0 0 45px 10px var(--theme-glow); }
+  0%, 100% {
+    box-shadow: 0 0 30px 5px var(--theme-glow);
+  }
+  50% {
+    box-shadow: 0 0 45px 10px var(--theme-glow);
+  }
 }
 
 body[data-theme] .classroom-glow {
