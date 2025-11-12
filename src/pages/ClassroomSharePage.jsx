@@ -9,6 +9,7 @@ export default function ClassroomSharePage() {
   useEffect(() => {
     const params = new URLSearchParams(window.location.search);
     const token = params.get("token");
+    const key = params.get("key"); // ✅ new group key support
     const authToken = localStorage.getItem("authToken") || "";
 
     if (!token) {
@@ -17,10 +18,15 @@ export default function ClassroomSharePage() {
       return;
     }
 
-    // ✅ Updated fetch block for safer guest handling
-    fetch(`https://law-network.onrender.com/api/classroom-access/check?token=${token}`, {
-      headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
-    })
+    // ✅ Include both token and key in the request
+    fetch(
+      `https://law-network.onrender.com/api/classroom-access/check?token=${token}${
+        key ? `&key=${key}` : ""
+      }`,
+      {
+        headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
+      }
+    )
       .then((res) => res.json())
       .then((data) => {
         if (data.allowed) {
@@ -31,12 +37,16 @@ export default function ClassroomSharePage() {
         }
       })
       .catch(() => {
+        // 🧠 Clear, user-friendly error messages
         let msg = "This classroom link is expired or not allowed.";
         if (reason === "expired") msg = "⏰ This classroom link has expired.";
         else if (reason === "no_user")
           msg = "🔐 Please log in to access this paid classroom.";
         else if (reason === "not_in_list")
           msg = "🚫 You are not authorized to view this private classroom.";
+        else if (reason === "invalid_group_key")
+          msg =
+            "🚫 Unauthorized — this link is reserved for official group members only.";
         alert(msg);
         window.location.href = "/";
       })
