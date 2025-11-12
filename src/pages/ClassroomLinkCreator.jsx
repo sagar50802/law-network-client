@@ -3,8 +3,8 @@ import React, { useState } from "react";
 export default function ClassroomLinkCreator() {
   const [lectureId, setLectureId] = useState("");
   const [type, setType] = useState("free");
-  const [expiresInHours, setExpiresInHours] = useState(0);
-  const [expiresInMinutes, setExpiresInMinutes] = useState(1); // default 1 min for quick test
+  const [expiryType, setExpiryType] = useState("minutes"); // user can choose minutes/hours
+  const [expiryValue, setExpiryValue] = useState(1); // default 1 minute for quick testing
   const [groupKeys, setGroupKeys] = useState([
     { label: "WhatsApp", key: "" },
     { label: "Telegram", key: "" },
@@ -25,14 +25,24 @@ export default function ClassroomLinkCreator() {
       alert("Please enter a valid Lecture ID");
       return;
     }
-    if (expiresInHours === 0 && expiresInMinutes === 0) {
-      alert("Set a valid expiry (at least 1 minute)");
-      return;
-    }
+
+    const permanent = Number(expiryValue) <= 0;
 
     setLoading(true);
     try {
       const token = localStorage.getItem("authToken");
+
+      const body = {
+        lectureId,
+        type,
+        permanent,
+        groupKeys: groupKeys.filter((g) => g.key.trim().length > 0),
+      };
+
+      if (!permanent) {
+        if (expiryType === "hours") body.expiresInHours = Number(expiryValue);
+        if (expiryType === "minutes") body.expiresInMinutes = Number(expiryValue);
+      }
 
       const res = await fetch(
         "https://law-network.onrender.com/api/classroom-access/create-link",
@@ -42,13 +52,7 @@ export default function ClassroomLinkCreator() {
             "Content-Type": "application/json",
             Authorization: token ? `Bearer ${token}` : "",
           },
-          body: JSON.stringify({
-            lectureId,
-            type,
-            expiresInHours: Number(expiresInHours),
-            expiresInMinutes: Number(expiresInMinutes),
-            groupKeys: groupKeys.filter((g) => g.key.trim().length > 0),
-          }),
+          body: JSON.stringify(body),
         }
       );
 
@@ -57,9 +61,14 @@ export default function ClassroomLinkCreator() {
       if (data.success) {
         setLink(data.url);
         navigator.clipboard.writeText(data.url);
-        alert("✅ Link created and copied to clipboard!");
+        alert(
+          "✅ Link created and copied to clipboard!" +
+            (data.expiresAt
+              ? `\n\nExpires at: ${new Date(data.expiresAt).toLocaleString()}`
+              : "\n\nNo expiry (permanent).")
+        );
       } else {
-        alert("❌ Failed to create link: " + data.error);
+        alert("❌ Failed to create link: " + (data.error || "Unknown error"));
       }
     } catch (err) {
       alert("Error: " + err.message);
@@ -100,31 +109,32 @@ export default function ClassroomLinkCreator() {
           </select>
         </div>
 
-        {/* Expiry Time */}
-        <div className="flex gap-2">
-          <div className="flex-1">
-            <label className="block mb-1 font-medium text-sm">Hours</label>
+        {/* Expiry */}
+        <div>
+          <label className="block mb-1 font-medium text-sm">Expiry</label>
+          <div className="flex gap-2">
+            <select
+              value={expiryType}
+              onChange={(e) => setExpiryType(e.target.value)}
+              className="w-1/2 border px-3 py-2 rounded-lg"
+            >
+              <option value="minutes">Minutes</option>
+              <option value="hours">Hours</option>
+            </select>
             <input
               type="number"
               min="0"
-              value={expiresInHours}
-              onChange={(e) => setExpiresInHours(e.target.value)}
-              className="w-full border px-3 py-2 rounded-lg"
+              value={expiryValue}
+              onChange={(e) => setExpiryValue(e.target.value)}
+              className="w-1/2 border px-3 py-2 rounded-lg"
             />
           </div>
-          <div className="flex-1">
-            <label className="block mb-1 font-medium text-sm">Minutes</label>
-            <input
-              type="number"
-              min="0"
-              value={expiresInMinutes}
-              onChange={(e) => setExpiresInMinutes(e.target.value)}
-              className="w-full border px-3 py-2 rounded-lg"
-            />
-          </div>
+          <p className="text-xs text-gray-500 mt-1">
+            Set 0 for permanent (no expiry)
+          </p>
         </div>
 
-        {/* Group Keys (only visible for paid links) */}
+        {/* Group Keys (only for paid links) */}
         {type === "paid" && (
           <div className="space-y-2">
             <div className="font-medium text-sm">Group Keys (optional)</div>
