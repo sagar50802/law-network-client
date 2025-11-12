@@ -1,7 +1,10 @@
 import React from 'react';
 import { createRoot } from 'react-dom/client';
 import App from './App.jsx';
+
+/* 🌍 Global Styles */
 import './styles/globals.css';
+import './styles/classroomTheme.css';  // ✅ ADD THIS LINE
 
 const OWNER_KEY = import.meta.env.VITE_OWNER_KEY || 'LAWNOWNER2025';
 
