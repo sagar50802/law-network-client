@@ -35,10 +35,10 @@ export default function ClassroomDrawerMenu() {
 
   return (
     <>
-      {/* 🟢 Floating hamburger (below navbar) */}
+      {/* 🟢 Floating hamburger (bottom-right) */}
       <motion.button
         onClick={() => setOpen(true)}
-        className="fixed top-[5.3rem] right-3 z-[9999] rounded-full p-3 shadow-xl bg-slate-900/80 border border-white/20 text-white hover:scale-110 transition-all duration-300"
+        className="fixed bottom-5 right-5 z-[9999] rounded-full p-3 shadow-xl bg-slate-900/85 border border-white/20 text-white hover:scale-110 transition-all duration-300 backdrop-blur-md"
         whileTap={{ scale: 0.9 }}
         aria-label="Open Classroom Menu"
       >
@@ -65,7 +65,7 @@ export default function ClassroomDrawerMenu() {
               initial={{ x: "100%" }}
               animate={{ x: 0 }}
               exit={{ x: "100%" }}
-              transition={{ type: "spring", stiffness: 120, damping: 18 }}
+              transition={{ type: 'spring', stiffness: 120, damping: 18 }}
             >
               {/* Header */}
               <div className="flex items-center justify-between p-4 border-b border-slate-700/50">
