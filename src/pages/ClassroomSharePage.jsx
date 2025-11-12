@@ -20,19 +20,26 @@ export default function ClassroomSharePage() {
       return;
     }
 
-    // 🔑 retrieve hidden group key (if user came via /bridge/gk/…)
+    // 🔑 Retrieve hidden group key (if user came via /bridge/gk/...).
     const hiddenGroupKey =
       sessionStorage.getItem(`gk:${token}`) ||
       sessionStorage.getItem("gk") ||
       key ||
       "";
 
+    // ✅ Always keep the group key around for refreshes.
+    if (hiddenGroupKey && !sessionStorage.getItem(`gk:${token}`)) {
+      sessionStorage.setItem(`gk:${token}`, hiddenGroupKey);
+      sessionStorage.setItem("gk", hiddenGroupKey);
+    }
+
+    // Headers for backend validation.
     const headers = {
       ...(authToken ? { Authorization: `Bearer ${authToken}` } : {}),
       ...(hiddenGroupKey ? { "X-Group-Key": hiddenGroupKey } : {}),
     };
 
-    // STEP 1️⃣ — check if link is valid
+    // STEP 1️⃣ — Validate the classroom share link.
     fetch(
       `https://law-network.onrender.com/api/classroom-access/check?token=${token}${
         hiddenGroupKey ? `&key=${hiddenGroupKey}` : ""
@@ -43,9 +50,12 @@ export default function ClassroomSharePage() {
       .then((data) => {
         if (data.allowed) {
           setAllowed(true);
-          // STEP 2️⃣ — load visible lectures (public + unlocked)
+          // STEP 2️⃣ — Load visible lectures (public + temporarily unlocked).
+          // ✅ FIX: Ensure group key is also passed to this fetch.
           return fetch(
-            `https://law-network.onrender.com/api/classroom-access/available?token=${token}`,
+            `https://law-network.onrender.com/api/classroom-access/available?token=${token}${
+              hiddenGroupKey ? `&key=${hiddenGroupKey}` : ""
+            }`,
             { headers, credentials: "include" }
           );
         } else {
@@ -62,7 +72,7 @@ export default function ClassroomSharePage() {
         }
       })
       .catch(() => {
-        // 🎯 clear, user-friendly errors
+        // 🎯 User-friendly errors.
         let msg = "This classroom link is expired or not allowed.";
         if (reason === "expired") msg = "⏰ This classroom link has expired.";
         else if (reason === "bad_group_key" || reason === "invalid_group_key")
@@ -93,6 +103,6 @@ export default function ClassroomSharePage() {
       </div>
     );
 
-  // ✅ Pass unlocked list using the prop ClassroomLivePage expects
+  // ✅ Pass unlocked list using the prop ClassroomLivePage expects.
   return allowed ? <ClassroomLivePage sharedLectures={lectures} /> : null;
 }
