@@ -4,7 +4,11 @@ import App from './App.jsx';
 
 /* 🌍 Global Styles */
 import './styles/globals.css';
-import './styles/classroomTheme.css';  // ✅ ADD THIS LINE
+import './styles/classroomTheme.css'; // ✅ keep theme css loaded globally
+
+/* 🧠 Apply Saved Theme + Focus Mode */
+import { applySavedTheme } from './utils/themeInitializer.js';
+applySavedTheme(); // ✅ runs on every load (handles theme + focus badge)
 
 const OWNER_KEY = import.meta.env.VITE_OWNER_KEY || 'LAWNOWNER2025';
 
