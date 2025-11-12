@@ -1,0 +1,73 @@
+/* 🎨 classroomTheme.css */
+/* Global Theme System for Classroom (auto-applies to Classroom Live + ThemeFocusPage) */
+
+/* THEME VARIABLES */
+body[data-theme="default"] {
+  --theme-bg: #0f172a; /* slate-900 */
+  --theme-accent: #10b981; /* emerald */
+  --theme-glow: rgba(16, 185, 129, 0.3);
+}
+
+body[data-theme="forest"] {
+  --theme-bg: #052e16; /* deep green */
+  --theme-accent: #34d399;
+  --theme-glow: rgba(52, 211, 153, 0.3);
+}
+
+body[data-theme="sunrise"] {
+  --theme-bg: #7c2d12; /* warm orange-brown */
+  --theme-accent: #f59e0b;
+  --theme-glow: rgba(245, 158, 11, 0.4);
+}
+
+body[data-theme="ocean"] {
+  --theme-bg: #0c4a6e; /* deep cyan */
+  --theme-accent: #22d3ee;
+  --theme-glow: rgba(34, 211, 238, 0.4);
+}
+
+body[data-theme="white"] {
+  --theme-bg: #f8fafc;
+  --theme-accent: #0f172a;
+  --theme-glow: rgba(15, 23, 42, 0.15);
+}
+
+/* Global Background and Smooth Transition */
+body {
+  background-color: var(--theme-bg);
+  transition: background-color 0.6s ease;
+}
+
+/* Accent text + glow utilities */
+.theme-accent {
+  color: var(--theme-accent);
+}
+
+.theme-glow {
+  box-shadow: 0 0 12px 3px var(--theme-glow);
+}
+
+/* Focus Mode */
+body[data-focus="on"] nav,
+body[data-focus="on"] footer {
+  opacity: 0.1;
+  pointer-events: none;
+  filter: blur(4px);
+  transition: 0.4s ease;
+}
+
+body[data-focus="off"] nav,
+body[data-focus="off"] footer {
+  opacity: 1;
+  filter: none;
+}
+
+/* Animated classroom glow */
+@keyframes slowPulse {
+  0%, 100% { box-shadow: 0 0 30px 5px var(--theme-glow); }
+  50% { box-shadow: 0 0 45px 10px var(--theme-glow); }
+}
+
+body[data-theme] .classroom-glow {
+  animation: slowPulse 5s infinite ease-in-out;
+}
