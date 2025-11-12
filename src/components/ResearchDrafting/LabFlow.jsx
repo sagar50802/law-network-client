@@ -64,11 +64,9 @@ export default function LabFlow({ id, onMarked }) {
   const [scrollPct, setScrollPct] = useState(0);
   const [showScrollHint, setShowScrollHint] = useState(false);
 
-  // 🧠 NEW: auto-generation UI states
   const [message, setMessage] = useState(null);
   const [autoGenRunning, setAutoGenRunning] = useState(false);
   const [autoGenPct, setAutoGenPct] = useState(0);
-  // this ref is what actually stops the loop
   const autoGenCancelRef = useRef(false);
 
   const notebookRef = useRef(null);
@@ -84,7 +82,6 @@ export default function LabFlow({ id, onMarked }) {
     assemble: useRef(null),
   };
 
-  /* -------------------------- load draft -------------------------- */
   async function load() {
     const r = await fetchDraft(id);
     if (r?.ok) setDraft({ ...r.draft, locked: r.locked });
@@ -93,7 +90,6 @@ export default function LabFlow({ id, onMarked }) {
     load();
   }, [id]);
 
-  /* ----------------------- scroll to section ---------------------- */
   function scrollToSection(key) {
     const wrap = notebookRef.current;
     const el = sectionRefs[key]?.current;
@@ -107,11 +103,9 @@ export default function LabFlow({ id, onMarked }) {
     }
   }
 
-  /* ---------------------------- run step -------------------------- */
   async function runStep(k) {
     setBusy(true);
 
-    // show placeholder immediately
     setDraft((prev) => {
       if (!prev) return prev;
       const updated = { ...prev };
@@ -124,9 +118,7 @@ export default function LabFlow({ id, onMarked }) {
     try {
       const r = await genStep(id, k);
       if (r?.ok) {
-        // keep blur until unlocked
         setDraft({ ...r.draft, locked: r.locked || true });
-
         setTimeout(() => {
           setStepIdx((prev) => Math.min(prev + 1, steps.length - 1));
         }, 350);
@@ -142,24 +134,17 @@ export default function LabFlow({ id, onMarked }) {
     }
   }
 
-  /* --------------------- auto-run first step ---------------------- */
   useEffect(() => {
     if (!draft) return;
-    // if auto-gen is running, don't kick this in
     if (autoGenRunning) return;
     if (stepIdx === 0 && !draft.gen?.abstract?.text) {
       runStep("abstract");
     }
   }, [draft, autoGenRunning]); // eslint-disable-line
 
-  /* ------------------------------------------------------------------ */
-  /* 🧠 AUTO-SEQUENCED GENERATION (auto-start when draft loads)         */
-  /* ------------------------------------------------------------------ */
   useEffect(() => {
-    // start only when we have a draft id
     if (!draft?._id) return;
 
-    // don't auto-gen when already in payment/unlocked states
     if (
       draft.status === "awaiting_payment" ||
       draft.status === "paid" ||
@@ -177,46 +162,27 @@ export default function LabFlow({ id, onMarked }) {
       setAutoGenPct(0);
       setMessage("⚙️ Auto-generation started — please wait until all steps finish...");
 
-
-       for (let i = 0; i < steps.length; i++) {
-  if (autoGenCancelRef.current) break;
-
-  const step = steps[i];
-  setMessage(`⚙️ Please wait, finishing step (${step.title})...`);
-  setStepIdx(i); // 🧠 move the tracker to current step
-  scrollToSection(step.key); // 🧠 scroll to current step in the notebook
-
-  // call backend step
-  // call backend step and wait for content to actually appear
-const r = await genStep(draft._id, step.key);
-
-// ✅ update tracker to current step
-setStepIdx(i);
-scrollToSection(step.key);
-
-// ✅ now refresh draft so notebook shows new generated text
-if (r?.ok) {
-  const refreshed = await fetchDraft(draft._id);
-  if (refreshed?.ok) setDraft({ ...refreshed.draft, locked: refreshed.locked });
-}
-
-  // update progress bar
-  const pct = Math.round(((i + 1) / steps.length) * 100);
-  setAutoGenPct(pct);
-
-  // smooth delay so user can see it move
-  await new Promise((r) => setTimeout(r, 1200));
-}
-
+      for (let i = 0; i < steps.length; i++) {
+        if (autoGenCancelRef.current) break;
+        const step = steps[i];
+        setMessage(`⚙️ Please wait, finishing step (${step.title})...`);
+        setStepIdx(i);
+        scrollToSection(step.key);
+        const r = await genStep(draft._id, step.key);
+        if (r?.ok) {
+          const refreshed = await fetchDraft(draft._id);
+          if (refreshed?.ok) setDraft({ ...refreshed.draft, locked: refreshed.locked });
+        }
+        const pct = Math.round(((i + 1) / steps.length) * 100);
+        setAutoGenPct(pct);
+        await new Promise((r) => setTimeout(r, 1200));
+      }
 
       if (!autoGenCancelRef.current) {
-        // finished normally
         setMessage(null);
         setAutoGenRunning(false);
-        // refresh outside to get latest status
         onMarked && onMarked();
       } else {
-        // cancelled by user
         setAutoGenRunning(false);
       }
     }
@@ -230,13 +196,11 @@ if (r?.ok) {
     };
   }, [draft?._id, draft?.status, onMarked]);
 
-  /* -------------------- when step changes scroll ------------------- */
   useEffect(() => {
     const key = steps[stepIdx]?.key;
     if (key) setTimeout(() => scrollToSection(key), 60);
   }, [stepIdx]);
 
-  /* -------------------- notebook scroll progress ------------------- */
   function handleNotebookScroll() {
     const el = notebookRef.current;
     if (!el) return;
@@ -261,9 +225,6 @@ if (r?.ok) {
 
   return (
     <div className="max-w-6xl mx-auto p-3 md:p-6">
-      {/* ----------------------------------------------------------------- */}
-      {/* 💬 auto-gen message + progress + cancel                          */}
-      {/* ----------------------------------------------------------------- */}
       {message && (
         <div className="flex flex-col items-center text-center mb-3">
           <div className="text-xs text-gray-600 animate-pulse">{message}</div>
@@ -279,7 +240,6 @@ if (r?.ok) {
             <button
               className="mt-2 px-3 py-1 rounded-full bg-red-500 hover:bg-red-600 text-white text-xs"
               onClick={() => {
-                // real cancel
                 autoGenCancelRef.current = true;
                 setAutoGenRunning(false);
                 setMessage("⏹️ Auto generation cancelled.");
@@ -296,7 +256,6 @@ if (r?.ok) {
       <MobileProgress stepIdx={stepIdx} setStepIdx={setStepIdx} />
 
       <div className="grid md:grid-cols-5 gap-6">
-        {/* LEFT (desktop) */}
         <div className="hidden md:block md:col-span-2">
           <ActionCard
             stepIdx={stepIdx}
@@ -308,7 +267,6 @@ if (r?.ok) {
           />
         </div>
 
-        {/* RIGHT (notebook) */}
         <div className="md:col-span-3 relative">
           <div
             ref={notebookRef}
@@ -320,81 +278,42 @@ if (r?.ok) {
             <div ref={sectionRefs.title}>
               {sectionBlock("Title", draft?.gen?.title || draft?.title || "", draft)}
             </div>
-
             {draft?.gen?.abstract?.text && (
               <div ref={sectionRefs.abstract}>
                 {sectionBlock("Put your Abstract", draft.gen.abstract.text, draft)}
               </div>
             )}
-
             {draft?.gen?.review?.text && (
               <div ref={sectionRefs.review}>
                 {sectionBlock("Review of Literature", draft.gen.review.text, draft)}
               </div>
             )}
-
             {draft?.gen?.methodology?.text && (
               <div ref={sectionRefs.methodology}>
                 {sectionBlock("Research Methodology", draft.gen.methodology.text, draft)}
               </div>
             )}
-
             {draft?.gen?.aims?.text && (
               <div ref={sectionRefs.aims}>
                 {sectionBlock("Aim of Research", draft.gen.aims.text, draft)}
               </div>
             )}
-
             {draft?.gen?.chapterization?.text && (
               <div ref={sectionRefs.chapterization}>
                 {sectionBlock("Chapterization", draft.gen.chapterization.text, draft)}
               </div>
             )}
-
             {draft?.gen?.conclusion?.text && (
               <div ref={sectionRefs.conclusion}>
                 {sectionBlock("Conclusion", draft.gen.conclusion.text, draft)}
               </div>
             )}
-
             {draft?.gen?.assembled?.text && (
               <div ref={sectionRefs.assemble}>
                 {sectionBlock("Final Preview", draft.gen.assembled.text, draft)}
               </div>
             )}
           </div>
-
-          {/* desktop scroll rail */}
-          <div className="hidden md:block absolute top-6 -right-3 h-[78vh] w-1 bg-gray-200 rounded-full">
-            <div
-              className="w-1 bg-indigo-500 rounded-full transition-all"
-              style={{ height: `${scrollPct}%` }}
-            />
-          </div>
-
-          {/* mobile scroll helper */}
-          {showScrollHint && (
-            <button
-              onClick={scrollToLatest}
-              className="md:hidden absolute right-3 bottom-24 bg-white/90 border rounded-full px-3 py-1 text-xs shadow"
-            >
-              Scroll to latest ↓
-            </button>
-          )}
-        </div>
-      </div>
-
-      {/* mobile FAB */}
-      <div className="md:hidden fixed bottom-3 right-3 left-3 flex justify-end pointer-events-none">
-        <div className="pointer-events-auto">
-          <MobileGenerateFAB
-            stepIdx={stepIdx}
-            busy={busy}
-            showPay={showPay}
-            draft={draft}
-            runStep={runStep}
-            reload={load}
-          />
         </div>
       </div>
     </div>
@@ -404,24 +323,17 @@ if (r?.ok) {
 /* --------------------------------------------------------------------- */
 /* sectionBlock                                                          */
 /* --------------------------------------------------------------------- */
- function sectionBlock(title, body, draft) {
+function sectionBlock(title, body, draft) {
   const isLocked = draft?.locked;
   const isGenerating = body?.includes("System is generating");
-
   return (
     <div className="mb-6 relative animate-fadeIn">
       <div className="font-semibold text-black mb-1">{title}</div>
-
       <div className="relative">
-        <div
-          className="bg-white/95 border border-gray-200 rounded-xl p-3 md:p-4 shadow-sm min-h-[80px]"
-        >
+        <div className="bg-white/95 border border-gray-200 rounded-xl p-3 md:p-4 shadow-sm min-h-[80px]">
           {isGenerating ? (
-            <div className="text-gray-400 italic animate-pulse">
-              System is generating...
-            </div>
+            <div className="text-gray-400 italic animate-pulse">System is generating...</div>
           ) : isLocked ? (
-            // 🟣 Shimmer placeholder (so user can't read generated text)
             <div className="relative overflow-hidden rounded-xl select-none pointer-events-none">
               <div className="h-[90px] md:h-[110px] bg-gradient-to-r from-gray-100 via-gray-200 to-gray-100 animate-pulse rounded-lg" />
             </div>
@@ -430,7 +342,8 @@ if (r?.ok) {
           )}
         </div>
 
-        {isLocked && (
+        {/* 🔓 Only lock others — keep Title & Abstract visible */}
+        {isLocked && title !== "Title" && title !== "Put your Abstract" && (
           <div className="absolute inset-0 flex items-center justify-center bg-white/50 backdrop-blur-[2px] rounded-xl">
             <span className="text-[11px] md:text-sm text-gray-700 bg-white/90 px-3 py-1 rounded-full shadow">
               🔒 Unlock this section after payment
@@ -441,7 +354,6 @@ if (r?.ok) {
     </div>
   );
 }
-
 
 /* --------------------------------------------------------------------- */
 /* DesktopProgress                                                       */
