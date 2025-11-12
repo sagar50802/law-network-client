@@ -17,6 +17,7 @@ export default function ClassroomSharePage() {
       return;
     }
 
+    // ✅ Updated fetch block for safer guest handling
     fetch(`https://law-network.onrender.com/api/classroom-access/check?token=${token}`, {
       headers: authToken ? { Authorization: `Bearer ${authToken}` } : {},
     })
@@ -25,16 +26,15 @@ export default function ClassroomSharePage() {
         if (data.allowed) {
           setAllowed(true);
         } else {
-          console.warn("Access denied:", data.reason);
           setReason(data.reason || "expired_or_not_allowed");
           throw new Error("not allowed");
         }
       })
       .catch(() => {
-        // 🔁 Optional: show different messages for clarity
         let msg = "This classroom link is expired or not allowed.";
         if (reason === "expired") msg = "⏰ This classroom link has expired.";
-        else if (reason === "no_user") msg = "🔐 Please log in to access this classroom.";
+        else if (reason === "no_user")
+          msg = "🔐 Please log in to access this paid classroom.";
         else if (reason === "not_in_list")
           msg = "🚫 You are not authorized to view this private classroom.";
         alert(msg);
