@@ -22,9 +22,9 @@ const API_BASE =
   "/classroom";
 
 /* -------------------------------------------------------------------------- */
-/* ✅ ClassroomLivePage Component                                            */
+/*  ClassroomLivePage                                                         */
 /* -------------------------------------------------------------------------- */
-export default function ClassroomLivePage({ sharedLectures = [] }) {   // 👈 NEW PROP
+export default function ClassroomLivePage({ sharedLectures = [] }) {
   /* ----------------------------- STATE ---------------------------------- */
   const [lectures, setLectures] = useState([]);
   const [slides, setSlides] = useState([]);
@@ -34,7 +34,7 @@ export default function ClassroomLivePage({ sharedLectures = [] }) {   // 👈 N
   const [currentSentence, setCurrentSentence] = useState("");
   const [progress, setProgress] = useState(0);
 
-  const [sentences, setSentences] = useState([]); // ✅ teleprompter sentences
+  const [sentences, setSentences] = useState([]);
   const [activeSentenceIndex, setActiveSentenceIndex] = useState(0);
 
   const [isPlaying, setIsPlaying] = useState(true);
@@ -52,7 +52,7 @@ export default function ClassroomLivePage({ sharedLectures = [] }) {   // 👈 N
   const speechPaused = useRef(false);
   const isPlayingRef = useRef(true);
 
-  // 👇 tracks whether we already hydrated from a share link so we don't overwrite it
+  // have we already hydrated the lecture list from a share link?
   const [hydratedFromShare, setHydratedFromShare] = useState(false);
 
   const currentSlide = slides[currentIndex] || null;
@@ -64,14 +64,14 @@ export default function ClassroomLivePage({ sharedLectures = [] }) {   // 👈 N
   }, [isPlaying]);
 
   /* ---------------------------------------------------------------------- */
-  /* 🔓 Unlock Speech Autoplay                                              */
+  /*  Unlock speech autoplay (browser permission)                           */
   /* ---------------------------------------------------------------------- */
   useEffect(() => {
     unlockSpeechOnUserClick();
   }, []);
 
   /* ---------------------------------------------------------------------- */
-  /* 🧹 Hard Stop Helper                                                    */
+  /*  Hard stop helper                                                      */
   /* ---------------------------------------------------------------------- */
   const hardStopSpeech = useCallback(() => {
     try {
@@ -86,36 +86,54 @@ export default function ClassroomLivePage({ sharedLectures = [] }) {   // 👈 N
   }, []);
 
   /* ---------------------------------------------------------------------- */
-  /* 🧲 Prefer unlocked list from share link                                */
+  /*  Prefer unlocked list coming from ClassroomSharePage                   */
   /* ---------------------------------------------------------------------- */
   useEffect(() => {
     if (sharedLectures && sharedLectures.length > 0) {
       setLectures(sharedLectures);
-      // pick the first lecture if none selected or previous selection not present
-      const firstId = sharedLectures[0]?._id || null;
-      setSelectedLectureId((prev) =>
-        prev && sharedLectures.some((l) => l._id === prev) ? prev : firstId
+
+      // 🔍 find the protected lecture unlocked by the share token
+      const unlocked = sharedLectures.find(
+        (l) =>
+          l.tempUnlocked === true ||
+          (l.isAllowed === true &&
+            (l.accessType === "protected" || l.access_type === "protected"))
       );
+
+      // fallback: first public lecture, otherwise first in list
+      const fallback =
+        sharedLectures.find(
+          (l) =>
+            l.accessType === "public" ||
+            l.access_type === "public"
+        ) || sharedLectures[0];
+
+      const nextId = unlocked?._id || fallback?._id || null;
+
+      setSelectedLectureId(nextId);
       setHydratedFromShare(true);
       setLoading(false);
     }
   }, [sharedLectures]);
 
   /* ---------------------------------------------------------------------- */
-  /* 📚 Load Lectures (public) — only if we didn't hydrate from share       */
+  /*  Load lectures (only when not using a share link)                      */
   /* ---------------------------------------------------------------------- */
   const fetchLectures = useCallback(async () => {
-    if (hydratedFromShare) return; // 👈 do not overwrite unlocked list
+    if (hydratedFromShare) return; // don't overwrite unlocked list
+
     try {
       const res = await fetch(`${API_BASE}/lectures?status=released`);
       if (!res.ok) throw new Error(`Server error: ${res.status}`);
       const json = await res.json();
       const list = Array.isArray(json.data) ? json.data : [];
+
       setLectures(list);
 
       if (!selectedLectureId && list[0]?._id) {
         setSelectedLectureId(list[0]._id);
       }
+
       setLoading(false);
     } catch (err) {
       console.error("Failed to load lectures:", err);
@@ -129,7 +147,7 @@ export default function ClassroomLivePage({ sharedLectures = [] }) {   // 👈 N
   }, [fetchLectures]);
 
   /* ---------------------------------------------------------------------- */
-  /* 📝 Load Slides for Selected Lecture                                   */
+  /*  Load slides for selected lecture                                      */
   /* ---------------------------------------------------------------------- */
   const fetchSlides = useCallback(
     async (lectureId) => {
@@ -164,7 +182,7 @@ export default function ClassroomLivePage({ sharedLectures = [] }) {   // 👈 N
   }, [selectedLectureId, fetchSlides]);
 
   /* ---------------------------------------------------------------------- */
-  /* 🎙 Preload Voices                                                     */
+  /*  Preload voices                                                        */
   /* ---------------------------------------------------------------------- */
   useEffect(() => {
     waitForVoices(3000).then((voices) =>
@@ -173,7 +191,7 @@ export default function ClassroomLivePage({ sharedLectures = [] }) {   // 👈 N
   }, []);
 
   /* ---------------------------------------------------------------------- */
-  /* 🧾 Split slide text into sentences for teleprompter                   */
+  /*  Split slide into sentences for teleprompter                           */
   /* ---------------------------------------------------------------------- */
   useEffect(() => {
     if (currentSlide?.content) {
@@ -188,10 +206,11 @@ export default function ClassroomLivePage({ sharedLectures = [] }) {   // 👈 N
   }, [currentSlide?._id]);
 
   /* ---------------------------------------------------------------------- */
-  /* 🧠 Main Speech Engine Binding                                         */
+  /*  Speech engine                                                         */
   /* ---------------------------------------------------------------------- */
   useEffect(() => {
     let cancelled = false;
+
     async function startSpeech() {
       if (!currentSlide || !slides.length || loading) return;
       if (!isPlayingRef.current || isMuted) return;
@@ -224,6 +243,7 @@ export default function ClassroomLivePage({ sharedLectures = [] }) {   // 👈 N
     }
 
     startSpeech();
+
     return () => {
       cancelled = true;
     };
@@ -237,7 +257,7 @@ export default function ClassroomLivePage({ sharedLectures = [] }) {   // 👈 N
   ]);
 
   /* ---------------------------------------------------------------------- */
-  /* 🧭 Auto-scroll teleprompter when active sentence changes              */
+  /*  Auto-scroll teleprompter                                              */
   /* ---------------------------------------------------------------------- */
   useEffect(() => {
     const container = document.getElementById("teleprompter");
@@ -250,7 +270,7 @@ export default function ClassroomLivePage({ sharedLectures = [] }) {   // 👈 N
   }, [activeSentenceIndex]);
 
   /* ---------------------------------------------------------------------- */
-  /* ⏭ Slide Progression                                                   */
+  /*  Slide progression                                                      */
   /* ---------------------------------------------------------------------- */
   const handleNextSlide = useCallback(() => {
     hardStopSpeech();
@@ -262,7 +282,7 @@ export default function ClassroomLivePage({ sharedLectures = [] }) {   // 👈 N
   }, [slides.length, hardStopSpeech]);
 
   /* ---------------------------------------------------------------------- */
-  /* 🎮 Controls                                                           */
+  /*  Controls                                                               */
   /* ---------------------------------------------------------------------- */
   const goToSlide = (index) => {
     if (index < 0 || index >= slides.length) return;
@@ -303,22 +323,20 @@ export default function ClassroomLivePage({ sharedLectures = [] }) {   // 👈 N
   };
 
   /* ---------------------------------------------------------------------- */
-  /* 🎯 Smooth Lecture Switching                                           */
+  /*  Smooth lecture switching                                              */
   /* ---------------------------------------------------------------------- */
   const smoothSwitchLecture = async (lec) => {
     if (!lec?._id || isSwitching) return;
     setIsSwitching(true);
 
-    // 1️⃣ Stop current
+    // stop current
     hardStopSpeech();
     setIsPlaying(false);
     setIsSpeaking(false);
 
-    // 2️⃣ Show temporary message
     setCurrentSentence("🔄 Switching to next lecture…");
     setSlides([]);
 
-    // 3️⃣ Load new slides
     try {
       const res = await fetch(`${API_BASE}/lectures/${lec._id}/slides`);
       const json = await res.json();
@@ -333,7 +351,6 @@ export default function ClassroomLivePage({ sharedLectures = [] }) {   // 👈 N
       setCurrentSentence("⚠️ Failed to load next lecture. Try again.");
     }
 
-    // 4️⃣ Restart speech
     clearTimeout(switchTimer.current);
     switchTimer.current = setTimeout(() => {
       setIsPlaying(true);
@@ -354,7 +371,7 @@ export default function ClassroomLivePage({ sharedLectures = [] }) {   // 👈 N
   };
 
   /* ---------------------------------------------------------------------- */
-  /* 🧾 Error Fallback                                                     */
+  /*  Error fallback                                                         */
   /* ---------------------------------------------------------------------- */
   if (error && !loading) {
     return (
@@ -365,7 +382,7 @@ export default function ClassroomLivePage({ sharedLectures = [] }) {   // 👈 N
   }
 
   /* ---------------------------------------------------------------------- */
-  /* 🖥 Render Layout                                                      */
+  /*  Render                                                                */
   /* ---------------------------------------------------------------------- */
   return (
     <div className="relative min-h-screen bg-slate-950 text-slate-50 flex flex-col overflow-hidden">
@@ -373,8 +390,12 @@ export default function ClassroomLivePage({ sharedLectures = [] }) {   // 👈 N
         <div className="absolute inset-0 z-[9999] flex items-center justify-center bg-black/95 text-white">
           <div className="bg-black/70 px-8 py-6 rounded-2xl text-center shadow-lg backdrop-blur-sm">
             <div className="w-10 h-10 border-4 border-green-400 border-t-transparent rounded-full animate-spin mx-auto mb-3" />
-            <h1 className="text-2xl font-semibold mb-2">📡 Loading classroom…</h1>
-            <p className="opacity-90 text-sm">Please wait, connecting to the live session.</p>
+            <h1 className="text-2xl font-semibold mb-2">
+              📡 Loading classroom…
+            </h1>
+            <p className="opacity-90 text-sm">
+              Please wait, connecting to the live session.
+            </p>
           </div>
         </div>
       )}
@@ -449,7 +470,7 @@ export default function ClassroomLivePage({ sharedLectures = [] }) {   // 👈 N
             isSpeaking={isSpeaking}
           />
 
-          {/* 🟩 Teleprompter */}
+          {/* Teleprompter + media */}
           <section className="flex flex-col gap-3">
             <div
               id="teleprompter"
@@ -503,6 +524,7 @@ export default function ClassroomLivePage({ sharedLectures = [] }) {   // 👈 N
             </div>
           </section>
 
+          {/* Playlist */}
           <LecturePlaylistSidebar
             lectures={lectures}
             currentLectureId={selectedLectureId}
