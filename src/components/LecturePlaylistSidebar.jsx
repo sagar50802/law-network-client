@@ -8,8 +8,8 @@ export default function LecturePlaylistSidebar({
   lectures = [],
   currentLectureId,
   onSelectLecture,
-  isSwitching = false, // ✅ optional prop for “Upcoming…” indicator
-  userRole = "student", // 🧠 optional prop if you want to unlock for admin/teacher
+  isSwitching = false,
+  userRole = "student",
 }) {
   const activeRef = useRef(null);
 
@@ -33,29 +33,24 @@ export default function LecturePlaylistSidebar({
 
   return (
     <aside className="bg-slate-900 text-slate-50 rounded-2xl p-4 md:p-5 border border-slate-700 flex flex-col gap-3 min-w-[220px] overflow-y-auto max-h-[80vh]">
-      <div className="font-semibold text-lg mb-1">Today&apos;s Lectures</div>
+      <div className="font-semibold text-lg mb-1">Today's Lectures</div>
 
       <div className="flex flex-col gap-2">
         {lectures.map((lec, idx) => {
           const active = lec._id === currentLectureId;
+          const accessType = lec.accessType || lec.access_type || "public";
 
-          // 🧩 Determine access type
-          const accessType = lec.accessType || lec.access_type || "public"; // "public" | "private" | "paid"
-
-          // ✅ IMPORTANT:
-          // When coming from a share link, the backend `/available` already filtered/unlocked items.
-          // Consider the lecture unlocked if:
-          //  - it arrived in this list, OR
-          //  - it has any of these flags: unlocked / isAllowed / tempUnlocked
-          const unlockedFlag =
-            lec.unlocked === true ||
+          // ✅ FIX:
+          // The lectures array already includes the ones temporarily unlocked by the share token.
+          // So mark all of them as accessible unless explicitly marked locked.
+          const unlocked =
+            accessType === "public" ||
+            userRole === "admin" ||
             lec.isAllowed === true ||
-            lec.tempUnlocked === true ||
-            false;
+            lec.unlocked === true ||
+            lec.tempUnlocked === true;
 
-          // 🔒 Lock only if it's not public, user isn't admin, and we didn't mark it unlocked
-          const isLocked =
-            accessType !== "public" && userRole !== "admin" && !unlockedFlag;
+          const isLocked = !unlocked;
 
           const dotClass =
             lec.status === "released"
@@ -91,7 +86,6 @@ export default function LecturePlaylistSidebar({
               <div>
                 <div className="font-medium truncate flex items-center">
                   Lecture {idx + 1} • {lec.title}
-                  {/* ✅ Upcoming indicator */}
                   {isSwitching && lec._id !== currentLectureId && (
                     <span className="ml-2 text-[10px] text-yellow-400 animate-pulse">
                       Upcoming…
