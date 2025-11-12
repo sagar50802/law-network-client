@@ -7,7 +7,7 @@ import { ArrowLeft } from "lucide-react";
  * - Plays a selected looping ambience persistently (even after leaving page)
  * - Remembers selection + volume via localStorage
  * - Smooth fade transitions
- * - Includes floating Back button to return to Classroom
+ * - Includes glowing Back button (yellow)
  */
 
 const LS_KEY = "lnx_ambience_v1";
@@ -75,8 +75,6 @@ export default function AmbiencePage() {
     audio.volume = 0;
     smoothSetVolume(volume, 350);
     setErrorMsg("");
-
-    // don’t cleanup here — keep persistent
   }, [currentId, isOn]);
 
   /* Apply volume change */
@@ -220,10 +218,17 @@ export default function AmbiencePage() {
         </p>
       </div>
 
-      {/* Floating Back Button */}
+      {/* 🌟 Floating Back Button (Yellow Glow) */}
       <Link
         to="/classroom"
-        className="fixed bottom-4 left-4 bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white px-4 py-2 rounded-full shadow-lg flex items-center gap-2 transition-all animate-pulse hover:scale-105"
+        className="fixed bottom-4 left-4 bg-yellow-400 text-black font-medium px-4 py-2 rounded-full 
+                   shadow-lg border border-yellow-300 flex items-center gap-2 
+                   hover:bg-yellow-300 hover:scale-105 transition-all
+                   animate-pulse hover:shadow-yellow-400/50"
+        style={{
+          boxShadow: "0 0 12px 3px rgba(255, 221, 0, 0.6)",
+          animation: "pulseGlow 2s infinite ease-in-out",
+        }}
       >
         <ArrowLeft size={16} /> Back to Classroom
       </Link>
@@ -232,6 +237,14 @@ export default function AmbiencePage() {
       <div className="mt-4 text-xs text-slate-500 pb-8">
         Plays persistently in background. Files served from <code className="text-slate-300">/ambience/*</code>.
       </div>
+
+      {/* Custom glow animation */}
+      <style>{`
+        @keyframes pulseGlow {
+          0%, 100% { box-shadow: 0 0 12px 3px rgba(255, 221, 0, 0.6); }
+          50% { box-shadow: 0 0 20px 6px rgba(255, 221, 0, 0.9); }
+        }
+      `}</style>
     </div>
   );
 }
