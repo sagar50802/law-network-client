@@ -3,6 +3,8 @@ import React, { useState } from "react";
 export default function ClassroomLinkCreator() {
   const [lectureId, setLectureId] = useState("");
   const [type, setType] = useState("free");
+  const [expiresInHours, setExpiresInHours] = useState(0);
+  const [expiresInMinutes, setExpiresInMinutes] = useState(1); // default 1 min for quick test
   const [link, setLink] = useState("");
   const [loading, setLoading] = useState(false);
 
@@ -11,6 +13,11 @@ export default function ClassroomLinkCreator() {
       alert("Please enter a valid Lecture ID");
       return;
     }
+    if (expiresInHours === 0 && expiresInMinutes === 0) {
+      alert("Set a valid expiry (at least 1 minute)");
+      return;
+    }
+
     setLoading(true);
     try {
       const token = localStorage.getItem("authToken");
@@ -26,7 +33,8 @@ export default function ClassroomLinkCreator() {
           body: JSON.stringify({
             lectureId,
             type,
-            expiresInHours: 24,
+            expiresInHours: Number(expiresInHours),
+            expiresInMinutes: Number(expiresInMinutes),
           }),
         }
       );
@@ -54,6 +62,7 @@ export default function ClassroomLinkCreator() {
       </h2>
 
       <div className="space-y-4">
+        {/* Lecture ID */}
         <div>
           <label className="block mb-1 font-medium text-sm">Lecture ID</label>
           <input
@@ -65,6 +74,7 @@ export default function ClassroomLinkCreator() {
           />
         </div>
 
+        {/* Link Type */}
         <div>
           <label className="block mb-1 font-medium text-sm">Link Type</label>
           <select
@@ -75,6 +85,30 @@ export default function ClassroomLinkCreator() {
             <option value="free">Free (public)</option>
             <option value="paid">Paid (restricted)</option>
           </select>
+        </div>
+
+        {/* Expiry Time */}
+        <div className="flex gap-2">
+          <div className="flex-1">
+            <label className="block mb-1 font-medium text-sm">Hours</label>
+            <input
+              type="number"
+              min="0"
+              value={expiresInHours}
+              onChange={(e) => setExpiresInHours(e.target.value)}
+              className="w-full border px-3 py-2 rounded-lg"
+            />
+          </div>
+          <div className="flex-1">
+            <label className="block mb-1 font-medium text-sm">Minutes</label>
+            <input
+              type="number"
+              min="0"
+              value={expiresInMinutes}
+              onChange={(e) => setExpiresInMinutes(e.target.value)}
+              className="w-full border px-3 py-2 rounded-lg"
+            />
+          </div>
         </div>
 
         <button
