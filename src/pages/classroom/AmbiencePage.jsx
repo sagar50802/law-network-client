@@ -1,25 +1,25 @@
 import React, { useEffect, useMemo, useRef, useState } from "react";
+import { Link } from "react-router-dom";
+import { ArrowLeft } from "lucide-react";
 
 /**
  * 🎵 Background Ambience — Classroom addon (frontend-only)
- * - Plays a selected looping ambience
+ * - Plays a selected looping ambience persistently (even after leaving page)
  * - Remembers selection + volume via localStorage
- * - Smooth volume ramp, safe cleanup
- *
- * Drop this at: src/pages/classroom/AmbiencePage.jsx
- * Make sure your audio files exist (see ambienceTracks below).
+ * - Smooth fade transitions
+ * - Includes floating Back button to return to Classroom
  */
 
 const LS_KEY = "lnx_ambience_v1";
 
 const ambienceTracks = [
-  { id: "none",   emoji: "🔘", name: "None",                src: null },
-  { id: "rain",   emoji: "🌧️", name: "Rainy Library",      src: "/ambience/rain.mp3" },
-  { id: "birds",  emoji: "🐦", name: "Morning Birds",       src: "/ambience/birds.mp3" },
-  { id: "cafe",   emoji: "☕", name: "Café Study Mode",     src: "/ambience/cafe.mp3" },
-  { id: "library",emoji: "🏛️", name: "Old Library",        src: "/ambience/old-library.mp3" },
-  { id: "tanpura",emoji: "🪔", name: "Indian Tanpura",      src: "/ambience/tanpura.mp3" },
-  { id: "night",  emoji: "🌃", name: "Midnight Focus",      src: "/ambience/midnight.mp3" },
+  { id: "none", emoji: "🔘", name: "None", src: null },
+  { id: "rain", emoji: "🌧️", name: "Rainy Library", src: "/ambience/rain.mp3" },
+  { id: "birds", emoji: "🐦", name: "Morning Birds", src: "/ambience/birds.mp3" },
+  { id: "cafe", emoji: "☕", name: "Café Study Mode", src: "/ambience/cafe.mp3" },
+  { id: "library", emoji: "🏛️", name: "Old Library", src: "/ambience/old-library.mp3" },
+  { id: "tanpura", emoji: "🪔", name: "Indian Tanpura", src: "/ambience/tanpura.mp3" },
+  { id: "night", emoji: "🌃", name: "Midnight Focus", src: "/ambience/midnight.mp3" },
 ];
 
 export default function AmbiencePage() {
@@ -41,79 +41,54 @@ export default function AmbiencePage() {
   const [isOn, setIsOn] = useState(initial.isOn);
   const [errorMsg, setErrorMsg] = useState("");
 
-  const audioRef = useRef(null);
   const fadeRef = useRef(null);
-
   const current = ambienceTracks.find((t) => t.id === currentId) || ambienceTracks[0];
 
-  /* Persist to localStorage */
+  /* Persist settings */
   useEffect(() => {
     localStorage.setItem(LS_KEY, JSON.stringify({ id: currentId, volume, isOn }));
   }, [currentId, volume, isOn]);
 
-  /* Create or update audio element when preset / power changes */
+  /* Persistent global audio across routes */
   useEffect(() => {
-    // clear previous fade interval
-    if (fadeRef.current) clearInterval(fadeRef.current);
+    if (!window.globalAmbienceAudio) {
+      const a = new Audio();
+      a.loop = true;
+      a.preload = "auto";
+      a.crossOrigin = "anonymous";
+      window.globalAmbienceAudio = a;
+    }
+    const audio = window.globalAmbienceAudio;
 
-    // Stop & cleanup if off or "None"
     if (!isOn || !current?.src) {
-      if (audioRef.current) {
-        try {
-          audioRef.current.pause();
-          audioRef.current.src = "";
-        } catch {}
-      }
+      smoothSetVolume(0, 300);
       return;
     }
 
-    // (Re)create audio element
-    const audio = new Audio(current.src);
-    audio.loop = true;
-    audio.preload = "auto";
-    audio.crossOrigin = "anonymous"; // safe if files are public
-    audio.volume = 0; // fade-in from 0 → target
-    audioRef.current = audio;
-
-    setErrorMsg("");
-    audio
-      .play()
-      .then(() => {
-        // Fade in smoothly to target volume
-        smoothSetVolume(volume, 350);
-      })
-      .catch((err) => {
-        setErrorMsg("Tap anywhere to allow audio (browser autoplay policy).");
-        console.warn("Ambience play blocked:", err);
+    if (audio.src !== window.location.origin + current.src) {
+      audio.src = current.src;
+      audio.play().catch((err) => {
+        setErrorMsg("Tap anywhere to allow audio playback (browser policy).");
+        console.warn("Audio blocked:", err);
       });
+    }
+    audio.volume = 0;
+    smoothSetVolume(volume, 350);
+    setErrorMsg("");
 
-    // Cleanup on change/unmount
-    return () => {
-      if (fadeRef.current) clearInterval(fadeRef.current);
-      try {
-        audio.pause();
-        audio.src = "";
-      } catch {}
-    };
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    // don’t cleanup here — keep persistent
   }, [currentId, isOn]);
 
-  /* Apply volume changes with gentle ramp */
+  /* Apply volume change */
   useEffect(() => {
-    if (!audioRef.current) return;
-    smoothSetVolume(volume, 200);
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    if (window.globalAmbienceAudio) smoothSetVolume(volume, 200);
   }, [volume]);
 
-  /* Unlock on first user interaction (mobile autoplay) */
+  /* Unlock audio (mobile) */
   useEffect(() => {
     const unlock = () => {
-      if (audioRef.current) {
-        audioRef.current
-          .play()
-          .then(() => setErrorMsg(""))
-          .catch(() => {});
-      }
+      const a = window.globalAmbienceAudio;
+      if (a) a.play().catch(() => {});
       window.removeEventListener("click", unlock);
       window.removeEventListener("touchstart", unlock);
     };
@@ -125,11 +100,12 @@ export default function AmbiencePage() {
     };
   }, []);
 
+  /* Smooth volume fade */
   function smoothSetVolume(target, ms = 250) {
-    if (!audioRef.current) return;
+    const a = window.globalAmbienceAudio;
+    if (!a) return;
     if (fadeRef.current) clearInterval(fadeRef.current);
 
-    const a = audioRef.current;
     const start = a.volume;
     const diff = target - start;
     const steps = Math.max(6, Math.round(ms / 25));
@@ -138,13 +114,9 @@ export default function AmbiencePage() {
     fadeRef.current = setInterval(() => {
       i++;
       const t = i / steps;
-      // ease-out
       const eased = 1 - Math.pow(1 - t, 2);
       a.volume = clamp01(start + diff * eased);
-      if (i >= steps) {
-        a.volume = clamp01(target);
-        clearInterval(fadeRef.current);
-      }
+      if (i >= steps) clearInterval(fadeRef.current);
     }, ms / steps);
   }
 
@@ -153,29 +125,22 @@ export default function AmbiencePage() {
   }
 
   function togglePower() {
-    // If selecting off
     if (isOn && currentId !== "none") {
-      smoothSetVolume(0, 200);
-      setTimeout(() => setIsOn(false), 180);
+      smoothSetVolume(0, 250);
+      setTimeout(() => setIsOn(false), 200);
     } else {
       setIsOn(true);
-      if (currentId === "none") {
-        setCurrentId("rain"); // default to rain when turning on
-      }
+      if (currentId === "none") setCurrentId("rain");
     }
   }
 
   function pick(id) {
     setCurrentId(id);
-    if (id === "none") {
-      setIsOn(false);
-    } else {
-      setIsOn(true);
-    }
+    setIsOn(id !== "none");
   }
 
   return (
-    <div className="min-h-screen bg-slate-950 text-white flex flex-col gap-6 md:gap-8 px-4 md:px-8 py-6 md:py-10">
+    <div className="min-h-screen bg-slate-950 text-white flex flex-col gap-6 md:gap-8 px-4 md:px-8 py-6 md:py-10 relative">
       {/* Header */}
       <div className="flex items-center justify-between">
         <div>
@@ -188,18 +153,20 @@ export default function AmbiencePage() {
         {/* Power toggle with glow */}
         <button
           onClick={togglePower}
-          className={`relative px-4 py-2 rounded-full font-semibold text-sm transition
-            ${isOn ? "bg-emerald-400 text-black" : "bg-slate-800 text-slate-200 border border-slate-600"}
-          `}
+          className={`relative px-4 py-2 rounded-full font-semibold text-sm transition ${
+            isOn
+              ? "bg-emerald-400 text-black shadow-lg shadow-emerald-400/20"
+              : "bg-slate-800 text-slate-200 border border-slate-600"
+          }`}
         >
           {isOn ? "On" : "Off"}
           {isOn && (
-            <span className="absolute -inset-1 rounded-full blur-md bg-emerald-400/30 pointer-events-none" />
+            <span className="absolute -inset-1 rounded-full blur-md bg-emerald-400/40 pointer-events-none animate-pulse" />
           )}
         </button>
       </div>
 
-      {/* Error / hint */}
+      {/* Error */}
       {errorMsg && (
         <div className="text-amber-300 text-sm bg-amber-900/20 border border-amber-600/40 rounded-lg px-3 py-2">
           {errorMsg}
@@ -214,9 +181,11 @@ export default function AmbiencePage() {
             <button
               key={t.id}
               onClick={() => pick(t.id)}
-              className={`group relative rounded-2xl border p-3 md:p-4 text-left transition
-                ${active ? "border-emerald-400/70 bg-emerald-400/10" : "border-slate-700 bg-slate-900/60 hover:bg-slate-900"}
-              `}
+              className={`group relative rounded-2xl border p-3 md:p-4 text-left transition ${
+                active
+                  ? "border-emerald-400/70 bg-emerald-400/10"
+                  : "border-slate-700 bg-slate-900/60 hover:bg-slate-900"
+              }`}
             >
               <div className="text-2xl">{t.emoji}</div>
               <div className="mt-1 font-medium">{t.name}</div>
@@ -251,9 +220,17 @@ export default function AmbiencePage() {
         </p>
       </div>
 
+      {/* Floating Back Button */}
+      <Link
+        to="/classroom"
+        className="fixed bottom-4 left-4 bg-slate-800 hover:bg-slate-700 border border-slate-600 text-white px-4 py-2 rounded-full shadow-lg flex items-center gap-2 transition-all animate-pulse hover:scale-105"
+      >
+        <ArrowLeft size={16} /> Back to Classroom
+      </Link>
+
       {/* Info */}
-      <div className="mt-2 text-xs text-slate-500">
-        Uses your browser audio only. No external API. Files served from <code className="text-slate-300">/ambience/*</code>.
+      <div className="mt-4 text-xs text-slate-500 pb-8">
+        Plays persistently in background. Files served from <code className="text-slate-300">/ambience/*</code>.
       </div>
     </div>
   );
