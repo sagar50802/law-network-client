@@ -20,7 +20,8 @@ import ClassroomDrawerMenu from "./components/ClassroomDrawerMenu.jsx";
 import AmbiencePage from "./pages/classroom/AmbiencePage.jsx";
 
 /* ---------- 🆕 NEW: Group Key Bridge ---------- */
-import GroupKeyBridge from "./pages/classroom/GroupKeyBridge.jsx";
+import GroupKeyBridge from "./pages/GroupKeyBridge.jsx";
+
 
 /* ---------- Main Pages ---------- */
 import HomePage from "./pages/HomePage.jsx";
