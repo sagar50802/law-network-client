@@ -2,7 +2,7 @@ import { useEffect, useState } from "react";
 import { getJSON } from "../utils/api";
 import { Link, useNavigate } from "react-router-dom";
 
-// Background slideshow image list (exactly matching your uploads)
+// Background slideshow images (must exist in /public/backgrounds/)
 const BACKGROUND_IMAGES = [
   "/backgrounds/bg1.png",
   "/backgrounds/bg2.png",
@@ -16,7 +16,21 @@ export default function PreparationPage() {
   const email = localStorage.getItem("userEmail") || "";
   const navigate = useNavigate();
 
-  // Fetch exams + progress
+  /* ---------------------------------------------------
+   * FORCE REMOVE ALL LAYOUT BACKGROUNDS FOR THIS PAGE
+   * --------------------------------------------------- */
+  useEffect(() => {
+    document.body.style.background = "transparent";
+    document.documentElement.style.background = "transparent";
+
+    // Cleanup when leaving page
+    return () => {
+      document.body.style.background = "";
+      document.documentElement.style.background = "";
+    };
+  }, []);
+
+  // Fetch exams
   useEffect(() => {
     (async () => {
       const r = await getJSON("/api/exams");
@@ -49,9 +63,11 @@ export default function PreparationPage() {
   }, []);
 
   return (
-    <div className="relative z-0 min-h-screen text-white bg-transparent !bg-transparent">
-
-      {/* Background Layer (safe) */}
+    <div
+      className="relative z-0 min-h-screen text-white bg-transparent !bg-transparent"
+      style={{ background: "transparent" }}
+    >
+      {/* BACKGROUND LAYER */}
       <div className="absolute inset-0 -z-10 pointer-events-none">
         {BACKGROUND_IMAGES.map((src, i) => (
           <div
@@ -63,11 +79,11 @@ export default function PreparationPage() {
           />
         ))}
 
-        {/* Gradient overlay for readability */}
+        {/* Dark overlay */}
         <div className="absolute inset-0 bg-gradient-to-b from-black/60 via-black/45 to-black/80" />
       </div>
 
-      {/* Page Content */}
+      {/* PAGE CONTENT */}
       <section className="relative max-w-6xl mx-auto px-4 py-10">
         <h1 className="text-3xl sm:text-4xl font-bold mb-8 drop-shadow-lg">
           Preparation
@@ -80,23 +96,21 @@ export default function PreparationPage() {
             return (
               <div
                 key={ex.examId}
+                onClick={() =>
+                  navigate(`/prep/${encodeURIComponent(ex.examId)}`)
+                }
                 className="group cursor-pointer relative rounded-3xl overflow-hidden 
                 backdrop-blur-xl bg-white/10 border border-white/10 
                 hover:border-white/20 transition-all duration-300 shadow-lg 
                 hover:shadow-2xl hover:-translate-y-1"
-                onClick={() =>
-                  navigate(`/prep/${encodeURIComponent(ex.examId)}`)
-                }
               >
-                {/* Glow hover effect */}
+                {/* Glow hover */}
                 <div className="absolute inset-0 rounded-3xl bg-blue-400/0 group-hover:bg-blue-500/10 blur-2xl transition duration-300 pointer-events-none" />
 
-                {/* Image section */}
+                {/* IMAGE */}
                 <div
                   className="relative h-44 w-full overflow-hidden"
-                  style={{
-                    clipPath: "polygon(0 0, 100% 0, 100% 88%, 0 100%)",
-                  }}
+                  style={{ clipPath: "polygon(0 0, 100% 0, 100% 88%, 0 100%)" }}
                 >
                   <img
                     src={imgSrc}
@@ -105,7 +119,7 @@ export default function PreparationPage() {
                     onError={(e) => (e.target.style.display = "none")}
                   />
 
-                  {/* Dark overlay */}
+                  {/* Gradient overlay */}
                   <div className="absolute inset-0 bg-gradient-to-t from-black/70 via-black/40 to-black/50" />
 
                   {/* Title */}
@@ -123,9 +137,9 @@ export default function PreparationPage() {
                   </div>
                 </div>
 
-                {/* Info section */}
+                {/* INFO */}
                 <div className="p-4 text-gray-200">
-                  {/* Progress */}
+                  {/* Progress bar */}
                   <div>
                     <div className="flex justify-between text-xs mb-1 text-gray-300">
                       <span>Progress</span>
@@ -144,7 +158,7 @@ export default function PreparationPage() {
                     <div className="transform translate-y-3 opacity-0 
                       group-hover:translate-y-0 group-hover:opacity-100 transition-all duration-300">
                       Continue your preparation for{" "}
-                      <strong>{ex.name}</strong>. Your progress is saved.
+                      <strong>{ex.name}</strong>. Your progress is stored.
                     </div>
                   </div>
 
