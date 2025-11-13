@@ -1,54 +1,16 @@
-import { useEffect } from "react";
-
 import BannerSlider from "../components/BannerSlider";
 import Article from "../components/Article/Article";
 import ConsultancySection from "../components/consultancy/ConsultancySection.jsx";
 import NewsTicker from "../components/NewsTicker.jsx";
 
 export default function HomePage() {
-
-  /* -----------------------------
-     ✔ Background slideshow
-     ✔ ONLY for homepage
-     ✔ Affects ONLY <main> wrapper
-     ✔ No effect on prep pages
-  --------------------------------*/
-  useEffect(() => {
-    const images = [
-      "/backgrounds/bg1.png",
-      "/backgrounds/bg2.png",
-      "/backgrounds/bg3.png"
-    ];
-
-    let i = 0;
-
-    const mainEl = document.querySelector("main.homepage-bg");
-
-    if (!mainEl) return;
-
-    function applySlide() {
-      mainEl.style.backgroundImage = `url(${images[i]})`;
-      mainEl.style.backgroundSize = "cover";
-      mainEl.style.backgroundPosition = "center";
-      mainEl.style.backgroundRepeat = "no-repeat";
-      mainEl.style.backgroundAttachment = "fixed";
-
-      i = (i + 1) % images.length;
-    }
-
-    applySlide();
-    const timer = setInterval(applySlide, 5000);
-
-    return () => clearInterval(timer);
-  }, []);
-
   return (
-    <main className="homepage-bg min-h-screen">
+    <main className="min-h-screen bg-[#f8fafc]">
       <div className="max-w-6xl mx-auto px-4 py-6">
         {/* Hero / Banner */}
         <BannerSlider />
 
-        {/* News ticker */}
+        {/* News ticker (horizontal, just below banner) */}
         <NewsTicker />
 
         {/* Title + Description */}
@@ -59,7 +21,7 @@ export default function HomePage() {
           Select a section from the navigation above.
         </p>
 
-        {/* ===== 70 / 30 split ===== */}
+        {/* 70/30 split layout */}
         <section className="mt-10 grid grid-cols-1 md:grid-cols-[7fr_3fr] gap-0 items-start">
           {/* Left: Articles */}
           <div
