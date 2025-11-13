@@ -7,7 +7,6 @@ const SLIDES = [
   "/backgrounds/bg3.png",
 ];
 
-// fallback if exam image missing
 const FALLBACK_IMG = "/backgrounds/bg1.png";
 
 export default function PrepList() {
@@ -45,10 +44,10 @@ export default function PrepList() {
             alt=""
           />
         ))}
-        <div className="absolute inset-0 bg-black/20"></div>
+        <div className="absolute inset-0 bg-black/25"></div>
       </div>
 
-      {/* 🔥 CONTENT ABOVE */}
+      {/* CONTENT */}
       <div className="relative z-10 max-w-5xl mx-auto p-4">
         <h1 className="text-2xl font-bold mb-6 text-white drop-shadow">
           Preparation
@@ -67,61 +66,56 @@ export default function PrepList() {
                 className="
                   group
                   relative
-                  rounded-2xl
+                  rounded-xl
                   overflow-hidden
-                  shadow-xl
-                  transition
-                  hover:scale-[1.03]
-                  hover:shadow-2xl
+                  shadow-lg
                   border border-white/20
                   backdrop-blur-sm
+                  transition
+                  hover:scale-[1.03]
                 "
+                style={{ height: "180px" }}   // 🔥 FIXED SMALL CARD SIZE
               >
 
-                {/* 🌈 FULL IMAGE BACKGROUND TILE */}
+                {/* IMAGE */}
                 <img
                   src={examImg}
                   onError={(e) => (e.target.src = FALLBACK_IMG)}
-                  className="absolute inset-0 w-full h-full object-cover transition duration-500 group-hover:scale-105"
+                  className="
+                    absolute inset-0 w-full h-full object-cover 
+                    group-hover:scale-105 transition duration-500
+                  "
                   alt=""
                 />
 
-                {/* DARK OVERLAY FOR READABILITY */}
-                <div className="absolute inset-0 bg-black/40 group-hover:bg-black/30 transition"></div>
+                {/* OVERLAY */}
+                <div className="absolute inset-0 bg-black/40"></div>
 
-                {/* 🌟 CARD CONTENT ON TOP OF IMAGE */}
-                <div className="relative z-10 p-5 text-white">
-                  
-                  {/* CATEGORY BADGE */}
-                  <span className="
-                    inline-block mb-3
-                    px-3 py-1
-                    bg-white/20
-                    text-white text-xs
-                    rounded-full
-                    backdrop-blur-md
-                    shadow
-                  ">
+                {/* TEXT ON IMAGE */}
+                <div className="relative z-10 p-4 text-white flex flex-col justify-end h-full">
+
+                  {/* BADGE */}
+                  <span
+                    className="
+                      absolute top-2 left-2 
+                      px-2 py-1 bg-white/20 
+                      text-xs rounded-full 
+                      backdrop-blur-md
+                    "
+                  >
                     {ex.examId}
                   </span>
 
-                  {/* NAME */}
-                  <div className="text-xl font-semibold drop-shadow">
+                  <div className="text-lg font-semibold drop-shadow">
                     {ex.name}
                   </div>
 
-                  {/* RESUME BUTTON */}
-                  <div className="
-                    mt-3 inline-block
-                    px-3 py-1
-                    bg-white/25
-                    text-white text-sm
-                    rounded-lg
-                    shadow
-                    backdrop-blur
-                    group-hover:bg-white/35
-                    transition
-                  ">
+                  <div
+                    className="
+                      text-sm text-blue-200 
+                      font-medium mt-1
+                    "
+                  >
                     Resume →
                   </div>
                 </div>
