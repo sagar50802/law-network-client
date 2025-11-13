@@ -24,7 +24,7 @@ import GroupKeyBridge from "./pages/GroupKeyBridge.jsx";
 
 /* ---------- Main Pages ---------- */
 import HomePage from "./pages/HomePage.jsx";
-import ArticlesPage from "./pages/ArticlesPage.jsx"];
+import ArticlesPage from "./pages/ArticlesPage.jsx";
 import NewsPage from "./pages/NewsPage.jsx";
 import VideosPage from "./pages/VideosPage.jsx";
 import PodcastsPage from "./pages/PodcastsPage.jsx";
