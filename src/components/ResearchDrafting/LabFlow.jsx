@@ -320,30 +320,41 @@ export default function LabFlow({ id, onMarked }) {
   );
 }
 
-/* --------------------------------------------------------------------- */
+ /* --------------------------------------------------------------------- */
 /* sectionBlock                                                          */
 /* --------------------------------------------------------------------- */
 function sectionBlock(title, body, draft) {
   const isLocked = draft?.locked;
   const isGenerating = body?.includes("System is generating");
+
+  // ✅ Allow "Title" and "Put your Abstract" to stay visible even when locked
+  const forceUnlocked = title === "Title" || title === "Put your Abstract";
+
   return (
     <div className="mb-6 relative animate-fadeIn">
       <div className="font-semibold text-black mb-1">{title}</div>
+
       <div className="relative">
-        <div className="bg-white/95 border border-gray-200 rounded-xl p-3 md:p-4 shadow-sm min-h-[80px]">
+        <div
+          className="bg-white/95 border border-gray-200 rounded-xl p-3 md:p-4 shadow-sm min-h-[80px]"
+        >
           {isGenerating ? (
-            <div className="text-gray-400 italic animate-pulse">System is generating...</div>
-          ) : isLocked ? (
+            <div className="text-gray-400 italic animate-pulse">
+              System is generating...
+            </div>
+          ) : isLocked && !forceUnlocked ? (
+            // 🟣 Shimmer placeholder (blur locked content)
             <div className="relative overflow-hidden rounded-xl select-none pointer-events-none">
               <div className="h-[90px] md:h-[110px] bg-gradient-to-r from-gray-100 via-gray-200 to-gray-100 animate-pulse rounded-lg" />
             </div>
           ) : (
+            // 🧠 Keep full live typing animation for visible/unlocked parts
             <Typewriter text={body || ""} />
           )}
         </div>
 
-        {/* 🔓 Only lock others — keep Title & Abstract visible */}
-        {isLocked && title !== "Title" && title !== "Put your Abstract" && (
+        {/* 🔒 Show lock overlay for all except Title & Abstract */}
+        {isLocked && !forceUnlocked && (
           <div className="absolute inset-0 flex items-center justify-center bg-white/50 backdrop-blur-[2px] rounded-xl">
             <span className="text-[11px] md:text-sm text-gray-700 bg-white/90 px-3 py-1 rounded-full shadow">
               🔒 Unlock this section after payment
