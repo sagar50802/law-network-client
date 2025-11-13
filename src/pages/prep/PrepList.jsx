@@ -66,57 +66,66 @@ export default function PrepList() {
                 href={`/prep/${encodeURIComponent(ex.examId)}`}
                 className="
                   group
-                  rounded-2xl 
-                  overflow-hidden 
-                  bg-white/90 
-                  backdrop-blur 
-                  border 
-                  shadow-lg 
-                  hover:shadow-2xl 
-                  transition 
-                  block
+                  relative
+                  rounded-2xl
+                  overflow-hidden
+                  shadow-xl
+                  transition
+                  hover:scale-[1.03]
+                  hover:shadow-2xl
+                  border border-white/20
+                  backdrop-blur-sm
                 "
               >
 
-                {/* 🔥 IMAGE with clip-path top */}
-                <div
-                  className="
-                    relative 
-                    h-40 
-                    overflow-hidden 
-                    [clip-path:polygon(0_0,100%_0,100%_85%,0_100%)]
-                  "
-                >
-                  <img
-                    src={examImg}
-                    onError={(e) => (e.target.src = FALLBACK_IMG)}
-                    className="w-full h-full object-cover group-hover:scale-105 transition duration-500"
-                    alt=""
-                  />
+                {/* 🌈 FULL IMAGE BACKGROUND TILE */}
+                <img
+                  src={examImg}
+                  onError={(e) => (e.target.src = FALLBACK_IMG)}
+                  className="absolute inset-0 w-full h-full object-cover transition duration-500 group-hover:scale-105"
+                  alt=""
+                />
 
-                  {/* 🔥 CATEGORY BADGE */}
+                {/* DARK OVERLAY FOR READABILITY */}
+                <div className="absolute inset-0 bg-black/40 group-hover:bg-black/30 transition"></div>
+
+                {/* 🌟 CARD CONTENT ON TOP OF IMAGE */}
+                <div className="relative z-10 p-5 text-white">
+                  
+                  {/* CATEGORY BADGE */}
                   <span className="
-                    absolute top-2 left-2 
-                    px-3 py-1 
-                    bg-black/70 
-                    text-white text-xs 
-                    rounded-full 
-                    backdrop-blur 
+                    inline-block mb-3
+                    px-3 py-1
+                    bg-white/20
+                    text-white text-xs
+                    rounded-full
+                    backdrop-blur-md
                     shadow
                   ">
                     {ex.examId}
                   </span>
-                </div>
 
-                {/* TEXT AREA */}
-                <div className="p-4">
-                  <div className="text-lg font-semibold">{ex.name}</div>
-                  <div className="text-xs text-gray-500">{ex.examId}</div>
+                  {/* NAME */}
+                  <div className="text-xl font-semibold drop-shadow">
+                    {ex.name}
+                  </div>
 
-                  <div className="mt-3 inline-block text-blue-700 font-medium">
+                  {/* RESUME BUTTON */}
+                  <div className="
+                    mt-3 inline-block
+                    px-3 py-1
+                    bg-white/25
+                    text-white text-sm
+                    rounded-lg
+                    shadow
+                    backdrop-blur
+                    group-hover:bg-white/35
+                    transition
+                  ">
                     Resume →
                   </div>
                 </div>
+
               </a>
             );
           })}
