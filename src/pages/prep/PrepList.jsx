@@ -13,14 +13,12 @@ export default function PrepList() {
   const [exams, setExams] = useState([]);
   const [bgIndex, setBgIndex] = useState(0);
 
-  // Load exam list
   useEffect(() => {
     getJSON("/api/prep/exams")
       .then((r) => setExams(r.exams || []))
       .catch(() => {});
   }, []);
 
-  // Background crossfade slideshow
   useEffect(() => {
     const interval = setInterval(() => {
       setBgIndex((prev) => (prev + 1) % SLIDES.length);
@@ -31,7 +29,7 @@ export default function PrepList() {
   return (
     <div className="relative min-h-screen">
 
-      {/* BACKGROUND CROSSFADE */}
+      {/* BACKGROUND FADE */}
       <div className="absolute inset-0 overflow-hidden z-0">
         {SLIDES.map((src, idx) => (
           <img
@@ -47,14 +45,14 @@ export default function PrepList() {
         <div className="absolute inset-0 bg-black/25"></div>
       </div>
 
-      {/* CONTENT ABOVE */}
-      <div className="relative z-10 max-w-5xl mx-auto p-4">
-        <h1 className="text-2xl font-bold mb-6 text-white drop-shadow">
+      {/* MAIN CONTENT */}
+      <div className="relative z-10 max-w-4xl mx-auto p-4">
+        <h1 className="text-2xl font-bold mb-6 text-white drop-shadow text-center">
           Preparation
         </h1>
 
-        {/* EXAM CARDS GRID */}
-        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
+        {/* CARDS GRID */}
+        <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-5">
 
           {exams.map((ex) => {
             const examImg = `/backgrounds/${ex.examId}.png`;
@@ -65,11 +63,13 @@ export default function PrepList() {
                 href={`/prep/${encodeURIComponent(ex.examId)}`}
                 className="
                   group
+                  w-[260px]
+                  mx-auto
                   rounded-2xl 
                   overflow-hidden 
                   bg-white/90 
                   backdrop-blur 
-                  border border-white/30
+                  border border-white/20
                   shadow-xl 
                   hover:shadow-2xl 
                   transition 
@@ -78,7 +78,7 @@ export default function PrepList() {
                 "
               >
 
-                {/* GLOW BEHIND CARD */}
+                {/* GLOW */}
                 <div className="
                   absolute inset-0 
                   rounded-2xl 
@@ -89,8 +89,8 @@ export default function PrepList() {
                   transition 
                 "></div>
 
-                {/* IMAGE (BRIGHT, NO FADE) */}
-                <div className="relative h-32 overflow-hidden rounded-t-2xl">
+                {/* TOP IMAGE — SMALLER */}
+                <div className="relative h-24 overflow-hidden rounded-t-2xl">
                   <img
                     src={examImg}
                     onError={(e) => (e.target.src = FALLBACK_IMG)}
@@ -104,29 +104,28 @@ export default function PrepList() {
                     "
                   />
 
-                  {/* CATEGORY BADGE */}
                   <span
                     className="
-                      absolute top-2 left-2 
-                      px-3 py-1 
+                      absolute top-1.5 left-1.5
+                      px-2 py-0.5
                       bg-black/70 
-                      text-white text-xs 
+                      text-white text-[10px]
                       rounded-full 
-                      shadow-lg
+                      shadow
                     "
                   >
                     {ex.examId}
                   </span>
                 </div>
 
-                {/* TEXT AREA */}
-                <div className="p-4 relative z-10">
-                  <div className="text-lg font-semibold text-gray-900">
+                {/* TEXT SECTION — COMPACT */}
+                <div className="p-3">
+                  <div className="text-[16px] font-semibold text-gray-900">
                     {ex.name}
                   </div>
-                  <div className="text-xs text-gray-500">{ex.examId}</div>
+                  <div className="text-[11px] text-gray-500">{ex.examId}</div>
 
-                  <div className="mt-3 inline-block text-blue-700 font-medium">
+                  <div className="mt-2 inline-block text-blue-700 font-medium text-sm">
                     Resume →
                   </div>
                 </div>
