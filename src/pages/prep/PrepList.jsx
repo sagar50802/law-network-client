@@ -1,7 +1,7 @@
 import { useEffect, useState } from "react";
 import { getJSON, absUrl } from "../../utils/api";
 
-// 🎨 Background images (only for /prep page)
+// 🎨 Background slideshow images (ONLY for /prep page)
 const BG_IMAGES = [
   "/backgrounds/bg1.png",
   "/backgrounds/bg2.png",
@@ -12,26 +12,26 @@ export default function PrepList() {
   const [exams, setExams] = useState([]);
   const [bgIndex, setBgIndex] = useState(0);
 
-  // fetch exam list (your original logic)
+  /* ---------------- Fetch Exams (Your Original Logic) ---------------- */
   useEffect(() => {
     getJSON("/api/prep/exams")
-      .then((r) => setExams(r.exams || []))
+      .then(r => setExams(r.exams || []))
       .catch(() => {});
   }, []);
 
-  // 🎞 Background slideshow — ONLY for this page
+  /* ---------------- Background Slideshow (NO overlay) ---------------- */
   useEffect(() => {
     if (BG_IMAGES.length <= 1) return;
     const id = setInterval(() => {
-      setBgIndex((i) => (i + 1) % BG_IMAGES.length);
-    }, 4000); // 4s crossfade
+      setBgIndex(i => (i + 1) % BG_IMAGES.length);
+    }, 4000); // change image every 4 seconds
     return () => clearInterval(id);
   }, []);
 
   return (
     <div className="relative max-w-5xl mx-auto p-4">
 
-      {/* 🔥 Local background slideshow (does NOT affect inner prep pages) */}
+      {/* 🔥 Background slideshow behind ONLY this page */}
       <div className="absolute inset-0 -z-10 overflow-hidden rounded-3xl">
         {BG_IMAGES.map((src, i) => (
           <div
@@ -43,15 +43,15 @@ export default function PrepList() {
           />
         ))}
 
-        {/* subtle white overlay for readability */}
-        <div className="absolute inset-0 bg-white/85" />
+        {/* ❌ No overlay (removed completely) */}
+        {/* <div className="absolute inset-0 bg-white/85" /> */}
       </div>
 
-      {/* ---- Main Content (unchanged) ---- */}
+      {/* ---------------- Main Content (UNTOUCHED) ---------------- */}
       <h1 className="text-2xl font-bold mb-4">Preparation</h1>
 
       <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-4">
-        {exams.map((ex) => (
+        {exams.map(ex => (
           <a
             key={ex.examId}
             href={`/prep/${encodeURIComponent(ex.examId)}`}
