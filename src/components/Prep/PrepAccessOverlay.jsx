@@ -88,13 +88,19 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
 
   const firstGuardDoneRef = useRef(false);
 
-  // 🔹 UX state for confirmations & visual feedback
+  // UX state for confirmations & visual feedback
   const [didPay, setDidPay] = useState(false);
   const [didSendProof, setDidSendProof] = useState(false);
   const [showPayConfirm, setShowPayConfirm] = useState(false);
   const [showProofConfirm, setShowProofConfirm] = useState(false);
   const [payWarning, setPayWarning] = useState(""); // "success" | "error" | ""
   const [payFeedback, setPayFeedback] = useState(""); // "yes" | "no" | ""
+  const [proofFeedback, setProofFeedback] = useState(""); // "yes" | "no" | ""
+  const [formStarted, setFormStarted] = useState(false);
+
+  const markFormStarted = () => {
+    if (!formStarted) setFormStarted(true);
+  };
 
   /* --------------------------------------------------
    * ✅ Fetch Exam Meta (public endpoint)
@@ -495,12 +501,12 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
               {/* STEP 1: Pay via UPI */}
               <button
                 className={`w-full py-3 rounded text-white text-lg font-semibold ${
-                  pay.upiLink
-                    ? "bg-emerald-600 hover:bg-emerald-700"
-                    : "bg-gray-300 cursor-not-allowed"
+                  !pay.upiLink || formStarted
+                    ? "bg-gray-300 cursor-not-allowed"
+                    : "bg-emerald-600 hover:bg-emerald-700"
                 }`}
                 onClick={() => {
-                  if (!pay.upiLink) return;
+                  if (!pay.upiLink || formStarted) return;
 
                   const now = Date.now();
                   localStorage.setItem(ks.upiStart, String(now));
@@ -511,7 +517,7 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
 
                   window.location.href = pay.upiLink;
                 }}
-                disabled={!pay.upiLink}
+                disabled={!pay.upiLink || formStarted}
               >
                 Pay via UPI{pay.priceINR ? ` • ₹${pay.priceINR}` : ""}
               </button>
@@ -519,14 +525,16 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
               {/* STEP 2: Send Proof on WhatsApp */}
               <button
                 className={`w-full py-3 rounded text-lg font-semibold border ${
-                  didPay && pay.waLink
+                  formStarted
+                    ? "bg-gray-200 cursor-not-allowed text-gray-400"
+                    : didPay && pay.waLink
                     ? "bg-white hover:bg-gray-50"
                     : payWarning === "error"
                     ? "bg-red-100 border-red-300 text-red-600 animate-pulse cursor-not-allowed"
                     : "bg-gray-200 cursor-not-allowed text-gray-500"
                 }`}
                 onClick={() => {
-                  if (!didPay || !pay.waLink) return; // must confirm payment first
+                  if (!didPay || !pay.waLink || formStarted) return; // must confirm payment first and not started form
 
                   const now = Date.now();
                   localStorage.setItem(ks.waStart, String(now));
@@ -537,7 +545,7 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
 
                   window.open(pay.waLink, "_blank", "noopener,noreferrer");
                 }}
-                disabled={!didPay || !pay.waLink}
+                disabled={!didPay || !pay.waLink || formStarted}
               >
                 {didPay
                   ? "Send Proof on WhatsApp"
@@ -555,12 +563,16 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
                 <div className="flex flex-col gap-2 mt-2">
                   <div className="flex items-center gap-2">
                     <button
+                      disabled={formStarted}
                       className={`px-3 py-1 rounded text-xs font-semibold ${
-                        didPay
+                        formStarted
+                          ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                          : didPay
                           ? "bg-emerald-600 text-white"
                           : "bg-emerald-100 text-emerald-800"
                       }`}
                       onClick={() => {
+                        if (formStarted) return;
                         setDidPay(true);
                         setPayWarning("success");
                         setPayFeedback("yes");
@@ -577,12 +589,16 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
 
                   <div className="flex items-center gap-2">
                     <button
+                      disabled={formStarted}
                       className={`px-3 py-1 rounded text-xs ${
-                        !didPay && payFeedback === "no"
+                        formStarted
+                          ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                          : !didPay && payFeedback === "no"
                           ? "bg-red-600 text-white"
                           : "bg-gray-200 text-gray-800"
                       }`}
                       onClick={() => {
+                        if (formStarted) return;
                         setDidPay(false);
                         setPayWarning("error");
                         setPayFeedback("no");
@@ -607,27 +623,56 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
                   Did you send the payment screenshot on WhatsApp?
                 </div>
 
-                <div className="flex items-center gap-2 mt-2">
-                  <button
-                    className={`px-3 py-1 rounded text-xs font-semibold ${
-                      didSendProof
-                        ? "bg-emerald-600 text-white"
-                        : "bg-emerald-100 text-emerald-800"
-                    }`}
-                    onClick={() => {
-                      setDidSendProof(true);
-                    }}
-                  >
-                    Yes, I sent it
-                  </button>
-                  <button
-                    className="px-3 py-1 rounded text-xs bg-gray-200 text-gray-800"
-                    onClick={() => {
-                      setDidSendProof(false);
-                    }}
-                  >
-                    Not yet
-                  </button>
+                <div className="flex flex-col gap-2 mt-2">
+                  <div className="flex items-center gap-2">
+                    <button
+                      disabled={formStarted}
+                      className={`px-3 py-1 rounded text-xs font-semibold ${
+                        formStarted
+                          ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                          : didSendProof
+                          ? "bg-emerald-600 text-white"
+                          : "bg-emerald-100 text-emerald-800"
+                      }`}
+                      onClick={() => {
+                        if (formStarted) return;
+                        setDidSendProof(true);
+                        setProofFeedback("yes");
+                      }}
+                    >
+                      Yes, I sent it
+                    </button>
+                    {proofFeedback === "yes" && (
+                      <span className="text-emerald-600 text-xs font-semibold animate-pulse">
+                        ✔ Screenshot sent
+                      </span>
+                    )}
+                  </div>
+
+                  <div className="flex items-center gap-2">
+                    <button
+                      disabled={formStarted}
+                      className={`px-3 py-1 rounded text-xs ${
+                        formStarted
+                          ? "bg-gray-200 text-gray-400 cursor-not-allowed"
+                          : proofFeedback === "no"
+                          ? "bg-red-600 text-white"
+                          : "bg-gray-200 text-gray-800"
+                      }`}
+                      onClick={() => {
+                        if (formStarted) return;
+                        setDidSendProof(false);
+                        setProofFeedback("no");
+                      }}
+                    >
+                      Not yet
+                    </button>
+                    {proofFeedback === "no" && (
+                      <span className="text-red-600 text-xs font-semibold animate-pulse">
+                        ⚠ Send screenshot to unlock the form below
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
             )}
@@ -657,43 +702,64 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
               </div>
             )}
 
-            <input
-              className={`w-full border rounded px-3 py-2 mb-2 ${
-                formDisabled ? "bg-gray-100 cursor-not-allowed" : ""
-              }`}
-              placeholder="Name"
-              value={nameField}
-              onChange={(e) => setName(e.target.value)}
-              disabled={formDisabled}
-            />
-            <input
-              className={`w-full border rounded px-3 py-2 mb-2 ${
-                formDisabled ? "bg-gray-100 cursor-not-allowed" : ""
-              }`}
-              placeholder="Phone Number"
-              value={phoneField}
-              onChange={(e) => setPhone(e.target.value)}
-              disabled={formDisabled}
-            />
-            <input
-              className={`w-full border rounded px-3 py-2 mb-3 ${
-                formDisabled ? "bg-gray-100 cursor-not-allowed" : ""
-              }`}
-              type="email"
-              required
-              placeholder="Email"
-              value={emailField}
-              onChange={(e) => setEmailField(e.target.value)}
-              disabled={formDisabled}
-            />
-
-            <button
-              className="w-full py-3 rounded bg-emerald-600 text-white text-lg font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
-              onClick={submitRequest}
-              disabled={submitDisabled}
+            {/* FORM BLOCK — red effect when Not yet (proof) */}
+            <div
+              className={
+                proofFeedback === "no"
+                  ? "border border-red-300 bg-red-50 rounded p-2 animate-pulse"
+                  : ""
+              }
             >
-              Submit
-            </button>
+              <input
+                className={`w-full border rounded px-3 py-2 mb-2 ${
+                  formDisabled ? "bg-gray-100 cursor-not-allowed" : ""
+                }`}
+                placeholder="Name"
+                value={nameField}
+                onFocus={markFormStarted}
+                onChange={(e) => {
+                  markFormStarted();
+                  setName(e.target.value);
+                }}
+                disabled={formDisabled}
+              />
+              <input
+                className={`w-full border rounded px-3 py-2 mb-2 ${
+                  formDisabled ? "bg-gray-100 cursor-not-allowed" : ""
+                }`}
+                placeholder="Phone Number"
+                value={phoneField}
+                onFocus={markFormStarted}
+                onChange={(e) => {
+                  markFormStarted();
+                  setPhone(e.target.value);
+                }}
+                disabled={formDisabled}
+              />
+              <input
+                className={`w-full border rounded px-3 py-2 mb-3 ${
+                  formDisabled ? "bg-gray-100 cursor-not-allowed" : ""
+                }`}
+                type="email"
+                required
+                placeholder="Email"
+                value={emailField}
+                onFocus={markFormStarted}
+                onChange={(e) => {
+                  markFormStarted();
+                  setEmailField(e.target.value);
+                }}
+                disabled={formDisabled}
+              />
+
+              <button
+                className="w-full py-3 rounded bg-emerald-600 text-white text-lg font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
+                onClick={submitRequest}
+                disabled={submitDisabled}
+              >
+                Submit
+              </button>
+            </div>
 
             {meta.trialDays > 0 && (
               <div className="text-[11px] text-gray-500 mt-3">
