@@ -24,7 +24,7 @@ import GroupKeyBridge from "./pages/GroupKeyBridge.jsx";
 
 /* ---------- Main Pages ---------- */
 import HomePage from "./pages/HomePage.jsx";
-import ArticlesPage from "./pages/ArticlesPage.jsx";
+import ArticlesPage from "./pages/ArticlesPage.jsx"];
 import NewsPage from "./pages/NewsPage.jsx";
 import VideosPage from "./pages/VideosPage.jsx";
 import PodcastsPage from "./pages/PodcastsPage.jsx";
@@ -135,197 +135,198 @@ function ClassroomWrapper({ children }) {
 }
 
 /* ---------- Main ---------- */
+function AppContent() {
+  const location = useLocation();
+
+  const isPrepHome = location.pathname === "/prep";
+
+  return (
+    <div
+      className={`text-[#0b1220] min-h-screen font-inter antialiased flex flex-col ${
+        isPrepHome
+          ? "bg-transparent"
+          : "bg-gradient-to-br from-[#f8fafc] to-[#e6edf5]"
+      }`}
+    >
+      {/* Sticky Navbar */}
+      <nav className="bg-white/70 backdrop-blur-md shadow-md sticky top-0 z-50">
+        <Navbar />
+      </nav>
+
+      <ScrollToHash />
+
+      <div className="animate-fadeIn flex-1">
+        <Routes>
+          {/* ---------- Public Pages ---------- */}
+          <Route path="/" element={<HomePage />} />
+          <Route path="/articles" element={<ArticlesPage />} />
+          <Route path="/news" element={<NewsPage />} />
+          <Route path="/videos" element={<VideosPage />} />
+          <Route path="/podcasts" element={<PodcastsPage />} />
+          <Route path="/notebook" element={<NotebookPage />} />
+          <Route path="/scholar" element={<ScholarPage />} />
+          <Route path="/plagiarism" element={<Plagiarism />} />
+          <Route path="/pdfdemo" element={<PdfDemo />} />
+
+          {/* LIVE */}
+          <Route path="/live" element={<LiveChannelPage />} />
+          <Route
+            path="/admin/live"
+            element={
+              <AdminRoute>
+                <LiveAdminPage />
+              </AdminRoute>
+            }
+          />
+
+          {/* Classroom */}
+          <Route
+            path="/classroom"
+            element={
+              <ClassroomWrapper>
+                <ClassroomLivePage />
+              </ClassroomWrapper>
+            }
+          />
+          <Route path="/classroom/share" element={<ClassroomSharePage />} />
+          <Route path="/classroom/ambience" element={<AmbiencePage />} />
+          <Route path="/classroom/theme" element={<ThemeFocusPage />} />
+
+          {/* Bridge */}
+          <Route
+            path="/bridge/gk/:key/t/:token"
+            element={<GroupKeyBridge />}
+          />
+
+          {/* Admin Classroom */}
+          <Route
+            path="/admin/classroom-link"
+            element={
+              <AdminRoute>
+                <ClassroomLinkCreator />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/classroom"
+            element={
+              <AdminRoute>
+                <AdminLectureManager />
+              </AdminRoute>
+            }
+          />
+
+          {/* Exam Prep */}
+          <Route path="/prep" element={<PrepList />} />
+          <Route path="/prep/:examId" element={<PrepWizard />} />
+
+          <Route
+            path="/admin/prep"
+            element={
+              <AdminRoute>
+                <AdminPrepPanel />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/prep-overlay"
+            element={
+              <AdminRoute>
+                <PrepOverlayEditor />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/prep-access"
+            element={
+              <AdminRoute>
+                <PrepAccessAdmin />
+              </AdminRoute>
+            }
+          />
+
+          {/* Test Series */}
+          <Route path="/tests" element={<TestDashboard />} />
+          <Route
+            path="/tests/:code"
+            element={<RouteWithCode Comp={TestIntro} />}
+          />
+          <Route
+            path="/tests/:code/play"
+            element={<RouteWithCode Comp={TestPlayer} />}
+          />
+          <Route
+            path="/tests/result/:id"
+            element={<RouteWithResultId Comp={ResultScreen} />}
+          />
+
+          {/* Owner Admin */}
+          <Route
+            path="/owner/tests/import"
+            element={
+              <IfOwnerOnly>
+                <AdminTestImporter />
+              </IfOwnerOnly>
+            }
+          />
+          <Route
+            path="/owner/tests/results"
+            element={
+              <IfOwnerOnly>
+                <AdminTestResults />
+              </IfOwnerOnly>
+            }
+          />
+          <Route
+            path="/owner/tests"
+            element={
+              <IfOwnerOnly>
+                <AdminTestManager />
+              </IfOwnerOnly>
+            }
+          />
+
+          {/* Admin Pages */}
+          <Route path="/admin/login" element={<AdminLogin />} />
+          <Route
+            path="/admin/dashboard"
+            element={
+              <AdminRoute>
+                <AdminDashboard />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/consultancy"
+            element={
+              <AdminRoute>
+                <AdminConsultancyEditor />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/footer"
+            element={
+              <AdminRoute>
+                <AdminFooterTermsEditor />
+              </AdminRoute>
+            }
+          />
+
+          {/* 404 */}
+          <Route path="*" element={<NotFound />} />
+        </Routes>
+      </div>
+
+      <Footer />
+    </div>
+  );
+}
+
 export default function App() {
   return (
     <Router>
-      <div className="bg-gradient-to-br from-[#f8fafc] to-[#e6edf5] text-[#0b1220] min-h-screen font-inter antialiased flex flex-col">
-        {/* Sticky Navbar */}
-        <nav className="bg-white/70 backdrop-blur-md shadow-md sticky top-0 z-50">
-          <Navbar />
-        </nav>
-
-        <ScrollToHash />
-
-        <div className="animate-fadeIn flex-1">
-          <Routes>
-            {/* ---------- Public Pages ---------- */}
-            <Route path="/" element={<HomePage />} />
-            <Route path="/articles" element={<ArticlesPage />} />
-            <Route path="/news" element={<NewsPage />} />
-            <Route path="/videos" element={<VideosPage />} />
-            <Route path="/podcasts" element={<PodcastsPage />} />
-            <Route path="/notebook" element={<NotebookPage />} />
-            <Route path="/scholar" element={<ScholarPage />} />
-            <Route path="/plagiarism" element={<Plagiarism />} />
-            <Route path="/pdfdemo" element={<PdfDemo />} />
-
-            {/* ✅ LIVE Channel */}
-            <Route path="/live" element={<LiveChannelPage />} />
-            <Route
-              path="/admin/live"
-              element={
-                <AdminRoute>
-                  <LiveAdminPage />
-                </AdminRoute>
-              }
-            />
-
-            {/* ✅ Classroom — Drawer visible only here */}
-            <Route
-              path="/classroom"
-              element={
-                <ClassroomWrapper>
-                  <ClassroomLivePage />
-                </ClassroomWrapper>
-              }
-            />
-            <Route path="/classroom/share" element={<ClassroomSharePage />} />
-
-            {/* 🆕 NEW: Ambience route */}
-            <Route path="/classroom/ambience" element={<AmbiencePage />} />
-            <Route path="/classroom/theme" element={<ThemeFocusPage />} />
-
-            {/* 🆕 NEW: Group Key Bridge route */}
-            <Route
-              path="/bridge/gk/:key/t/:token"
-              element={<GroupKeyBridge />}
-            />
-
-            <Route
-              path="/admin/classroom-link"
-              element={
-                <AdminRoute>
-                  <ClassroomLinkCreator />
-                </AdminRoute>
-              }
-            />
-            <Route
-              path="/admin/classroom"
-              element={
-                <AdminRoute>
-                  <AdminLectureManager />
-                </AdminRoute>
-              }
-            />
-
-            {/* ✅ Research Drafting */}
-            <Route path="/research-drafting" element={<ResearchDrafting />} />
-            <Route
-              path="/research-drafting/lab/:id"
-              element={<ResearchDraftingLab />}
-            />
-            <Route
-              path="/admin/research-drafting"
-              element={
-                <IfOwnerOnly>
-                  <AdminResearchPanel />
-                </IfOwnerOnly>
-              }
-            />
-
-            {/* ✅ Exam Prep */}
-            <Route path="/prep" element={<PrepList />} />
-            <Route path="/prep/:examId" element={<PrepWizard />} />
-            <Route
-              path="/admin/prep"
-              element={
-                <AdminRoute>
-                  <AdminPrepPanel />
-                </AdminRoute>
-              }
-            />
-            <Route
-              path="/admin/prep-overlay"
-              element={
-                <AdminRoute>
-                  <PrepOverlayEditor />
-                </AdminRoute>
-              }
-            />
-            <Route
-              path="/admin/prep-access"
-              element={
-                <AdminRoute>
-                  <PrepAccessAdmin />
-                </AdminRoute>
-              }
-            />
-
-            {/* ✅ Test Series */}
-            <Route path="/tests" element={<TestDashboard />} />
-            <Route
-              path="/tests/:code"
-              element={<RouteWithCode Comp={TestIntro} />}
-            />
-            <Route
-              path="/tests/:code/play"
-              element={<RouteWithCode Comp={TestPlayer} />}
-            />
-            <Route
-              path="/tests/result/:id"
-              element={<RouteWithResultId Comp={ResultScreen} />}
-            />
-
-            {/* ✅ Admin Test Tools */}
-            <Route
-              path="/owner/tests/import"
-              element={
-                <IfOwnerOnly>
-                  <AdminTestImporter />
-                </IfOwnerOnly>
-              }
-            />
-            <Route
-              path="/owner/tests/results"
-              element={
-                <IfOwnerOnly>
-                  <AdminTestResults />
-                </IfOwnerOnly>
-              }
-            />
-            <Route
-              path="/owner/tests"
-              element={
-                <IfOwnerOnly>
-                  <AdminTestManager />
-                </IfOwnerOnly>
-              }
-            />
-
-            {/* ✅ Admin Pages */}
-            <Route path="/admin/login" element={<AdminLogin />} />
-            <Route
-              path="/admin/dashboard"
-              element={
-                <AdminRoute>
-                  <AdminDashboard />
-                </AdminRoute>
-              }
-            />
-            <Route
-              path="/admin/consultancy"
-              element={
-                <AdminRoute>
-                  <AdminConsultancyEditor />
-                </AdminRoute>
-              }
-            />
-            <Route
-              path="/admin/footer"
-              element={
-                <AdminRoute>
-                  <AdminFooterTermsEditor />
-                </AdminRoute>
-              }
-            />
-
-            {/* 404 */}
-            <Route path="*" element={<NotFound />} />
-          </Routes>
-        </div>
-
-        <Footer />
-      </div>
+      <AppContent />
     </Router>
   );
 }
