@@ -7,44 +7,46 @@ const SLIDES = [
   "/backgrounds/bg3.png",
 ];
 
+// fallback image if exam image missing
 const FALLBACK_IMG = "/backgrounds/bg1.png";
 
 export default function PrepList() {
   const [exams, setExams] = useState([]);
   const [bgIndex, setBgIndex] = useState(0);
 
-  // Load exam list
+  // Fetch exam list
   useEffect(() => {
     getJSON("/api/prep/exams")
       .then((r) => setExams(r.exams || []))
       .catch(() => {});
   }, []);
 
-  // Background slideshow
+  // Background crossfade slideshow
   useEffect(() => {
-    const interval = setInterval(() => {
-      setBgIndex((prev) => (prev + 1) % SLIDES.length);
-    }, 4000);
+    const interval = setInterval(
+      () => setBgIndex((prev) => (prev + 1) % SLIDES.length),
+      4000
+    );
     return () => clearInterval(interval);
   }, []);
 
   return (
     <div className="relative min-h-screen">
 
-      {/* 🔥 BACKGROUND CROSSFADE */}
+      {/* BACKGROUND CROSSFADE */}
       <div className="absolute inset-0 overflow-hidden z-0">
         {SLIDES.map((src, idx) => (
           <img
             key={idx}
             src={src}
+            alt=""
             className={
               "absolute inset-0 w-full h-full object-cover transition-opacity duration-[1500ms]" +
               (idx === bgIndex ? " opacity-100" : " opacity-0")
             }
-            alt=""
           />
         ))}
-        <div className="absolute inset-0 bg-black/25"></div>
+        <div className="absolute inset-0 bg-black/20"></div>
       </div>
 
       {/* CONTENT */}
@@ -53,7 +55,6 @@ export default function PrepList() {
           Preparation
         </h1>
 
-        {/* ===== Exam Cards ===== */}
         <div className="grid sm:grid-cols-2 lg:grid-cols-3 gap-6">
 
           {exams.map((ex) => {
@@ -68,67 +69,81 @@ export default function PrepList() {
                   relative
                   rounded-xl
                   overflow-hidden
-                  shadow-lg
+                  shadow-xl
                   border border-white/20
                   backdrop-blur-sm
                   transition
                   hover:scale-[1.03]
+                  hover:shadow-[0_0_25px_rgba(255,255,255,0.4)]
+                  h-[120px]
+                  block
                 "
-                style={{ height: "180px" }}   // 🔥 FIXED SMALL CARD SIZE
               >
+
+                {/* GLOW BEHIND */}
+                <div
+                  className="
+                    absolute inset-0
+                    rounded-xl
+                    opacity-60
+                    blur-xl
+                    bg-gradient-to-br from-blue-400/40 to-purple-400/40
+                    group-hover:opacity-90
+                    transition
+                  "
+                ></div>
 
                 {/* IMAGE */}
                 <img
                   src={examImg}
                   onError={(e) => (e.target.src = FALLBACK_IMG)}
-                  className="
-                    absolute inset-0 w-full h-full object-cover 
-                    group-hover:scale-105 transition duration-500
-                  "
                   alt=""
+                  className="
+                    absolute inset-0 
+                    w-full h-full object-cover 
+                    opacity-70
+                    group-hover:opacity-90 
+                    group-hover:scale-105 
+                    transition duration-500
+                    rounded-xl
+                  "
                 />
 
-                {/* OVERLAY */}
-                <div className="absolute inset-0 bg-black/40"></div>
+                {/* DARK OVERLAY */}
+                <div className="absolute inset-0 bg-black/35 rounded-xl"></div>
 
-                {/* TEXT ON IMAGE */}
-                <div className="relative z-10 p-4 text-white flex flex-col justify-end h-full">
+                {/* TEXT CONTENT */}
+                <div className="relative z-10 p-3 text-white flex flex-col justify-end h-full">
 
                   {/* BADGE */}
                   <span
                     className="
                       absolute top-2 left-2 
-                      px-2 py-1 bg-white/20 
+                      px-2 py-0.5 bg-white/25 
                       text-xs rounded-full 
                       backdrop-blur-md
+                      shadow
                     "
                   >
                     {ex.examId}
                   </span>
 
-                  <div className="text-lg font-semibold drop-shadow">
+                  <div className="text-sm font-semibold leading-tight drop-shadow-lg">
                     {ex.name}
                   </div>
 
-                  <div
-                    className="
-                      text-sm text-blue-200 
-                      font-medium mt-1
-                    "
-                  >
+                  <div className="text-xs text-blue-200 mt-0.5 drop-shadow">
                     Resume →
                   </div>
                 </div>
-
               </a>
             );
           })}
 
           {exams.length === 0 && (
-            <div className="text-gray-100 text-lg drop-shadow">
-              No exams yet.
-            </div>
+            <div className="text-gray-100 text-lg drop-shadow">No exams yet.</div>
           )}
+
         </div>
       </div>
     </div>
