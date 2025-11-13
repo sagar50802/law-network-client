@@ -22,7 +22,6 @@ import AmbiencePage from "./pages/classroom/AmbiencePage.jsx";
 /* ---------- 🆕 NEW: Group Key Bridge ---------- */
 import GroupKeyBridge from "./pages/GroupKeyBridge.jsx";
 
-
 /* ---------- Main Pages ---------- */
 import HomePage from "./pages/HomePage.jsx";
 import ArticlesPage from "./pages/ArticlesPage.jsx";
@@ -135,11 +134,24 @@ function ClassroomWrapper({ children }) {
   );
 }
 
-/* ---------- Main ---------- */
+/* ===========================================================
+ *                     MAIN APP COMPONENT
+ * =========================================================== */
 export default function App() {
+  const location = useLocation(); // ← ADDED
+
+  // Dynamic background: transparent ONLY for /prep
+  const isPrepPage = location.pathname.startsWith("/prep");
+
   return (
     <Router>
-      <div className="bg-gradient-to-br from-[#f8fafc] to-[#e6edf5] text-[#0b1220] min-h-screen font-inter antialiased flex flex-col">
+      <div
+        className={`text-[#0b1220] min-h-screen font-inter antialiased flex flex-col ${
+          isPrepPage
+            ? "bg-transparent"
+            : "bg-gradient-to-br from-[#f8fafc] to-[#e6edf5]"
+        }`}
+      >
         {/* Sticky Navbar */}
         <nav className="bg-white/70 backdrop-blur-md shadow-md sticky top-0 z-50">
           <Navbar />
@@ -160,7 +172,7 @@ export default function App() {
             <Route path="/plagiarism" element={<Plagiarism />} />
             <Route path="/pdfdemo" element={<PdfDemo />} />
 
-            {/* ✅ LIVE Channel */}
+            {/* LIVE Channel */}
             <Route path="/live" element={<LiveChannelPage />} />
             <Route
               path="/admin/live"
@@ -171,7 +183,7 @@ export default function App() {
               }
             />
 
-            {/* ✅ Classroom — Drawer visible only here */}
+            {/* Classroom */}
             <Route
               path="/classroom"
               element={
@@ -181,12 +193,10 @@ export default function App() {
               }
             />
             <Route path="/classroom/share" element={<ClassroomSharePage />} />
-
-            {/* 🆕 NEW: Ambience route */}
             <Route path="/classroom/ambience" element={<AmbiencePage />} />
             <Route path="/classroom/theme" element={<ThemeFocusPage />} />
 
-            {/* 🆕 NEW: Group Key Bridge route */}
+            {/* Group Key Bridge */}
             <Route
               path="/bridge/gk/:key/t/:token"
               element={<GroupKeyBridge />}
@@ -209,7 +219,7 @@ export default function App() {
               }
             />
 
-            {/* ✅ Research Drafting */}
+            {/* Research Drafting */}
             <Route path="/research-drafting" element={<ResearchDrafting />} />
             <Route
               path="/research-drafting/lab/:id"
@@ -224,7 +234,7 @@ export default function App() {
               }
             />
 
-            {/* ✅ Exam Prep */}
+            {/* Exam Prep */}
             <Route path="/prep" element={<PrepList />} />
             <Route path="/prep/:examId" element={<PrepWizard />} />
             <Route
@@ -252,7 +262,7 @@ export default function App() {
               }
             />
 
-            {/* ✅ Test Series */}
+            {/* Test Series */}
             <Route path="/tests" element={<TestDashboard />} />
             <Route
               path="/tests/:code"
@@ -267,7 +277,7 @@ export default function App() {
               element={<RouteWithResultId Comp={ResultScreen} />}
             />
 
-            {/* ✅ Admin Test Tools */}
+            {/* Admin Test Tools */}
             <Route
               path="/owner/tests/import"
               element={
@@ -293,7 +303,7 @@ export default function App() {
               }
             />
 
-            {/* ✅ Admin Pages */}
+            {/* Admin Pages */}
             <Route path="/admin/login" element={<AdminLogin />} />
             <Route
               path="/admin/dashboard"
