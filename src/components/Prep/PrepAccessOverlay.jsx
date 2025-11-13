@@ -88,6 +88,12 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
 
   const firstGuardDoneRef = useRef(false);
 
+  // 🔹 NEW: UX state for confirmations & flow
+  const [didPay, setDidPay] = useState(false);
+  const [didSendProof, setDidSendProof] = useState(false);
+  const [showPayConfirm, setShowPayConfirm] = useState(false);
+  const [showProofConfirm, setShowProofConfirm] = useState(false);
+
   /* --------------------------------------------------
    * ✅ Fetch Exam Meta (public endpoint)
    * -------------------------------------------------- */
@@ -123,73 +129,74 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
    * ✅ Guard — Determine if user already has access
    * (Calls /api/prep/access/status/guard)
    * -------------------------------------------------- */
-   async function fetchGuard() {
-  if (!examId) return;
+  async function fetchGuard() {
+    if (!examId) return;
 
-  // Expire stale waiting state (15min)
-  const startedAt = Number(localStorage.getItem(ks.waitAt) || 0);
-  if (startedAt && Date.now() - startedAt > 15 * 60 * 1000) {
-    localStorage.removeItem(ks.wait);
-    localStorage.removeItem(ks.waitAt);
-  }
-  const keepWaiting = !!localStorage.getItem(ks.wait);
-
-  try {
-    const qs = new URLSearchParams({
-      examId,
-      email: emailField || email || "",
-    });
-
-    // ✅ add cache-buster to avoid stale responses
-    const r = await getJSON(`/api/prep/access/status/guard?${qs.toString()}&_=${Date.now()}`);
-    const { access, overlay } = r || {};
-
-    if (access?.status === "active") {
-      // ✅ already has access — hide overlay
-      console.log(
-        "[PrepAccessOverlay] ✅ Access already active — overlay hidden for",
-        emailField || email,
-        "exam:",
-        examId
-      );
-      setState((s) => ({ ...s, show: false, mode: "", access }));
+    // Expire stale waiting state (15min)
+    const startedAt = Number(localStorage.getItem(ks.waitAt) || 0);
+    if (startedAt && Date.now() - startedAt > 15 * 60 * 1000) {
       localStorage.removeItem(ks.wait);
       localStorage.removeItem(ks.waitAt);
+    }
+    const keepWaiting = !!localStorage.getItem(ks.wait);
+
+    try {
+      const qs = new URLSearchParams({
+        examId,
+        email: emailField || email || "",
+      });
+
+      // ✅ add cache-buster to avoid stale responses
+      const r = await getJSON(
+        `/api/prep/access/status/guard?${qs.toString()}&_=${Date.now()}`
+      );
+      const { access, overlay } = r || {};
+
+      if (access?.status === "active") {
+        // ✅ already has access — hide overlay
+        console.log(
+          "[PrepAccessOverlay] ✅ Access already active — overlay hidden for",
+          emailField || email,
+          "exam:",
+          examId
+        );
+        setState((s) => ({ ...s, show: false, mode: "", access }));
+        localStorage.removeItem(ks.wait);
+        localStorage.removeItem(ks.waitAt);
+        localStorage.removeItem(ks.approved);
+        firstGuardDoneRef.current = true;
+        return;
+      }
+
+      // ✅ handle trial access
+      if (access?.status === "trial") {
+        setState((s) => ({ ...s, show: false, mode: "trial", access }));
+        firstGuardDoneRef.current = true;
+        return;
+      }
+
+      // ✅ reset stale states before showing purchase/wait screen
       localStorage.removeItem(ks.approved);
+      localStorage.removeItem(ks.wait);
+      localStorage.removeItem(ks.waitAt);
+
+      let mode = overlay?.mode || "purchase";
+      if (keepWaiting) mode = "waiting";
+
+      setState((s) => ({ ...s, loading: false, show: true, mode, access }));
       firstGuardDoneRef.current = true;
-      return;
-    }
-
-    // ✅ handle trial access
-    if (access?.status === "trial") {
-      setState((s) => ({ ...s, show: false, mode: "trial", access }));
+    } catch (e) {
+      console.error("[status/guard] failed:", e);
+      setState((s) => ({
+        ...s,
+        loading: false,
+        show: true,
+        mode: "purchase",
+        error: "Could not verify access",
+      }));
       firstGuardDoneRef.current = true;
-      return;
     }
-
-    // ✅ reset stale states before showing purchase/wait screen
-    localStorage.removeItem(ks.approved);
-    localStorage.removeItem(ks.wait);
-    localStorage.removeItem(ks.waitAt);
-
-    let mode = overlay?.mode || "purchase";
-    if (keepWaiting) mode = "waiting";
-
-    setState((s) => ({ ...s, loading: false, show: true, mode, access }));
-    firstGuardDoneRef.current = true;
-  } catch (e) {
-    console.error("[status/guard] failed:", e);
-    setState((s) => ({
-      ...s,
-      loading: false,
-      show: true,
-      mode: "purchase",
-      error: "Could not verify access",
-    }));
-    firstGuardDoneRef.current = true;
   }
-}
-
 
   /* --------------------------------------------------
    * Lifecycle Hooks
@@ -230,7 +237,8 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
     if (state.mode !== "approved") return;
     const tick = () => {
       const until = Number(localStorage.getItem(ks.approved) || 0);
-      const left = until > Date.now() ? Math.ceil((until - Date.now()) / 1000) : 0;
+      const left =
+        until > Date.now() ? Math.ceil((until - Date.now()) / 1000) : 0;
       setApproveLeft(clamp(left, 0, APPROVE_SECONDS));
       if (left <= 0) unlockNow(true);
     };
@@ -249,7 +257,9 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
       if (stop) return;
       try {
         const qs = new URLSearchParams({ examId, email: emailField });
-        const j = await getJSON(`/api/prep/access/request/status?${qs.toString()}`);
+        const j = await getJSON(
+          `/api/prep/access/request/status?${qs.toString()}`
+        );
 
         if (j?.status === "approved") {
           const until = Date.now() + APPROVE_SECONDS * 1000;
@@ -317,14 +327,16 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
           priceINR ? `&am=${encodeURIComponent(priceINR)}` : ""
         }&cu=INR&tn=${encodeURIComponent(`Payment for ${courseName}`)}`
       : "";
-    const waLink = wa ? `https://wa.me/${wa}?text=${encodeURIComponent(waText)}` : "";
+    const waLink = wa
+      ? `https://wa.me/${wa}?text=${encodeURIComponent(waText)}`
+      : "";
     return { courseName, priceINR, upiId, upiName, upiLink, wa, waLink };
   }, [meta, examId]);
 
   const isAndroid = /Android/i.test(navigator.userAgent);
 
   /* --------------------------------------------------
-   * ✅ submitRequest (unchanged)
+   * ✅ submitRequest (with added note flags)
    * -------------------------------------------------- */
   async function submitRequest() {
     if (state.mode === "waiting") return;
@@ -339,6 +351,8 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
       name: nameField,
       phone: phoneField,
       note: [
+        didPay ? "user_confirmed_payment=1" : "",
+        didSendProof ? "user_sent_proof=1" : "",
         upiStartTs ? "upi_clicked=1" : "",
         waStartTs ? "wa_clicked=1" : "",
       ]
@@ -416,8 +430,13 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
       ? `Approved — unlocking in ${approveLeft || APPROVE_SECONDS}s`
       : `Start / Restart — ${pay.courseName}`;
 
+  const formDisabled = !didPay || !didSendProof;
+
   const submitDisabled =
-    submitting || state.mode === "waiting" || !(emailField && emailField.trim());
+    submitting ||
+    state.mode === "waiting" ||
+    !(emailField && emailField.trim()) ||
+    formDisabled;
 
   return (
     <div className="fixed inset-0 z-[99999] bg-black/60 backdrop-blur-sm flex items-center justify-center p-4">
@@ -455,7 +474,13 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
         {/* PURCHASE */}
         {state.mode !== "waiting" && state.mode !== "approved" && (
           <>
-            <div className="flex items-center justify-between text-xs mb-3">
+            {/* 🔔 Blinking instruction banner */}
+            <div className="text-[11px] bg-yellow-50 text-yellow-900 border border-yellow-200 rounded px-3 py-2 mb-3 animate-pulse">
+              Step 1: Pay via UPI → Step 2: Send screenshot on WhatsApp → Step 3:
+              Fill your details and tap Submit.
+            </div>
+
+            <div className="Flex items-center justify-between text-xs mb-3">
               <Step n={1} label="Pay via UPI" />
               <div className="flex-1 h-px bg-gray-200 mx-2" />
               <Step n={2} label="Send Proof" />
@@ -476,6 +501,7 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
                   localStorage.setItem(ks.upiStart, String(now));
                   setUpiStartTs(now);
                   window.location.href = pay.upiLink;
+                  setShowPayConfirm(true); // show step-1 confirmation when user returns
                 }}
                 disabled={!pay.upiLink}
               >
@@ -493,12 +519,67 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
                   localStorage.setItem(ks.waStart, String(now));
                   setWaStartTs(now);
                   window.open(pay.waLink, "_blank", "noopener,noreferrer");
+                  setShowProofConfirm(true); // show step-2 confirmation
                 }}
                 disabled={!pay.waLink}
               >
                 Send Proof on WhatsApp
               </button>
             </div>
+
+            {/* 🔹 Step-1 confirmation: did user pay? */}
+            {showPayConfirm && (
+              <div className="p-2 bg-blue-50 border border-blue-200 rounded text-sm mb-3">
+                <div className="font-medium mb-1">
+                  Did you complete the UPI payment?
+                </div>
+                <div className="flex gap-3 mt-1">
+                  <button
+                    onClick={() => {
+                      setDidPay(true);
+                    }}
+                    className="px-3 py-1 rounded bg-emerald-600 text-white text-xs font-semibold"
+                  >
+                    Yes, I paid
+                  </button>
+                  <button
+                    onClick={() => {
+                      setDidPay(false);
+                    }}
+                    className="px-3 py-1 rounded bg-gray-200 text-xs"
+                  >
+                    Not yet
+                  </button>
+                </div>
+              </div>
+            )}
+
+            {/* 🔹 Step-2 confirmation: did user send screenshot? */}
+            {showProofConfirm && (
+              <div className="p-2 bg-yellow-50 border border-yellow-200 rounded text-sm mb-3">
+                <div className="font-medium mb-1">
+                  Did you send the payment screenshot on WhatsApp?
+                </div>
+                <div className="flex gap-3 mt-1">
+                  <button
+                    onClick={() => {
+                      setDidSendProof(true);
+                    }}
+                    className="px-3 py-1 rounded bg-emerald-600 text-white text-xs font-semibold"
+                  >
+                    Yes, I sent it
+                  </button>
+                  <button
+                    onClick={() => {
+                      setDidSendProof(false);
+                    }}
+                    className="px-3 py-1 rounded bg-gray-200 text-xs"
+                  >
+                    Not yet
+                  </button>
+                </div>
+              </div>
+            )}
 
             {!isAndroid && pay.upiId && (
               <div className="text-[12px] text-gray-600 mb-3">
@@ -526,28 +607,37 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
             )}
 
             <input
-              className="w-full border rounded px-3 py-2 mb-2"
+              className={`w-full border rounded px-3 py-2 mb-2 ${
+                formDisabled ? "bg-gray-100 cursor-not-allowed" : ""
+              }`}
               placeholder="Name"
               value={nameField}
               onChange={(e) => setName(e.target.value)}
+              disabled={formDisabled}
             />
             <input
-              className="w-full border rounded px-3 py-2 mb-2"
+              className={`w-full border rounded px-3 py-2 mb-2 ${
+                formDisabled ? "bg-gray-100 cursor-not-allowed" : ""
+              }`}
               placeholder="Phone Number"
               value={phoneField}
               onChange={(e) => setPhone(e.target.value)}
+              disabled={formDisabled}
             />
             <input
-              className="w-full border rounded px-3 py-2 mb-3"
+              className={`w-full border rounded px-3 py-2 mb-3 ${
+                formDisabled ? "bg-gray-100 cursor-not-allowed" : ""
+              }`}
               type="email"
               required
               placeholder="Email"
               value={emailField}
               onChange={(e) => setEmailField(e.target.value)}
+              disabled={formDisabled}
             />
 
             <button
-              className="w-full py-3 rounded bg-emerald-600 text-white text-lg font-semibold disabled:opacity-60"
+              className="w-full py-3 rounded bg-emerald-600 text-white text-lg font-semibold disabled:opacity-60 disabled:cursor-not-allowed"
               onClick={submitRequest}
               disabled={submitDisabled}
             >
