@@ -1,19 +1,16 @@
 import React, { useEffect, useRef } from "react";
 import "./LecturePlaylistSidebar.css";
 
-/**
- * LecturePlaylistSidebar — displays lecture list with active state & click support
- */
 export default function LecturePlaylistSidebar({
   lectures = [],
   currentLectureId,
   onSelectLecture,
   isSwitching = false,
   userRole = "student",
+  forceUnlock = false, // 👈 NEW
 }) {
   const activeRef = useRef(null);
 
-  // 🔄 Auto-scroll the active lecture into view when selected
   useEffect(() => {
     if (activeRef.current) {
       activeRef.current.scrollIntoView({
@@ -40,17 +37,18 @@ export default function LecturePlaylistSidebar({
           const active = lec._id === currentLectureId;
           const accessType = lec.accessType || lec.access_type || "public";
 
-          // ✅ FIX:
-          // The lectures array already includes the ones temporarily unlocked by the share token.
-          // So mark all of them as accessible unless explicitly marked locked.
-          const unlocked =
-            accessType === "public" ||
-            userRole === "admin" ||
-            lec.isAllowed === true ||
-            lec.unlocked === true ||
-            lec.tempUnlocked === true;
+          let isLocked = false;
 
-          const isLocked = !unlocked;
+          if (!forceUnlock) {
+            const unlocked =
+              accessType === "public" ||
+              userRole === "admin" ||
+              lec.isAllowed === true ||
+              lec.unlocked === true ||
+              lec.tempUnlocked === true;
+
+            isLocked = !unlocked;
+          }
 
           const dotClass =
             lec.status === "released"
@@ -69,9 +67,9 @@ export default function LecturePlaylistSidebar({
               disabled={isLocked}
               title={
                 isLocked
-                  ? accessType === "paid"
-                    ? "🔒 Paid — please purchase access"
-                    : "🔒 Private — not accessible"
+                  ? accessType === "protected"
+                    ? "🔒 Private — not accessible"
+                    : "🔒 Locked"
                   : ""
               }
               className={`playlist-item w-full text-left px-3 py-2 rounded-xl text-sm flex items-center justify-between border transition-colors duration-150
@@ -91,7 +89,7 @@ export default function LecturePlaylistSidebar({
                       Upcoming…
                     </span>
                   )}
-                  {isLocked && (
+                  {isLocked && !forceUnlock && (
                     <span className="ml-2 text-[12px] text-yellow-400 flex items-center">
                       🔒
                     </span>
