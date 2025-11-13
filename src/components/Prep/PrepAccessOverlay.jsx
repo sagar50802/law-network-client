@@ -88,11 +88,13 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
 
   const firstGuardDoneRef = useRef(false);
 
-  // 🔹 NEW: UX state for confirmations & flow
+  // 🔹 UX state for confirmations & visual feedback
   const [didPay, setDidPay] = useState(false);
   const [didSendProof, setDidSendProof] = useState(false);
   const [showPayConfirm, setShowPayConfirm] = useState(false);
   const [showProofConfirm, setShowProofConfirm] = useState(false);
+  const [payWarning, setPayWarning] = useState(""); // "success" | "error" | ""
+  const [payFeedback, setPayFeedback] = useState(""); // "yes" | "no" | ""
 
   /* --------------------------------------------------
    * ✅ Fetch Exam Meta (public endpoint)
@@ -519,6 +521,8 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
                 className={`w-full py-3 rounded text-lg font-semibold border ${
                   didPay && pay.waLink
                     ? "bg-white hover:bg-gray-50"
+                    : payWarning === "error"
+                    ? "bg-red-100 border-red-300 text-red-600 animate-pulse cursor-not-allowed"
                     : "bg-gray-200 cursor-not-allowed text-gray-500"
                 }`}
                 onClick={() => {
@@ -548,22 +552,50 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
                   Did you complete the UPI payment?
                 </div>
 
-                <div className="flex gap-3 mt-2">
-                  <button
-                    className="px-3 py-1 bg-emerald-600 text-white rounded text-xs"
-                    onClick={() => {
-                      setDidPay(true);
-                    }}
-                  >
-                    Yes, I paid
-                  </button>
+                <div className="flex flex-col gap-2 mt-2">
+                  <div className="flex items-center gap-2">
+                    <button
+                      className={`px-3 py-1 rounded text-xs font-semibold ${
+                        didPay
+                          ? "bg-emerald-600 text-white"
+                          : "bg-emerald-100 text-emerald-800"
+                      }`}
+                      onClick={() => {
+                        setDidPay(true);
+                        setPayWarning("success");
+                        setPayFeedback("yes");
+                      }}
+                    >
+                      Yes, I paid
+                    </button>
+                    {payFeedback === "yes" && (
+                      <span className="text-emerald-600 text-xs font-semibold animate-pulse">
+                        ✔ Payment confirmed
+                      </span>
+                    )}
+                  </div>
 
-                  <button
-                    className="px-3 py-1 bg-gray-300 rounded text-xs"
-                    onClick={() => setDidPay(false)}
-                  >
-                    Not yet
-                  </button>
+                  <div className="flex items-center gap-2">
+                    <button
+                      className={`px-3 py-1 rounded text-xs ${
+                        !didPay && payFeedback === "no"
+                          ? "bg-red-600 text-white"
+                          : "bg-gray-200 text-gray-800"
+                      }`}
+                      onClick={() => {
+                        setDidPay(false);
+                        setPayWarning("error");
+                        setPayFeedback("no");
+                      }}
+                    >
+                      Not yet
+                    </button>
+                    {payFeedback === "no" && (
+                      <span className="text-red-600 text-xs font-semibold animate-pulse">
+                        ⚠ Pay first to enable WhatsApp step
+                      </span>
+                    )}
+                  </div>
                 </div>
               </div>
             )}
@@ -575,19 +607,24 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
                   Did you send the payment screenshot on WhatsApp?
                 </div>
 
-                <div className="flex gap-3 mt-2">
+                <div className="flex items-center gap-2 mt-2">
                   <button
-                    className="px-3 py-1 bg-emerald-600 text-white rounded text-xs"
+                    className={`px-3 py-1 rounded text-xs font-semibold ${
+                      didSendProof
+                        ? "bg-emerald-600 text-white"
+                        : "bg-emerald-100 text-emerald-800"
+                    }`}
                     onClick={() => {
                       setDidSendProof(true);
                     }}
                   >
                     Yes, I sent it
                   </button>
-
                   <button
-                    className="px-3 py-1 bg-gray-300 rounded text-xs"
-                    onClick={() => setDidSendProof(false)}
+                    className="px-3 py-1 rounded text-xs bg-gray-200 text-gray-800"
+                    onClick={() => {
+                      setDidSendProof(false);
+                    }}
                   >
                     Not yet
                   </button>
