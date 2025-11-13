@@ -480,7 +480,7 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
               Fill your details and tap Submit.
             </div>
 
-            <div className="Flex items-center justify-between text-xs mb-3">
+            <div className="flex items-center justify-between text-xs mb-3">
               <Step n={1} label="Pay via UPI" />
               <div className="flex-1 h-px bg-gray-200 mx-2" />
               <Step n={2} label="Send Proof" />
@@ -488,7 +488,9 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
               <Step n={3} label="Submit" />
             </div>
 
+            {/* STEP BUTTONS */}
             <div className="grid gap-2 mb-3">
+              {/* STEP 1: Pay via UPI */}
               <button
                 className={`w-full py-3 rounded text-white text-lg font-semibold ${
                   pay.upiLink
@@ -497,56 +499,68 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
                 }`}
                 onClick={() => {
                   if (!pay.upiLink) return;
+
                   const now = Date.now();
                   localStorage.setItem(ks.upiStart, String(now));
                   setUpiStartTs(now);
+
+                  // Show confirmation after returning
+                  setShowPayConfirm(true);
+
                   window.location.href = pay.upiLink;
-                  setShowPayConfirm(true); // show step-1 confirmation when user returns
                 }}
                 disabled={!pay.upiLink}
               >
                 Pay via UPI{pay.priceINR ? ` • ₹${pay.priceINR}` : ""}
               </button>
+
+              {/* STEP 2: Send Proof on WhatsApp */}
               <button
                 className={`w-full py-3 rounded text-lg font-semibold border ${
-                  pay.waLink
+                  didPay && pay.waLink
                     ? "bg-white hover:bg-gray-50"
-                    : "bg-gray-100 cursor-not-allowed"
+                    : "bg-gray-200 cursor-not-allowed text-gray-500"
                 }`}
                 onClick={() => {
-                  if (!pay.waLink) return;
+                  if (!didPay || !pay.waLink) return; // must confirm payment first
+
                   const now = Date.now();
                   localStorage.setItem(ks.waStart, String(now));
                   setWaStartTs(now);
+
+                  // Show confirmation after returning
+                  setShowProofConfirm(true);
+
                   window.open(pay.waLink, "_blank", "noopener,noreferrer");
-                  setShowProofConfirm(true); // show step-2 confirmation
                 }}
-                disabled={!pay.waLink}
+                disabled={!didPay || !pay.waLink}
               >
-                Send Proof on WhatsApp
+                {didPay
+                  ? "Send Proof on WhatsApp"
+                  : "Pay First to Enable WhatsApp Step"}
               </button>
             </div>
 
-            {/* 🔹 Step-1 confirmation: did user pay? */}
+            {/* 🔵 Step-1 confirmation: did user pay? */}
             {showPayConfirm && (
-              <div className="p-2 bg-blue-50 border border-blue-200 rounded text-sm mb-3">
-                <div className="font-medium mb-1">
+              <div className="p-3 bg-blue-50 border border-blue-200 rounded mb-3">
+                <div className="font-semibold text-sm">
                   Did you complete the UPI payment?
                 </div>
-                <div className="flex gap-3 mt-1">
+
+                <div className="flex gap-3 mt-2">
                   <button
+                    className="px-3 py-1 bg-emerald-600 text-white rounded text-xs"
                     onClick={() => {
                       setDidPay(true);
                     }}
-                    className="px-3 py-1 rounded bg-emerald-600 text-white text-xs font-semibold"
                   >
                     Yes, I paid
                   </button>
+
                   <button
-                    onClick={() => {
-                      setDidPay(false);
-                    }}
-                    className="px-3 py-1 rounded bg-gray-200 text-xs"
+                    className="px-3 py-1 bg-gray-300 rounded text-xs"
+                    onClick={() => setDidPay(false)}
                   >
                     Not yet
                   </button>
@@ -554,26 +568,26 @@ export default function PrepAccessOverlay({ examId, email, onApproved }) {
               </div>
             )}
 
-            {/* 🔹 Step-2 confirmation: did user send screenshot? */}
+            {/* 🟡 Step-2 confirmation: did user send screenshot? */}
             {showProofConfirm && (
-              <div className="p-2 bg-yellow-50 border border-yellow-200 rounded text-sm mb-3">
-                <div className="font-medium mb-1">
+              <div className="p-3 bg-yellow-50 border border-yellow-200 rounded mb-3">
+                <div className="font-semibold text-sm">
                   Did you send the payment screenshot on WhatsApp?
                 </div>
-                <div className="flex gap-3 mt-1">
+
+                <div className="flex gap-3 mt-2">
                   <button
+                    className="px-3 py-1 bg-emerald-600 text-white rounded text-xs"
                     onClick={() => {
                       setDidSendProof(true);
                     }}
-                    className="px-3 py-1 rounded bg-emerald-600 text-white text-xs font-semibold"
                   >
                     Yes, I sent it
                   </button>
+
                   <button
-                    onClick={() => {
-                      setDidSendProof(false);
-                    }}
-                    className="px-3 py-1 rounded bg-gray-200 text-xs"
+                    className="px-3 py-1 bg-gray-300 rounded text-xs"
+                    onClick={() => setDidSendProof(false)}
                   >
                     Not yet
                   </button>
