@@ -1,16 +1,54 @@
+import { useEffect } from "react";
+
 import BannerSlider from "../components/BannerSlider";
 import Article from "../components/Article/Article";
 import ConsultancySection from "../components/consultancy/ConsultancySection.jsx";
 import NewsTicker from "../components/NewsTicker.jsx";
 
 export default function HomePage() {
+
+  /* -----------------------------
+     ✔ Background slideshow
+     ✔ ONLY for homepage
+     ✔ Affects ONLY <main> wrapper
+     ✔ No effect on prep pages
+  --------------------------------*/
+  useEffect(() => {
+    const images = [
+      "/backgrounds/bg1.png",
+      "/backgrounds/bg2.png",
+      "/backgrounds/bg3.png"
+    ];
+
+    let i = 0;
+
+    const mainEl = document.querySelector("main.homepage-bg");
+
+    if (!mainEl) return;
+
+    function applySlide() {
+      mainEl.style.backgroundImage = `url(${images[i]})`;
+      mainEl.style.backgroundSize = "cover";
+      mainEl.style.backgroundPosition = "center";
+      mainEl.style.backgroundRepeat = "no-repeat";
+      mainEl.style.backgroundAttachment = "fixed";
+
+      i = (i + 1) % images.length;
+    }
+
+    applySlide();
+    const timer = setInterval(applySlide, 5000);
+
+    return () => clearInterval(timer);
+  }, []);
+
   return (
-    <main className="min-h-screen bg-[#f8fafc]">
+    <main className="homepage-bg min-h-screen">
       <div className="max-w-6xl mx-auto px-4 py-6">
         {/* Hero / Banner */}
         <BannerSlider />
 
-        {/* News ticker (horizontal, just below banner) */}
+        {/* News ticker */}
         <NewsTicker />
 
         {/* Title + Description */}
@@ -21,9 +59,9 @@ export default function HomePage() {
           Select a section from the navigation above.
         </p>
 
-        {/* ===== 70 / 30 split with ZERO horizontal gap ===== */}
+        {/* ===== 70 / 30 split ===== */}
         <section className="mt-10 grid grid-cols-1 md:grid-cols-[7fr_3fr] gap-0 items-start">
-          {/* Left: Articles (70%). Hide internal admin compose ONLY on the homepage. */}
+          {/* Left: Articles */}
           <div
             className="
               [&_section#articles]:max-w-none
@@ -36,7 +74,7 @@ export default function HomePage() {
             <Article limit={3} />
           </div>
 
-          {/* Right: Consultancy (30%). Remove any default top margin inside. */}
+          {/* Right: Consultancy */}
           <aside className="[&_section]:mt-0">
             <ConsultancySection />
           </aside>
