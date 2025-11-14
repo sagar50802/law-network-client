@@ -22,18 +22,29 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  /* --------------------------------------------
-       AUTO LOAD BACKGROUNDS (any file type)
-  --------------------------------------------- */
+  /* -----------------------------------------------
+     LOAD BACKGROUNDS
+  ----------------------------------------------- */
   useEffect(() => {
-    const imgs = loadBackgroundImages();
-    setBackgrounds(imgs);
+    setBackgrounds(loadBackgroundImages());
   }, []);
 
+  /* -----------------------------------------------
+     SLIDE UPDATE
+  ----------------------------------------------- */
   function updateSlide(idx, patch) {
     setSlides((prev) => {
       const next = [...prev];
-      next[idx] = { ...next[idx], ...patch };
+
+      // sanitize patch
+      const safePatch = {
+        id: patch.id ?? next[idx].id,
+        backgroundUrl: patch.backgroundUrl ?? next[idx].backgroundUrl ?? "",
+        rawText: patch.rawText ?? next[idx].rawText ?? "",
+        highlight: patch.highlight ?? next[idx].highlight ?? "",
+      };
+
+      next[idx] = { ...next[idx], ...safePatch };
       return next;
     });
   }
@@ -41,7 +52,7 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
   function addSlide() {
     setSlides((prev) => [
       ...prev,
-      { ...EMPTY_SLIDE, id: "s" + (prev.length + 1) },
+      { ...EMPTY_SLIDE, id: `s${prev.length + 1}` },
     ]);
   }
 
@@ -49,22 +60,9 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
     setSlides((prev) => prev.filter((_, i) => i !== idx));
   }
 
-  /* ===========================================================
-      ⭐ FIX #1 — ALWAYS sanitize slide data before sending
-      prevents MongoDB validation crash → HTML error → JSON error
-  =========================================================== */
-  function sanitizeSlide(slide, index) {
-    return {
-      id: slide.id || `s${index + 1}`,
-      backgroundUrl: slide.backgroundUrl || "",
-      rawText: slide.rawText || "",
-      highlight: slide.highlight || "",
-    };
-  }
-
-  /* ===========================================================
-      SAVE MAGAZINE
-  =========================================================== */
+  /* -----------------------------------------------
+     SAVE (POST or PUT)
+  ----------------------------------------------- */
   async function handleSave() {
     setSaving(true);
     setError("");
@@ -73,16 +71,20 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
       title,
       subtitle,
       slug: slug || title.toLowerCase().replace(/\s+/g, "-"),
-
-      // ⭐ FIX #1 applied here
-      slides: slides.map((s, i) => sanitizeSlide(s, i)),
+      slides: slides.map((s, i) => ({
+        id: s.id || `s${i + 1}`,
+        backgroundUrl: s.backgroundUrl || "",
+        rawText: s.rawText || "",
+        highlight: s.highlight || "",
+      })),
     };
 
     try {
-      const method = existingIssue ? "PUT" : "POST";
       const url = existingIssue
         ? `/api/magazines/${existingIssue._id}`
         : `/api/magazines`;
+
+      const method = existingIssue ? "PUT" : "POST";
 
       const res = await fetch(url, {
         method,
@@ -92,48 +94,45 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
 
       const text = await res.text();
 
-      /* ======================================================
-          ⭐ FIX #2 — SAFE JSON PARSE
-          prevents "<!DOCTYPE html>" crash
-      ====================================================== */
-      let data = null;
+      let data;
       try {
         data = JSON.parse(text);
       } catch {
-        console.error("Invalid JSON from server:", text);
-        throw new Error("Server returned invalid JSON");
+        console.error("❌ Server returned HTML instead of JSON:\n", text);
+        throw new Error("Server returned invalid JSON (HTML error page)");
       }
 
-      if (!data.ok) throw new Error(data.error || "Save failed");
+      if (!data.ok) {
+        throw new Error(data.error || "Save failed");
+      }
 
       onSaved && onSaved(data.issue);
     } catch (err) {
-      setError(err.message || "Error saving magazine");
+      setError(err.message);
     } finally {
       setSaving(false);
     }
   }
 
-  /* ===========================================================
-      DELETE MAGAZINE (unchanged except JSON safeguard)
-  =========================================================== */
+  /* -----------------------------------------------
+     DELETE MAGAZINE
+  ----------------------------------------------- */
   async function handleDelete() {
     if (!existingIssue) return;
-    if (!window.confirm("Are you sure you want to delete this magazine?"))
-      return;
+    if (!confirm("Delete this magazine?")) return;
 
     try {
       const res = await fetch(`/api/magazines/${existingIssue._id}`, {
         method: "DELETE",
       });
 
-      const text = await res.text();
-      let data;
+      const txt = await res.text();
 
+      let data;
       try {
-        data = JSON.parse(text); // ⭐ FIX #3 — safe parse
+        data = JSON.parse(txt);
       } catch {
-        alert("Server returned invalid JSON");
+        alert("Invalid JSON response from server");
         return;
       }
 
@@ -142,13 +141,16 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
         return;
       }
 
-      alert("Magazine deleted successfully!");
+      alert("Magazine deleted successfully");
       onSaved && onSaved(null);
     } catch {
-      alert("Server error while deleting");
+      alert("Network/server error while deleting");
     }
   }
 
+  /* -----------------------------------------------
+     RENDER UI
+  ----------------------------------------------- */
   return (
     <div className="max-w-5xl mx-auto p-4 md:p-6">
       <h1 className="text-2xl font-bold mb-4">Magazine Editor</h1>
@@ -159,10 +161,10 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
         </div>
       )}
 
-      {/* ---------------- Title / Subtitle / Slug ---------------- */}
+      {/* INPUTS */}
       <div className="grid md:grid-cols-2 gap-4 mb-4">
         <div>
-          <label className="text-xs font-semibold text-gray-700">Title</label>
+          <label className="text-xs font-semibold">Title</label>
           <input
             className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
             value={title}
@@ -171,7 +173,7 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
         </div>
 
         <div>
-          <label className="text-xs font-semibold text-gray-700">Subtitle</label>
+          <label className="text-xs font-semibold">Subtitle</label>
           <input
             className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
             value={subtitle}
@@ -180,7 +182,7 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
         </div>
 
         <div>
-          <label className="text-xs font-semibold text-gray-700">Slug (URL)</label>
+          <label className="text-xs font-semibold">Slug</label>
           <input
             className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
             value={slug}
@@ -189,20 +191,16 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
         </div>
       </div>
 
-      {/* ---------------- Slides ---------------- */}
+      {/* SLIDES */}
       <div className="space-y-4">
         {slides.map((slide, idx) => (
-          <div
-            key={slide.id || idx}
-            className="border rounded-xl p-4 bg-white shadow-sm"
-          >
-            <div className="flex justify-between items-center mb-2">
+          <div key={slide.id} className="border rounded-xl p-4 bg-white shadow-sm">
+            <div className="flex justify-between mb-2">
               <div className="font-semibold text-sm">Slide {idx + 1}</div>
-
               {slides.length > 1 && (
                 <button
                   onClick={() => removeSlide(idx)}
-                  className="text-xs text-red-500 hover:underline"
+                  className="text-xs text-red-500"
                 >
                   Remove
                 </button>
@@ -210,60 +208,42 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
             </div>
 
             <div className="grid md:grid-cols-2 gap-3">
-              {/* Background */}              
+              {/* BACKGROUND */}
               <div>
-                <label className="text-xs font-semibold text-gray-700">
-                  Background Image
-                </label>
+                <label className="text-xs font-semibold">Background Image</label>
 
                 <select
-                  className="mt-1 w-full border rounded-lg px-3 py-1.5 text-xs"
+                  className="mt-1 w-full border rounded px-2 py-2 text-xs"
                   value={slide.backgroundUrl}
                   onChange={(e) =>
                     updateSlide(idx, { backgroundUrl: e.target.value })
                   }
                 >
                   <option value="">-- Select background --</option>
-
-                  {backgrounds.map((bg, i) => (
-                    <option key={i} value={bg.url}>
+                  {backgrounds.map((bg) => (
+                    <option key={bg.name} value={bg.url}>
                       {bg.name}
                     </option>
                   ))}
                 </select>
 
-                {/* Custom URL */}
-                <input
-                  className="mt-2 w-full border rounded-lg px-3 py-1.5 text-xs"
-                  value={slide.backgroundUrl}
-                  onChange={(e) =>
-                    updateSlide(idx, { backgroundUrl: e.target.value })
-                  }
-                  placeholder="Or paste custom image URL"
-                />
-
-                {/* Preview */}
+                {/* PREVIEW */}
                 {slide.backgroundUrl && (
-                  <div className="mt-2">
-                    <div className="text-[10px] text-gray-500 mb-1">Preview</div>
-                    <div
-                      className="w-full h-24 rounded-lg bg-cover bg-center border"
-                      style={{
-                        backgroundImage: `url(${slide.backgroundUrl})`,
-                      }}
-                    />
-                  </div>
+                  <div
+                    className="mt-2 h-24 bg-cover bg-center rounded border"
+                    style={{ backgroundImage: `url(${slide.backgroundUrl})` }}
+                  />
                 )}
               </div>
 
-              {/* Highlight */}
+              {/* HIGHLIGHT */}
               <div>
-                <label className="text-xs font-semibold text-gray-700">
+                <label className="text-xs font-semibold">
                   Highlight / Pull Quote
                 </label>
                 <textarea
-                  className="mt-1 w-full border rounded-lg px-3 py-1.5 text-xs min-h-[80px]"
-                  value={slide.highlight || ""}
+                  className="mt-1 w-full border rounded px-3 py-2 text-xs"
+                  value={slide.highlight}
                   onChange={(e) =>
                     updateSlide(idx, { highlight: e.target.value })
                   }
@@ -271,26 +251,26 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
               </div>
             </div>
 
-            {/* Slide Text */}
+            {/* TEXT */}
             <div className="mt-3">
-              <label className="text-xs font-semibold text-gray-700">
-                Slide Text
-              </label>
+              <label className="text-xs font-semibold">Slide Text</label>
               <textarea
-                className="mt-1 w-full border rounded-lg px-3 py-2 text-xs min-h-[160px]"
+                className="mt-1 w-full border rounded px-3 py-2 text-xs min-h-[150px]"
                 value={slide.rawText}
-                onChange={(e) => updateSlide(idx, { rawText: e.target.value })}
+                onChange={(e) =>
+                  updateSlide(idx, { rawText: e.target.value })
+                }
               />
             </div>
           </div>
         ))}
       </div>
 
-      {/* ---------------- Controls ---------------- */}
-      <div className="mt-4 flex flex-wrap gap-2">
+      {/* CONTROLS */}
+      <div className="mt-4 flex gap-2">
         <button
           onClick={addSlide}
-          className="px-3 py-2 text-xs rounded-lg border bg-gray-50 hover:bg-gray-100"
+          className="px-3 py-2 text-xs border rounded bg-gray-50"
         >
           + Add Slide
         </button>
@@ -298,7 +278,7 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
         <button
           disabled={saving}
           onClick={handleSave}
-          className="px-4 py-2 text-xs md:text-sm rounded-lg bg-indigo-600 text-white hover:bg-indigo-700"
+          className="px-4 py-2 text-xs rounded bg-indigo-600 text-white"
         >
           {saving ? "Saving..." : "Save Magazine"}
         </button>
@@ -306,9 +286,9 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
         {existingIssue && (
           <button
             onClick={handleDelete}
-            className="px-4 py-2 text-xs md:text-sm rounded-lg bg-red-600 text-white hover:bg-red-700"
+            className="px-4 py-2 text-xs rounded bg-red-600 text-white"
           >
-            Delete Magazine
+            Delete
           </button>
         )}
       </div>
