@@ -2,6 +2,7 @@ import BannerSlider from "../components/BannerSlider";
 import Article from "../components/Article/Article";
 import ConsultancySection from "../components/consultancy/ConsultancySection.jsx";
 import NewsTicker from "../components/NewsTicker.jsx";
+import MagazineViewer from "../components/Magazine/MagazineViewer"; // ⬅️ Added
 
 export default function HomePage() {
   return (
@@ -22,7 +23,7 @@ export default function HomePage() {
         </p>
 
         {/* 70/30 split layout */}
-        <section className="mt-10 grid grid-cols-1 md:grid-cols-[7fr_3fr] gap-0 items-start">
+        <section className="mt-10 grid grid-cols-1 md:grid-cols-[7fr_3fr] gap-6 items-start">
           {/* Left: Articles */}
           <div
             className="
@@ -36,9 +37,14 @@ export default function HomePage() {
             <Article limit={3} />
           </div>
 
-          {/* Right: Consultancy */}
-          <aside className="[&_section]:mt-0">
+          {/* Right Column: Consultancy + Magazine */}
+          <aside className="space-y-4">
             <ConsultancySection />
+
+            {/* Magazine Feature */}
+            <div className="border rounded-2xl bg-white shadow-sm overflow-hidden">
+              <MagazineViewer slug="indian-constitution-basics" />
+            </div>
           </aside>
         </section>
       </div>
