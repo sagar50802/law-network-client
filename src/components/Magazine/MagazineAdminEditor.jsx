@@ -18,15 +18,16 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
       : [{ ...EMPTY_SLIDE, id: "s1" }]
   );
 
-  const [backgrounds, setBackgrounds] = useState([]); // auto-loaded folder images
+  const [backgrounds, setBackgrounds] = useState([]); 
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  // ---------------------------------------------
-  // AUTO-LOAD BACKGROUND IMAGES FROM /public/backgrounds
-  // ---------------------------------------------
+  /* -------------------------------------------------
+     AUTO LOAD IMAGES FROM /public/backgrounds/*
+     Supports: png, jpg, jpeg, webp, gif, svg, avif
+  ------------------------------------------------- */
   useEffect(() => {
-    const imgs = loadBackgroundImages();
+    const imgs = loadBackgroundImages(); // now auto-detects everything
     setBackgrounds(imgs);
   }, []);
 
@@ -77,12 +78,11 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
 
       const text = await res.text();
 
-      // Fix: Prevent "<!doctype html>" JSON crash
       try {
         const data = JSON.parse(text);
         if (!data.ok) throw new Error(data.error || "Save failed");
         onSaved && onSaved(data.issue);
-      } catch (jsonErr) {
+      } catch {
         console.error("Invalid JSON from server:", text);
         throw new Error("Server returned invalid JSON");
       }
@@ -96,10 +96,8 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
   async function handleDelete() {
     if (!existingIssue) return;
 
-    const ok = window.confirm(
-      "Are you sure you want to delete this magazine?"
-    );
-    if (!ok) return;
+    if (!window.confirm("Are you sure you want to delete this magazine?"))
+      return;
 
     try {
       const res = await fetch(`/api/magazines/${existingIssue._id}`, {
@@ -107,11 +105,11 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
       });
 
       const text = await res.text();
-
       let data;
+
       try {
         data = JSON.parse(text);
-      } catch (err) {
+      } catch {
         alert("Server returned invalid JSON");
         return;
       }
@@ -123,7 +121,7 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
 
       alert("Magazine deleted successfully!");
       onSaved && onSaved(null);
-    } catch (err) {
+    } catch {
       alert("Server error while deleting");
     }
   }
@@ -138,7 +136,7 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
         </div>
       )}
 
-      {/* ------------------ Title / Subtitle / Slug ------------------ */}
+      {/* Title / Subtitle / Slug */}
       <div className="grid md:grid-cols-2 gap-4 mb-4">
         <div>
           <label className="text-xs font-semibold text-gray-700">Title</label>
@@ -146,7 +144,6 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
             className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="eg. Indian Constitution Foundations"
           />
         </div>
 
@@ -156,7 +153,6 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
             className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
             value={subtitle}
             onChange={(e) => setSubtitle(e.target.value)}
-            placeholder="A LawPrepX visual magazine for law students"
           />
         </div>
 
@@ -166,12 +162,11 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
             className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
             value={slug}
             onChange={(e) => setSlug(e.target.value)}
-            placeholder="indian-constitution-basics"
           />
         </div>
       </div>
 
-      {/* ------------------ SLIDES ------------------ */}
+      {/* Slides */}
       <div className="space-y-4">
         {slides.map((slide, idx) => (
           <div
@@ -192,7 +187,7 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
             </div>
 
             <div className="grid md:grid-cols-2 gap-3">
-              {/* Background dropdown */}
+              {/* Background Selector */}
               <div>
                 <label className="text-xs font-semibold text-gray-700">
                   Background Image
@@ -214,15 +209,17 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
                   ))}
                 </select>
 
+                {/* Custom URL */}
                 <input
                   className="mt-2 w-full border rounded-lg px-3 py-1.5 text-xs"
                   value={slide.backgroundUrl}
                   onChange={(e) =>
                     updateSlide(idx, { backgroundUrl: e.target.value })
                   }
-                  placeholder="Or paste custom URL"
+                  placeholder="Or paste custom image URL"
                 />
 
+                {/* Preview */}
                 {slide.backgroundUrl && (
                   <div className="mt-2">
                     <div className="text-[10px] text-gray-500 mb-1">Preview</div>
@@ -239,7 +236,7 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
               {/* Highlight */}
               <div>
                 <label className="text-xs font-semibold text-gray-700">
-                  Highlight / Pull Quote (optional)
+                  Highlight / Pull Quote
                 </label>
                 <textarea
                   className="mt-1 w-full border rounded-lg px-3 py-1.5 text-xs min-h-[80px]"
@@ -247,7 +244,6 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
                   onChange={(e) =>
                     updateSlide(idx, { highlight: e.target.value })
                   }
-                  placeholder="The Constitution is a living document..."
                 />
               </div>
             </div>
@@ -261,14 +257,13 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
                 className="mt-1 w-full border rounded-lg px-3 py-2 text-xs min-h-[160px]"
                 value={slide.rawText}
                 onChange={(e) => updateSlide(idx, { rawText: e.target.value })}
-                placeholder="Paste long text here..."
               />
             </div>
           </div>
         ))}
       </div>
 
-      {/* Buttons */}
+      {/* Controls */}
       <div className="mt-4 flex flex-wrap gap-2">
         <button
           onClick={addSlide}
