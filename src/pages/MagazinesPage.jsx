@@ -21,7 +21,9 @@ export default function MagazinesPage() {
 
   if (loading) {
     return (
-      <div className="py-16 text-center text-gray-600">Loading magazines...</div>
+      <div className="py-16 text-center text-gray-600 text-lg">
+        Loading magazines...
+      </div>
     );
   }
 
@@ -32,7 +34,9 @@ export default function MagazinesPage() {
       </h1>
 
       {issues.length === 0 && (
-        <p className="text-center text-gray-500">No magazines found.</p>
+        <p className="text-center text-gray-500">
+          No magazines found. Create one from admin panel.
+        </p>
       )}
 
       <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
@@ -44,26 +48,43 @@ export default function MagazinesPage() {
   );
 }
 
+/* ---------------------------------------------------------- */
+/* Magazine Card Component (Safe & Improved)                  */
+/* ---------------------------------------------------------- */
 function MagazineCard({ issue }) {
-  const cover =
-    issue.slides?.[0]?.backgroundUrl || "/backgrounds/default-mag.jpg";
+  // Backend list does NOT return slides → safe fallback cover
+  const cover = issue.coverUrl || "/backgrounds/default-mag.jpg";
 
   return (
-    <div className="bg-white rounded-xl shadow-sm border hover:shadow-md transition overflow-hidden">
+    <div className="bg-white rounded-2xl shadow-sm border hover:shadow-lg transition overflow-hidden">
+      {/* Cover Preview */}
       <div
-        className="h-44 bg-cover bg-center"
+        className="relative h-44 bg-cover bg-center"
         style={{ backgroundImage: `url(${cover})` }}
-      ></div>
+      >
+        {/* Watermark */}
+        <div className="absolute inset-0 flex items-center justify-center">
+          <span className="text-white text-2xl font-bold opacity-20">
+            LawPrepX
+          </span>
+        </div>
+      </div>
 
+      {/* Content */}
       <div className="p-4">
-        <h2 className="font-bold text-lg mb-1">{issue.title}</h2>
-        <p className="text-gray-600 text-sm mb-3">{issue.subtitle}</p>
+        <h2 className="font-bold text-lg leading-tight mb-1">
+          {issue.title}
+        </h2>
+
+        <p className="text-gray-600 text-sm mb-4">
+          {issue.subtitle || "A LawPrepX visual magazine"}
+        </p>
 
         <Link
           to={`/magazine/${issue.slug}`}
           className="inline-block px-4 py-2 bg-indigo-600 text-white rounded-lg text-sm hover:bg-indigo-700"
         >
-          Read Now
+          Read Now →
         </Link>
       </div>
     </div>
