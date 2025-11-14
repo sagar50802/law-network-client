@@ -14,13 +14,13 @@ import AdminRoute from "./components/common/AdminRoute.jsx";
 import IfOwnerOnly from "./components/common/IfOwnerOnly.jsx";
 import "./styles/ui.css";
 
-/* ---------- NEW: Classroom Drawer Menu ---------- */
+/* ---------- NEW: Classroom Drawer Menu (Slide-out) ---------- */
 import ClassroomDrawerMenu from "./components/ClassroomDrawerMenu.jsx";
 
-/* ---------- Ambience ---------- */
+/* ---------- 🆕 NEW: Ambience Page ---------- */
 import AmbiencePage from "./pages/classroom/AmbiencePage.jsx";
 
-/* ---------- Group Key Bridge ---------- */
+/* ---------- 🆕 NEW: Group Key Bridge ---------- */
 import GroupKeyBridge from "./pages/GroupKeyBridge.jsx";
 
 /* ---------- Main Pages ---------- */
@@ -34,8 +34,10 @@ import ScholarPage from "./pages/ScholarPage.jsx";
 import PdfDemo from "./pages/PdfDemo.jsx";
 import Plagiarism from "./pages/Plagiarism.jsx";
 
-/* ---------- Magazine ---------- */
+/* ---------- 🆕 Magazine Reader Page ---------- */
 import MagazineReader from "./pages/MagazineReader.jsx";
+
+/* ---------- 🆕 Magazine Pages (NEW) ---------- */
 import MagazinesPage from "./pages/MagazinesPage.jsx";
 import AdminMagazines from "./pages/admin/AdminMagazines.jsx";
 
@@ -79,14 +81,19 @@ import ClassroomLinkCreator from "./pages/ClassroomLinkCreator.jsx";
 /* ---------- Theme Page ---------- */
 import ThemeFocusPage from "./pages/classroom/ThemeFocusPage.jsx";
 
-/* ---------- 404 ---------- */
+/* ---------- Helpers ---------- */
 function NotFound() {
   return (
-    <div className="flex flex-col items-center py-24">
-      <h1 className="text-6xl font-extrabold text-[#1e293b]">404</h1>
-      <p className="text-gray-600 mt-2">Page not found.</p>
-      <a href="/" className="mt-4 px-6 py-3 bg-[#0b1220] text-white rounded-lg">
-        Home
+    <div className="flex flex-col items-center justify-center py-24 text-center">
+      <h1 className="text-6xl font-extrabold text-[#1e293b] mb-4">404</h1>
+      <p className="text-lg text-gray-600 mb-6">
+        Oops! The page you’re looking for doesn’t exist.
+      </p>
+      <a
+        href="/"
+        className="px-6 py-3 rounded-lg bg-[#0b1220] text-white shadow-lg hover:bg-[#1e293b] transition"
+      >
+        Go Back Home
       </a>
     </div>
   );
@@ -96,14 +103,19 @@ function ScrollToHash() {
   const { hash, pathname } = useLocation();
   useEffect(() => {
     if (!hash) return;
-    const id = hash.replace("#", "");
-    const scroll = () => {
+    const id = hash.replace(/^#/, "");
+    const tryScroll = () => {
       const el = document.getElementById(id);
-      if (el) el.scrollIntoView({ behavior: "smooth" });
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
     };
-    setTimeout(scroll, 0);
-    setTimeout(scroll, 150);
-    setTimeout(scroll, 350);
+    const t0 = setTimeout(tryScroll, 0);
+    const t1 = setTimeout(tryScroll, 120);
+    const t2 = setTimeout(tryScroll, 350);
+    return () => {
+      clearTimeout(t0);
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
   }, [hash, pathname]);
   return null;
 }
@@ -118,40 +130,47 @@ function RouteWithResultId({ Comp }) {
   return <Comp id={id} />;
 }
 
+/* ---------- Wrapper: Show Drawer Only on Classroom Routes ---------- */
 function ClassroomWrapper({ children }) {
   const location = useLocation();
-  const isClass = location.pathname.startsWith("/classroom");
+  const isClassroom = location.pathname.startsWith("/classroom");
   return (
     <>
-      {isClass && <ClassroomDrawerMenu />}
+      {isClassroom && <ClassroomDrawerMenu />}
       {children}
     </>
   );
 }
 
-/* ---------- MAIN APP CONTENT ---------- */
+/* ---------- Main App Content ---------- */
 function AppContent() {
   const location = useLocation();
-
   const isPrepHome = location.pathname === "/prep";
-  const isLivePage = location.pathname.startsWith("/live"); // ✅ FIX ADDED
+
+  // ✅ FIX: hide global navbar on LIVE page
+  const hideNavbar = location.pathname.startsWith("/live");
 
   return (
     <div
-      className={`min-h-screen flex flex-col font-inter antialiased ${
-        isPrepHome || isLivePage
-          ? "bg-transparent" // LIVE + PREP handle their own backgrounds
+      className={`text-[#0b1220] min-h-screen font-inter antialiased flex flex-col ${
+        isPrepHome
+          ? "bg-transparent"
           : "bg-gradient-to-br from-[#f8fafc] to-[#e6edf5]"
       }`}
     >
-      <nav className="bg-white/70 backdrop-blur-md shadow-md sticky top-0 z-50">
-        <Navbar />
-      </nav>
+
+      {/* 🚫 Navbar removed ONLY for /live */}
+      {!hideNavbar && (
+        <nav className="bg-white/70 backdrop-blur-md shadow-md sticky top-0 z-50">
+          <Navbar />
+        </nav>
+      )}
 
       <ScrollToHash />
 
-      <div className="flex-1 animate-fadeIn">
+      <div className="animate-fadeIn flex-1">
         <Routes>
+          {/* ---------- Public Pages ---------- */}
           <Route path="/" element={<HomePage />} />
           <Route path="/articles" element={<ArticlesPage />} />
           <Route path="/news" element={<NewsPage />} />
@@ -162,11 +181,11 @@ function AppContent() {
           <Route path="/plagiarism" element={<Plagiarism />} />
           <Route path="/pdfdemo" element={<PdfDemo />} />
 
-          {/* Magazines */}
+          {/* ---------- Magazine ---------- */}
           <Route path="/magazine/:slug" element={<MagazineReader />} />
           <Route path="/magazines" element={<MagazinesPage />} />
 
-          {/* LIVE */}
+          {/* ---------- LIVE ---------- */}
           <Route path="/live" element={<LiveChannelPage />} />
           <Route
             path="/admin/live"
@@ -177,7 +196,7 @@ function AppContent() {
             }
           />
 
-          {/* Classroom */}
+          {/* ---------- Classroom ---------- */}
           <Route
             path="/classroom"
             element={
@@ -190,13 +209,13 @@ function AppContent() {
           <Route path="/classroom/ambience" element={<AmbiencePage />} />
           <Route path="/classroom/theme" element={<ThemeFocusPage />} />
 
-          {/* Group Key */}
+          {/* ---------- Group Key Bridge ---------- */}
           <Route
             path="/bridge/gk/:key/t/:token"
             element={<GroupKeyBridge />}
           />
 
-          {/* Admin classroom */}
+          {/* ---------- Admin Classroom ---------- */}
           <Route
             path="/admin/classroom-link"
             element={
@@ -214,7 +233,7 @@ function AppContent() {
             }
           />
 
-          {/* Research Drafting */}
+          {/* ---------- Research Drafting ---------- */}
           <Route path="/research-drafting" element={<ResearchDrafting />} />
           <Route
             path="/research-drafting/lab/:id"
@@ -229,7 +248,7 @@ function AppContent() {
             }
           />
 
-          {/* Exam Prep */}
+          {/* ---------- Exam Prep ---------- */}
           <Route path="/prep" element={<PrepList />} />
           <Route path="/prep/:examId" element={<PrepWizard />} />
           <Route
@@ -257,7 +276,7 @@ function AppContent() {
             }
           />
 
-          {/* Test Series */}
+          {/* ---------- Test Series ---------- */}
           <Route path="/tests" element={<TestDashboard />} />
           <Route
             path="/tests/:code"
@@ -272,7 +291,7 @@ function AppContent() {
             element={<RouteWithResultId Comp={ResultScreen} />}
           />
 
-          {/* Admin tests */}
+          {/* ---------- Owner / Test Admin ---------- */}
           <Route
             path="/owner/tests/import"
             element={
@@ -298,7 +317,7 @@ function AppContent() {
             }
           />
 
-          {/* Admin general */}
+          {/* ---------- Admin Pages ---------- */}
           <Route path="/admin/login" element={<AdminLogin />} />
           <Route
             path="/admin/dashboard"
@@ -325,7 +344,7 @@ function AppContent() {
             }
           />
 
-          {/* Magazines admin */}
+          {/* ---------- Magazine Admin ---------- */}
           <Route
             path="/admin/magazines"
             element={
@@ -335,7 +354,7 @@ function AppContent() {
             }
           />
 
-          {/* 404 */}
+          {/* ---------- 404 ---------- */}
           <Route path="*" element={<NotFound />} />
         </Routes>
       </div>
@@ -345,6 +364,7 @@ function AppContent() {
   );
 }
 
+/* ---------- Root Wrapper ---------- */
 export default function App() {
   return (
     <Router>
