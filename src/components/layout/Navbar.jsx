@@ -6,7 +6,9 @@ export default function Navbar() {
   const [articleCount, setArticleCount] = useState(0);
   const [testCount, setTestCount] = useState(0);
   const [open, setOpen] = useState(false);
-  const [adminKey, setAdminKey] = useState(localStorage.getItem("ADMIN_KEY") || "");
+  const [adminKey, setAdminKey] = useState(
+    localStorage.getItem("ADMIN_KEY") || ""
+  );
 
   // 🔄 Auto-refresh ADMIN_KEY every second
   useEffect(() => {
@@ -60,12 +62,16 @@ export default function Navbar() {
             Articles ({articleCount})
           </a>
 
-          {/* ⭐ NEW: Magazine Link (Desktop) */}
+          {/* ⭐ NEW: Magazine Menu */}
           <a href="/magazines" className="hover:text-blue-600">
             Magazines
           </a>
 
-          <a href="/#consultancy" onClick={goConsultancy} className="hover:text-blue-600">
+          <a
+            href="/#consultancy"
+            onClick={goConsultancy}
+            className="hover:text-blue-600"
+          >
             Consultancy
           </a>
 
@@ -101,43 +107,64 @@ export default function Navbar() {
             Scholar Space
           </a>
 
-          {/* ✅ Classroom Link (Public) */}
-          <a href="/classroom" className="text-green-600 font-semibold hover:underline">
+          {/* CLASSROOM */}
+          <a
+            href="/classroom"
+            className="text-green-600 font-semibold hover:underline"
+          >
             Classroom
           </a>
 
-          {/* ✅ LIVE link (Public) */}
-          <a href="/live" className="text-red-600 font-semibold hover:underline">
+          {/* LIVE */}
+          <a
+            href="/live"
+            className="text-red-600 font-semibold hover:underline"
+          >
             LIVE
           </a>
 
-          {/* ✅ Owner & Admin links */}
+          {/* ADMIN SECTION */}
           {(isOwner() || adminKey === "LAWNOWNER2025") && (
             <>
               <span className="text-gray-300">|</span>
+
               <a href="/admin/dashboard" className="text-blue-600 underline">
                 Admin
               </a>
+
               <a href="/admin/prep" className="text-blue-600 underline">
                 Prep Admin
               </a>
+
               <a href="/admin/prep-access" className="text-blue-600 underline">
                 Access Requests
               </a>
+
               <a href="/owner/tests" className="text-blue-600 underline">
                 Manage Tests
               </a>
+
               <a href="/owner/tests/import" className="text-blue-600 underline">
                 Import Tests
               </a>
+
               <a href="/admin/research" className="text-blue-600 underline">
                 Research Admin
               </a>
-              <a href="/admin/research-drafting" className="text-blue-600 underline">
+
+              <a
+                href="/admin/research-drafting"
+                className="text-blue-600 underline"
+              >
                 Research Drafting Admin
               </a>
 
-              {/* ✅ Classroom Admin */}
+              {/* ⭐ NEW → Magazine Admin (Desktop) */}
+              <a href="/admin/magazines" className="text-blue-600 underline">
+                Magazine Admin
+              </a>
+
+              {/* Classroom Admin */}
               <a
                 href="/admin/classroom"
                 className="px-2 py-1 rounded-md bg-green-200 text-green-900 font-semibold hover:bg-green-300 transition"
@@ -145,7 +172,7 @@ export default function Navbar() {
                 🎓 Classroom Manager
               </a>
 
-              {/* ✅ LIVE Admin */}
+              {/* LIVE Admin */}
               {showLiveAdmin && (
                 <a
                   href="/admin/live"
@@ -155,7 +182,7 @@ export default function Navbar() {
                 </a>
               )}
 
-              {/* ⭐ NEW: Footer & Terms Editor */}
+              {/* Footer editor */}
               <a
                 href="/admin/footer"
                 className="px-2 py-1 rounded-md bg-blue-200 text-blue-900 font-semibold hover:bg-blue-300 transition"
@@ -177,7 +204,7 @@ export default function Navbar() {
           )}
         </div>
 
-        {/* Mobile burger */}
+        {/* Mobile Burger */}
         <div className="md:hidden">
           <button onClick={() => setOpen((v) => !v)} aria-label="Menu">
             ☰
@@ -185,14 +212,11 @@ export default function Navbar() {
         </div>
       </div>
 
-      {/* Mobile drawer */}
+      {/* Mobile Drawer */}
       {open && (
         <div className="md:hidden px-4 pb-3 flex flex-col gap-2">
           <a href="/articles">Articles</a>
-
-          {/* ⭐ NEW: Magazine Link (Mobile) */}
           <a href="/magazines">Magazines</a>
-
           <a href="/#consultancy" onClick={goConsultancy}>
             Consultancy
           </a>
@@ -207,12 +231,10 @@ export default function Navbar() {
           <a href="/research-drafting">Research Drafting</a>
           <a href="/scholar">Scholar Space</a>
 
-          {/* ✅ Classroom Link */}
           <a href="/classroom" className="text-green-600 font-semibold">
             Classroom
           </a>
 
-          {/* ✅ LIVE Link */}
           <a href="/live" className="text-red-600 font-semibold">
             LIVE
           </a>
@@ -241,7 +263,11 @@ export default function Navbar() {
                 Research Drafting Admin
               </a>
 
-              {/* ✅ Classroom Admin */}
+              {/* ⭐ NEW: Magazine Admin (Mobile) */}
+              <a href="/admin/magazines" className="underline">
+                Magazine Admin
+              </a>
+
               <a
                 href="/admin/classroom"
                 className="px-2 py-1 rounded-md bg-green-200 text-green-900 font-semibold text-center hover:bg-green-300 transition"
@@ -249,22 +275,12 @@ export default function Navbar() {
                 🎓 Classroom Manager
               </a>
 
-              {/* ⭐ NEW: Footer & Terms Editor */}
               <a
                 href="/admin/footer"
                 className="px-2 py-1 rounded-md bg-blue-200 text-blue-900 font-semibold text-center hover:bg-blue-300 transition"
               >
                 📝 Edit Footer
               </a>
-
-              {showLiveAdmin && (
-                <a
-                  href="/admin/live"
-                  className="px-2 py-1 rounded-md bg-yellow-400 text-black font-semibold text-center hover:bg-yellow-300 transition"
-                >
-                  🎥 Live Studio
-                </a>
-              )}
 
               <button
                 className="text-left text-xs border px-2 py-1 rounded w-fit"
