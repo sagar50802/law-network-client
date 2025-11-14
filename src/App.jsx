@@ -70,7 +70,7 @@ import LiveAdminPage from "./pages/LiveAdminPage.jsx";
 /* ---------- Classroom Feature ---------- */
 import ClassroomLivePage from "./pages/ClassroomLivePage.jsx";
 import AdminLectureManager from "./pages/AdminLectureManager.jsx";
-import ClassroomSharePage from "./pages/ClassroomSharePage.jsx;
+import ClassroomSharePage from "./pages/ClassroomSharePage.jsx";
 import ClassroomLinkCreator from "./pages/ClassroomLinkCreator.jsx";
 
 /* ---------- Theme Page ---------- */
