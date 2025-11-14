@@ -10,7 +10,9 @@ export default function MagazineReader() {
   useEffect(() => {
     async function load() {
       try {
-        const res = await fetch(`/api/magazines/${slug}`);
+        // ✅ FIXED ROUTE (was /api/magazines/${slug})
+        const res = await fetch(`/api/magazines/slug/${slug}`);
+
         const data = await res.json();
         if (data.ok) {
           setIssue(data.issue);
@@ -27,7 +29,7 @@ export default function MagazineReader() {
   if (!issue) return <div className="p-10 text-center">Magazine not found.</div>;
 
   /* -------------------------------------- */
-  /* SAFETY FIX — prevent crash on missing slide */
+  /* SAFETY: prevent crash on missing slide */
   /* -------------------------------------- */
   const slide = issue.slides?.[idx] || {
     backgroundUrl: "",
