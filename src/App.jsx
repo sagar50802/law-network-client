@@ -14,13 +14,13 @@ import AdminRoute from "./components/common/AdminRoute.jsx";
 import IfOwnerOnly from "./components/common/IfOwnerOnly.jsx";
 import "./styles/ui.css";
 
-/* ---------- NEW: Classroom Drawer Menu (Slide-out) ---------- */
+/* ---------- Classroom Drawer Menu ---------- */
 import ClassroomDrawerMenu from "./components/ClassroomDrawerMenu.jsx";
 
-/* ---------- 🆕 NEW: Ambience Page ---------- */
+/* ---------- Ambience Page ---------- */
 import AmbiencePage from "./pages/classroom/AmbiencePage.jsx";
 
-/* ---------- 🆕 NEW: Group Key Bridge ---------- */
+/* ---------- Group Key Bridge ---------- */
 import GroupKeyBridge from "./pages/GroupKeyBridge.jsx";
 
 /* ---------- Main Pages ---------- */
@@ -34,10 +34,10 @@ import ScholarPage from "./pages/ScholarPage.jsx";
 import PdfDemo from "./pages/PdfDemo.jsx";
 import Plagiarism from "./pages/Plagiarism.jsx";
 
-/* ---------- 🆕 Magazine Reader Page ---------- */
+/* ---------- Magazine Reader ---------- */
 import MagazineReader from "./pages/MagazineReader.jsx";
 
-/* ---------- 🆕 Magazine Pages (NEW) ---------- */
+/* ---------- Magazines ---------- */
 import MagazinesPage from "./pages/MagazinesPage.jsx";
 import AdminMagazines from "./pages/admin/AdminMagazines.jsx";
 
@@ -130,7 +130,7 @@ function RouteWithResultId({ Comp }) {
   return <Comp id={id} />;
 }
 
-/* ---------- Wrapper: Show Drawer Only on Classroom Routes ---------- */
+/* ---------- Classroom Wrapper ---------- */
 function ClassroomWrapper({ children }) {
   const location = useLocation();
   const isClassroom = location.pathname.startsWith("/classroom");
@@ -147,30 +147,21 @@ function AppContent() {
   const location = useLocation();
   const isPrepHome = location.pathname === "/prep";
 
-  // ✅ FIX: hide global navbar on LIVE page
-  const hideNavbar = location.pathname.startsWith("/live");
-
   return (
     <div
       className={`text-[#0b1220] min-h-screen font-inter antialiased flex flex-col ${
-        isPrepHome
-          ? "bg-transparent"
-          : "bg-gradient-to-br from-[#f8fafc] to-[#e6edf5]"
+        isPrepHome ? "bg-transparent" : "bg-gradient-to-br from-[#f8fafc] to-[#e6edf5]"
       }`}
     >
-
-      {/* 🚫 Navbar removed ONLY for /live */}
-      {!hideNavbar && (
-        <nav className="bg-white/70 backdrop-blur-md shadow-md sticky top-0 z-50">
-          <Navbar />
-        </nav>
-      )}
+      <nav className="bg-white/70 backdrop-blur-md shadow-md sticky top-0 z-50">
+        <Navbar />
+      </nav>
 
       <ScrollToHash />
 
       <div className="animate-fadeIn flex-1">
         <Routes>
-          {/* ---------- Public Pages ---------- */}
+          {/* Public Pages */}
           <Route path="/" element={<HomePage />} />
           <Route path="/articles" element={<ArticlesPage />} />
           <Route path="/news" element={<NewsPage />} />
@@ -181,11 +172,11 @@ function AppContent() {
           <Route path="/plagiarism" element={<Plagiarism />} />
           <Route path="/pdfdemo" element={<PdfDemo />} />
 
-          {/* ---------- Magazine ---------- */}
+          {/* Magazine */}
           <Route path="/magazine/:slug" element={<MagazineReader />} />
           <Route path="/magazines" element={<MagazinesPage />} />
 
-          {/* ---------- LIVE ---------- */}
+          {/* LIVE */}
           <Route path="/live" element={<LiveChannelPage />} />
           <Route
             path="/admin/live"
@@ -196,7 +187,7 @@ function AppContent() {
             }
           />
 
-          {/* ---------- Classroom ---------- */}
+          {/* Classroom */}
           <Route
             path="/classroom"
             element={
@@ -205,17 +196,15 @@ function AppContent() {
               </ClassroomWrapper>
             }
           />
+
           <Route path="/classroom/share" element={<ClassroomSharePage />} />
           <Route path="/classroom/ambience" element={<AmbiencePage />} />
           <Route path="/classroom/theme" element={<ThemeFocusPage />} />
 
-          {/* ---------- Group Key Bridge ---------- */}
-          <Route
-            path="/bridge/gk/:key/t/:token"
-            element={<GroupKeyBridge />}
-          />
+          {/* Bridge */}
+          <Route path="/bridge/gk/:key/t/:token" element={<GroupKeyBridge />} />
 
-          {/* ---------- Admin Classroom ---------- */}
+          {/* Admin Classroom */}
           <Route
             path="/admin/classroom-link"
             element={
@@ -224,6 +213,7 @@ function AppContent() {
               </AdminRoute>
             }
           />
+
           <Route
             path="/admin/classroom"
             element={
@@ -233,7 +223,7 @@ function AppContent() {
             }
           />
 
-          {/* ---------- Research Drafting ---------- */}
+          {/* Research Drafting */}
           <Route path="/research-drafting" element={<ResearchDrafting />} />
           <Route
             path="/research-drafting/lab/:id"
@@ -248,9 +238,10 @@ function AppContent() {
             }
           />
 
-          {/* ---------- Exam Prep ---------- */}
+          {/* Prep */}
           <Route path="/prep" element={<PrepList />} />
           <Route path="/prep/:examId" element={<PrepWizard />} />
+
           <Route
             path="/admin/prep"
             element={
@@ -259,6 +250,7 @@ function AppContent() {
               </AdminRoute>
             }
           />
+
           <Route
             path="/admin/prep-overlay"
             element={
@@ -267,6 +259,7 @@ function AppContent() {
               </AdminRoute>
             }
           />
+
           <Route
             path="/admin/prep-access"
             element={
@@ -276,12 +269,9 @@ function AppContent() {
             }
           />
 
-          {/* ---------- Test Series ---------- */}
+          {/* Test Series */}
           <Route path="/tests" element={<TestDashboard />} />
-          <Route
-            path="/tests/:code"
-            element={<RouteWithCode Comp={TestIntro} />}
-          />
+          <Route path="/tests/:code" element={<RouteWithCode Comp={TestIntro} />} />
           <Route
             path="/tests/:code/play"
             element={<RouteWithCode Comp={TestPlayer} />}
@@ -291,7 +281,7 @@ function AppContent() {
             element={<RouteWithResultId Comp={ResultScreen} />}
           />
 
-          {/* ---------- Owner / Test Admin ---------- */}
+          {/* Test Admin */}
           <Route
             path="/owner/tests/import"
             element={
@@ -300,6 +290,7 @@ function AppContent() {
               </IfOwnerOnly>
             }
           />
+
           <Route
             path="/owner/tests/results"
             element={
@@ -308,6 +299,7 @@ function AppContent() {
               </IfOwnerOnly>
             }
           />
+
           <Route
             path="/owner/tests"
             element={
@@ -317,7 +309,7 @@ function AppContent() {
             }
           />
 
-          {/* ---------- Admin Pages ---------- */}
+          {/* Admin Pages */}
           <Route path="/admin/login" element={<AdminLogin />} />
           <Route
             path="/admin/dashboard"
@@ -327,6 +319,7 @@ function AppContent() {
               </AdminRoute>
             }
           />
+
           <Route
             path="/admin/consultancy"
             element={
@@ -335,6 +328,7 @@ function AppContent() {
               </AdminRoute>
             }
           />
+
           <Route
             path="/admin/footer"
             element={
@@ -344,7 +338,6 @@ function AppContent() {
             }
           />
 
-          {/* ---------- Magazine Admin ---------- */}
           <Route
             path="/admin/magazines"
             element={
@@ -354,7 +347,7 @@ function AppContent() {
             }
           />
 
-          {/* ---------- 404 ---------- */}
+          {/* 404 */}
           <Route path="*" element={<NotFound />} />
         </Routes>
       </div>
@@ -364,7 +357,7 @@ function AppContent() {
   );
 }
 
-/* ---------- Root Wrapper ---------- */
+/* ---------- Root App ---------- */
 export default function App() {
   return (
     <Router>
