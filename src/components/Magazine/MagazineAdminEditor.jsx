@@ -1,4 +1,5 @@
-import { useState } from "react";
+import { useEffect, useState } from "react";
+import { loadBackgroundImages } from "../../utils/loadBackgrounds";
 
 const EMPTY_SLIDE = {
   id: "",
@@ -6,17 +7,6 @@ const EMPTY_SLIDE = {
   rawText: "",
   highlight: "",
 };
-
-// ✅ All built-in background options in ONE place
-const BACKGROUND_PRESETS = [
-  { value: "/backgrounds/bg1.png", label: "Courtroom (bg1.png)" },
-  { value: "/backgrounds/bg2.png", label: "Office (bg2.png)" },
-  { value: "/backgrounds/bg3.png", label: "Law Library (bg3.png)" },
-  { value: "/backgrounds/biharapo.png", label: "Pattern (biharapo.png)" },
-  { value: "/backgrounds/classroom-fallback.png", label: "Classroom Fallback" },
-  // 👇 When you add a new image file, just add a new line like this:
-  // { value: "/backgrounds/constitution-cover.png", label: "Constitution Cover" },
-];
 
 export default function MagazineAdminEditor({ existingIssue, onSaved }) {
   const [title, setTitle] = useState(existingIssue?.title || "");
@@ -27,8 +17,18 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
       ? existingIssue.slides
       : [{ ...EMPTY_SLIDE, id: "s1" }]
   );
+
+  const [backgrounds, setBackgrounds] = useState([]); // auto-loaded folder images
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
+
+  // ---------------------------------------------
+  // AUTO-LOAD BACKGROUND IMAGES FROM /public/backgrounds
+  // ---------------------------------------------
+  useEffect(() => {
+    const imgs = loadBackgroundImages();
+    setBackgrounds(imgs);
+  }, []);
 
   function updateSlide(idx, patch) {
     setSlides((prev) => {
@@ -41,10 +41,7 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
   function addSlide() {
     setSlides((prev) => [
       ...prev,
-      {
-        ...EMPTY_SLIDE,
-        id: "s" + (prev.length + 1),
-      },
+      { ...EMPTY_SLIDE, id: "s" + (prev.length + 1) },
     ]);
   }
 
@@ -78,22 +75,30 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
         body: JSON.stringify(payload),
       });
 
-      if (!res.ok) throw new Error("Failed to save magazine");
+      const text = await res.text();
 
-      const data = await res.json();
-      onSaved && onSaved(data.issue);
-    } catch (e) {
-      setError(e.message || "Error saving");
+      // Fix: Prevent "<!doctype html>" JSON crash
+      try {
+        const data = JSON.parse(text);
+        if (!data.ok) throw new Error(data.error || "Save failed");
+        onSaved && onSaved(data.issue);
+      } catch (jsonErr) {
+        console.error("Invalid JSON from server:", text);
+        throw new Error("Server returned invalid JSON");
+      }
+    } catch (err) {
+      setError(err.message || "Error saving magazine");
     } finally {
       setSaving(false);
     }
   }
 
   async function handleDelete() {
-    const ok = window.confirm(
-      "Are you sure you want to delete this magazine? This cannot be undone."
-    );
+    if (!existingIssue) return;
 
+    const ok = window.confirm(
+      "Are you sure you want to delete this magazine?"
+    );
     if (!ok) return;
 
     try {
@@ -101,7 +106,15 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
         method: "DELETE",
       });
 
-      const data = await res.json();
+      const text = await res.text();
+
+      let data;
+      try {
+        data = JSON.parse(text);
+      } catch (err) {
+        alert("Server returned invalid JSON");
+        return;
+      }
 
       if (!data.ok) {
         alert("Delete failed: " + data.error);
@@ -125,6 +138,7 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
         </div>
       )}
 
+      {/* ------------------ Title / Subtitle / Slug ------------------ */}
       <div className="grid md:grid-cols-2 gap-4 mb-4">
         <div>
           <label className="text-xs font-semibold text-gray-700">Title</label>
@@ -132,9 +146,10 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
             className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
-            placeholder="eg. Indian Constitution: Foundations & Future"
+            placeholder="eg. Indian Constitution Foundations"
           />
         </div>
+
         <div>
           <label className="text-xs font-semibold text-gray-700">Subtitle</label>
           <input
@@ -144,10 +159,9 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
             placeholder="A LawPrepX visual magazine for law students"
           />
         </div>
+
         <div>
-          <label className="text-xs font-semibold text-gray-700">
-            Slug (URL)
-          </label>
+          <label className="text-xs font-semibold text-gray-700">Slug (URL)</label>
           <input
             className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
             value={slug}
@@ -157,14 +171,16 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
         </div>
       </div>
 
+      {/* ------------------ SLIDES ------------------ */}
       <div className="space-y-4">
         {slides.map((slide, idx) => (
           <div
             key={slide.id || idx}
-            className="border rounded-xl p-3 md:p-4 bg-white shadow-sm"
+            className="border rounded-xl p-4 bg-white shadow-sm"
           >
             <div className="flex justify-between items-center mb-2">
               <div className="font-semibold text-sm">Slide {idx + 1}</div>
+
               {slides.length > 1 && (
                 <button
                   onClick={() => removeSlide(idx)}
@@ -176,58 +192,51 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
             </div>
 
             <div className="grid md:grid-cols-2 gap-3">
-              {/* Background selector + manual input + preview */}
+              {/* Background dropdown */}
               <div>
                 <label className="text-xs font-semibold text-gray-700">
                   Background Image
                 </label>
 
-                <div className="mt-1 flex flex-col gap-1">
-                  <div className="flex gap-2 items-start">
-                    {/* Preset dropdown */}
-                    <select
-                      className="border rounded-lg px-2 py-1.5 text-xs w-48"
-                      value={slide.backgroundUrl || ""}
-                      onChange={(e) =>
-                        updateSlide(idx, { backgroundUrl: e.target.value })
-                      }
-                    >
-                      <option value="">-- Select background --</option>
-                      {BACKGROUND_PRESETS.map((bg) => (
-                        <option key={bg.value} value={bg.value}>
-                          {bg.label}
-                        </option>
-                      ))}
-                    </select>
+                <select
+                  className="mt-1 w-full border rounded-lg px-3 py-1.5 text-xs"
+                  value={slide.backgroundUrl}
+                  onChange={(e) =>
+                    updateSlide(idx, { backgroundUrl: e.target.value })
+                  }
+                >
+                  <option value="">-- Select background --</option>
 
-                    {/* Manual URL input */}
-                    <input
-                      className="flex-1 border rounded-lg px-2 py-1.5 text-xs"
-                      placeholder="Or paste custom image URL"
-                      value={slide.backgroundUrl || ""}
-                      onChange={(e) =>
-                        updateSlide(idx, { backgroundUrl: e.target.value })
-                      }
+                  {backgrounds.map((bg, i) => (
+                    <option key={i} value={bg.url}>
+                      {bg.name}
+                    </option>
+                  ))}
+                </select>
+
+                <input
+                  className="mt-2 w-full border rounded-lg px-3 py-1.5 text-xs"
+                  value={slide.backgroundUrl}
+                  onChange={(e) =>
+                    updateSlide(idx, { backgroundUrl: e.target.value })
+                  }
+                  placeholder="Or paste custom URL"
+                />
+
+                {slide.backgroundUrl && (
+                  <div className="mt-2">
+                    <div className="text-[10px] text-gray-500 mb-1">Preview</div>
+                    <div
+                      className="w-full h-24 rounded-lg bg-cover bg-center border"
+                      style={{
+                        backgroundImage: `url(${slide.backgroundUrl})`,
+                      }}
                     />
                   </div>
-
-                  {/* Preview */}
-                  {slide.backgroundUrl && (
-                    <div className="mt-2">
-                      <div className="text-[10px] text-gray-500 mb-1">
-                        Preview
-                      </div>
-                      <div
-                        className="w-full h-24 rounded-lg bg-cover bg-center border"
-                        style={{
-                          backgroundImage: `url(${slide.backgroundUrl})`,
-                        }}
-                      />
-                    </div>
-                  )}
-                </div>
+                )}
               </div>
 
+              {/* Highlight */}
               <div>
                 <label className="text-xs font-semibold text-gray-700">
                   Highlight / Pull Quote (optional)
@@ -243,21 +252,23 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
               </div>
             </div>
 
+            {/* Slide Text */}
             <div className="mt-3">
               <label className="text-xs font-semibold text-gray-700">
-                Slide Text (plain text, system will style it)
+                Slide Text
               </label>
               <textarea
                 className="mt-1 w-full border rounded-lg px-3 py-2 text-xs min-h-[160px]"
                 value={slide.rawText}
                 onChange={(e) => updateSlide(idx, { rawText: e.target.value })}
-                placeholder="Paste long text here. First line will be treated as local title..."
+                placeholder="Paste long text here..."
               />
             </div>
           </div>
         ))}
       </div>
 
+      {/* Buttons */}
       <div className="mt-4 flex flex-wrap gap-2">
         <button
           onClick={addSlide}
