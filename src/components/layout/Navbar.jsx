@@ -60,6 +60,11 @@ export default function Navbar() {
             Articles ({articleCount})
           </a>
 
+          {/* ⭐ NEW: Magazine Link (Desktop) */}
+          <a href="/magazines" className="hover:text-blue-600">
+            Magazines
+          </a>
+
           <a href="/#consultancy" onClick={goConsultancy} className="hover:text-blue-600">
             Consultancy
           </a>
@@ -184,6 +189,10 @@ export default function Navbar() {
       {open && (
         <div className="md:hidden px-4 pb-3 flex flex-col gap-2">
           <a href="/articles">Articles</a>
+
+          {/* ⭐ NEW: Magazine Link (Mobile) */}
+          <a href="/magazines">Magazines</a>
+
           <a href="/#consultancy" onClick={goConsultancy}>
             Consultancy
           </a>
