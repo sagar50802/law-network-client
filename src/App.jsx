@@ -36,6 +36,10 @@ import Plagiarism from "./pages/Plagiarism.jsx";
 /* ---------- 🆕 Magazine Reader Page ---------- */
 import MagazineReader from "./pages/MagazineReader.jsx";
 
+/* ---------- 🆕 Magazine Pages (NEW) ---------- */
+import MagazinesPage from "./pages/MagazinesPage.jsx";
+import AdminMagazines from "./pages/admin/AdminMagazines.jsx";
+
 /* ---------- Admin Pages ---------- */
 import AdminDashboard from "./pages/AdminDashboard.jsx";
 import AdminLogin from "./pages/AdminLogin.jsx";
@@ -172,6 +176,9 @@ function AppContent() {
 
           {/* ---------- 🆕 Magazine Reader ---------- */}
           <Route path="/magazine/:slug" element={<MagazineReader />} />
+
+          {/* ---------- 🆕 Magazines List ---------- */}
+          <Route path="/magazines" element={<MagazinesPage />} />
 
           {/* ---------- LIVE Channel ---------- */}
           <Route path="/live" element={<LiveChannelPage />} />
@@ -331,6 +338,16 @@ function AppContent() {
             element={
               <AdminRoute>
                 <AdminFooterTermsEditor />
+              </AdminRoute>
+            }
+          />
+
+          {/* ---------- 🆕 Magazine Admin ---------- */}
+          <Route
+            path="/admin/magazines"
+            element={
+              <AdminRoute>
+                <AdminMagazines />
               </AdminRoute>
             }
           />
