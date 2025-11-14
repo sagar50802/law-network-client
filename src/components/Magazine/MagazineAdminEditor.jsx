@@ -1,4 +1,3 @@
-// client/src/components/Magazine/MagazineAdminEditor.jsx
 import { useState } from "react";
 
 const EMPTY_SLIDE = {
@@ -77,6 +76,32 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
     }
   }
 
+  async function handleDelete() {
+    const ok = window.confirm(
+      "Are you sure you want to delete this magazine? This cannot be undone."
+    );
+
+    if (!ok) return;
+
+    try {
+      const res = await fetch(`/api/magazines/${existingIssue._id}`, {
+        method: "DELETE",
+      });
+
+      const data = await res.json();
+
+      if (!data.ok) {
+        alert("Delete failed: " + data.error);
+        return;
+      }
+
+      alert("Magazine deleted successfully!");
+      onSaved && onSaved(null);
+    } catch (err) {
+      alert("Server error while deleting");
+    }
+  }
+
   return (
     <div className="max-w-5xl mx-auto p-4 md:p-6">
       <h1 className="text-2xl font-bold mb-4">Magazine Editor</h1>
@@ -124,9 +149,7 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
             className="border rounded-xl p-3 md:p-4 bg-white shadow-sm"
           >
             <div className="flex justify-between items-center mb-2">
-              <div className="font-semibold text-sm">
-                Slide {idx + 1}
-              </div>
+              <div className="font-semibold text-sm">Slide {idx + 1}</div>
               {slides.length > 1 && (
                 <button
                   onClick={() => removeSlide(idx)}
@@ -145,9 +168,7 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
                 <input
                   className="mt-1 w-full border rounded-lg px-3 py-1.5 text-xs"
                   value={slide.backgroundUrl}
-                  onChange={(e) =>
-                    updateSlide(idx, { backgroundUrl: e.target.value })
-                  }
+                  onChange={(e) => updateSlide(idx, { backgroundUrl: e.target.value })}
                   placeholder="/backgrounds/courtroom.jpg"
                 />
                 {slide.backgroundUrl && (
@@ -168,9 +189,7 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
                 <textarea
                   className="mt-1 w-full border rounded-lg px-3 py-1.5 text-xs min-h-[80px]"
                   value={slide.highlight || ""}
-                  onChange={(e) =>
-                    updateSlide(idx, { highlight: e.target.value })
-                  }
+                  onChange={(e) => updateSlide(idx, { highlight: e.target.value })}
                   placeholder="The Constitution is a living document..."
                 />
               </div>
@@ -183,9 +202,7 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
               <textarea
                 className="mt-1 w-full border rounded-lg px-3 py-2 text-xs min-h-[160px]"
                 value={slide.rawText}
-                onChange={(e) =>
-                  updateSlide(idx, { rawText: e.target.value })
-                }
+                onChange={(e) => updateSlide(idx, { rawText: e.target.value })}
                 placeholder="Paste long text here. First line will be treated as local title..."
               />
             </div>
@@ -193,13 +210,14 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
         ))}
       </div>
 
-      <div className="mt-4 flex gap-2">
+      <div className="mt-4 flex flex-wrap gap-2">
         <button
           onClick={addSlide}
           className="px-3 py-2 text-xs rounded-lg border bg-gray-50 hover:bg-gray-100"
         >
           + Add Slide
         </button>
+
         <button
           disabled={saving}
           onClick={handleSave}
@@ -207,6 +225,15 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
         >
           {saving ? "Saving..." : "Save Magazine"}
         </button>
+
+        {existingIssue && (
+          <button
+            onClick={handleDelete}
+            className="px-4 py-2 text-xs md:text-sm rounded-lg bg-red-600 text-white hover:bg-red-700"
+          >
+            Delete Magazine
+          </button>
+        )}
       </div>
     </div>
   );
