@@ -1,12 +1,19 @@
-// Auto-import all images from /public/backgrounds (any extension)
+// utils/loadBackgrounds.js
+
+// Auto-generate background list from /public/backgrounds
+// This assumes files named: bg1.jpg, bg2.jpg, ... bg20.jpg
+// You can increase MAX_BG if you add more.
 export function loadBackgroundImages() {
-  const images = import.meta.glob("/public/backgrounds/*", { eager: true });
-  
-  return Object.keys(images).map((path) => {
-    const file = path.split("/").pop();
-    return {
+  const MAX_BG = 20; // change to 30, 40 etc. if you want more
+  const result = [];
+
+  for (let i = 1; i <= MAX_BG; i++) {
+    const file = `bg${i}.jpg`;
+    result.push({
       name: file,
-      url: path.replace("/public", ""), // Vite serves /public as root
-    };
-  });
+      url: `/backgrounds/${file}`, // served from public/backgrounds
+    });
+  }
+
+  return result;
 }
