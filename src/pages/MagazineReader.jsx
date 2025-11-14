@@ -26,7 +26,16 @@ export default function MagazineReader() {
   if (loading) return <div className="p-10 text-center">Loading...</div>;
   if (!issue) return <div className="p-10 text-center">Magazine not found.</div>;
 
-  const slide = issue.slides[idx];
+  /* -------------------------------------- */
+  /* SAFETY FIX — prevent crash on missing slide */
+  /* -------------------------------------- */
+  const slide = issue.slides?.[idx] || {
+    backgroundUrl: "",
+    highlight: "",
+    rawText: "Content missing for this slide.",
+  };
+
+  const bgUrl = slide.backgroundUrl ? `url(${slide.backgroundUrl})` : "none";
 
   return (
     <div className="w-full min-h-screen bg-gray-100 flex flex-col items-center py-6">
@@ -37,7 +46,7 @@ export default function MagazineReader() {
       <div
         className="relative w-[90%] max-w-3xl h-[80vh] bg-white rounded-xl shadow-lg overflow-hidden border"
         style={{
-          backgroundImage: slide.backgroundUrl ? `url(${slide.backgroundUrl})` : "none",
+          backgroundImage: bgUrl,
           backgroundSize: "cover",
           backgroundPosition: "center",
         }}
@@ -50,8 +59,7 @@ export default function MagazineReader() {
         </div>
 
         <div className="absolute inset-0 bg-white/60 backdrop-blur-sm p-6 overflow-y-auto">
-
-          {/* Highlight / Quote */}
+          {/* Highlight */}
           {slide.highlight && (
             <div className="mb-4 p-3 bg-amber-50 border-l-4 border-amber-500 rounded shadow-sm italic text-sm">
               {slide.highlight}
@@ -59,7 +67,7 @@ export default function MagazineReader() {
           )}
 
           {/* Styled Raw Text */}
-          <StyledSlideText text={slide.rawText} />
+          <StyledSlideText text={slide.rawText || ""} />
         </div>
       </div>
 
@@ -74,7 +82,7 @@ export default function MagazineReader() {
         </button>
 
         <button
-          disabled={idx === issue.slides.length - 1}
+          disabled={idx >= issue.slides.length - 1}
           onClick={() => setIdx((i) => i + 1)}
           className="px-4 py-2 bg-gray-200 rounded disabled:opacity-40"
         >
@@ -95,19 +103,24 @@ export default function MagazineReader() {
 function StyledSlideText({ text }) {
   if (!text) return null;
 
-  const lines = text.trim().split("\n").filter(Boolean);
+  /* SAFETY FIX — prevent empty title crash */
+  const lines = text.trim().split("\n").filter((l) => l.trim() !== "");
 
-  const title = lines[0];
+  const title = lines[0] || "Untitled Slide";
   const paragraphs = lines.slice(1);
 
   return (
     <div className="text-gray-800 leading-relaxed">
-      {/* Title */}
       <h2 className="text-xl font-bold mb-3 underline decoration-indigo-400 decoration-4">
         {title}
       </h2>
 
-      {/* Paragraphs */}
+      {paragraphs.length === 0 && (
+        <p className="text-sm text-gray-600">
+          (No additional content on this slide.)
+        </p>
+      )}
+
       {paragraphs.map((p, i) => (
         <p key={i} className="mb-3 text-sm">
           {p}
