@@ -7,6 +7,17 @@ const EMPTY_SLIDE = {
   highlight: "",
 };
 
+// ✅ All built-in background options in ONE place
+const BACKGROUND_PRESETS = [
+  { value: "/backgrounds/bg1.png", label: "Courtroom (bg1.png)" },
+  { value: "/backgrounds/bg2.png", label: "Office (bg2.png)" },
+  { value: "/backgrounds/bg3.png", label: "Law Library (bg3.png)" },
+  { value: "/backgrounds/biharapo.png", label: "Pattern (biharapo.png)" },
+  { value: "/backgrounds/classroom-fallback.png", label: "Classroom Fallback" },
+  // 👇 When you add a new image file, just add a new line like this:
+  // { value: "/backgrounds/constitution-cover.png", label: "Constitution Cover" },
+];
+
 export default function MagazineAdminEditor({ existingIssue, onSaved }) {
   const [title, setTitle] = useState(existingIssue?.title || "");
   const [subtitle, setSubtitle] = useState(existingIssue?.subtitle || "");
@@ -165,15 +176,15 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
             </div>
 
             <div className="grid md:grid-cols-2 gap-3">
-              {/* ✅ Background selector + manual input + preview */}
+              {/* Background selector + manual input + preview */}
               <div>
                 <label className="text-xs font-semibold text-gray-700">
                   Background Image
                 </label>
 
-                {/* Preset selector + manual box */}
                 <div className="mt-1 flex flex-col gap-1">
                   <div className="flex gap-2 items-start">
+                    {/* Preset dropdown */}
                     <select
                       className="border rounded-lg px-2 py-1.5 text-xs w-48"
                       value={slide.backgroundUrl || ""}
@@ -182,26 +193,17 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
                       }
                     >
                       <option value="">-- Select background --</option>
-                      <option value="/backgrounds/bg1.png">
-                        Courtroom (bg1.png)
-                      </option>
-                      <option value="/backgrounds/bg2.png">
-                        Office (bg2.png)
-                      </option>
-                      <option value="/backgrounds/bg3.png">
-                        Law Library (bg3.png)
-                      </option>
-                      <option value="/backgrounds/biharapo.png">
-                        Pattern (biharapo.png)
-                      </option>
-                      <option value="/backgrounds/classroom-fallback.png">
-                        Classroom Fallback
-                      </option>
+                      {BACKGROUND_PRESETS.map((bg) => (
+                        <option key={bg.value} value={bg.value}>
+                          {bg.label}
+                        </option>
+                      ))}
                     </select>
 
+                    {/* Manual URL input */}
                     <input
                       className="flex-1 border rounded-lg px-2 py-1.5 text-xs"
-                      placeholder="Or paste custom image URL (eg. /backgrounds/bg1.png)"
+                      placeholder="Or paste custom image URL"
                       value={slide.backgroundUrl || ""}
                       onChange={(e) =>
                         updateSlide(idx, { backgroundUrl: e.target.value })
