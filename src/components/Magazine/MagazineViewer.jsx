@@ -5,6 +5,7 @@ import {
   chunkParagraphs,
   pickTemplateName,
 } from "./layoutUtils";
+
 import {
   CoverTemplate,
   TwoColumnTemplate,
@@ -25,21 +26,53 @@ export default function MagazineViewer({ slug }) {
       try {
         const res = await fetch(`/api/magazines/${slug}`);
         const data = await res.json();
+
+        if (!data.ok || !data.issue) {
+          console.warn("No magazine found for slug:", slug);
+          setIssue(null);
+          setPages([]);
+          return;
+        }
+
         const issue = data.issue;
         setIssue(issue);
 
-        // Build pages: each slide may become multiple pages
+        if (!issue.slides || issue.slides.length === 0) {
+          setPages([]);
+          return;
+        }
+
+        /* ------------------------------------------------------ */
+        /* BUILD PAGES SAFELY                                     */
+        /* ------------------------------------------------------ */
         const built = [];
+
         issue.slides.forEach((slide, slideIndex) => {
-          const { localTitle, paragraphs } = parseSlideText(slide.rawText);
-          const chunks = chunkParagraphs(paragraphs, 6);
+          const raw = slide.rawText || "";
+
+          const { localTitle, paragraphs } = parseSlideText(raw || "");
+
+          // Prevent template crash if paragraphs is empty
+          const safeParagraphs = Array.isArray(paragraphs)
+            ? paragraphs
+            : [raw];
+
+          const chunks = chunkParagraphs(safeParagraphs, 6);
+
+          if (chunks.length === 0) {
+            chunks.push([raw]); // guarantee at least one page
+          }
+
           chunks.forEach((chunk, pageIndex) => {
             const templateName = pickTemplateName(slideIndex, pageIndex);
             built.push({
               slideIndex,
               pageIndex,
-              slide,
-              localTitle,
+              slide: {
+                ...slide,
+                backgroundUrl: slide.backgroundUrl || "",
+              },
+              localTitle: localTitle || "Untitled Page",
               paragraphs: chunk,
               templateName,
             });
@@ -50,13 +83,18 @@ export default function MagazineViewer({ slug }) {
         setPageIdx(0);
       } catch (e) {
         console.error("Failed to load magazine:", e);
+        setPages([]);
       } finally {
         setLoading(false);
       }
     }
+
     load();
   }, [slug]);
 
+  /* -------------------------------------------------------------- */
+  /* PAGE NAVIGATION                                                */
+  /* -------------------------------------------------------------- */
   function goPrev() {
     setPageIdx((idx) => Math.max(0, idx - 1));
   }
@@ -65,6 +103,9 @@ export default function MagazineViewer({ slug }) {
     setPageIdx((idx) => Math.min(pages.length - 1, idx + 1));
   }
 
+  /* -------------------------------------------------------------- */
+  /* LOADING + EMPTY STATES                                         */
+  /* -------------------------------------------------------------- */
   if (loading) {
     return (
       <div className="flex items-center justify-center py-10">
@@ -85,6 +126,9 @@ export default function MagazineViewer({ slug }) {
     );
   }
 
+  /* -------------------------------------------------------------- */
+  /* RENDER CURRENT PAGE                                            */
+  /* -------------------------------------------------------------- */
   const current = pages[pageIdx];
 
   function renderPage() {
@@ -101,12 +145,16 @@ export default function MagazineViewer({ slug }) {
     switch (current.templateName) {
       case "cover":
         return <CoverTemplate {...commonProps} />;
+
       case "twoColumn":
         return <TwoColumnTemplate {...commonProps} />;
+
       case "highlightRight":
         return <HighlightRightTemplate {...commonProps} />;
+
       case "fullBleedGlass":
         return <FullBleedGlassTemplate {...commonProps} />;
+
       case "pullQuote":
       default:
         return <PullQuoteTemplate {...commonProps} />;
@@ -115,6 +163,9 @@ export default function MagazineViewer({ slug }) {
 
   const totalPages = pages.length;
 
+  /* -------------------------------------------------------------- */
+  /* MAIN UI                                                        */
+  /* -------------------------------------------------------------- */
   return (
     <div className="max-w-6xl mx-auto p-3 md:p-6">
       <div className="flex items-center justify-between mb-3">
@@ -126,6 +177,7 @@ export default function MagazineViewer({ slug }) {
             {issue.title}
           </div>
         </div>
+
         <div className="flex items-center gap-2 text-xs md:text-sm text-gray-600">
           <button
             onClick={goPrev}
@@ -138,9 +190,11 @@ export default function MagazineViewer({ slug }) {
           >
             ← Prev
           </button>
+
           <span className="text-[11px] md:text-xs">
             Page {pageIdx + 1} / {totalPages}
           </span>
+
           <button
             onClick={goNext}
             disabled={pageIdx === totalPages - 1}
@@ -155,12 +209,13 @@ export default function MagazineViewer({ slug }) {
         </div>
       </div>
 
+      {/* Magazine Page */}
       <div className="aspect-[4/3] md:aspect-[16/9]">
         {renderPage()}
       </div>
 
       <div className="mt-3 text-[10px] md:text-xs text-gray-500 text-center">
-        Styled automatically from admin text • Watermark: LawPrepX • Layouts: mixed magazine-style
+        Styled automatically from admin text • Watermark: LawPrepX • Mixed magazine layouts
       </div>
     </div>
   );
