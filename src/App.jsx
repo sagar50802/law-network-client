@@ -137,7 +137,6 @@ function ClassroomWrapper({ children }) {
 /* ---------- Main ---------- */
 function AppContent() {
   const location = useLocation();
-
   const isPrepHome = location.pathname === "/prep";
 
   return (
@@ -168,7 +167,7 @@ function AppContent() {
           <Route path="/plagiarism" element={<Plagiarism />} />
           <Route path="/pdfdemo" element={<PdfDemo />} />
 
-          {/* LIVE */}
+          {/* ---------- LIVE Channel ---------- */}
           <Route path="/live" element={<LiveChannelPage />} />
           <Route
             path="/admin/live"
@@ -179,7 +178,7 @@ function AppContent() {
             }
           />
 
-          {/* Classroom */}
+          {/* ---------- Classroom ---------- */}
           <Route
             path="/classroom"
             element={
@@ -192,13 +191,13 @@ function AppContent() {
           <Route path="/classroom/ambience" element={<AmbiencePage />} />
           <Route path="/classroom/theme" element={<ThemeFocusPage />} />
 
-          {/* Bridge */}
+          {/* ---------- Group Key Bridge ---------- */}
           <Route
             path="/bridge/gk/:key/t/:token"
             element={<GroupKeyBridge />}
           />
 
-          {/* Admin Classroom */}
+          {/* ---------- Admin Classroom ---------- */}
           <Route
             path="/admin/classroom-link"
             element={
@@ -216,10 +215,27 @@ function AppContent() {
             }
           />
 
-          {/* Exam Prep */}
+          {/* ---------- Research Drafting (RESTORED) ---------- */}
+          <Route
+            path="/research-drafting"
+            element={<ResearchDrafting />}
+          />
+          <Route
+            path="/research-drafting/lab/:id"
+            element={<ResearchDraftingLab />}
+          />
+          <Route
+            path="/admin/research-drafting"
+            element={
+              <IfOwnerOnly>
+                <AdminResearchPanel />
+              </IfOwnerOnly>
+            }
+          />
+
+          {/* ---------- Exam Prep ---------- */}
           <Route path="/prep" element={<PrepList />} />
           <Route path="/prep/:examId" element={<PrepWizard />} />
-
           <Route
             path="/admin/prep"
             element={
@@ -245,7 +261,7 @@ function AppContent() {
             }
           />
 
-          {/* Test Series */}
+          {/* ---------- Test Series ---------- */}
           <Route path="/tests" element={<TestDashboard />} />
           <Route
             path="/tests/:code"
@@ -260,7 +276,7 @@ function AppContent() {
             element={<RouteWithResultId Comp={ResultScreen} />}
           />
 
-          {/* Owner Admin */}
+          {/* ---------- Owner / Test Admin ---------- */}
           <Route
             path="/owner/tests/import"
             element={
@@ -286,7 +302,7 @@ function AppContent() {
             }
           />
 
-          {/* Admin Pages */}
+          {/* ---------- Admin Pages ---------- */}
           <Route path="/admin/login" element={<AdminLogin />} />
           <Route
             path="/admin/dashboard"
@@ -313,7 +329,7 @@ function AppContent() {
             }
           />
 
-          {/* 404 */}
+          {/* ---------- 404 ---------- */}
           <Route path="*" element={<NotFound />} />
         </Routes>
       </div>
