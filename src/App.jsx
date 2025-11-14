@@ -1,3 +1,4 @@
+// src/App.jsx
 import {
   BrowserRouter as Router,
   Routes,
@@ -141,7 +142,7 @@ function ClassroomWrapper({ children }) {
   );
 }
 
-/* ---------- Main ---------- */
+/* ---------- Main App Content (inside Router) ---------- */
 function AppContent() {
   const location = useLocation();
   const isPrepHome = location.pathname === "/prep";
@@ -150,7 +151,7 @@ function AppContent() {
     <div
       className={`text-[#0b1220] min-h-screen font-inter antialiased flex flex-col ${
         isPrepHome
-          ? "bg-transparent"
+          ? "bg-transparent" // let PrepList control its own background slideshow
           : "bg-gradient-to-br from-[#f8fafc] to-[#e6edf5]"
       }`}
     >
@@ -228,11 +229,8 @@ function AppContent() {
             }
           />
 
-          {/* ---------- Research Drafting (RESTORED) ---------- */}
-          <Route
-            path="/research-drafting"
-            element={<ResearchDrafting />}
-          />
+          {/* ---------- Research Drafting ---------- */}
+          <Route path="/research-drafting" element={<ResearchDrafting />} />
           <Route
             path="/research-drafting/lab/:id"
             element={<ResearchDraftingLab />}
@@ -362,6 +360,7 @@ function AppContent() {
   );
 }
 
+/* ---------- Root App (Router wrapper) ---------- */
 export default function App() {
   return (
     <Router>
