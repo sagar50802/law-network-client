@@ -12,7 +12,9 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
   const [subtitle, setSubtitle] = useState(existingIssue?.subtitle || "");
   const [slug, setSlug] = useState(existingIssue?.slug || "");
   const [slides, setSlides] = useState(
-    existingIssue?.slides?.length ? existingIssue.slides : [{ ...EMPTY_SLIDE, id: "s1" }]
+    existingIssue?.slides?.length
+      ? existingIssue.slides
+      : [{ ...EMPTY_SLIDE, id: "s1" }]
   );
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
@@ -132,7 +134,9 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
           />
         </div>
         <div>
-          <label className="text-xs font-semibold text-gray-700">Slug (URL)</label>
+          <label className="text-xs font-semibold text-gray-700">
+            Slug (URL)
+          </label>
           <input
             className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
             value={slug}
@@ -161,25 +165,65 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
             </div>
 
             <div className="grid md:grid-cols-2 gap-3">
+              {/* ✅ Background selector + manual input + preview */}
               <div>
                 <label className="text-xs font-semibold text-gray-700">
-                  Background Image URL
+                  Background Image
                 </label>
-                <input
-                  className="mt-1 w-full border rounded-lg px-3 py-1.5 text-xs"
-                  value={slide.backgroundUrl}
-                  onChange={(e) => updateSlide(idx, { backgroundUrl: e.target.value })}
-                  placeholder="/backgrounds/courtroom.jpg"
-                />
-                {slide.backgroundUrl && (
-                  <div className="mt-2">
-                    <div className="text-[10px] text-gray-500 mb-1">Preview</div>
-                    <div
-                      className="w-full h-24 rounded-lg bg-cover bg-center border"
-                      style={{ backgroundImage: `url(${slide.backgroundUrl})` }}
+
+                {/* Preset selector + manual box */}
+                <div className="mt-1 flex flex-col gap-1">
+                  <div className="flex gap-2 items-start">
+                    <select
+                      className="border rounded-lg px-2 py-1.5 text-xs w-48"
+                      value={slide.backgroundUrl || ""}
+                      onChange={(e) =>
+                        updateSlide(idx, { backgroundUrl: e.target.value })
+                      }
+                    >
+                      <option value="">-- Select background --</option>
+                      <option value="/backgrounds/bg1.png">
+                        Courtroom (bg1.png)
+                      </option>
+                      <option value="/backgrounds/bg2.png">
+                        Office (bg2.png)
+                      </option>
+                      <option value="/backgrounds/bg3.png">
+                        Law Library (bg3.png)
+                      </option>
+                      <option value="/backgrounds/biharapo.png">
+                        Pattern (biharapo.png)
+                      </option>
+                      <option value="/backgrounds/classroom-fallback.png">
+                        Classroom Fallback
+                      </option>
+                    </select>
+
+                    <input
+                      className="flex-1 border rounded-lg px-2 py-1.5 text-xs"
+                      placeholder="Or paste custom image URL (eg. /backgrounds/bg1.png)"
+                      value={slide.backgroundUrl || ""}
+                      onChange={(e) =>
+                        updateSlide(idx, { backgroundUrl: e.target.value })
+                      }
                     />
                   </div>
-                )}
+
+                  {/* Preview */}
+                  {slide.backgroundUrl && (
+                    <div className="mt-2">
+                      <div className="text-[10px] text-gray-500 mb-1">
+                        Preview
+                      </div>
+                      <div
+                        className="w-full h-24 rounded-lg bg-cover bg-center border"
+                        style={{
+                          backgroundImage: `url(${slide.backgroundUrl})`,
+                        }}
+                      />
+                    </div>
+                  )}
+                </div>
               </div>
 
               <div>
@@ -189,7 +233,9 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
                 <textarea
                   className="mt-1 w-full border rounded-lg px-3 py-1.5 text-xs min-h-[80px]"
                   value={slide.highlight || ""}
-                  onChange={(e) => updateSlide(idx, { highlight: e.target.value })}
+                  onChange={(e) =>
+                    updateSlide(idx, { highlight: e.target.value })
+                  }
                   placeholder="The Constitution is a living document..."
                 />
               </div>
