@@ -18,16 +18,15 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
       : [{ ...EMPTY_SLIDE, id: "s1" }]
   );
 
-  const [backgrounds, setBackgrounds] = useState([]); 
+  const [backgrounds, setBackgrounds] = useState([]);
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  /* -------------------------------------------------
-     AUTO LOAD IMAGES FROM /public/backgrounds/*
-     Supports: png, jpg, jpeg, webp, gif, svg, avif
-  ------------------------------------------------- */
+  /* --------------------------------------------
+       AUTO LOAD BACKGROUNDS (any file type)
+  --------------------------------------------- */
   useEffect(() => {
-    const imgs = loadBackgroundImages(); // now auto-detects everything
+    const imgs = loadBackgroundImages();
     setBackgrounds(imgs);
   }, []);
 
@@ -50,6 +49,22 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
     setSlides((prev) => prev.filter((_, i) => i !== idx));
   }
 
+  /* ===========================================================
+      ⭐ FIX #1 — ALWAYS sanitize slide data before sending
+      prevents MongoDB validation crash → HTML error → JSON error
+  =========================================================== */
+  function sanitizeSlide(slide, index) {
+    return {
+      id: slide.id || `s${index + 1}`,
+      backgroundUrl: slide.backgroundUrl || "",
+      rawText: slide.rawText || "",
+      highlight: slide.highlight || "",
+    };
+  }
+
+  /* ===========================================================
+      SAVE MAGAZINE
+  =========================================================== */
   async function handleSave() {
     setSaving(true);
     setError("");
@@ -58,10 +73,9 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
       title,
       subtitle,
       slug: slug || title.toLowerCase().replace(/\s+/g, "-"),
-      slides: slides.map((s, i) => ({
-        ...s,
-        id: s.id || `s${i + 1}`,
-      })),
+
+      // ⭐ FIX #1 applied here
+      slides: slides.map((s, i) => sanitizeSlide(s, i)),
     };
 
     try {
@@ -78,14 +92,21 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
 
       const text = await res.text();
 
+      /* ======================================================
+          ⭐ FIX #2 — SAFE JSON PARSE
+          prevents "<!DOCTYPE html>" crash
+      ====================================================== */
+      let data = null;
       try {
-        const data = JSON.parse(text);
-        if (!data.ok) throw new Error(data.error || "Save failed");
-        onSaved && onSaved(data.issue);
+        data = JSON.parse(text);
       } catch {
         console.error("Invalid JSON from server:", text);
         throw new Error("Server returned invalid JSON");
       }
+
+      if (!data.ok) throw new Error(data.error || "Save failed");
+
+      onSaved && onSaved(data.issue);
     } catch (err) {
       setError(err.message || "Error saving magazine");
     } finally {
@@ -93,9 +114,11 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
     }
   }
 
+  /* ===========================================================
+      DELETE MAGAZINE (unchanged except JSON safeguard)
+  =========================================================== */
   async function handleDelete() {
     if (!existingIssue) return;
-
     if (!window.confirm("Are you sure you want to delete this magazine?"))
       return;
 
@@ -108,7 +131,7 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
       let data;
 
       try {
-        data = JSON.parse(text);
+        data = JSON.parse(text); // ⭐ FIX #3 — safe parse
       } catch {
         alert("Server returned invalid JSON");
         return;
@@ -136,7 +159,7 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
         </div>
       )}
 
-      {/* Title / Subtitle / Slug */}
+      {/* ---------------- Title / Subtitle / Slug ---------------- */}
       <div className="grid md:grid-cols-2 gap-4 mb-4">
         <div>
           <label className="text-xs font-semibold text-gray-700">Title</label>
@@ -166,7 +189,7 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
         </div>
       </div>
 
-      {/* Slides */}
+      {/* ---------------- Slides ---------------- */}
       <div className="space-y-4">
         {slides.map((slide, idx) => (
           <div
@@ -187,7 +210,7 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
             </div>
 
             <div className="grid md:grid-cols-2 gap-3">
-              {/* Background Selector */}
+              {/* Background */}              
               <div>
                 <label className="text-xs font-semibold text-gray-700">
                   Background Image
@@ -263,7 +286,7 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
         ))}
       </div>
 
-      {/* Controls */}
+      {/* ---------------- Controls ---------------- */}
       <div className="mt-4 flex flex-wrap gap-2">
         <button
           onClick={addSlide}
