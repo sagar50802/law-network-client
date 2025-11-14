@@ -33,6 +33,9 @@ import ScholarPage from "./pages/ScholarPage.jsx";
 import PdfDemo from "./pages/PdfDemo.jsx";
 import Plagiarism from "./pages/Plagiarism.jsx";
 
+/* ---------- 🆕 Magazine Reader Page ---------- */
+import MagazineReader from "./pages/MagazineReader.jsx";
+
 /* ---------- Admin Pages ---------- */
 import AdminDashboard from "./pages/AdminDashboard.jsx";
 import AdminLogin from "./pages/AdminLogin.jsx";
@@ -67,7 +70,7 @@ import LiveAdminPage from "./pages/LiveAdminPage.jsx";
 /* ---------- Classroom Feature ---------- */
 import ClassroomLivePage from "./pages/ClassroomLivePage.jsx";
 import AdminLectureManager from "./pages/AdminLectureManager.jsx";
-import ClassroomSharePage from "./pages/ClassroomSharePage.jsx";
+import ClassroomSharePage from "./pages/ClassroomSharePage.jsx;
 import ClassroomLinkCreator from "./pages/ClassroomLinkCreator.jsx";
 
 /* ---------- Theme Page ---------- */
@@ -166,6 +169,9 @@ function AppContent() {
           <Route path="/scholar" element={<ScholarPage />} />
           <Route path="/plagiarism" element={<Plagiarism />} />
           <Route path="/pdfdemo" element={<PdfDemo />} />
+
+          {/* ---------- 🆕 Magazine Reader ---------- */}
+          <Route path="/magazine/:slug" element={<MagazineReader />} />
 
           {/* ---------- LIVE Channel ---------- */}
           <Route path="/live" element={<LiveChannelPage />} />
