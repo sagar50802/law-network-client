@@ -16,8 +16,9 @@ export default function NewsTicker() {
       setItems([]);
     }
   }
-
-  useEffect(() => { load(); }, []);
+  useEffect(() => {
+    load();
+  }, []);
 
   async function add(e) {
     e.preventDefault();
@@ -28,7 +29,6 @@ export default function NewsTicker() {
       fd.append("title", form.title.trim());
       if (form.link?.trim()) fd.append("link", form.link.trim());
       if (form.image) fd.append("image", form.image);
-
       await upload("/api/news", fd);
       setForm({ title: "", link: "", image: null });
       await load();
@@ -49,28 +49,21 @@ export default function NewsTicker() {
   }
 
   return (
-    <section className="border-y bg-white shadow-sm">
-      <div className="max-w-6xl mx-auto px-4 py-3">
+    <section className="relative border-y bg-white shadow-sm">
+      {/* ★ Stylish animated bar on top */}
+      <div className="absolute top-0 left-0 w-full h-0.5 bg-gradient-to-r from-yellow-400 via-red-500 to-blue-500 animate-pulse" />
 
-        {/* ===== TICKER ROW ===== */}
-        <div
-          className="
-            flex gap-6 overflow-x-auto items-center ticker-scroll
-            py-1
-          "
-        >
+      <div className="max-w-6xl mx-auto px-4 py-3">
+        {/* Ticker Row */}
+        <div className="flex gap-6 overflow-x-auto items-center py-1 ticker-scroll">
           {items.length === 0 && (
-            <div className="text-gray-400 italic">No news yet</div>
+            <div className="text-gray-400">No news yet</div>
           )}
 
           {items.map((n) => (
             <div
               key={n.id || n._id}
-              className="
-                flex items-center gap-3 shrink-0 px-3 py-1
-                bg-gray-50 border rounded-xl shadow-sm
-                hover:shadow-md transition
-              "
+              className="flex items-center gap-3 shrink-0 bg-white px-3 py-2 rounded-xl shadow hover:shadow-md transition"
             >
               {n.image && (
                 <img
@@ -78,26 +71,28 @@ export default function NewsTicker() {
                   alt=""
                   className="h-10 w-10 object-cover rounded-lg shadow-sm"
                   loading="lazy"
-                  onError={(ev) => { ev.currentTarget.style.display = "none"; }}
+                  onError={(ev) => (ev.currentTarget.style.display = "none")}
                 />
               )}
 
               {n.link ? (
                 <a
-                  className="font-medium text-blue-600 hover:underline"
                   href={n.link}
                   target="_blank"
                   rel="noreferrer"
+                  className="text-blue-600 font-medium whitespace-nowrap hover:underline"
                 >
                   {n.title}
                 </a>
               ) : (
-                <span className="font-medium text-gray-800">{n.title}</span>
+                <span className="text-gray-800 font-medium whitespace-nowrap">
+                  {n.title}
+                </span>
               )}
 
               <IfOwnerOnly>
                 <button
-                  className="text-xs text-red-600 hover:underline"
+                  className="text-xs text-red-600 hover:underline ml-2"
                   onClick={() => del(n.id || n._id)}
                 >
                   Delete
@@ -107,49 +102,46 @@ export default function NewsTicker() {
           ))}
         </div>
 
-        {/* ===== ADMIN INPUT FORM ===== */}
+        {/* Admin Form */}
         <IfOwnerOnly>
           <form
             onSubmit={add}
-            className="flex flex-wrap gap-2 items-center mt-4"
+            className="flex flex-wrap gap-2 items-center mt-3"
           >
             <input
-              className="border rounded p-2 focus:ring focus:ring-blue-200"
+              className="border rounded p-2"
               placeholder="Title"
               value={form.title}
-              onChange={(e) => setForm({ ...form, title: e.target.value })}
+              onChange={(e) =>
+                setForm({ ...form, title: e.target.value })
+              }
             />
-
             <input
-              className="border rounded p-2 min-w-[260px] focus:ring focus:ring-blue-200"
+              className="border rounded p-2 min-w-[260px]"
               placeholder="Link https:// (optional)"
               value={form.link}
-              onChange={(e) => setForm({ ...form, link: e.target.value })}
+              onChange={(e) =>
+                setForm({ ...form, link: e.target.value })
+              }
             />
 
-            <label
-              className="
-                border rounded p-2 cursor-pointer
-                bg-gray-100 hover:bg-gray-200 transition
-              "
-            >
+            <label className="border rounded p-2 cursor-pointer">
               Image
               <input
                 type="file"
                 accept="image/*"
                 className="hidden"
                 onChange={(e) =>
-                  setForm({ ...form, image: e.target.files?.[0] || null })
+                  setForm({
+                    ...form,
+                    image: e.target.files?.[0] || null,
+                  })
                 }
               />
             </label>
 
             <button
-              className="
-                bg-black text-white px-4 py-2 rounded 
-                hover:bg-gray-800 transition
-                disabled:opacity-50
-              "
+              className="bg-black text-white px-4 py-2 rounded disabled:opacity-50"
               disabled={saving}
             >
               {saving ? "Saving…" : "Add"}
@@ -158,19 +150,8 @@ export default function NewsTicker() {
         </IfOwnerOnly>
       </div>
 
-      {/* ===== LOCAL TICKER CSS (SAFE — ONLY AFFECTS THIS COMPONENT) ===== */}
-      <style>{`
-        .ticker-scroll::-webkit-scrollbar {
-          height: 6px;
-        }
-        .ticker-scroll::-webkit-scrollbar-thumb {
-          background: #cbd5e1;
-          border-radius: 8px;
-        }
-        .ticker-scroll {
-          scroll-behavior: smooth;
-        }
-      `}</style>
+      {/* Extra bottom glow */}
+      <div className="absolute bottom-0 left-0 w-full h-0.5 bg-gradient-to-r from-blue-500 via-purple-500 to-pink-500 opacity-60" />
     </section>
   );
 }
