@@ -146,19 +146,24 @@ function ClassroomWrapper({ children }) {
 function AppContent() {
   const location = useLocation();
   const isPrepHome = location.pathname === "/prep";
+  const isLivePage = location.pathname.startsWith("/live"); // ✅ detect live
+
+  const wrapperClasses = `text-[#0b1220] min-h-screen font-inter antialiased flex flex-col ${
+    isPrepHome
+      ? "bg-transparent" // let PrepList control its own background slideshow
+      : isLivePage
+      ? "" // let LiveChannelPage be full black on its own
+      : "bg-gradient-to-br from-[#f8fafc] to-[#e6edf5]"
+  }`;
 
   return (
-    <div
-      className={`text-[#0b1220] min-h-screen font-inter antialiased flex flex-col ${
-        isPrepHome
-          ? "bg-transparent" // let PrepList control its own background slideshow
-          : "bg-gradient-to-br from-[#f8fafc] to-[#e6edf5]"
-      }`}
-    >
-      {/* Sticky Navbar */}
-      <nav className="bg-white/70 backdrop-blur-md shadow-md sticky top-0 z-50">
-        <Navbar />
-      </nav>
+    <div className={wrapperClasses}>
+      {/* Sticky Navbar (hide on LIVE so it doesn't conflict with LiveChannelPage header) */}
+      {!isLivePage && (
+        <nav className="bg-white/70 backdrop-blur-md shadow-md sticky top-0 z-50">
+          <Navbar />
+        </nav>
+      )}
 
       <ScrollToHash />
 
@@ -355,7 +360,8 @@ function AppContent() {
         </Routes>
       </div>
 
-      <Footer />
+      {/* Hide footer on LIVE as well */}
+      {!isLivePage && <Footer />}
     </div>
   );
 }
