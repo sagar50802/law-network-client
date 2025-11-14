@@ -11,7 +11,7 @@ export default function MagazineReader() {
     async function load() {
       try {
         // ✅ FIXED ROUTE (was /api/magazines/${slug})
-        const res = await fetch(`/api/magazines/${slug}`);
+        const res = await fetch(`/api/magazines/slug/${slug}`);
 
         const data = await res.json();
         if (data.ok) {
