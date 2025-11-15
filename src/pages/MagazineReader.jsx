@@ -6,19 +6,41 @@ export default function MagazineReader() {
   const [issue, setIssue] = useState(null);
   const [idx, setIdx] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
+
+  /* ----------------------------------------------------------
+     SAFE GET — prevents "<!doctype>" = invalid JSON 
+  ---------------------------------------------------------- */
+  async function safeFetchJSON(url) {
+    const res = await fetch(url, { headers: { Accept: "application/json" } });
+
+    const text = await res.text();
+
+    // If HTML → bad response
+    if (text.startsWith("<!DOCTYPE") || text.startsWith("<html")) {
+      console.error("❌ Server returned HTML instead of JSON.");
+      throw new Error("Server returned invalid JSON");
+    }
+
+    try {
+      return JSON.parse(text);
+    } catch {
+      console.error("❌ JSON Parse Error. Raw:", text);
+      throw new Error("Invalid JSON from server");
+    }
+  }
 
   useEffect(() => {
     async function load() {
       try {
-        // ✅ FIXED ROUTE (was /api/magazines/${slug})
-        const res = await fetch(`/api/magazines/slug/${slug}`);
+        const data = await safeFetchJSON(`/api/magazines/slug/${slug}`);
 
-        const data = await res.json();
-        if (data.ok) {
-          setIssue(data.issue);
-        }
-      } catch (e) {
-        console.error("Error fetching magazine:", e);
+        if (!data.ok) throw new Error(data.error || "Magazine not found");
+
+        setIssue(data.issue);
+      } catch (err) {
+        setError(err.message);
+        console.error("Magazine load error:", err);
       }
       setLoading(false);
     }
@@ -26,11 +48,9 @@ export default function MagazineReader() {
   }, [slug]);
 
   if (loading) return <div className="p-10 text-center">Loading...</div>;
+  if (error) return <div className="p-10 text-center text-red-600">{error}</div>;
   if (!issue) return <div className="p-10 text-center">Magazine not found.</div>;
 
-  /* -------------------------------------- */
-  /* SAFETY: prevent crash on missing slide */
-  /* -------------------------------------- */
   const slide = issue.slides?.[idx] || {
     backgroundUrl: "",
     highlight: "",
@@ -53,31 +73,20 @@ export default function MagazineReader() {
           backgroundPosition: "center",
         }}
       >
-        {/* Watermark */}
-        <div className="absolute inset-0 flex items-center justify-center pointer-events-none select-none">
-          <span className="text-6xl font-bold text-gray-300 opacity-10">
-            LawPrepX
-          </span>
-        </div>
-
         <div className="absolute inset-0 bg-white/60 backdrop-blur-sm p-6 overflow-y-auto">
-          {/* Highlight */}
           {slide.highlight && (
             <div className="mb-4 p-3 bg-amber-50 border-l-4 border-amber-500 rounded shadow-sm italic text-sm">
               {slide.highlight}
             </div>
           )}
-
-          {/* Styled Raw Text */}
           <StyledSlideText text={slide.rawText || ""} />
         </div>
       </div>
 
-      {/* Slide Controls */}
       <div className="flex gap-4 mt-6">
         <button
           disabled={idx === 0}
-          onClick={() => setIdx((i) => i - 1)}
+          onClick={() => setIdx((i) => Math.max(0, i - 1))}
           className="px-4 py-2 bg-gray-200 rounded disabled:opacity-40"
         >
           ◀ Previous
@@ -99,15 +108,10 @@ export default function MagazineReader() {
   );
 }
 
-/* --------------------------------------------------------- */
-/*  Auto Format Slide Text (Title, Paragraphs, Spacing)      */
-/* --------------------------------------------------------- */
 function StyledSlideText({ text }) {
   if (!text) return null;
 
-  /* SAFETY FIX — prevent empty title crash */
   const lines = text.trim().split("\n").filter((l) => l.trim() !== "");
-
   const title = lines[0] || "Untitled Slide";
   const paragraphs = lines.slice(1);
 
@@ -117,17 +121,15 @@ function StyledSlideText({ text }) {
         {title}
       </h2>
 
-      {paragraphs.length === 0 && (
-        <p className="text-sm text-gray-600">
-          (No additional content on this slide.)
-        </p>
+      {paragraphs.length === 0 ? (
+        <p className="text-sm text-gray-600">(No additional content.)</p>
+      ) : (
+        paragraphs.map((p, i) => (
+          <p key={i} className="mb-3 text-sm">
+            {p}
+          </p>
+        ))
       )}
-
-      {paragraphs.map((p, i) => (
-        <p key={i} className="mb-3 text-sm">
-          {p}
-        </p>
-      ))}
     </div>
   );
 }
