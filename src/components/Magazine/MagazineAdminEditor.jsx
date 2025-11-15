@@ -1,53 +1,22 @@
 import { useEffect, useState } from "react";
 import { loadBackgroundImages } from "../../utils/loadBackgrounds";
 
-/* -----------------------------------------------------------
-   API helpers (same pattern)
------------------------------------------------------------ */
-const API_BASE = import.meta.env.VITE_BACKEND_URL || "";
-
-function apiUrl(path) {
-  return API_BASE ? `${API_BASE}${path}` : path;
+const API_BASE = import.meta.env.VITE_BACKEND_URL;
+function api(path) {
+  return `${API_BASE}${path.startsWith("/") ? path : "/" + path}`;
 }
 
 async function safeFetchJSON(path, options = {}) {
-  const res = await fetch(apiUrl(path), {
+  const res = await fetch(api(path), {
     ...options,
-    headers: {
-      "Content-Type": "application/json",
-      Accept: "application/json",
-      ...(options.headers || {}),
-    },
+    headers: { "Content-Type": "application/json", Accept: "application/json" },
   });
 
   const text = await res.text();
-  const trimmed = text.trim();
+  if (!text || text.startsWith("<")) throw new Error("Invalid JSON from server");
 
-  if (!trimmed) {
-    throw new Error(`Empty response from ${path}`);
-  }
-
-  if (trimmed.startsWith("<!DOCTYPE") || trimmed.startsWith("<html")) {
-    throw new Error(`Server returned HTML instead of JSON for ${path}`);
-  }
-
-  let data;
-  try {
-    data = JSON.parse(trimmed);
-  } catch {
-    throw new Error(`Invalid JSON from server for ${path}`);
-  }
-
-  if (!res.ok || data.ok === false) {
-    throw new Error(data.error || `Request failed (${res.status})`);
-  }
-
-  return data;
+  return JSON.parse(text);
 }
-
-/* -----------------------------------------------------------
-   Component
------------------------------------------------------------ */
 
 const EMPTY_SLIDE = {
   id: "",
@@ -70,42 +39,18 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  /* -----------------------------------------------
-     LOAD BACKGROUNDS
-  ----------------------------------------------- */
   useEffect(() => {
     setBackgrounds(loadBackgroundImages());
   }, []);
 
-  /* -----------------------------------------------
-     SLIDE UPDATE
-  ----------------------------------------------- */
   function updateSlide(idx, patch) {
     setSlides((prev) => {
       const next = [...prev];
-      const safePatch = {
-        id: patch.id ?? next[idx].id,
-        backgroundUrl: patch.backgroundUrl ?? next[idx].backgroundUrl ?? "",
-        rawText: patch.rawText ?? next[idx].rawText ?? "",
-        highlight: patch.highlight ?? next[idx].highlight ?? "",
-      };
-      next[idx] = { ...next[idx], ...safePatch };
+      next[idx] = { ...next[idx], ...patch };
       return next;
     });
   }
 
-  function addSlide() {
-    setSlides((prev) => [
-      ...prev,
-      { ...EMPTY_SLIDE, id: `s${prev.length + 1}` },
-    ]);
-  }
-
-  function removeSlide(idx) {
-    setSlides((prev) => prev.filter((_, i) => i !== idx));
-  }
-
-  /* ---------------------- SAVE ----------------------- */
   async function handleSave() {
     setSaving(true);
     setError("");
@@ -123,186 +68,143 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
     try {
       const method = existingIssue?._id ? "PUT" : "POST";
       const path = existingIssue?._id
-        ? `/api/magazines/${existingIssue._id}`
-        : `/api/magazines`;
+        ? `/magazines/${existingIssue._id}`
+        : `/magazines`;
 
       const data = await safeFetchJSON(path, {
         method,
         body: JSON.stringify(payload),
       });
 
+      if (!data.ok) throw new Error(data.error);
       onSaved && onSaved(data.issue);
     } catch (err) {
       setError(err.message);
-    } finally {
-      setSaving(false);
     }
+
+    setSaving(false);
   }
 
-  /* ---------------------- DELETE ----------------------- */
   async function handleDelete() {
     if (!existingIssue?._id) return;
     if (!window.confirm("Delete magazine?")) return;
 
     try {
-      const path = `/api/magazines/${existingIssue._id}`;
-      await safeFetchJSON(path, { method: "DELETE" });
+      const data = await safeFetchJSON(`/magazines/${existingIssue._id}`, {
+        method: "DELETE",
+      });
 
-      alert("Magazine deleted!");
-      onSaved && onSaved(null);
+      if (!data.ok) throw new Error(data.error);
+      onSaved(null);
     } catch (err) {
       alert(err.message);
     }
   }
 
-  /* -----------------------------------------------
-     RENDER UI
-  ----------------------------------------------- */
   return (
-    <div className="max-w-5xl mx-auto p-4 md:p-6">
-      <h1 className="text-2xl font-bold mb-4">Magazine Editor</h1>
+    <div className="max-w-5xl mx-auto p-4">
+      <h1 className="text-2xl font-bold mb-3">Magazine Editor</h1>
 
       {error && (
-        <div className="mb-3 text-sm text-red-600 bg-red-50 border border-red-200 p-2 rounded">
+        <div className="text-red-600 bg-red-50 border p-2 rounded mb-3">
           {error}
         </div>
       )}
 
-      {/* INPUTS */}
-      <div className="grid md:grid-cols-2 gap-4 mb-4">
+      {/* FORM */}
+      <div className="grid grid-cols-2 gap-4 mb-4">
         <div>
-          <label className="text-xs font-semibold">Title</label>
+          <label className="text-xs">Title</label>
           <input
-            className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
             value={title}
             onChange={(e) => setTitle(e.target.value)}
+            className="border rounded w-full p-2"
           />
         </div>
 
         <div>
-          <label className="text-xs font-semibold">Subtitle</label>
+          <label className="text-xs">Subtitle</label>
           <input
-            className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
             value={subtitle}
             onChange={(e) => setSubtitle(e.target.value)}
+            className="border rounded w-full p-2"
           />
         </div>
 
         <div>
-          <label className="text-xs font-semibold">Slug (URL)</label>
+          <label className="text-xs">Slug</label>
           <input
-            className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
             value={slug}
             onChange={(e) => setSlug(e.target.value)}
+            className="border rounded w-full p-2"
           />
         </div>
       </div>
 
       {/* SLIDES */}
-      <div className="space-y-4">
-        {slides.map((slide, idx) => (
-          <div
-            key={slide.id}
-            className="border rounded-xl p-4 bg-white shadow-sm"
+      {slides.map((s, idx) => (
+        <div key={idx} className="border p-4 rounded mb-4">
+          <div className="font-semibold mb-2">Slide {idx + 1}</div>
+
+          <label className="text-xs">Background</label>
+          <select
+            value={s.backgroundUrl}
+            onChange={(e) => updateSlide(idx, { backgroundUrl: e.target.value })}
+            className="border w-full p-2 mb-2"
           >
-            <div className="flex justify-between mb-2">
-              <div className="font-semibold text-sm">Slide {idx + 1}</div>
-              {slides.length > 1 && (
-                <button
-                  onClick={() => removeSlide(idx)}
-                  className="text-xs text-red-500"
-                >
-                  Remove
-                </button>
-              )}
-            </div>
+            <option value="">-- select background --</option>
+            {backgrounds.map((b) => (
+              <option key={b.name} value={b.url}>
+                {b.name}
+              </option>
+            ))}
+          </select>
 
-            <div className="grid md:grid-cols-2 gap-3">
-              {/* BACKGROUND */}
-              <div>
-                <label className="text-xs font-semibold">
-                  Background Image
-                </label>
+          <label className="text-xs">Highlight</label>
+          <textarea
+            value={s.highlight}
+            onChange={(e) => updateSlide(idx, { highlight: e.target.value })}
+            className="border w-full p-2 mb-2"
+          />
 
-                <select
-                  className="mt-1 w-full border rounded px-2 py-2 text-xs"
-                  value={slide.backgroundUrl}
-                  onChange={(e) =>
-                    updateSlide(idx, { backgroundUrl: e.target.value })
-                  }
-                >
-                  <option value="">-- Select background --</option>
-                  {backgrounds.map((bg) => (
-                    <option key={bg.name} value={bg.url}>
-                      {bg.name}
-                    </option>
-                  ))}
-                </select>
+          <label className="text-xs">Text</label>
+          <textarea
+            value={s.rawText}
+            onChange={(e) => updateSlide(idx, { rawText: e.target.value })}
+            className="border w-full p-2 min-h-[120px]"
+          />
+        </div>
+      ))}
 
-                {slide.backgroundUrl && (
-                  <div
-                    className="mt-2 h-24 bg-cover bg-center rounded border"
-                    style={{ backgroundImage: `url(${slide.backgroundUrl})` }}
-                  />
-                )}
-              </div>
+      {/* BUTTONS */}
+      <button
+        onClick={() =>
+          setSlides((prev) => [
+            ...prev,
+            { ...EMPTY_SLIDE, id: `s${prev.length + 1}` },
+          ])
+        }
+        className="px-3 py-2 border rounded mr-2"
+      >
+        + Add Slide
+      </button>
 
-              {/* HIGHLIGHT */}
-              <div>
-                <label className="text-xs font-semibold">
-                  Highlight / Pull Quote
-                </label>
-                <textarea
-                  className="mt-1 w-full border rounded px-3 py-2 text-xs"
-                  value={slide.highlight}
-                  onChange={(e) =>
-                    updateSlide(idx, { highlight: e.target.value })
-                  }
-                />
-              </div>
-            </div>
+      <button
+        disabled={saving}
+        onClick={handleSave}
+        className="px-4 py-2 bg-indigo-600 text-white rounded"
+      >
+        {saving ? "Saving…" : "Save Magazine"}
+      </button>
 
-            {/* TEXT */}
-            <div className="mt-3">
-              <label className="text-xs font-semibold">Slide Text</label>
-              <textarea
-                className="mt-1 w-full border rounded px-3 py-2 text-xs min-h-[150px]"
-                value={slide.rawText}
-                onChange={(e) =>
-                  updateSlide(idx, { rawText: e.target.value })
-                }
-              />
-            </div>
-          </div>
-        ))}
-      </div>
-
-      {/* CONTROLS */}
-      <div className="mt-4 flex gap-2">
+      {existingIssue?._id && (
         <button
-          onClick={addSlide}
-          className="px-3 py-2 text-xs border rounded bg-gray-50"
+          onClick={handleDelete}
+          className="ml-2 px-4 py-2 bg-red-600 text-white rounded"
         >
-          + Add Slide
+          Delete
         </button>
-
-        <button
-          disabled={saving}
-          onClick={handleSave}
-          className="px-4 py-2 text-xs rounded bg-indigo-600 text-white"
-        >
-          {saving ? "Saving..." : "Save Magazine"}
-        </button>
-
-        {existingIssue?._id && (
-          <button
-            onClick={handleDelete}
-            className="px-4 py-2 text-xs rounded bg-red-600 text-white"
-          >
-            Delete
-          </button>
-        )}
-      </div>
+      )}
     </div>
   );
 }
