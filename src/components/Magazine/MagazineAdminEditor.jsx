@@ -1,13 +1,14 @@
-// client/src/components/Magazine/MagazineAdminEditor.jsx
 import { useEffect, useState } from "react";
 import { loadBackgroundImages } from "../../utils/loadBackgrounds";
 
 /* -----------------------------------------------------------
    API BASE
 ----------------------------------------------------------- */
-const API_BASE = import.meta.env.VITE_BACKEND_URL || "";
+const API_BASE =
+  import.meta.env.VITE_BACKEND_URL || "https://law-network.onrender.com";
+
 function apiUrl(path) {
-  return API_BASE ? `${API_BASE}${path}` : path;
+  return `${API_BASE}${path}`;
 }
 
 const EMPTY_SLIDE = {
@@ -31,10 +32,16 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
+  /* -----------------------------------------------
+     LOAD BACKGROUNDS
+  ----------------------------------------------- */
   useEffect(() => {
     setBackgrounds(loadBackgroundImages());
   }, []);
 
+  /* -----------------------------------------------
+     SLIDE UPDATE
+  ----------------------------------------------- */
   function updateSlide(idx, patch) {
     setSlides((prev) => {
       const next = [...prev];
@@ -60,6 +67,9 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
     setSlides((prev) => prev.filter((_, i) => i !== idx));
   }
 
+  /* ----------------------------------------------------------
+     SAFE JSON FETCH
+  ---------------------------------------------------------- */
   async function safeFetchJSON(path, options = {}) {
     const res = await fetch(apiUrl(path), {
       ...options,
@@ -72,24 +82,19 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
 
     const text = await res.text();
 
-    if (text.startsWith("<!DOCTYPE") || text.startsWith("<html")) {
-      console.error("❌ AdminEditor: server returned HTML for", path);
-      throw new Error("Server returned invalid JSON");
+    if (text.startsWith("<")) {
+      console.error("Admin editor: backend returned HTML for", path);
+      throw new Error("Invalid JSON from server");
     }
 
     if (!text) {
-      console.error("❌ AdminEditor: empty response for", path);
       throw new Error("Empty response from server");
     }
 
-    try {
-      return JSON.parse(text);
-    } catch {
-      console.error("❌ AdminEditor: JSON parse failed. Raw:", text);
-      throw new Error("Invalid JSON from server");
-    }
+    return JSON.parse(text);
   }
 
+  /* ---------------------- SAVE ----------------------- */
   async function handleSave() {
     setSaving(true);
     setError("");
@@ -97,7 +102,7 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
     const payload = {
       title,
       subtitle,
-      slug: slug || title.toLowerCase().replace(/\s+/g, "-"),
+      slug: (slug || title).toLowerCase().replace(/\s+/g, "-"),
       slides: slides.map((s, i) => ({
         ...s,
         id: s.id || `s${i + 1}`,
@@ -119,12 +124,13 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
 
       onSaved && onSaved(data.issue);
     } catch (err) {
-      setError(err.message);
+      setError(err.message || "Failed to save magazine");
     } finally {
       setSaving(false);
     }
   }
 
+  /* ---------------------- DELETE ----------------------- */
   async function handleDelete() {
     if (!existingIssue?._id) return;
     if (!window.confirm("Delete magazine?")) return;
@@ -139,10 +145,13 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
       alert("Magazine deleted!");
       onSaved && onSaved(null);
     } catch (err) {
-      alert(err.message);
+      alert(err.message || "Failed to delete");
     }
   }
 
+  /* -----------------------------------------------
+     RENDER UI
+  ----------------------------------------------- */
   return (
     <div className="max-w-5xl mx-auto p-4 md:p-6">
       <h1 className="text-2xl font-bold mb-4">Magazine Editor</h1>
@@ -174,7 +183,7 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
         </div>
 
         <div>
-          <label className="text-xs font-semibold">Slug</label>
+          <label className="text-xs font-semibold">Slug (URL)</label>
           <input
             className="mt-1 w-full border rounded-lg px-3 py-2 text-sm"
             value={slug}
@@ -203,6 +212,7 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
             </div>
 
             <div className="grid md:grid-cols-2 gap-3">
+              {/* BACKGROUND */}
               <div>
                 <label className="text-xs font-semibold">
                   Background Image
@@ -231,6 +241,7 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
                 )}
               </div>
 
+              {/* HIGHLIGHT */}
               <div>
                 <label className="text-xs font-semibold">
                   Highlight / Pull Quote
@@ -245,6 +256,7 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
               </div>
             </div>
 
+            {/* TEXT */}
             <div className="mt-3">
               <label className="text-xs font-semibold">Slide Text</label>
               <textarea
@@ -259,6 +271,7 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
         ))}
       </div>
 
+      {/* CONTROLS */}
       <div className="mt-4 flex gap-2">
         <button
           onClick={addSlide}
