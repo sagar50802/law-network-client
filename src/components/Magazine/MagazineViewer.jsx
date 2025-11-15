@@ -1,4 +1,3 @@
-// client/src/components/Magazine/MagazineViewer.jsx
 import { useEffect, useState } from "react";
 import {
   parseSlideText,
@@ -14,40 +13,12 @@ import {
   PullQuoteTemplate,
 } from "./MagazineTemplates";
 
-/* -----------------------------------------------------------
-   API helper (same as admin)
------------------------------------------------------------ */
-const API_BASE = import.meta.env.VITE_BACKEND_URL || "";
+/* API BASE */
+const API_BASE =
+  import.meta.env.VITE_BACKEND_URL || "https://law-network.onrender.com";
+
 function apiUrl(path) {
-  return API_BASE ? `${API_BASE}${path}` : path;
-}
-
-async function safeFetchJSON(path, options = {}) {
-  const res = await fetch(apiUrl(path), {
-    ...options,
-    headers: {
-      Accept: "application/json",
-      ...(options.headers || {}),
-    },
-  });
-
-  const text = await res.text();
-
-  if (text.startsWith("<!DOCTYPE") || text.startsWith("<html")) {
-    console.error("❌ MagazineViewer: server returned HTML for", path);
-    throw new Error("Server returned HTML instead of JSON");
-  }
-
-  if (!text) {
-    throw new Error("Empty response from server");
-  }
-
-  try {
-    return JSON.parse(text);
-  } catch {
-    console.error("❌ MagazineViewer: JSON parse failed. Raw:", text);
-    throw new Error("Invalid JSON from server");
-  }
+  return `${API_BASE}${path}`;
 }
 
 export default function MagazineViewer({ slug }) {
@@ -55,17 +26,27 @@ export default function MagazineViewer({ slug }) {
   const [pages, setPages] = useState([]);
   const [pageIdx, setPageIdx] = useState(0);
   const [loading, setLoading] = useState(true);
+  const [error, setError] = useState("");
 
   useEffect(() => {
     async function load() {
       setLoading(true);
+      setError("");
       try {
-        const data = await safeFetchJSON(`/api/magazines/slug/${slug}`);
+        const res = await fetch(apiUrl(`/api/magazines/slug/${slug}`));
+        const text = await res.text();
+
+        if (text.startsWith("<")) {
+          console.error("MagazineViewer: backend returned HTML");
+          throw new Error("Invalid JSON from server");
+        }
+
+        const data = JSON.parse(text);
 
         if (!data.ok || !data.issue) {
-          console.warn("No magazine found for slug:", slug);
           setIssue(null);
           setPages([]);
+          setError("Magazine not found.");
           return;
         }
 
@@ -82,7 +63,6 @@ export default function MagazineViewer({ slug }) {
         issue.slides.forEach((slide, slideIndex) => {
           const raw = slide.rawText || "";
           const { localTitle, paragraphs } = parseSlideText(raw);
-
           const safeParagraphs = Array.isArray(paragraphs)
             ? paragraphs
             : [raw];
@@ -111,12 +91,13 @@ export default function MagazineViewer({ slug }) {
         console.error("Failed to load magazine:", e);
         setIssue(null);
         setPages([]);
+        setError("Invalid JSON from server");
       } finally {
         setLoading(false);
       }
     }
 
-    if (slug) load();
+    load();
   }, [slug]);
 
   function goPrev() {
@@ -140,8 +121,8 @@ export default function MagazineViewer({ slug }) {
   if (!issue || pages.length === 0) {
     return (
       <div className="flex items-center justify-center py-10">
-        <div className="text-sm text-gray-500">
-          No magazine content available.
+        <div className="text-sm text-red-600">
+          {error || "No magazine content available."}
         </div>
       </div>
     );
@@ -163,12 +144,16 @@ export default function MagazineViewer({ slug }) {
     switch (current.templateName) {
       case "cover":
         return <CoverTemplate {...commonProps} />;
+
       case "twoColumn":
         return <TwoColumnTemplate {...commonProps} />;
+
       case "highlightRight":
         return <HighlightRightTemplate {...commonProps} />;
+
       case "fullBleedGlass":
         return <FullBleedGlassTemplate {...commonProps} />;
+
       case "pullQuote":
       default:
         return <PullQuoteTemplate {...commonProps} />;
