@@ -1,4 +1,3 @@
-// client/src/components/Magazine/MagazineViewer.jsx
 import { useEffect, useState } from "react";
 import {
   parseSlideText,
@@ -16,7 +15,7 @@ import {
 
 export default function MagazineViewer({ slug }) {
   const [issue, setIssue] = useState(null);
-  const [pages, setPages] = useState([]); // flattened pages
+  const [pages, setPages] = useState([]); 
   const [pageIdx, setPageIdx] = useState(0);
   const [loading, setLoading] = useState(true);
 
@@ -24,8 +23,18 @@ export default function MagazineViewer({ slug }) {
     async function load() {
       setLoading(true);
       try {
-        const res = await fetch(`/api/magazines/${slug}`);
-        const data = await res.json();
+        // ✅ FIXED ROUTE
+        const res = await fetch(`/api/magazines/slug/${slug}`);
+        const text = await res.text();
+
+        // ⛔ PREVENT <html> PARSE ERROR
+        if (text.startsWith("<!DOCTYPE") || text.startsWith("<html")) {
+          console.error("❌ Server returned HTML instead of JSON");
+          setIssue(null);
+          return;
+        }
+
+        const data = JSON.parse(text);
 
         if (!data.ok || !data.issue) {
           console.warn("No magazine found for slug:", slug);
@@ -43,28 +52,24 @@ export default function MagazineViewer({ slug }) {
         }
 
         /* ------------------------------------------------------ */
-        /* BUILD PAGES SAFELY                                     */
+        /* BUILD SAFE PAGE STRUCTURE                              */
         /* ------------------------------------------------------ */
         const built = [];
 
         issue.slides.forEach((slide, slideIndex) => {
           const raw = slide.rawText || "";
 
-          const { localTitle, paragraphs } = parseSlideText(raw || "");
+          const { localTitle, paragraphs } = parseSlideText(raw);
 
-          // Prevent template crash if paragraphs is empty
           const safeParagraphs = Array.isArray(paragraphs)
             ? paragraphs
             : [raw];
 
           const chunks = chunkParagraphs(safeParagraphs, 6);
 
-          if (chunks.length === 0) {
-            chunks.push([raw]); // guarantee at least one page
-          }
+          if (chunks.length === 0) chunks.push([raw]);
 
           chunks.forEach((chunk, pageIndex) => {
-            const templateName = pickTemplateName(slideIndex, pageIndex);
             built.push({
               slideIndex,
               pageIndex,
@@ -74,7 +79,7 @@ export default function MagazineViewer({ slug }) {
               },
               localTitle: localTitle || "Untitled Page",
               paragraphs: chunk,
-              templateName,
+              templateName: pickTemplateName(slideIndex, pageIndex),
             });
           });
         });
@@ -83,6 +88,7 @@ export default function MagazineViewer({ slug }) {
         setPageIdx(0);
       } catch (e) {
         console.error("Failed to load magazine:", e);
+        setIssue(null);
         setPages([]);
       } finally {
         setLoading(false);
@@ -163,9 +169,6 @@ export default function MagazineViewer({ slug }) {
 
   const totalPages = pages.length;
 
-  /* -------------------------------------------------------------- */
-  /* MAIN UI                                                        */
-  /* -------------------------------------------------------------- */
   return (
     <div className="max-w-6xl mx-auto p-3 md:p-6">
       <div className="flex items-center justify-between mb-3">
@@ -209,13 +212,12 @@ export default function MagazineViewer({ slug }) {
         </div>
       </div>
 
-      {/* Magazine Page */}
       <div className="aspect-[4/3] md:aspect-[16/9]">
         {renderPage()}
       </div>
 
       <div className="mt-3 text-[10px] md:text-xs text-gray-500 text-center">
-        Styled automatically from admin text • Watermark: LawPrepX • Mixed magazine layouts
+        Styled by admin • Dynamic layouts • Watermark: LawPrepX
       </div>
     </div>
   );
