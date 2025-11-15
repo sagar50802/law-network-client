@@ -8,7 +8,7 @@ export default function MagazinesPage() {
   useEffect(() => {
     async function load() {
       try {
-        const res = await fetch("/api/magazines");
+        const res = await fetch(`/api/magazines/slug/${slug}`)
         const data = await res.json();
         if (data.ok) setIssues(data.issues);
       } catch (err) {
