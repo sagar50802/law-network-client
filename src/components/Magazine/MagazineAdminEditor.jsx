@@ -1,6 +1,14 @@
 import { useEffect, useState } from "react";
 import { loadBackgroundImages } from "../../utils/loadBackgrounds";
 
+/* -----------------------------------------------------------
+   API BASE (same pattern as AdminMagazinesPage)
+----------------------------------------------------------- */
+const API_BASE = import.meta.env.VITE_BACKEND_URL || "";
+function apiUrl(path) {
+  return API_BASE ? `${API_BASE}${path}` : path;
+}
+
 const EMPTY_SLIDE = {
   id: "",
   backgroundUrl: "",
@@ -60,20 +68,26 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
   /* ----------------------------------------------------------
      SAFE JSON FETCH (never breaks on "<!doctype>")
   ---------------------------------------------------------- */
-  async function safeFetchJSON(url, options = {}) {
-    const res = await fetch(url, {
+  async function safeFetchJSON(path, options = {}) {
+    const res = await fetch(apiUrl(path), {
       ...options,
       headers: {
         "Content-Type": "application/json",
         Accept: "application/json",
+        ...(options.headers || {}),
       },
     });
 
     const text = await res.text();
 
     if (text.startsWith("<!DOCTYPE") || text.startsWith("<html")) {
-      console.error("❌ Server returned HTML instead of JSON");
+      console.error("❌ Server returned HTML instead of JSON for", path);
       throw new Error("Server returned invalid JSON");
+    }
+
+    if (!text) {
+      console.error("❌ Empty response from server for", path);
+      throw new Error("Empty response from server");
     }
 
     try {
@@ -100,8 +114,8 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
     };
 
     try {
-      const method = existingIssue ? "PUT" : "POST";
-      const url = existingIssue
+      const method = existingIssue?._id ? "PUT" : "POST";
+      const url = existingIssue?._id
         ? `/api/magazines/${existingIssue._id}`
         : `/api/magazines`;
 
@@ -122,7 +136,7 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
 
   /* ---------------------- DELETE ----------------------- */
   async function handleDelete() {
-    if (!existingIssue) return;
+    if (!existingIssue?._id) return;
     if (!window.confirm("Delete magazine?")) return;
 
     try {
@@ -185,7 +199,10 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
       {/* SLIDES */}
       <div className="space-y-4">
         {slides.map((slide, idx) => (
-          <div key={slide.id} className="border rounded-xl p-4 bg-white shadow-sm">
+          <div
+            key={slide.id}
+            className="border rounded-xl p-4 bg-white shadow-sm"
+          >
             <div className="flex justify-between mb-2">
               <div className="font-semibold text-sm">Slide {idx + 1}</div>
               {slides.length > 1 && (
@@ -201,7 +218,9 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
             <div className="grid md:grid-cols-2 gap-3">
               {/* BACKGROUND */}
               <div>
-                <label className="text-xs font-semibold">Background Image</label>
+                <label className="text-xs font-semibold">
+                  Background Image
+                </label>
 
                 <select
                   className="mt-1 w-full border rounded px-2 py-2 text-xs"
@@ -228,7 +247,9 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
 
               {/* HIGHLIGHT */}
               <div>
-                <label className="text-xs font-semibold">Highlight / Pull Quote</label>
+                <label className="text-xs font-semibold">
+                  Highlight / Pull Quote
+                </label>
                 <textarea
                   className="mt-1 w-full border rounded px-3 py-2 text-xs"
                   value={slide.highlight}
@@ -271,7 +292,7 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
           {saving ? "Saving..." : "Save Magazine"}
         </button>
 
-        {existingIssue && (
+        {existingIssue?._id && (
           <button
             onClick={handleDelete}
             className="px-4 py-2 text-xs rounded bg-red-600 text-white"
