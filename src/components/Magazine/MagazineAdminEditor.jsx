@@ -2,14 +2,52 @@ import { useEffect, useState } from "react";
 import { loadBackgroundImages } from "../../utils/loadBackgrounds";
 
 /* -----------------------------------------------------------
-   API BASE
+   API helpers (same pattern)
 ----------------------------------------------------------- */
-const API_BASE =
-  import.meta.env.VITE_BACKEND_URL || "https://law-network.onrender.com";
+const API_BASE = import.meta.env.VITE_BACKEND_URL || "";
 
 function apiUrl(path) {
-  return `${API_BASE}${path}`;
+  return API_BASE ? `${API_BASE}${path}` : path;
 }
+
+async function safeFetchJSON(path, options = {}) {
+  const res = await fetch(apiUrl(path), {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      ...(options.headers || {}),
+    },
+  });
+
+  const text = await res.text();
+  const trimmed = text.trim();
+
+  if (!trimmed) {
+    throw new Error(`Empty response from ${path}`);
+  }
+
+  if (trimmed.startsWith("<!DOCTYPE") || trimmed.startsWith("<html")) {
+    throw new Error(`Server returned HTML instead of JSON for ${path}`);
+  }
+
+  let data;
+  try {
+    data = JSON.parse(trimmed);
+  } catch {
+    throw new Error(`Invalid JSON from server for ${path}`);
+  }
+
+  if (!res.ok || data.ok === false) {
+    throw new Error(data.error || `Request failed (${res.status})`);
+  }
+
+  return data;
+}
+
+/* -----------------------------------------------------------
+   Component
+----------------------------------------------------------- */
 
 const EMPTY_SLIDE = {
   id: "",
@@ -67,33 +105,6 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
     setSlides((prev) => prev.filter((_, i) => i !== idx));
   }
 
-  /* ----------------------------------------------------------
-     SAFE JSON FETCH
-  ---------------------------------------------------------- */
-  async function safeFetchJSON(path, options = {}) {
-    const res = await fetch(apiUrl(path), {
-      ...options,
-      headers: {
-        "Content-Type": "application/json",
-        Accept: "application/json",
-        ...(options.headers || {}),
-      },
-    });
-
-    const text = await res.text();
-
-    if (text.startsWith("<")) {
-      console.error("Admin editor: backend returned HTML for", path);
-      throw new Error("Invalid JSON from server");
-    }
-
-    if (!text) {
-      throw new Error("Empty response from server");
-    }
-
-    return JSON.parse(text);
-  }
-
   /* ---------------------- SAVE ----------------------- */
   async function handleSave() {
     setSaving(true);
@@ -102,7 +113,7 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
     const payload = {
       title,
       subtitle,
-      slug: (slug || title).toLowerCase().replace(/\s+/g, "-"),
+      slug: slug || title.toLowerCase().replace(/\s+/g, "-"),
       slides: slides.map((s, i) => ({
         ...s,
         id: s.id || `s${i + 1}`,
@@ -120,11 +131,9 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
         body: JSON.stringify(payload),
       });
 
-      if (!data.ok) throw new Error(data.error || "Failed to save");
-
       onSaved && onSaved(data.issue);
     } catch (err) {
-      setError(err.message || "Failed to save magazine");
+      setError(err.message);
     } finally {
       setSaving(false);
     }
@@ -136,16 +145,13 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
     if (!window.confirm("Delete magazine?")) return;
 
     try {
-      const data = await safeFetchJSON(`/api/magazines/${existingIssue._id}`, {
-        method: "DELETE",
-      });
-
-      if (!data.ok) throw new Error(data.error);
+      const path = `/api/magazines/${existingIssue._id}`;
+      await safeFetchJSON(path, { method: "DELETE" });
 
       alert("Magazine deleted!");
       onSaved && onSaved(null);
     } catch (err) {
-      alert(err.message || "Failed to delete");
+      alert(err.message);
     }
   }
 
