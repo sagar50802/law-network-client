@@ -1,3 +1,4 @@
+// client/src/components/Magazine/MagazineViewer.jsx
 import { useEffect, useState } from "react";
 import {
   parseSlideText,
@@ -13,9 +14,45 @@ import {
   PullQuoteTemplate,
 } from "./MagazineTemplates";
 
+/* -----------------------------------------------------------
+   API helper (same as admin)
+----------------------------------------------------------- */
+const API_BASE = import.meta.env.VITE_BACKEND_URL || "";
+function apiUrl(path) {
+  return API_BASE ? `${API_BASE}${path}` : path;
+}
+
+async function safeFetchJSON(path, options = {}) {
+  const res = await fetch(apiUrl(path), {
+    ...options,
+    headers: {
+      Accept: "application/json",
+      ...(options.headers || {}),
+    },
+  });
+
+  const text = await res.text();
+
+  if (text.startsWith("<!DOCTYPE") || text.startsWith("<html")) {
+    console.error("❌ MagazineViewer: server returned HTML for", path);
+    throw new Error("Server returned HTML instead of JSON");
+  }
+
+  if (!text) {
+    throw new Error("Empty response from server");
+  }
+
+  try {
+    return JSON.parse(text);
+  } catch {
+    console.error("❌ MagazineViewer: JSON parse failed. Raw:", text);
+    throw new Error("Invalid JSON from server");
+  }
+}
+
 export default function MagazineViewer({ slug }) {
   const [issue, setIssue] = useState(null);
-  const [pages, setPages] = useState([]); 
+  const [pages, setPages] = useState([]);
   const [pageIdx, setPageIdx] = useState(0);
   const [loading, setLoading] = useState(true);
 
@@ -23,18 +60,7 @@ export default function MagazineViewer({ slug }) {
     async function load() {
       setLoading(true);
       try {
-        // ✅ FIXED ROUTE
-        const res = await fetch(`/api/magazines/slug/${slug}`);
-        const text = await res.text();
-
-        // ⛔ PREVENT <html> PARSE ERROR
-        if (text.startsWith("<!DOCTYPE") || text.startsWith("<html")) {
-          console.error("❌ Server returned HTML instead of JSON");
-          setIssue(null);
-          return;
-        }
-
-        const data = JSON.parse(text);
+        const data = await safeFetchJSON(`/api/magazines/slug/${slug}`);
 
         if (!data.ok || !data.issue) {
           console.warn("No magazine found for slug:", slug);
@@ -51,14 +77,10 @@ export default function MagazineViewer({ slug }) {
           return;
         }
 
-        /* ------------------------------------------------------ */
-        /* BUILD SAFE PAGE STRUCTURE                              */
-        /* ------------------------------------------------------ */
         const built = [];
 
         issue.slides.forEach((slide, slideIndex) => {
           const raw = slide.rawText || "";
-
           const { localTitle, paragraphs } = parseSlideText(raw);
 
           const safeParagraphs = Array.isArray(paragraphs)
@@ -66,7 +88,6 @@ export default function MagazineViewer({ slug }) {
             : [raw];
 
           const chunks = chunkParagraphs(safeParagraphs, 6);
-
           if (chunks.length === 0) chunks.push([raw]);
 
           chunks.forEach((chunk, pageIndex) => {
@@ -95,12 +116,9 @@ export default function MagazineViewer({ slug }) {
       }
     }
 
-    load();
+    if (slug) load();
   }, [slug]);
 
-  /* -------------------------------------------------------------- */
-  /* PAGE NAVIGATION                                                */
-  /* -------------------------------------------------------------- */
   function goPrev() {
     setPageIdx((idx) => Math.max(0, idx - 1));
   }
@@ -109,9 +127,6 @@ export default function MagazineViewer({ slug }) {
     setPageIdx((idx) => Math.min(pages.length - 1, idx + 1));
   }
 
-  /* -------------------------------------------------------------- */
-  /* LOADING + EMPTY STATES                                         */
-  /* -------------------------------------------------------------- */
   if (loading) {
     return (
       <div className="flex items-center justify-center py-10">
@@ -132,9 +147,6 @@ export default function MagazineViewer({ slug }) {
     );
   }
 
-  /* -------------------------------------------------------------- */
-  /* RENDER CURRENT PAGE                                            */
-  /* -------------------------------------------------------------- */
   const current = pages[pageIdx];
 
   function renderPage() {
@@ -151,16 +163,12 @@ export default function MagazineViewer({ slug }) {
     switch (current.templateName) {
       case "cover":
         return <CoverTemplate {...commonProps} />;
-
       case "twoColumn":
         return <TwoColumnTemplate {...commonProps} />;
-
       case "highlightRight":
         return <HighlightRightTemplate {...commonProps} />;
-
       case "fullBleedGlass":
         return <FullBleedGlassTemplate {...commonProps} />;
-
       case "pullQuote":
       default:
         return <PullQuoteTemplate {...commonProps} />;
@@ -212,9 +220,7 @@ export default function MagazineViewer({ slug }) {
         </div>
       </div>
 
-      <div className="aspect-[4/3] md:aspect-[16/9]">
-        {renderPage()}
-      </div>
+      <div className="aspect-[4/3] md:aspect-[16/9]">{renderPage()}</div>
 
       <div className="mt-3 text-[10px] md:text-xs text-gray-500 text-center">
         Styled by admin • Dynamic layouts • Watermark: LawPrepX
