@@ -35,15 +35,12 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
   function updateSlide(idx, patch) {
     setSlides((prev) => {
       const next = [...prev];
-
-      // sanitize patch
       const safePatch = {
         id: patch.id ?? next[idx].id,
         backgroundUrl: patch.backgroundUrl ?? next[idx].backgroundUrl ?? "",
         rawText: patch.rawText ?? next[idx].rawText ?? "",
         highlight: patch.highlight ?? next[idx].highlight ?? "",
       };
-
       next[idx] = { ...next[idx], ...safePatch };
       return next;
     });
@@ -60,9 +57,34 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
     setSlides((prev) => prev.filter((_, i) => i !== idx));
   }
 
-  /* -----------------------------------------------
-     SAVE (POST or PUT)
-  ----------------------------------------------- */
+  /* ----------------------------------------------------------
+     SAFE JSON FETCH (never breaks on "<!doctype>")
+  ---------------------------------------------------------- */
+  async function safeFetchJSON(url, options = {}) {
+    const res = await fetch(url, {
+      ...options,
+      headers: {
+        "Content-Type": "application/json",
+        Accept: "application/json",
+      },
+    });
+
+    const text = await res.text();
+
+    if (text.startsWith("<!DOCTYPE") || text.startsWith("<html")) {
+      console.error("❌ Server returned HTML instead of JSON");
+      throw new Error("Server returned invalid JSON");
+    }
+
+    try {
+      return JSON.parse(text);
+    } catch {
+      console.error("❌ JSON parse failed. Raw:", text);
+      throw new Error("Invalid JSON from server");
+    }
+  }
+
+  /* ---------------------- SAVE ----------------------- */
   async function handleSave() {
     setSaving(true);
     setError("");
@@ -72,39 +94,23 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
       subtitle,
       slug: slug || title.toLowerCase().replace(/\s+/g, "-"),
       slides: slides.map((s, i) => ({
+        ...s,
         id: s.id || `s${i + 1}`,
-        backgroundUrl: s.backgroundUrl || "",
-        rawText: s.rawText || "",
-        highlight: s.highlight || "",
       })),
     };
 
     try {
+      const method = existingIssue ? "PUT" : "POST";
       const url = existingIssue
         ? `/api/magazines/${existingIssue._id}`
         : `/api/magazines`;
 
-      const method = existingIssue ? "PUT" : "POST";
-
-      const res = await fetch(url, {
+      const data = await safeFetchJSON(url, {
         method,
-        headers: { "Content-Type": "application/json" },
         body: JSON.stringify(payload),
       });
 
-      const text = await res.text();
-
-      let data;
-      try {
-        data = JSON.parse(text);
-      } catch {
-        console.error("❌ Server returned HTML instead of JSON:\n", text);
-        throw new Error("Server returned invalid JSON (HTML error page)");
-      }
-
-      if (!data.ok) {
-        throw new Error(data.error || "Save failed");
-      }
+      if (!data.ok) throw new Error(data.error || "Failed to save");
 
       onSaved && onSaved(data.issue);
     } catch (err) {
@@ -114,37 +120,22 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
     }
   }
 
-  /* -----------------------------------------------
-     DELETE MAGAZINE
-  ----------------------------------------------- */
+  /* ---------------------- DELETE ----------------------- */
   async function handleDelete() {
     if (!existingIssue) return;
-    if (!confirm("Delete this magazine?")) return;
+    if (!window.confirm("Delete magazine?")) return;
 
     try {
-      const res = await fetch(`/api/magazines/${existingIssue._id}`, {
+      const data = await safeFetchJSON(`/api/magazines/${existingIssue._id}`, {
         method: "DELETE",
       });
 
-      const txt = await res.text();
+      if (!data.ok) throw new Error(data.error);
 
-      let data;
-      try {
-        data = JSON.parse(txt);
-      } catch {
-        alert("Invalid JSON response from server");
-        return;
-      }
-
-      if (!data.ok) {
-        alert("Delete failed: " + data.error);
-        return;
-      }
-
-      alert("Magazine deleted successfully");
+      alert("Magazine deleted!");
       onSaved && onSaved(null);
-    } catch {
-      alert("Network/server error while deleting");
+    } catch (err) {
+      alert(err.message);
     }
   }
 
@@ -227,7 +218,6 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
                   ))}
                 </select>
 
-                {/* PREVIEW */}
                 {slide.backgroundUrl && (
                   <div
                     className="mt-2 h-24 bg-cover bg-center rounded border"
@@ -238,9 +228,7 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
 
               {/* HIGHLIGHT */}
               <div>
-                <label className="text-xs font-semibold">
-                  Highlight / Pull Quote
-                </label>
+                <label className="text-xs font-semibold">Highlight / Pull Quote</label>
                 <textarea
                   className="mt-1 w-full border rounded px-3 py-2 text-xs"
                   value={slide.highlight}
