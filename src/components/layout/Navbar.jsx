@@ -62,10 +62,8 @@ export default function Navbar() {
             Articles ({articleCount})
           </a>
 
-          {/* ⭐ NEW: Magazine Menu */}
-          <a href="/magazines" className="hover:text-blue-600">
-            Magazines
-          </a>
+          {/* ❌ REMOVED: Magazines */}
+          {/* <a href="/magazines" className="hover:text-blue-600">Magazines</a> */}
 
           <a
             href="/#consultancy"
@@ -103,11 +101,10 @@ export default function Navbar() {
             Research Drafting
           </a>
 
-          <a href="/scholar" className="hover:text-blue-600">
-            Scholar Space
-          </a>
+          {/* ❌ REMOVED: Scholar Space */}
+          {/* <a href="/scholar" className="hover:text-blue-600">Scholar Space</a> */}
 
-          {/* CLASSROOM */}
+          {/* Classroom */}
           <a
             href="/classroom"
             className="text-green-600 font-semibold hover:underline"
@@ -159,10 +156,8 @@ export default function Navbar() {
                 Research Drafting Admin
               </a>
 
-              {/* ⭐ NEW → Magazine Admin (Desktop) */}
-              <a href="/admin/magazines" className="text-blue-600 underline">
-                Magazine Admin
-              </a>
+              {/* ❌ REMOVED: Magazine Admin */}
+              {/* <a href="/admin/magazines" className="text-blue-600 underline">Magazine Admin</a> */}
 
               {/* Classroom Admin */}
               <a
@@ -216,7 +211,10 @@ export default function Navbar() {
       {open && (
         <div className="md:hidden px-4 pb-3 flex flex-col gap-2">
           <a href="/articles">Articles</a>
-          <a href="/magazines">Magazines</a>
+
+          {/* ❌ REMOVED: Magazines */}
+          {/* <a href="/magazines">Magazines</a> */}
+
           <a href="/#consultancy" onClick={goConsultancy}>
             Consultancy
           </a>
@@ -229,7 +227,9 @@ export default function Navbar() {
           <a href="/notebook">PDF Notebook</a>
           <a href="/plagiarism">Plagiarism</a>
           <a href="/research-drafting">Research Drafting</a>
-          <a href="/scholar">Scholar Space</a>
+
+          {/* ❌ REMOVED: Scholar */}
+          {/* <a href="/scholar">Scholar Space</a> */}
 
           <a href="/classroom" className="text-green-600 font-semibold">
             Classroom
@@ -263,10 +263,8 @@ export default function Navbar() {
                 Research Drafting Admin
               </a>
 
-              {/* ⭐ NEW: Magazine Admin (Mobile) */}
-              <a href="/admin/magazines" className="underline">
-                Magazine Admin
-              </a>
+              {/* ❌ REMOVED: Magazine Admin */}
+              {/* <a href="/admin/magazines" className="underline">Magazine Admin</a> */}
 
               <a
                 href="/admin/classroom"
