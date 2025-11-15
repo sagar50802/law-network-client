@@ -1,8 +1,9 @@
+// client/src/components/Magazine/MagazineAdminEditor.jsx
 import { useEffect, useState } from "react";
 import { loadBackgroundImages } from "../../utils/loadBackgrounds";
 
 /* -----------------------------------------------------------
-   API BASE (same pattern as AdminMagazinesPage)
+   API BASE
 ----------------------------------------------------------- */
 const API_BASE = import.meta.env.VITE_BACKEND_URL || "";
 function apiUrl(path) {
@@ -30,16 +31,10 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
   const [saving, setSaving] = useState(false);
   const [error, setError] = useState("");
 
-  /* -----------------------------------------------
-     LOAD BACKGROUNDS
-  ----------------------------------------------- */
   useEffect(() => {
     setBackgrounds(loadBackgroundImages());
   }, []);
 
-  /* -----------------------------------------------
-     SLIDE UPDATE
-  ----------------------------------------------- */
   function updateSlide(idx, patch) {
     setSlides((prev) => {
       const next = [...prev];
@@ -65,9 +60,6 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
     setSlides((prev) => prev.filter((_, i) => i !== idx));
   }
 
-  /* ----------------------------------------------------------
-     SAFE JSON FETCH (never breaks on "<!doctype>")
-  ---------------------------------------------------------- */
   async function safeFetchJSON(path, options = {}) {
     const res = await fetch(apiUrl(path), {
       ...options,
@@ -81,24 +73,23 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
     const text = await res.text();
 
     if (text.startsWith("<!DOCTYPE") || text.startsWith("<html")) {
-      console.error("❌ Server returned HTML instead of JSON for", path);
+      console.error("❌ AdminEditor: server returned HTML for", path);
       throw new Error("Server returned invalid JSON");
     }
 
     if (!text) {
-      console.error("❌ Empty response from server for", path);
+      console.error("❌ AdminEditor: empty response for", path);
       throw new Error("Empty response from server");
     }
 
     try {
       return JSON.parse(text);
     } catch {
-      console.error("❌ JSON parse failed. Raw:", text);
+      console.error("❌ AdminEditor: JSON parse failed. Raw:", text);
       throw new Error("Invalid JSON from server");
     }
   }
 
-  /* ---------------------- SAVE ----------------------- */
   async function handleSave() {
     setSaving(true);
     setError("");
@@ -115,11 +106,11 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
 
     try {
       const method = existingIssue?._id ? "PUT" : "POST";
-      const url = existingIssue?._id
+      const path = existingIssue?._id
         ? `/api/magazines/${existingIssue._id}`
         : `/api/magazines`;
 
-      const data = await safeFetchJSON(url, {
+      const data = await safeFetchJSON(path, {
         method,
         body: JSON.stringify(payload),
       });
@@ -134,7 +125,6 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
     }
   }
 
-  /* ---------------------- DELETE ----------------------- */
   async function handleDelete() {
     if (!existingIssue?._id) return;
     if (!window.confirm("Delete magazine?")) return;
@@ -153,9 +143,6 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
     }
   }
 
-  /* -----------------------------------------------
-     RENDER UI
-  ----------------------------------------------- */
   return (
     <div className="max-w-5xl mx-auto p-4 md:p-6">
       <h1 className="text-2xl font-bold mb-4">Magazine Editor</h1>
@@ -216,7 +203,6 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
             </div>
 
             <div className="grid md:grid-cols-2 gap-3">
-              {/* BACKGROUND */}
               <div>
                 <label className="text-xs font-semibold">
                   Background Image
@@ -245,7 +231,6 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
                 )}
               </div>
 
-              {/* HIGHLIGHT */}
               <div>
                 <label className="text-xs font-semibold">
                   Highlight / Pull Quote
@@ -260,7 +245,6 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
               </div>
             </div>
 
-            {/* TEXT */}
             <div className="mt-3">
               <label className="text-xs font-semibold">Slide Text</label>
               <textarea
@@ -275,7 +259,6 @@ export default function MagazineAdminEditor({ existingIssue, onSaved }) {
         ))}
       </div>
 
-      {/* CONTROLS */}
       <div className="mt-4 flex gap-2">
         <button
           onClick={addSlide}
