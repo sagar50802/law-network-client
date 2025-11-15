@@ -1,19 +1,16 @@
 // utils/loadBackgrounds.js
+// Auto-detect ALL images inside /public/backgrounds (any extension)
 
-// Auto-generate background list from /public/backgrounds
-// This assumes files named: bg1.jpg, bg2.jpg, ... bg20.jpg
-// You can increase MAX_BG if you add more.
 export function loadBackgroundImages() {
-  const MAX_BG = 20; // change to 30, 40 etc. if you want more
-  const result = [];
+  // Import all files inside /public/backgrounds/*
+  const images = import.meta.glob("/public/backgrounds/*", { eager: true });
 
-  for (let i = 1; i <= MAX_BG; i++) {
-    const file = `bg${i}.jpg`;
-    result.push({
-      name: file,
-      url: `/backgrounds/${file}`, // served from public/backgrounds
-    });
-  }
+  return Object.keys(images).map((path) => {
+    const name = path.split("/").pop(); // e.g., "bg2.jpg"
 
-  return result;
+    return {
+      name,
+      url: path.replace("/public", ""), // remove /public prefix → becomes /backgrounds/bg2.jpg
+    };
+  });
 }
