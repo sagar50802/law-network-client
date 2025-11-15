@@ -2,15 +2,17 @@ import { useEffect, useState } from "react";
 import MagazineAdminEditor from "../components/Magazine/MagazineAdminEditor.jsx";
 
 /* -----------------------------------------------------------
-   Helper: build API URL (supports VITE_BACKEND_URL in prod)
+   API BASE  (backend domain)
 ----------------------------------------------------------- */
-const API_BASE = import.meta.env.VITE_BACKEND_URL || "";
+const API_BASE =
+  import.meta.env.VITE_BACKEND_URL || "https://law-network.onrender.com";
+
 function apiUrl(path) {
-  return API_BASE ? `${API_BASE}${path}` : path;
+  return `${API_BASE}${path}`;
 }
 
 /* -----------------------------------------------------------
-   Helper: safe JSON fetch (no SyntaxError, no "<!doctype" crash)
+   Safe JSON fetch (no HTML parsing)
 ----------------------------------------------------------- */
 async function safeFetchJSON(path, options = {}) {
   const res = await fetch(apiUrl(path), {
@@ -24,22 +26,17 @@ async function safeFetchJSON(path, options = {}) {
 
   const text = await res.text();
 
-  // If server sent HTML (Render error page, SPA index, etc.)
-  if (text.startsWith("<!DOCTYPE") || text.startsWith("<html")) {
-    // Don’t throw SyntaxError, just a normal error with message
-    throw new Error("Server returned HTML instead of JSON for " + path);
+  // Backend should NEVER send HTML for these routes
+  if (text.startsWith("<")) {
+    console.error("Magazine list: backend returned HTML for", path);
+    throw new Error("Invalid JSON from server");
   }
 
   if (!text) {
-    // empty 204/404 etc.
-    throw new Error("Empty response from server for " + path);
+    throw new Error("Empty response from server");
   }
 
-  try {
-    return JSON.parse(text);
-  } catch {
-    throw new Error("Invalid JSON from server for " + path);
-  }
+  return JSON.parse(text);
 }
 
 /* ===========================================================
@@ -47,7 +44,7 @@ async function safeFetchJSON(path, options = {}) {
 =========================================================== */
 export default function AdminMagazinesPage() {
   const [issues, setIssues] = useState([]);
-  const [selected, setSelected] = useState(null); // null = list mode, object = edit mode
+  const [selected, setSelected] = useState(null); // null = list mode
   const [loading, setLoading] = useState(true);
   const [error, setError] = useState("");
 
@@ -63,9 +60,8 @@ export default function AdminMagazinesPage() {
         }
         setIssues(data.issues || []);
       } catch (err) {
-        // Only show in UI, no JSON SyntaxError in console
         console.error("Magazine list load error:", err);
-        setError(err.message);
+        setError(err.message || "Failed to load magazines");
       } finally {
         setLoading(false);
       }
@@ -76,21 +72,19 @@ export default function AdminMagazinesPage() {
 
   /* --------------------- CALLBACK FROM EDITOR ------------ */
   function handleSaved(issue) {
-    // If editor calls onSaved(null) after delete -> go back to list
+    // If editor calls onSaved(null) after delete -> back to list
     if (!issue) {
-      setIssues((prev) =>
-        prev.filter((x) => x._id !== (selected && selected._id))
-      );
+      if (selected?._id) {
+        setIssues((prev) => prev.filter((x) => x._id !== selected._id));
+      }
       setSelected(null);
       return;
     }
 
+    // Update or add in list
     setIssues((prev) => {
       const idx = prev.findIndex((x) => x._id === issue._id);
-      if (idx === -1) {
-        // new
-        return [issue, ...prev];
-      }
+      if (idx === -1) return [issue, ...prev];
       const copy = [...prev];
       copy[idx] = issue;
       return copy;
@@ -101,7 +95,6 @@ export default function AdminMagazinesPage() {
 
   /* --------------------- NEW MAGAZINE -------------------- */
   function startNewMagazine() {
-    // Minimal shape expected by MagazineAdminEditor
     setSelected({
       _id: null,
       title: "",
