@@ -1,63 +1,44 @@
-// client/src/pages/MagazinesPage.jsx
 import { useEffect, useState } from "react";
 import { Link } from "react-router-dom";
 
-/* -----------------------------------------------------------
-   API helper
------------------------------------------------------------ */
-const API_BASE = import.meta.env.VITE_BACKEND_URL || "";
+/* API BASE */
+const API_BASE =
+  import.meta.env.VITE_BACKEND_URL || "https://law-network.onrender.com";
+
 function apiUrl(path) {
-  return API_BASE ? `${API_BASE}${path}` : path;
+  return `${API_BASE}${path}`;
 }
 
-async function safeFetchJSON(path, options = {}) {
-  const res = await fetch(apiUrl(path), {
-    ...options,
-    headers: {
-      Accept: "application/json",
-      ...(options.headers || {}),
-    },
-  });
-
+async function safeFetchJSON(path) {
+  const res = await fetch(apiUrl(path));
   const text = await res.text();
 
-  if (text.startsWith("<!DOCTYPE") || text.startsWith("<html")) {
-    console.error("❌ MagazinesPage: server returned HTML for", path);
-    throw new Error("Server returned HTML instead of JSON");
-  }
-
-  if (!text) {
-    throw new Error("Empty response from server");
-  }
-
-  try {
-    return JSON.parse(text);
-  } catch {
-    console.error("❌ MagazinesPage: JSON parse failed. Raw:", text);
+  if (text.startsWith("<")) {
+    console.error("MagazinesPage: backend returned HTML for", path);
     throw new Error("Invalid JSON from server");
   }
+
+  if (!text) throw new Error("Empty response from server");
+  return JSON.parse(text);
 }
 
 export default function MagazinesPage() {
   const [issues, setIssues] = useState([]);
   const [loading, setLoading] = useState(true);
-  const [error, setError] = useState("");
 
   useEffect(() => {
     async function load() {
-      setLoading(true);
-      setError("");
       try {
-        // ✅ LIST endpoint, not slug
         const data = await safeFetchJSON("/api/magazines");
-        if (!data.ok) throw new Error(data.error || "Failed to load magazines");
-        setIssues(data.issues || []);
+        if (data.ok) {
+          setIssues(data.issues || []);
+        } else {
+          console.error("Magazine list error:", data.error);
+        }
       } catch (err) {
         console.error("Magazine list error:", err);
-        setError(err.message);
-      } finally {
-        setLoading(false);
       }
+      setLoading(false);
     }
     load();
   }, []);
@@ -66,14 +47,6 @@ export default function MagazinesPage() {
     return (
       <div className="py-16 text-center text-gray-600 text-lg">
         Loading magazines...
-      </div>
-    );
-  }
-
-  if (error) {
-    return (
-      <div className="py-16 text-center text-red-600 text-sm">
-        {error}
       </div>
     );
   }
@@ -99,14 +72,14 @@ export default function MagazinesPage() {
   );
 }
 
-/* ---------------------------------------------------------- */
-/* Magazine Card Component                                    */
-/* ---------------------------------------------------------- */
+/* Magazine Card */
 function MagazineCard({ issue }) {
-  const cover = issue.coverUrl || "/backgrounds/default-mag.jpg";
+  // safe fallback cover
+  const cover = issue.coverUrl || "/backgrounds/bg4.jpg";
 
   return (
     <div className="bg-white rounded-2xl shadow-sm border hover:shadow-lg transition overflow-hidden">
+      {/* Cover Preview */}
       <div
         className="relative h-44 bg-cover bg-center"
         style={{ backgroundImage: `url(${cover})` }}
@@ -118,6 +91,7 @@ function MagazineCard({ issue }) {
         </div>
       </div>
 
+      {/* Content */}
       <div className="p-4">
         <h2 className="font-bold text-lg leading-tight mb-1">
           {issue.title}
