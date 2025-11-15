@@ -30,16 +30,15 @@ import NewsPage from "./pages/NewsPage.jsx";
 import VideosPage from "./pages/VideosPage.jsx";
 import PodcastsPage from "./pages/PodcastsPage.jsx";
 import NotebookPage from "./pages/NotebookPage.jsx";
-import ScholarPage from "./pages/ScholarPage.jsx";
+// ❌ REMOVE Scholar feature
+// import ScholarPage from "./pages/ScholarPage.jsx";
 import PdfDemo from "./pages/PdfDemo.jsx";
 import Plagiarism from "./pages/Plagiarism.jsx";
 
-/* ---------- Magazine Reader ---------- */
-import MagazineReader from "./pages/MagazineReader.jsx";
-
-/* ---------- Magazines ---------- */
-import MagazinesPage from "./pages/MagazinesPage.jsx";
-import AdminMagazines from "./pages/admin/AdminMagazines.jsx";
+/* ---------- Magazine Feature REMOVED ---------- */
+// import MagazineReader from "./pages/MagazineReader.jsx";
+// import MagazinesPage from "./pages/MagazinesPage.jsx";
+// import AdminMagazines from "./pages/admin/AdminMagazines.jsx";
 
 /* ---------- Admin Pages ---------- */
 import AdminDashboard from "./pages/AdminDashboard.jsx";
@@ -81,7 +80,6 @@ import ClassroomLinkCreator from "./pages/ClassroomLinkCreator.jsx";
 /* ---------- Theme Page ---------- */
 import ThemeFocusPage from "./pages/classroom/ThemeFocusPage.jsx";
 
-/* ---------- Helpers ---------- */
 function NotFound() {
   return (
     <div className="flex flex-col items-center justify-center py-24 text-center">
@@ -130,7 +128,6 @@ function RouteWithResultId({ Comp }) {
   return <Comp id={id} />;
 }
 
-/* ---------- Classroom Wrapper ---------- */
 function ClassroomWrapper({ children }) {
   const location = useLocation();
   const isClassroom = location.pathname.startsWith("/classroom");
@@ -142,7 +139,6 @@ function ClassroomWrapper({ children }) {
   );
 }
 
-/* ---------- Main App Content ---------- */
 function AppContent() {
   const location = useLocation();
   const isPrepHome = location.pathname === "/prep";
@@ -168,13 +164,16 @@ function AppContent() {
           <Route path="/videos" element={<VideosPage />} />
           <Route path="/podcasts" element={<PodcastsPage />} />
           <Route path="/notebook" element={<NotebookPage />} />
-          <Route path="/scholar" element={<ScholarPage />} />
+
+          {/* Scholar Removed */}
+          {/* <Route path="/scholar" element={<ScholarPage />} /> */}
+
           <Route path="/plagiarism" element={<Plagiarism />} />
           <Route path="/pdfdemo" element={<PdfDemo />} />
 
-          {/* Magazine */}
-          <Route path="/magazine/:slug" element={<MagazineReader />} />
-          <Route path="/magazines" element={<MagazinesPage />} />
+          {/* Magazine Removed */}
+          {/* <Route path="/magazine/:slug" element={<MagazineReader />} /> */}
+          {/* <Route path="/magazines" element={<MagazinesPage />} /> */}
 
           {/* LIVE */}
           <Route path="/live" element={<LiveChannelPage />} />
@@ -225,10 +224,8 @@ function AppContent() {
 
           {/* Research Drafting */}
           <Route path="/research-drafting" element={<ResearchDrafting />} />
-          <Route
-            path="/research-drafting/lab/:id"
-            element={<ResearchDraftingLab />}
-          />
+          <Route path="/research-drafting/lab/:id" element={<ResearchDraftingLab />} />
+
           <Route
             path="/admin/research-drafting"
             element={
@@ -272,14 +269,8 @@ function AppContent() {
           {/* Test Series */}
           <Route path="/tests" element={<TestDashboard />} />
           <Route path="/tests/:code" element={<RouteWithCode Comp={TestIntro} />} />
-          <Route
-            path="/tests/:code/play"
-            element={<RouteWithCode Comp={TestPlayer} />}
-          />
-          <Route
-            path="/tests/result/:id"
-            element={<RouteWithResultId Comp={ResultScreen} />}
-          />
+          <Route path="/tests/:code/play" element={<RouteWithCode Comp={TestPlayer} />} />
+          <Route path="/tests/result/:id" element={<RouteWithResultId Comp={ResultScreen} />} />
 
           {/* Test Admin */}
           <Route
@@ -311,6 +302,7 @@ function AppContent() {
 
           {/* Admin Pages */}
           <Route path="/admin/login" element={<AdminLogin />} />
+
           <Route
             path="/admin/dashboard"
             element={
@@ -338,14 +330,8 @@ function AppContent() {
             }
           />
 
-          <Route
-            path="/admin/magazines"
-            element={
-              <AdminRoute>
-                <AdminMagazines />
-              </AdminRoute>
-            }
-          />
+          {/* Magazine Admin Removed */}
+          {/* <Route path="/admin/magazines" element={<AdminMagazines />} /> */}
 
           {/* 404 */}
           <Route path="*" element={<NotFound />} />
@@ -357,7 +343,6 @@ function AppContent() {
   );
 }
 
-/* ---------- Root App ---------- */
 export default function App() {
   return (
     <Router>
