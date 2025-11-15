@@ -2,7 +2,8 @@ import BannerSlider from "../components/BannerSlider";
 import Article from "../components/Article/Article";
 import ConsultancySection from "../components/consultancy/ConsultancySection.jsx";
 import NewsTicker from "../components/NewsTicker.jsx";
-import MagazineViewer from "../components/Magazine/MagazineViewer"; // ⬅️ Added
+// ❌ Removed: MagazineViewer import
+// import MagazineViewer from "../components/Magazine/MagazineViewer";
 
 export default function HomePage() {
   return (
@@ -37,14 +38,14 @@ export default function HomePage() {
             <Article limit={3} />
           </div>
 
-          {/* Right Column: Consultancy + Magazine */}
+          {/* Right Column: Consultancy (magazine removed) */}
           <aside className="space-y-4">
             <ConsultancySection />
-
-            {/* Magazine Feature */}
+            {/* ❌ Removed Magazine Feature block
             <div className="border rounded-2xl bg-white shadow-sm overflow-hidden">
               <MagazineViewer slug="indian-constitution-basics" />
             </div>
+            */}
           </aside>
         </section>
       </div>
