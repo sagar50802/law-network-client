@@ -13,13 +13,53 @@ import {
   PullQuoteTemplate,
 } from "./MagazineTemplates";
 
-/* API BASE */
-const API_BASE =
-  import.meta.env.VITE_BACKEND_URL || "https://law-network.onrender.com";
+/* -----------------------------------------------------------
+   API helpers
+----------------------------------------------------------- */
+const API_BASE = import.meta.env.VITE_BACKEND_URL || "";
 
 function apiUrl(path) {
-  return `${API_BASE}${path}`;
+  return API_BASE ? `${API_BASE}${path}` : path;
 }
+
+async function safeFetchJSON(path, options = {}) {
+  const res = await fetch(apiUrl(path), {
+    ...options,
+    headers: {
+      "Content-Type": "application/json",
+      Accept: "application/json",
+      ...(options.headers || {}),
+    },
+  });
+
+  const text = await res.text();
+  const trimmed = text.trim();
+
+  if (!trimmed) {
+    throw new Error(`Empty response from ${path}`);
+  }
+
+  if (trimmed.startsWith("<!DOCTYPE") || trimmed.startsWith("<html")) {
+    throw new Error(`Server returned HTML instead of JSON for ${path}`);
+  }
+
+  let data;
+  try {
+    data = JSON.parse(trimmed);
+  } catch {
+    throw new Error(`Invalid JSON from server for ${path}`);
+  }
+
+  if (!res.ok || data.ok === false) {
+    throw new Error(data.error || `Request failed (${res.status})`);
+  }
+
+  return data;
+}
+
+/* -----------------------------------------------------------
+   Component
+----------------------------------------------------------- */
 
 export default function MagazineViewer({ slug }) {
   const [issue, setIssue] = useState(null);
@@ -33,22 +73,8 @@ export default function MagazineViewer({ slug }) {
       setLoading(true);
       setError("");
       try {
-        const res = await fetch(apiUrl(`/api/magazines/slug/${slug}`));
-        const text = await res.text();
-
-        if (text.startsWith("<")) {
-          console.error("MagazineViewer: backend returned HTML");
-          throw new Error("Invalid JSON from server");
-        }
-
-        const data = JSON.parse(text);
-
-        if (!data.ok || !data.issue) {
-          setIssue(null);
-          setPages([]);
-          setError("Magazine not found.");
-          return;
-        }
+        // ✅ Call backend: GET /api/magazines/slug/:slug
+        const data = await safeFetchJSON(`/api/magazines/slug/${slug}`);
 
         const issue = data.issue;
         setIssue(issue);
@@ -63,11 +89,13 @@ export default function MagazineViewer({ slug }) {
         issue.slides.forEach((slide, slideIndex) => {
           const raw = slide.rawText || "";
           const { localTitle, paragraphs } = parseSlideText(raw);
+
           const safeParagraphs = Array.isArray(paragraphs)
             ? paragraphs
             : [raw];
 
           const chunks = chunkParagraphs(safeParagraphs, 6);
+
           if (chunks.length === 0) chunks.push([raw]);
 
           chunks.forEach((chunk, pageIndex) => {
@@ -87,11 +115,11 @@ export default function MagazineViewer({ slug }) {
 
         setPages(built);
         setPageIdx(0);
-      } catch (e) {
-        console.error("Failed to load magazine:", e);
+      } catch (err) {
+        console.error("Magazine load error:", err);
         setIssue(null);
         setPages([]);
-        setError("Invalid JSON from server");
+        setError(err.message);
       } finally {
         setLoading(false);
       }
@@ -100,6 +128,9 @@ export default function MagazineViewer({ slug }) {
     load();
   }, [slug]);
 
+  /* -------------------------------------------------------------- */
+  /* PAGE NAVIGATION                                                */
+  /* -------------------------------------------------------------- */
   function goPrev() {
     setPageIdx((idx) => Math.max(0, idx - 1));
   }
@@ -108,6 +139,9 @@ export default function MagazineViewer({ slug }) {
     setPageIdx((idx) => Math.min(pages.length - 1, idx + 1));
   }
 
+  /* -------------------------------------------------------------- */
+  /* LOADING + EMPTY STATES                                         */
+  /* -------------------------------------------------------------- */
   if (loading) {
     return (
       <div className="flex items-center justify-center py-10">
@@ -118,7 +152,7 @@ export default function MagazineViewer({ slug }) {
     );
   }
 
-  if (!issue || pages.length === 0) {
+  if (error || !issue || pages.length === 0) {
     return (
       <div className="flex items-center justify-center py-10">
         <div className="text-sm text-red-600">
@@ -128,6 +162,9 @@ export default function MagazineViewer({ slug }) {
     );
   }
 
+  /* -------------------------------------------------------------- */
+  /* RENDER CURRENT PAGE                                            */
+  /* -------------------------------------------------------------- */
   const current = pages[pageIdx];
 
   function renderPage() {
@@ -144,16 +181,12 @@ export default function MagazineViewer({ slug }) {
     switch (current.templateName) {
       case "cover":
         return <CoverTemplate {...commonProps} />;
-
       case "twoColumn":
         return <TwoColumnTemplate {...commonProps} />;
-
       case "highlightRight":
         return <HighlightRightTemplate {...commonProps} />;
-
       case "fullBleedGlass":
         return <FullBleedGlassTemplate {...commonProps} />;
-
       case "pullQuote":
       default:
         return <PullQuoteTemplate {...commonProps} />;
