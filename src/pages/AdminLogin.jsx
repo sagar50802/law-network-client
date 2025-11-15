@@ -1,24 +1,23 @@
-// client/src/pages/AdminLogin.jsx
 import { useState } from "react";
 import { useNavigate } from "react-router-dom";
-
-const OWNER_KEY = import.meta.env.VITE_OWNER_KEY || "LAWNOWNER2025";
+import axios from "axios";
 
 export default function AdminLogin() {
   const [pwd, setPwd] = useState("");
   const [err, setErr] = useState("");
   const navigate = useNavigate();
 
-  const onSubmit = (e) => {
+  const onSubmit = async (e) => {
     e.preventDefault();
-    if (pwd === OWNER_KEY) {
-      localStorage.setItem("ownerKey", OWNER_KEY);
-      // optional: also enable the console helper state
-      if (typeof window !== "undefined") {
-        console.log("%cAdmin mode enabled", "color: green; font-weight: bold;");
-      }
-      navigate("/admin/dashboard", { replace: true });
-    } else {
+    try {
+      const res = await axios.post(
+        "https://law-network-api.onrender.com/api/admin/login",
+        { password: pwd }
+      );
+
+      localStorage.setItem("adminToken", res.data.token);
+      navigate("/admin/dashboard");
+    } catch (err) {
       setErr("Wrong password");
     }
   };
@@ -37,9 +36,6 @@ export default function AdminLogin() {
         {err && <div className="text-red-600 text-sm">{err}</div>}
         <button className="bg-black text-white px-4 py-2 rounded">Login</button>
       </form>
-      <p className="text-xs text-gray-500 mt-3">
-        Tip: you can also enter <code>enterAdmin('{OWNER_KEY}')</code> in the browser console.
-      </p>
     </main>
   );
 }
