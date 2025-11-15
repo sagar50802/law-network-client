@@ -101,9 +101,6 @@ export default function Navbar() {
             Research Drafting
           </a>
 
-          {/* ❌ REMOVED: Scholar Space */}
-          {/* <a href="/scholar" className="hover:text-blue-600">Scholar Space</a> */}
-
           {/* Classroom */}
           <a
             href="/classroom"
@@ -156,9 +153,6 @@ export default function Navbar() {
                 Research Drafting Admin
               </a>
 
-              {/* ❌ REMOVED: Magazine Admin */}
-              {/* <a href="/admin/magazines" className="text-blue-600 underline">Magazine Admin</a> */}
-
               {/* Classroom Admin */}
               <a
                 href="/admin/classroom"
@@ -185,11 +179,20 @@ export default function Navbar() {
                 📝 Edit Footer
               </a>
 
+              {/* 🔐 NEW: Change password link */}
+              <a
+                href="/admin/change-password"
+                className="px-2 py-1 rounded-md bg-red-200 text-red-900 font-semibold hover:bg-red-300 transition"
+              >
+                🔑 Change Password
+              </a>
+
               <button
                 className="ml-2 text-xs border px-2 py-1 rounded"
                 onClick={() => {
                   localStorage.removeItem("ownerKey");
                   localStorage.removeItem("ADMIN_KEY");
+                  localStorage.removeItem("adminToken");
                   location.reload();
                 }}
               >
@@ -228,9 +231,6 @@ export default function Navbar() {
           <a href="/plagiarism">Plagiarism</a>
           <a href="/research-drafting">Research Drafting</a>
 
-          {/* ❌ REMOVED: Scholar */}
-          {/* <a href="/scholar">Scholar Space</a> */}
-
           <a href="/classroom" className="text-green-600 font-semibold">
             Classroom
           </a>
@@ -263,9 +263,6 @@ export default function Navbar() {
                 Research Drafting Admin
               </a>
 
-              {/* ❌ REMOVED: Magazine Admin */}
-              {/* <a href="/admin/magazines" className="underline">Magazine Admin</a> */}
-
               <a
                 href="/admin/classroom"
                 className="px-2 py-1 rounded-md bg-green-200 text-green-900 font-semibold text-center hover:bg-green-300 transition"
@@ -280,11 +277,20 @@ export default function Navbar() {
                 📝 Edit Footer
               </a>
 
+              {/* 🔐 NEW: Change password link (mobile) */}
+              <a
+                href="/admin/change-password"
+                className="px-2 py-1 rounded-md bg-red-200 text-red-900 font-semibold text-center hover:bg-red-300 transition"
+              >
+                🔑 Change Password
+              </a>
+
               <button
                 className="text-left text-xs border px-2 py-1 rounded w-fit"
                 onClick={() => {
                   localStorage.removeItem("ownerKey");
                   localStorage.removeItem("ADMIN_KEY");
+                  localStorage.removeItem("adminToken");
                   location.reload();
                 }}
               >
