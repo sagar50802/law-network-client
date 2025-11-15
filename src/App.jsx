@@ -30,21 +30,17 @@ import NewsPage from "./pages/NewsPage.jsx";
 import VideosPage from "./pages/VideosPage.jsx";
 import PodcastsPage from "./pages/PodcastsPage.jsx";
 import NotebookPage from "./pages/NotebookPage.jsx";
-// ❌ REMOVE Scholar feature
-// import ScholarPage from "./pages/ScholarPage.jsx";
 import PdfDemo from "./pages/PdfDemo.jsx";
 import Plagiarism from "./pages/Plagiarism.jsx";
-
-/* ---------- Magazine Feature REMOVED ---------- */
-// import MagazineReader from "./pages/MagazineReader.jsx";
-// import MagazinesPage from "./pages/MagazinesPage.jsx";
-// import AdminMagazines from "./pages/admin/AdminMagazines.jsx";
 
 /* ---------- Admin Pages ---------- */
 import AdminDashboard from "./pages/AdminDashboard.jsx";
 import AdminLogin from "./pages/AdminLogin.jsx";
 import AdminConsultancyEditor from "./components/Admin/AdminConsultancyEditor.jsx";
 import AdminFooterTermsEditor from "./pages/AdminFooterTermsEditor.jsx";
+
+/* ---------- NEW — Change Password ---------- */
+import ChangePassword from "./pages/ChangePassword.jsx";
 
 /* ---------- Exam Prep ---------- */
 import PrepList from "./pages/prep/PrepList.jsx";
@@ -80,6 +76,9 @@ import ClassroomLinkCreator from "./pages/ClassroomLinkCreator.jsx";
 /* ---------- Theme Page ---------- */
 import ThemeFocusPage from "./pages/classroom/ThemeFocusPage.jsx";
 
+/* ========================================== */
+/*                 NOT FOUND                  */
+/* ========================================== */
 function NotFound() {
   return (
     <div className="flex flex-col items-center justify-center py-24 text-center">
@@ -139,6 +138,9 @@ function ClassroomWrapper({ children }) {
   );
 }
 
+/* ========================================== */
+/*                 MAIN ROUTES                */
+/* ========================================== */
 function AppContent() {
   const location = useLocation();
   const isPrepHome = location.pathname === "/prep";
@@ -146,7 +148,9 @@ function AppContent() {
   return (
     <div
       className={`text-[#0b1220] min-h-screen font-inter antialiased flex flex-col ${
-        isPrepHome ? "bg-transparent" : "bg-gradient-to-br from-[#f8fafc] to-[#e6edf5]"
+        isPrepHome
+          ? "bg-transparent"
+          : "bg-gradient-to-br from-[#f8fafc] to-[#e6edf5]"
       }`}
     >
       <nav className="bg-white/70 backdrop-blur-md shadow-md sticky top-0 z-50">
@@ -157,23 +161,15 @@ function AppContent() {
 
       <div className="animate-fadeIn flex-1">
         <Routes>
-          {/* Public Pages */}
+          {/* PUBLIC PAGES */}
           <Route path="/" element={<HomePage />} />
           <Route path="/articles" element={<ArticlesPage />} />
           <Route path="/news" element={<NewsPage />} />
           <Route path="/videos" element={<VideosPage />} />
           <Route path="/podcasts" element={<PodcastsPage />} />
           <Route path="/notebook" element={<NotebookPage />} />
-
-          {/* Scholar Removed */}
-          {/* <Route path="/scholar" element={<ScholarPage />} /> */}
-
           <Route path="/plagiarism" element={<Plagiarism />} />
           <Route path="/pdfdemo" element={<PdfDemo />} />
-
-          {/* Magazine Removed */}
-          {/* <Route path="/magazine/:slug" element={<MagazineReader />} /> */}
-          {/* <Route path="/magazines" element={<MagazinesPage />} /> */}
 
           {/* LIVE */}
           <Route path="/live" element={<LiveChannelPage />} />
@@ -186,7 +182,7 @@ function AppContent() {
             }
           />
 
-          {/* Classroom */}
+          {/* CLASSROOM */}
           <Route
             path="/classroom"
             element={
@@ -200,10 +196,10 @@ function AppContent() {
           <Route path="/classroom/ambience" element={<AmbiencePage />} />
           <Route path="/classroom/theme" element={<ThemeFocusPage />} />
 
-          {/* Bridge */}
+          {/* GROUP KEY */}
           <Route path="/bridge/gk/:key/t/:token" element={<GroupKeyBridge />} />
 
-          {/* Admin Classroom */}
+          {/* ADMIN CLASSROOM */}
           <Route
             path="/admin/classroom-link"
             element={
@@ -222,7 +218,7 @@ function AppContent() {
             }
           />
 
-          {/* Research Drafting */}
+          {/* RESEARCH */}
           <Route path="/research-drafting" element={<ResearchDrafting />} />
           <Route path="/research-drafting/lab/:id" element={<ResearchDraftingLab />} />
 
@@ -235,7 +231,7 @@ function AppContent() {
             }
           />
 
-          {/* Prep */}
+          {/* PREP */}
           <Route path="/prep" element={<PrepList />} />
           <Route path="/prep/:examId" element={<PrepWizard />} />
 
@@ -266,13 +262,22 @@ function AppContent() {
             }
           />
 
-          {/* Test Series */}
+          {/* TEST SERIES */}
           <Route path="/tests" element={<TestDashboard />} />
-          <Route path="/tests/:code" element={<RouteWithCode Comp={TestIntro} />} />
-          <Route path="/tests/:code/play" element={<RouteWithCode Comp={TestPlayer} />} />
-          <Route path="/tests/result/:id" element={<RouteWithResultId Comp={ResultScreen} />} />
+          <Route
+            path="/tests/:code"
+            element={<RouteWithCode Comp={TestIntro} />}
+          />
+          <Route
+            path="/tests/:code/play"
+            element={<RouteWithCode Comp={TestPlayer} />}
+          />
+          <Route
+            path="/tests/result/:id"
+            element={<RouteWithResultId Comp={ResultScreen} />}
+          />
 
-          {/* Test Admin */}
+          {/* TEST ADMIN */}
           <Route
             path="/owner/tests/import"
             element={
@@ -300,7 +305,7 @@ function AppContent() {
             }
           />
 
-          {/* Admin Pages */}
+          {/* ADMIN */}
           <Route path="/admin/login" element={<AdminLogin />} />
 
           <Route
@@ -330,8 +335,15 @@ function AppContent() {
             }
           />
 
-          {/* Magazine Admin Removed */}
-          {/* <Route path="/admin/magazines" element={<AdminMagazines />} /> */}
+          {/* NEW — CHANGE PASSWORD */}
+          <Route
+            path="/admin/change-password"
+            element={
+              <AdminRoute>
+                <ChangePassword />
+              </AdminRoute>
+            }
+          />
 
           {/* 404 */}
           <Route path="*" element={<NotFound />} />
