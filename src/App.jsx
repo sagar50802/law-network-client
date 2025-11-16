@@ -101,18 +101,8 @@ function ScrollToHash() {
   useEffect(() => {
     if (!hash) return;
     const id = hash.replace(/^#/, "");
-    const tryScroll = () => {
-      const el = document.getElementById(id);
-      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-    };
-    const t0 = setTimeout(tryScroll, 0);
-    const t1 = setTimeout(tryScroll, 120);
-    const t2 = setTimeout(tryScroll, 350);
-    return () => {
-      clearTimeout(t0);
-      clearTimeout(t1);
-      clearTimeout(t2);
-    };
+    const el = document.getElementById(id);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [hash, pathname]);
   return null;
 }
@@ -138,9 +128,6 @@ function ClassroomWrapper({ children }) {
   );
 }
 
-/* ========================================== */
-/*                 MAIN ROUTES                */
-/* ========================================== */
 function AppContent() {
   const location = useLocation();
   const isPrepHome = location.pathname === "/prep";
@@ -161,7 +148,7 @@ function AppContent() {
 
       <div className="animate-fadeIn flex-1">
         <Routes>
-          {/* PUBLIC PAGES */}
+          {/* PUBLIC */}
           <Route path="/" element={<HomePage />} />
           <Route path="/articles" element={<ArticlesPage />} />
           <Route path="/news" element={<NewsPage />} />
@@ -208,7 +195,6 @@ function AppContent() {
               </AdminRoute>
             }
           />
-
           <Route
             path="/admin/classroom"
             element={
@@ -220,8 +206,10 @@ function AppContent() {
 
           {/* RESEARCH */}
           <Route path="/research-drafting" element={<ResearchDrafting />} />
-          <Route path="/research-drafting/lab/:id" element={<ResearchDraftingLab />} />
-
+          <Route
+            path="/research-drafting/lab/:id"
+            element={<ResearchDraftingLab />}
+          />
           <Route
             path="/admin/research-drafting"
             element={
@@ -243,7 +231,6 @@ function AppContent() {
               </AdminRoute>
             }
           />
-
           <Route
             path="/admin/prep-overlay"
             element={
@@ -252,7 +239,6 @@ function AppContent() {
               </AdminRoute>
             }
           />
-
           <Route
             path="/admin/prep-access"
             element={
@@ -262,7 +248,7 @@ function AppContent() {
             }
           />
 
-          {/* TEST SERIES */}
+          {/* TESTS */}
           <Route path="/tests" element={<TestDashboard />} />
           <Route
             path="/tests/:code"
@@ -286,7 +272,6 @@ function AppContent() {
               </IfOwnerOnly>
             }
           />
-
           <Route
             path="/owner/tests/results"
             element={
@@ -295,7 +280,6 @@ function AppContent() {
               </IfOwnerOnly>
             }
           />
-
           <Route
             path="/owner/tests"
             element={
@@ -307,7 +291,6 @@ function AppContent() {
 
           {/* ADMIN */}
           <Route path="/admin/login" element={<AdminLogin />} />
-
           <Route
             path="/admin/dashboard"
             element={
@@ -316,7 +299,6 @@ function AppContent() {
               </AdminRoute>
             }
           />
-
           <Route
             path="/admin/consultancy"
             element={
@@ -325,7 +307,6 @@ function AppContent() {
               </AdminRoute>
             }
           />
-
           <Route
             path="/admin/footer"
             element={
@@ -335,7 +316,7 @@ function AppContent() {
             }
           />
 
-          {/* NEW — CHANGE PASSWORD */}
+          {/* PASSWORD */}
           <Route
             path="/admin/change-password"
             element={
