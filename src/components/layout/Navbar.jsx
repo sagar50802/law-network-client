@@ -62,9 +62,6 @@ export default function Navbar() {
             Articles ({articleCount})
           </a>
 
-          {/* ❌ REMOVED: Magazines */}
-          {/* <a href="/magazines" className="hover:text-blue-600">Magazines</a> */}
-
           <a
             href="/#consultancy"
             onClick={goConsultancy}
@@ -107,6 +104,11 @@ export default function Navbar() {
             className="text-green-600 font-semibold hover:underline"
           >
             Classroom
+          </a>
+
+          {/* ⭐ NEW: Library */}
+          <a href="/library" className="hover:text-blue-600">
+            Library
           </a>
 
           {/* LIVE */}
@@ -215,16 +217,11 @@ export default function Navbar() {
         <div className="md:hidden px-4 pb-3 flex flex-col gap-2">
           <a href="/articles">Articles</a>
 
-          {/* ❌ REMOVED: Magazines */}
-          {/* <a href="/magazines">Magazines</a> */}
-
           <a href="/#consultancy" onClick={goConsultancy}>
             Consultancy
           </a>
           <a href="/prep">Preparation</a>
-          <a href="/tests">
-            Test Series {testCount ? `(${testCount})` : ""}
-          </a>
+          <a href="/tests">Test Series {testCount ? `(${testCount})` : ""}</a>
           <a href="/podcasts">Podcasts</a>
           <a href="/videos">Video Gallery</a>
           <a href="/notebook">PDF Notebook</a>
@@ -233,6 +230,11 @@ export default function Navbar() {
 
           <a href="/classroom" className="text-green-600 font-semibold">
             Classroom
+          </a>
+
+          {/* ⭐ NEW: Library (mobile) */}
+          <a href="/library" className="text-blue-600 font-semibold">
+            Library
           </a>
 
           <a href="/live" className="text-red-600 font-semibold">
