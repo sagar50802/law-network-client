@@ -32,20 +32,12 @@ import PodcastsPage from "./pages/PodcastsPage.jsx";
 import NotebookPage from "./pages/NotebookPage.jsx";
 import PdfDemo from "./pages/PdfDemo.jsx";
 import Plagiarism from "./pages/Plagiarism.jsx";
-import LibraryPage from "./pages/LibraryPage.jsx"; // ★ ADDED
 
 /* ---------- Admin Pages ---------- */
 import AdminDashboard from "./pages/AdminDashboard.jsx";
 import AdminLogin from "./pages/AdminLogin.jsx";
 import AdminConsultancyEditor from "./components/Admin/AdminConsultancyEditor.jsx";
 import AdminFooterTermsEditor from "./pages/AdminFooterTermsEditor.jsx";
-
-/* ---------- Library Admin Pages (NEW) ---------- */
-import LibraryAdminPage from "./pages/admin/library/LibraryAdminPage.jsx";
-import PaymentsPage from "./pages/admin/library/PaymentsPage.jsx";
-import SeatsPage from "./pages/admin/library/SeatsPage.jsx";
-import BookPurchasesPage from "./pages/admin/library/BookPurchasesPage.jsx";
-import SettingsPage from "./pages/admin/library/SettingsPage.jsx";
 
 /* ---------- NEW — Change Password ---------- */
 import ChangePassword from "./pages/ChangePassword.jsx";
@@ -178,7 +170,6 @@ function AppContent() {
           <Route path="/notebook" element={<NotebookPage />} />
           <Route path="/plagiarism" element={<Plagiarism />} />
           <Route path="/pdfdemo" element={<PdfDemo />} />
-          <Route path="/library" element={<LibraryPage />} /> {/* ★ ADDED */}
 
           {/* LIVE */}
           <Route path="/live" element={<LiveChannelPage />} />
@@ -229,10 +220,7 @@ function AppContent() {
 
           {/* RESEARCH */}
           <Route path="/research-drafting" element={<ResearchDrafting />} />
-          <Route
-            path="/research-drafting/lab/:id"
-            element={<ResearchDraftingLab />}
-          />
+          <Route path="/research-drafting/lab/:id" element={<ResearchDraftingLab />} />
 
           <Route
             path="/admin/research-drafting"
@@ -343,48 +331,6 @@ function AppContent() {
             element={
               <AdminRoute>
                 <AdminFooterTermsEditor />
-              </AdminRoute>
-            }
-          />
-
-          {/* LIBRARY ADMIN (NEW) */}
-          <Route
-            path="/admin/library"
-            element={
-              <AdminRoute>
-                <LibraryAdminPage />
-              </AdminRoute>
-            }
-          />
-          <Route
-            path="/admin/library/payments"
-            element={
-              <AdminRoute>
-                <PaymentsPage />
-              </AdminRoute>
-            }
-          />
-          <Route
-            path="/admin/library/seats"
-            element={
-              <AdminRoute>
-                <SeatsPage />
-              </AdminRoute>
-            }
-          />
-          <Route
-            path="/admin/library/book-purchases"
-            element={
-              <AdminRoute>
-                <BookPurchasesPage />
-              </AdminRoute>
-            }
-          />
-          <Route
-            path="/admin/library/settings"
-            element={
-              <AdminRoute>
-                <SettingsPage />
               </AdminRoute>
             }
           />
