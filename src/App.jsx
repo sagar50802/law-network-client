@@ -32,6 +32,7 @@ import PodcastsPage from "./pages/PodcastsPage.jsx";
 import NotebookPage from "./pages/NotebookPage.jsx";
 import PdfDemo from "./pages/PdfDemo.jsx";
 import Plagiarism from "./pages/Plagiarism.jsx";
+import LibraryPage from "./pages/LibraryPage.jsx"; // ★ ADDED
 
 /* ---------- Admin Pages ---------- */
 import AdminDashboard from "./pages/AdminDashboard.jsx";
@@ -170,6 +171,7 @@ function AppContent() {
           <Route path="/notebook" element={<NotebookPage />} />
           <Route path="/plagiarism" element={<Plagiarism />} />
           <Route path="/pdfdemo" element={<PdfDemo />} />
+          <Route path="/library" element={<LibraryPage />} /> {/* ★ ADDED */}
 
           {/* LIVE */}
           <Route path="/live" element={<LiveChannelPage />} />
