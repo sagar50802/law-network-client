@@ -41,11 +41,11 @@ import AdminConsultancyEditor from "./components/Admin/AdminConsultancyEditor.js
 import AdminFooterTermsEditor from "./pages/AdminFooterTermsEditor.jsx";
 
 /* ---------- Library Admin Pages (NEW) ---------- */
-import LibraryAdminPage from "./pages/library/LibraryAdminPage.jsx";
-import PaymentsPage from "./pages/library/PaymentsPage.jsx";
-import SeatsPage from "./pages/library/SeatsPage.jsx";
-import BookPurchasesPage from "./pages/library/BookPurchasesPage.jsx";
-import SettingsPage from "./pages/library/SettingsPage.jsx";
+ import LibraryAdminPage from "./pages/admin/library/LibraryAdminPage.jsx";
+import PaymentsPage from "./pages/admin/library/PaymentsPage.jsx";
+import SeatsPage from "./pages/admin/library/SeatsPage.jsx";
+import BookPurchasesPage from "./pages/admin/library/BookPurchasesPage.jsx";
+import SettingsPage from "./pages/admin/library/SettingsPage.jsx";
 
 /* ---------- NEW — Change Password ---------- */
 import ChangePassword from "./pages/ChangePassword.jsx";
