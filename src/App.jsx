@@ -41,7 +41,7 @@ import AdminConsultancyEditor from "./components/Admin/AdminConsultancyEditor.js
 import AdminFooterTermsEditor from "./pages/AdminFooterTermsEditor.jsx";
 
 /* ---------- Library Admin Pages (NEW) ---------- */
- import LibraryAdminPage from "./pages/admin/library/LibraryAdminPage.jsx";
+import LibraryAdminPage from "./pages/admin/library/LibraryAdminPage.jsx";
 import PaymentsPage from "./pages/admin/library/PaymentsPage.jsx";
 import SeatsPage from "./pages/admin/library/SeatsPage.jsx";
 import BookPurchasesPage from "./pages/admin/library/BookPurchasesPage.jsx";
