@@ -106,7 +106,7 @@ export default function Navbar() {
             Classroom
           </a>
 
-          {/* ⭐ NEW: Library */}
+          {/* ⭐ Library (user) */}
           <a href="/library" className="hover:text-blue-600">
             Library
           </a>
@@ -155,6 +155,38 @@ export default function Navbar() {
                 Research Drafting Admin
               </a>
 
+              {/* ⭐⭐ NEW: LIBRARY ADMIN LINKS (DESKTOP) */}
+              <a
+                href="/admin/library"
+                className="text-blue-600 underline"
+              >
+                Library Admin
+              </a>
+              <a
+                href="/admin/library/payments"
+                className="text-blue-600 underline"
+              >
+                Library Payments
+              </a>
+              <a
+                href="/admin/library/seats"
+                className="text-blue-600 underline"
+              >
+                Library Seats
+              </a>
+              <a
+                href="/admin/library/book-purchases"
+                className="text-blue-600 underline"
+              >
+                Book Purchases
+              </a>
+              <a
+                href="/admin/library/settings"
+                className="text-blue-600 underline"
+              >
+                Library Settings
+              </a>
+
               {/* Classroom Admin */}
               <a
                 href="/admin/classroom"
@@ -181,7 +213,7 @@ export default function Navbar() {
                 📝 Edit Footer
               </a>
 
-              {/* 🔐 NEW: Change password link */}
+              {/* 🔐 Change password */}
               <a
                 href="/admin/change-password"
                 className="px-2 py-1 rounded-md bg-red-200 text-red-900 font-semibold hover:bg-red-300 transition"
@@ -232,7 +264,7 @@ export default function Navbar() {
             Classroom
           </a>
 
-          {/* ⭐ NEW: Library (mobile) */}
+          {/* ⭐ Library (mobile user) */}
           <a href="/library" className="text-blue-600 font-semibold">
             Library
           </a>
@@ -265,6 +297,26 @@ export default function Navbar() {
                 Research Drafting Admin
               </a>
 
+              {/* ⭐⭐ NEW: LIBRARY ADMIN LINKS (MOBILE) */}
+              <a href="/admin/library" className="underline">
+                Library Admin
+              </a>
+              <a href="/admin/library/payments" className="underline">
+                Library Payments
+              </a>
+              <a href="/admin/library/seats" className="underline">
+                Library Seats
+              </a>
+              <a
+                href="/admin/library/book-purchases"
+                className="underline"
+              >
+                Book Purchases
+              </a>
+              <a href="/admin/library/settings" className="underline">
+                Library Settings
+              </a>
+
               <a
                 href="/admin/classroom"
                 className="px-2 py-1 rounded-md bg-green-200 text-green-900 font-semibold text-center hover:bg-green-300 transition"
@@ -279,7 +331,7 @@ export default function Navbar() {
                 📝 Edit Footer
               </a>
 
-              {/* 🔐 NEW: Change password link (mobile) */}
+              {/* 🔐 Change password (mobile) */}
               <a
                 href="/admin/change-password"
                 className="px-2 py-1 rounded-md bg-red-200 text-red-900 font-semibold text-center hover:bg-red-300 transition"
