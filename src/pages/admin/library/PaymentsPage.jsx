@@ -1,4 +1,5 @@
 import React, { useEffect, useState } from "react";
+import { Link } from "react-router-dom";
 import AdminSidebar from "./AdminSidebar.jsx";
 
 const API_URL =
@@ -14,36 +15,38 @@ export default function PaymentsPage() {
 
   async function loadPayments() {
     setLoading(true);
+
     try {
-      const res = await fetch(`${API_URL}/api/admin/library/payments`);
+      const res = await fetch(`${API_URL}/api/admin/library/payments`, {
+        credentials: "include",
+      });
+
       const json = await res.json();
-      if (json.success) setPayments(json.data || []);
+      if (json.success) {
+        setPayments(json.data || []);
+      }
     } catch (err) {
       console.error("[Admin] load payments error:", err);
     }
+
     setLoading(false);
   }
 
-  async function handleApprove(payment) {
-    if (payment.type === "seat") {
-      await fetch(`${API_URL}/api/library/admin/seat/approve/${payment._id}`, {
-        method: "POST",
-        credentials: "include",
-      });
-    } else {
-      await fetch(`${API_URL}/api/library/admin/book/approve/${payment._id}`, {
-        method: "POST",
-        credentials: "include",
-      });
-    }
-    loadPayments();
-  }
-
-  async function handleReject(payment) {
-    await fetch(`${API_URL}/api/admin/library/payments/reject/${payment._id}`, {
+  async function handleApprove(paymentId) {
+    await fetch(`${API_URL}/api/admin/library/payment/approve/${paymentId}`, {
       method: "POST",
       credentials: "include",
     });
+
+    loadPayments();
+  }
+
+  async function handleReject(paymentId) {
+    await fetch(`${API_URL}/api/admin/library/payment/reject/${paymentId}`, {
+      method: "POST",
+      credentials: "include",
+    });
+
     loadPayments();
   }
 
@@ -57,7 +60,7 @@ export default function PaymentsPage() {
         {loading ? (
           <p>Loading...</p>
         ) : payments.length === 0 ? (
-          <p className="text-slate-400">No payment requests pending.</p>
+          <p className="text-slate-400">No pending payments.</p>
         ) : (
           <div className="space-y-4">
             {payments.map((p) => (
@@ -65,42 +68,62 @@ export default function PaymentsPage() {
                 key={p._id}
                 className="border border-slate-700 rounded-lg p-4 bg-slate-800"
               >
-                <div className="flex justify-between">
+                <div className="flex justify-between items-start">
                   <div>
-                    <p className="font-semibold">
-                      {p.type === "seat" ? "Seat Reservation" : "Book Purchase"}
+                    <p className="font-semibold text-lg">
+                      {p.type === "seat" ? "💺 Seat Reservation" : "📖 Book Purchase"}
                     </p>
+
                     <p className="text-sm text-slate-300">
-                      Name: {p.name} • Phone: {p.phone}
+                      Name: {p.name || "N/A"} • Phone: {p.phone || "N/A"}
                     </p>
+
                     <p className="text-sm text-slate-400">
-                      Amount: ₹{p.amount}
+                      Amount: <span className="text-green-400">₹{p.amount}</span>
+                    </p>
+
+                    <p className="text-xs mt-1">
+                      Status:{" "}
+                      <span
+                        className={
+                          p.status === "submitted"
+                            ? "text-yellow-300"
+                            : p.status === "approved"
+                            ? "text-green-400"
+                            : "text-red-400"
+                        }
+                      >
+                        {p.status}
+                      </span>
                     </p>
                   </div>
 
                   {p.screenshotPath && (
                     <img
-                      src={p.screenshotPath}
+                      src={`${API_URL}/${p.screenshotPath}`}
                       alt="Payment Screenshot"
-                      className="w-24 h-24 object-cover rounded border border-slate-700"
+                      className="w-24 h-24 object-cover rounded border border-slate-700 cursor-pointer"
                     />
                   )}
                 </div>
 
-                <div className="flex gap-3 mt-3">
-                  <button
-                    onClick={() => handleApprove(p)}
-                    className="px-3 py-1 bg-emerald-500 text-black rounded hover:bg-emerald-400"
-                  >
-                    Approve
-                  </button>
-                  <button
-                    onClick={() => handleReject(p)}
-                    className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-500"
-                  >
-                    Reject
-                  </button>
-                </div>
+                {p.status === "submitted" && (
+                  <div className="flex gap-3 mt-3">
+                    <button
+                      onClick={() => handleApprove(p._id)}
+                      className="px-3 py-1 bg-emerald-500 text-black rounded hover:bg-emerald-400"
+                    >
+                      Approve
+                    </button>
+
+                    <button
+                      onClick={() => handleReject(p._id)}
+                      className="px-3 py-1 bg-red-600 text-white rounded hover:bg-red-500"
+                    >
+                      Reject
+                    </button>
+                  </div>
+                )}
               </div>
             ))}
           </div>
