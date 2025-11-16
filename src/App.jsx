@@ -1,4 +1,4 @@
-// src/App.jsx
+ // src/App.jsx
 import {
   BrowserRouter as Router,
   Routes,
@@ -32,15 +32,20 @@ import PodcastsPage from "./pages/PodcastsPage.jsx";
 import NotebookPage from "./pages/NotebookPage.jsx";
 import PdfDemo from "./pages/PdfDemo.jsx";
 import Plagiarism from "./pages/Plagiarism.jsx";
-
-/* ⭐ NEW: Public Library page ---------- */
-import LibraryPage from "./pages/LibraryPage.jsx";
+import LibraryPage from "./pages/LibraryPage.jsx"; // ★ ADDED
 
 /* ---------- Admin Pages ---------- */
 import AdminDashboard from "./pages/AdminDashboard.jsx";
 import AdminLogin from "./pages/AdminLogin.jsx";
 import AdminConsultancyEditor from "./components/Admin/AdminConsultancyEditor.jsx";
 import AdminFooterTermsEditor from "./pages/AdminFooterTermsEditor.jsx";
+
+/* ---------- Library Admin Pages (NEW) ---------- */
+import LibraryAdminPage from "./pages/admin/library/LibraryAdminPage.jsx";
+import PaymentsPage from "./pages/admin/library/PaymentsPage.jsx";
+import SeatsPage from "./pages/admin/library/SeatsPage.jsx";
+import BookPurchasesPage from "./pages/admin/library/BookPurchasesPage.jsx";
+import SettingsPage from "./pages/admin/library/SettingsPage.jsx";
 
 /* ---------- NEW — Change Password ---------- */
 import ChangePassword from "./pages/ChangePassword.jsx";
@@ -49,7 +54,7 @@ import ChangePassword from "./pages/ChangePassword.jsx";
 import PrepList from "./pages/prep/PrepList.jsx";
 import PrepWizard from "./pages/prep/PrepWizard.jsx";
 import AdminPrepPanel from "./pages/prep/AdminPrepPanel.jsx";
-import PrepOverlayEditor from "./pages/prep/PrepOverlayEditor.jsx;
+import PrepOverlayEditor from "./pages/prep/PrepOverlayEditor.jsx";
 import PrepAccessAdmin from "./pages/admin/PrepAccessAdmin.jsx";
 
 /* ---------- Test Series ---------- */
@@ -104,8 +109,18 @@ function ScrollToHash() {
   useEffect(() => {
     if (!hash) return;
     const id = hash.replace(/^#/, "");
-    const el = document.getElementById(id);
-    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    const tryScroll = () => {
+      const el = document.getElementById(id);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    };
+    const t0 = setTimeout(tryScroll, 0);
+    const t1 = setTimeout(tryScroll, 120);
+    const t2 = setTimeout(tryScroll, 350);
+    return () => {
+      clearTimeout(t0);
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
   }, [hash, pathname]);
   return null;
 }
@@ -131,6 +146,9 @@ function ClassroomWrapper({ children }) {
   );
 }
 
+/* ========================================== */
+/*                 MAIN ROUTES                */
+/* ========================================== */
 function AppContent() {
   const location = useLocation();
   const isPrepHome = location.pathname === "/prep";
@@ -151,7 +169,7 @@ function AppContent() {
 
       <div className="animate-fadeIn flex-1">
         <Routes>
-          {/* PUBLIC */}
+          {/* PUBLIC PAGES */}
           <Route path="/" element={<HomePage />} />
           <Route path="/articles" element={<ArticlesPage />} />
           <Route path="/news" element={<NewsPage />} />
@@ -160,8 +178,7 @@ function AppContent() {
           <Route path="/notebook" element={<NotebookPage />} />
           <Route path="/plagiarism" element={<Plagiarism />} />
           <Route path="/pdfdemo" element={<PdfDemo />} />
-          {/* ⭐ NEW: PUBLIC LIBRARY ROUTE */}
-          <Route path="/library" element={<LibraryPage />} />
+          <Route path="/library" element={<LibraryPage />} /> {/* ★ ADDED */}
 
           {/* LIVE */}
           <Route path="/live" element={<LiveChannelPage />} />
@@ -183,6 +200,7 @@ function AppContent() {
               </ClassroomWrapper>
             }
           />
+
           <Route path="/classroom/share" element={<ClassroomSharePage />} />
           <Route path="/classroom/ambience" element={<AmbiencePage />} />
           <Route path="/classroom/theme" element={<ThemeFocusPage />} />
@@ -199,6 +217,7 @@ function AppContent() {
               </AdminRoute>
             }
           />
+
           <Route
             path="/admin/classroom"
             element={
@@ -214,6 +233,7 @@ function AppContent() {
             path="/research-drafting/lab/:id"
             element={<ResearchDraftingLab />}
           />
+
           <Route
             path="/admin/research-drafting"
             element={
@@ -226,6 +246,7 @@ function AppContent() {
           {/* PREP */}
           <Route path="/prep" element={<PrepList />} />
           <Route path="/prep/:examId" element={<PrepWizard />} />
+
           <Route
             path="/admin/prep"
             element={
@@ -234,6 +255,7 @@ function AppContent() {
               </AdminRoute>
             }
           />
+
           <Route
             path="/admin/prep-overlay"
             element={
@@ -242,6 +264,7 @@ function AppContent() {
               </AdminRoute>
             }
           />
+
           <Route
             path="/admin/prep-access"
             element={
@@ -275,6 +298,7 @@ function AppContent() {
               </IfOwnerOnly>
             }
           />
+
           <Route
             path="/owner/tests/results"
             element={
@@ -283,6 +307,7 @@ function AppContent() {
               </IfOwnerOnly>
             }
           />
+
           <Route
             path="/owner/tests"
             element={
@@ -294,6 +319,7 @@ function AppContent() {
 
           {/* ADMIN */}
           <Route path="/admin/login" element={<AdminLogin />} />
+
           <Route
             path="/admin/dashboard"
             element={
@@ -302,6 +328,7 @@ function AppContent() {
               </AdminRoute>
             }
           />
+
           <Route
             path="/admin/consultancy"
             element={
@@ -310,6 +337,7 @@ function AppContent() {
               </AdminRoute>
             }
           />
+
           <Route
             path="/admin/footer"
             element={
@@ -319,7 +347,49 @@ function AppContent() {
             }
           />
 
-          {/* PASSWORD */}
+          {/* LIBRARY ADMIN (NEW) */}
+          <Route
+            path="/admin/library"
+            element={
+              <AdminRoute>
+                <LibraryAdminPage />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/library/payments"
+            element={
+              <AdminRoute>
+                <PaymentsPage />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/library/seats"
+            element={
+              <AdminRoute>
+                <SeatsPage />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/library/book-purchases"
+            element={
+              <AdminRoute>
+                <BookPurchasesPage />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/library/settings"
+            element={
+              <AdminRoute>
+                <SettingsPage />
+              </AdminRoute>
+            }
+          />
+
+          {/* NEW — CHANGE PASSWORD */}
           <Route
             path="/admin/change-password"
             element={
