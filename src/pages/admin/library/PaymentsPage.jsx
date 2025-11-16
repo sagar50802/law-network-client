@@ -1,6 +1,6 @@
 import React, { useEffect, useState } from "react";
-import { Link } from "react-router-dom";
 import AdminSidebar from "./AdminSidebar.jsx";
+import PaymentReviewModal from "./PaymentReviewModal.jsx";
 
 const API_URL =
   import.meta.env.VITE_API_URL || "https://law-network-server.onrender.com";
@@ -9,26 +9,24 @@ export default function PaymentsPage() {
   const [payments, setPayments] = useState([]);
   const [loading, setLoading] = useState(true);
 
+  // Modal state
+  const [selectedPayment, setSelectedPayment] = useState(null);
+
   useEffect(() => {
     loadPayments();
   }, []);
 
   async function loadPayments() {
     setLoading(true);
-
     try {
       const res = await fetch(`${API_URL}/api/admin/library/payments`, {
         credentials: "include",
       });
-
       const json = await res.json();
-      if (json.success) {
-        setPayments(json.data || []);
-      }
+      if (json.success) setPayments(json.data || []);
     } catch (err) {
       console.error("[Admin] load payments error:", err);
     }
-
     setLoading(false);
   }
 
@@ -37,7 +35,6 @@ export default function PaymentsPage() {
       method: "POST",
       credentials: "include",
     });
-
     loadPayments();
   }
 
@@ -46,7 +43,6 @@ export default function PaymentsPage() {
       method: "POST",
       credentials: "include",
     });
-
     loadPayments();
   }
 
@@ -60,7 +56,7 @@ export default function PaymentsPage() {
         {loading ? (
           <p>Loading...</p>
         ) : payments.length === 0 ? (
-          <p className="text-slate-400">No pending payments.</p>
+          <p className="text-slate-400">No payment requests pending.</p>
         ) : (
           <div className="space-y-4">
             {payments.map((p) => (
@@ -68,10 +64,10 @@ export default function PaymentsPage() {
                 key={p._id}
                 className="border border-slate-700 rounded-lg p-4 bg-slate-800"
               >
-                <div className="flex justify-between items-start">
+                <div className="flex justify-between">
                   <div>
-                    <p className="font-semibold text-lg">
-                      {p.type === "seat" ? "💺 Seat Reservation" : "📖 Book Purchase"}
+                    <p className="font-semibold">
+                      {p.type === "seat" ? "Seat Reservation" : "Book Purchase"}
                     </p>
 
                     <p className="text-sm text-slate-300">
@@ -79,7 +75,7 @@ export default function PaymentsPage() {
                     </p>
 
                     <p className="text-sm text-slate-400">
-                      Amount: <span className="text-green-400">₹{p.amount}</span>
+                      Amount: ₹{p.amount}
                     </p>
 
                     <p className="text-xs mt-1">
@@ -102,6 +98,7 @@ export default function PaymentsPage() {
                     <img
                       src={`${API_URL}/${p.screenshotPath}`}
                       alt="Payment Screenshot"
+                      onClick={() => setSelectedPayment(p)}
                       className="w-24 h-24 object-cover rounded border border-slate-700 cursor-pointer"
                     />
                   )}
@@ -129,6 +126,21 @@ export default function PaymentsPage() {
           </div>
         )}
       </div>
+
+      {/* ⭐ Review Modal */}
+      <PaymentReviewModal
+        payment={selectedPayment}
+        API_URL={API_URL}
+        onClose={() => setSelectedPayment(null)}
+        onApprove={() => {
+          handleApprove(selectedPayment._id);
+          setSelectedPayment(null);
+        }}
+        onReject={() => {
+          handleReject(selectedPayment._id);
+          setSelectedPayment(null);
+        }}
+      />
     </div>
   );
 }
