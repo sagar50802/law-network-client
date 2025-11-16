@@ -8,18 +8,19 @@ export default function BookPurchasesPage() {
   const [purchases, setPurchases] = useState([]);
   const [loading, setLoading] = useState(true);
 
-  // Load purchases on page load
   useEffect(() => {
     load();
+    const interval = setInterval(load, 30000); // auto-refresh every 30 sec
+    return () => clearInterval(interval);
   }, []);
 
-  // Fetch all approved book purchases
   async function load() {
     setLoading(true);
     try {
       const res = await fetch(`${API_URL}/api/admin/library/book-purchases`, {
         credentials: "include",
       });
+
       const json = await res.json();
       if (json.success) {
         setPurchases(json.data || []);
@@ -30,15 +31,17 @@ export default function BookPurchasesPage() {
     setLoading(false);
   }
 
-  // Optional: revoke a user's access manually
   async function revokeAccess(purchaseId) {
-    if (!window.confirm("Are you sure you want to revoke this access?")) return;
+    if (!window.confirm("Are you sure you want to revoke this user's book access?")) return;
 
     try {
-      await fetch(`${API_URL}/api/admin/library/book-purchases/revoke/${purchaseId}`, {
-        method: "POST",
-        credentials: "include",
-      });
+      await fetch(
+        `${API_URL}/api/admin/library/book-purchases/revoke/${purchaseId}`,
+        {
+          method: "POST",
+          credentials: "include",
+        }
+      );
 
       load();
     } catch (err) {
@@ -47,14 +50,22 @@ export default function BookPurchasesPage() {
     }
   }
 
-  const now = Date.now();
+  // Helper: Calculate time left
+  function timeLeft(expiresAt) {
+    const ms = new Date(expiresAt) - new Date();
+    if (ms <= 0) return "Expired";
+
+    const s = Math.floor(ms / 1000);
+    const h = Math.floor(s / 3600);
+    const m = Math.floor((s % 3600) / 60);
+    const sec = s % 60;
+    return `${h}h ${m}m ${sec}s`;
+  }
 
   return (
     <div className="min-h-screen flex bg-slate-900 text-slate-100">
-      {/* Sidebar */}
       <AdminSidebar />
 
-      {/* Main content */}
       <div className="flex-1 p-6">
         <h1 className="text-xl font-bold mb-6">📖 Paid Book Access</h1>
 
@@ -64,61 +75,66 @@ export default function BookPurchasesPage() {
           <p className="text-slate-400">No paid book purchases found.</p>
         ) : (
           <div className="overflow-x-auto">
-            <table className="w-full text-sm border-collapse">
-              <thead>
-                <tr className="border-b border-slate-700 text-left">
-                  <th className="py-2 px-2">Book</th>
-                  <th className="py-2 px-2">User</th>
-                  <th className="py-2 px-2">Readable Until</th>
-                  <th className="py-2 px-2">Status</th>
-                  <th className="py-2 px-2">Actions</th>
+            <table className="w-full text-sm bg-slate-800 border border-slate-700 rounded-lg overflow-hidden">
+              <thead className="bg-slate-700 text-left">
+                <tr>
+                  <th className="py-2 px-3">Book</th>
+                  <th className="py-2 px-3">User</th>
+                  <th className="py-2 px-3">Readable Until</th>
+                  <th className="py-2 px-3">Time Left</th>
+                  <th className="py-2 px-3">Status</th>
+                  <th className="py-2 px-3">Actions</th>
                 </tr>
               </thead>
 
               <tbody>
                 {purchases.map((p) => {
-                  const expiresAt = new Date(p.readingExpiresAt).getTime();
-                  const isExpired = expiresAt < now;
+                  const expired = new Date(p.readingExpiresAt) < new Date();
 
                   return (
                     <tr
                       key={p._id}
-                      className="border-b border-slate-800 hover:bg-slate-800/40"
+                      className="border-t border-slate-700 hover:bg-slate-700/40"
                     >
-                      {/* Book */}
-                      <td className="py-3 px-2">
+                      {/* Book info */}
+                      <td className="py-3 px-3">
                         <div className="font-semibold text-slate-100">
-                          {p.book?.title || "Unknown"}
+                          {p.book?.title || "Unknown Book"}
                         </div>
                         <div className="text-[11px] text-slate-400">
-                          {p.book?.subject}
+                          {p.book?.subject || "No subject"}
                         </div>
                       </td>
 
-                      {/* User */}
-                      <td className="py-3 px-2">
+                      {/* User info */}
+                      <td className="py-3 px-3">
                         <div className="font-medium">
                           {p.user?.name || "Unknown User"}
                         </div>
                         <div className="text-[11px] text-slate-400">
-                          {p.user?.phone}
+                          {p.user?.phone || "No phone"}
                         </div>
                       </td>
 
-                      {/* Expiry */}
-                      <td className="py-3 px-2">
+                      {/* Readable until */}
+                      <td className="py-3 px-3">
                         <span
-                          className={`${
-                            isExpired ? "text-red-400" : "text-emerald-300"
-                          }`}
+                          className={`${expired ? "text-red-400" : "text-emerald-300"}`}
                         >
                           {new Date(p.readingExpiresAt).toLocaleString()}
                         </span>
                       </td>
 
+                      {/* Time Left */}
+                      <td className="py-3 px-3">
+                        <span className="px-2 py-1 bg-black/40 rounded text-yellow-300">
+                          {timeLeft(p.readingExpiresAt)}
+                        </span>
+                      </td>
+
                       {/* Status */}
-                      <td className="py-3 px-2">
-                        {isExpired ? (
+                      <td className="py-3 px-3">
+                        {expired ? (
                           <span className="px-2 py-1 text-xs rounded bg-red-600 text-white">
                             Expired
                           </span>
@@ -130,7 +146,7 @@ export default function BookPurchasesPage() {
                       </td>
 
                       {/* Actions */}
-                      <td className="py-3 px-2">
+                      <td className="py-3 px-3">
                         <button
                           onClick={() => revokeAccess(p._id)}
                           className="px-3 py-1 text-xs rounded bg-red-600 hover:bg-red-500 text-white"
