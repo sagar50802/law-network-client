@@ -1,4 +1,5 @@
 import React from "react";
+import { Link } from "react-router-dom";
 import AdminSidebar from "./AdminSidebar.jsx";
 
 export default function LibraryAdminPage() {
@@ -13,45 +14,45 @@ export default function LibraryAdminPage() {
 
         <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-6">
 
-          <a
-            href="/admin/library/payments"
-            className="p-4 rounded-lg bg-slate-800 border border-slate-700 hover:bg-slate-700"
+          <Link
+            to="/admin/library/payments"
+            className="p-4 rounded-lg bg-slate-800 border border-slate-700 hover:bg-slate-700 block"
           >
             <h2 className="font-semibold text-lg">💰 Payment Requests</h2>
             <p className="text-sm text-slate-300">
               Review screenshots & approve seat or book purchases
             </p>
-          </a>
+          </Link>
 
-          <a
-            href="/admin/library/seats"
-            className="p-4 rounded-lg bg-slate-800 border border-slate-700 hover:bg-slate-700"
+          <Link
+            to="/admin/library/seats"
+            className="p-4 rounded-lg bg-slate-800 border border-slate-700 hover:bg-slate-700 block"
           >
             <h2 className="font-semibold text-lg">💺 Active Seats</h2>
             <p className="text-sm text-slate-300">
               View reservations & expiry timers
             </p>
-          </a>
+          </Link>
 
-          <a
-            href="/admin/library/book-purchases"
-            className="p-4 rounded-lg bg-slate-800 border border-slate-700 hover:bg-slate-700"
+          <Link
+            to="/admin/library/book-purchases"
+            className="p-4 rounded-lg bg-slate-800 border border-slate-700 hover:bg-slate-700 block"
           >
             <h2 className="font-semibold text-lg">📖 Paid Book Access</h2>
             <p className="text-sm text-slate-300">
               Approve reading access or view active windows
             </p>
-          </a>
+          </Link>
 
-          <a
-            href="/admin/library/settings"
-            className="p-4 rounded-lg bg-slate-800 border border-slate-700 hover:bg-slate-700"
+          <Link
+            to="/admin/library/settings"
+            className="p-4 rounded-lg bg-slate-800 border border-slate-700 hover:bg-slate-700 block"
           >
             <h2 className="font-semibold text-lg">⚙️ Library Settings</h2>
             <p className="text-sm text-slate-300">
               Auto-approve mode, seat price, durations, etc.
             </p>
-          </a>
+          </Link>
 
         </div>
       </div>
