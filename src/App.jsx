@@ -8,27 +8,22 @@ import {
 } from "react-router-dom";
 import { useEffect } from "react";
 
-/* Layout */
 import Navbar from "./components/layout/Navbar";
 import Footer from "./components/layout/Footer.jsx";
 import AdminRoute from "./components/common/AdminRoute.jsx";
 import IfOwnerOnly from "./components/common/IfOwnerOnly.jsx";
 import "./styles/ui.css";
 
-/* Classroom Drawer */
+/* ---------- Classroom Drawer Menu ---------- */
 import ClassroomDrawerMenu from "./components/ClassroomDrawerMenu.jsx";
 
-/* Classroom Pages */
+/* ---------- Ambience Page ---------- */
 import AmbiencePage from "./pages/classroom/AmbiencePage.jsx";
-import ClassroomLivePage from "./pages/ClassroomLivePage.jsx";
-import ClassroomSharePage from "./pages/ClassroomSharePage.jsx";
-import ClassroomLinkCreator from "./pages/ClassroomLinkCreator.jsx";
-import ThemeFocusPage from "./pages/classroom/ThemeFocusPage.jsx";
 
-/* Group Key */
+/* ---------- Group Key Bridge ---------- */
 import GroupKeyBridge from "./pages/GroupKeyBridge.jsx";
 
-/* Main Pages */
+/* ---------- Main Pages ---------- */
 import HomePage from "./pages/HomePage.jsx";
 import ArticlesPage from "./pages/ArticlesPage.jsx";
 import NewsPage from "./pages/NewsPage.jsx";
@@ -38,33 +33,26 @@ import NotebookPage from "./pages/NotebookPage.jsx";
 import PdfDemo from "./pages/PdfDemo.jsx";
 import Plagiarism from "./pages/Plagiarism.jsx";
 
-/* ⭐ Library Public Page */
-import LibraryPage from "./pages/library/LibraryPage.jsx";
+/* ⭐ NEW: Public Library page ---------- */
+import LibraryPage from "./pages/LibraryPage.jsx";
 
-/* Admin Pages */
+/* ---------- Admin Pages ---------- */
 import AdminDashboard from "./pages/AdminDashboard.jsx";
 import AdminLogin from "./pages/AdminLogin.jsx";
 import AdminConsultancyEditor from "./components/Admin/AdminConsultancyEditor.jsx";
 import AdminFooterTermsEditor from "./pages/AdminFooterTermsEditor.jsx";
 
-/* ⭐ Library Admin Pages */
-import LibraryAdminPage from "./pages/admin/library/LibraryAdminPage.jsx";
-import PaymentsPage from "./pages/admin/library/PaymentsPage.jsx";
-import SeatsPage from "./pages/admin/library/SeatsPage.jsx";
-import BookPurchasesPage from "./pages/admin/library/BookPurchasesPage.jsx";
-import SettingsPage from "./pages/admin/library/SettingsPage.jsx";
-
-/* Change Password */
+/* ---------- NEW — Change Password ---------- */
 import ChangePassword from "./pages/ChangePassword.jsx";
 
-/* Prep */
+/* ---------- Exam Prep ---------- */
 import PrepList from "./pages/prep/PrepList.jsx";
 import PrepWizard from "./pages/prep/PrepWizard.jsx";
 import AdminPrepPanel from "./pages/prep/AdminPrepPanel.jsx";
-import PrepOverlayEditor from "./pages/prep/PrepOverlayEditor.jsx";
+import PrepOverlayEditor from "./pages/prep/PrepOverlayEditor.jsx;
 import PrepAccessAdmin from "./pages/admin/PrepAccessAdmin.jsx";
 
-/* Test Series */
+/* ---------- Test Series ---------- */
 import TestDashboard from "./pages/testseries/TestDashboard.jsx";
 import TestIntro from "./pages/testseries/TestIntro.jsx";
 import TestPlayer from "./pages/testseries/TestPlayer.jsx";
@@ -73,16 +61,27 @@ import AdminTestImporter from "./pages/testseries/AdminTestImporter.jsx";
 import AdminTestResults from "./pages/testseries/AdminTestResults.jsx";
 import AdminTestManager from "./pages/testseries/AdminTestManager.jsx";
 
-/* Research */
+/* ---------- Research Drafting ---------- */
 import ResearchDrafting from "./pages/ResearchDrafting.jsx";
 import ResearchDraftingLab from "./pages/ResearchDraftingLab.jsx";
 import AdminResearchPanel from "./components/ResearchDrafting/AdminResearchPanel.jsx";
 
-/* LIVE */
+/* ---------- LIVE Channel ---------- */
 import LiveChannelPage from "./pages/LiveChannelPage.jsx";
 import LiveAdminPage from "./pages/LiveAdminPage.jsx";
 
-/* 404 */
+/* ---------- Classroom Feature ---------- */
+import ClassroomLivePage from "./pages/ClassroomLivePage.jsx";
+import AdminLectureManager from "./pages/AdminLectureManager.jsx";
+import ClassroomSharePage from "./pages/ClassroomSharePage.jsx";
+import ClassroomLinkCreator from "./pages/ClassroomLinkCreator.jsx";
+
+/* ---------- Theme Page ---------- */
+import ThemeFocusPage from "./pages/classroom/ThemeFocusPage.jsx";
+
+/* ========================================== */
+/*                 NOT FOUND                  */
+/* ========================================== */
 function NotFound() {
   return (
     <div className="flex flex-col items-center justify-center py-24 text-center">
@@ -100,7 +99,6 @@ function NotFound() {
   );
 }
 
-/* Helpers */
 function ScrollToHash() {
   const { hash, pathname } = useLocation();
   useEffect(() => {
@@ -122,7 +120,6 @@ function RouteWithResultId({ Comp }) {
   return <Comp id={id} />;
 }
 
-/* Classroom Wrapper */
 function ClassroomWrapper({ children }) {
   const location = useLocation();
   const isClassroom = location.pathname.startsWith("/classroom");
@@ -134,7 +131,6 @@ function ClassroomWrapper({ children }) {
   );
 }
 
-/* MAIN CONTENT */
 function AppContent() {
   const location = useLocation();
   const isPrepHome = location.pathname === "/prep";
@@ -164,8 +160,7 @@ function AppContent() {
           <Route path="/notebook" element={<NotebookPage />} />
           <Route path="/plagiarism" element={<Plagiarism />} />
           <Route path="/pdfdemo" element={<PdfDemo />} />
-
-          {/* ⭐ PUBLIC LIBRARY */}
+          {/* ⭐ NEW: PUBLIC LIBRARY ROUTE */}
           <Route path="/library" element={<LibraryPage />} />
 
           {/* LIVE */}
@@ -324,53 +319,7 @@ function AppContent() {
             }
           />
 
-          {/* ⭐ LIBRARY ADMIN */}
-          <Route
-            path="/admin/library"
-            element={
-              <AdminRoute>
-                <LibraryAdminPage />
-              </AdminRoute>
-            }
-          />
-
-          <Route
-            path="/admin/library/payments"
-            element={
-              <AdminRoute>
-                <PaymentsPage />
-              </AdminRoute>
-            }
-          />
-
-          <Route
-            path="/admin/library/seats"
-            element={
-              <AdminRoute>
-                <SeatsPage />
-              </AdminRoute>
-            }
-          />
-
-          <Route
-            path="/admin/library/book-purchases"
-            element={
-              <AdminRoute>
-                <BookPurchasesPage />
-              </AdminRoute>
-            }
-          />
-
-          <Route
-            path="/admin/library/settings"
-            element={
-              <AdminRoute>
-                <SettingsPage />
-              </AdminRoute>
-            }
-          />
-
-          {/* CHANGE PASSWORD */}
+          {/* PASSWORD */}
           <Route
             path="/admin/change-password"
             element={
