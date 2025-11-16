@@ -31,19 +31,35 @@ export default function PaymentsPage() {
   }
 
   async function handleApprove(paymentId) {
-    await fetch(`${API_URL}/api/admin/library/payment/approve/${paymentId}`, {
-      method: "POST",
-      credentials: "include",
-    });
-    loadPayments();
+    if (!paymentId) return;
+    try {
+      await fetch(
+        `${API_URL}/api/admin/library/payment/approve/${paymentId}`,
+        {
+          method: "POST",
+          credentials: "include",
+        }
+      );
+      await loadPayments();
+    } catch (err) {
+      console.error("[Admin] approve error:", err);
+    }
   }
 
   async function handleReject(paymentId) {
-    await fetch(`${API_URL}/api/admin/library/payment/reject/${paymentId}`, {
-      method: "POST",
-      credentials: "include",
-    });
-    loadPayments();
+    if (!paymentId) return;
+    try {
+      await fetch(
+        `${API_URL}/api/admin/library/payment/reject/${paymentId}`,
+        {
+          method: "POST",
+          credentials: "include",
+        }
+      );
+      await loadPayments();
+    } catch (err) {
+      console.error("[Admin] reject error:", err);
+    }
   }
 
   return (
@@ -127,20 +143,22 @@ export default function PaymentsPage() {
         )}
       </div>
 
-      {/* ⭐ Review Modal */}
-      <PaymentReviewModal
-        payment={selectedPayment}
-        API_URL={API_URL}
-        onClose={() => setSelectedPayment(null)}
-        onApprove={() => {
-          handleApprove(selectedPayment._id);
-          setSelectedPayment(null);
-        }}
-        onReject={() => {
-          handleReject(selectedPayment._id);
-          setSelectedPayment(null);
-        }}
-      />
+      {/* ⭐ Review Modal — render ONLY when selectedPayment exists */}
+      {selectedPayment && (
+        <PaymentReviewModal
+          payment={selectedPayment}
+          API_URL={API_URL}
+          onClose={() => setSelectedPayment(null)}
+          onApprove={() => {
+            handleApprove(selectedPayment._id);
+            setSelectedPayment(null);
+          }}
+          onReject={() => {
+            handleReject(selectedPayment._id);
+            setSelectedPayment(null);
+          }}
+        />
+      )}
     </div>
   );
 }
