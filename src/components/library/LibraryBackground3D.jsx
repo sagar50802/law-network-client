@@ -1,6 +1,9 @@
-// src/components/library/LibraryBackground3D.jsx
+// 🚀 src/components/library/LibraryBackground3D.jsx
 import { useEffect, useRef } from "react";
 import * as THREE from "three";
+import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
+import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
+import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 
 export default function LibraryBackground3D() {
   const containerRef = useRef(null);
@@ -9,146 +12,195 @@ export default function LibraryBackground3D() {
     const container = containerRef.current;
     if (!container) return;
 
-    // --- Scene, Camera, Renderer ---
+    /* =====================================================
+       🔧 CORE: Scene + Renderer + Camera
+    ===================================================== */
     const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x020617, 0.18);
+    scene.fog = new THREE.FogExp2(0x020617, 0.2);
 
-    const camera = new THREE.PerspectiveCamera(
-      45,
-      container.clientWidth / container.clientHeight,
-      0.1,
-      100
-    );
-    camera.position.set(0, 1.5, 7);
+    const width = container.clientWidth;
+    const height = container.clientHeight;
+
+    const camera = new THREE.PerspectiveCamera(45, width / height, 0.1, 100);
+    camera.position.set(0, 2, 9);
 
     const renderer = new THREE.WebGLRenderer({
       antialias: true,
       alpha: true,
     });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
-    renderer.setSize(container.clientWidth, container.clientHeight);
+    renderer.setSize(width, height);
     renderer.setClearColor(0x020617, 1);
     container.appendChild(renderer.domElement);
 
-    // Lights
-    const ambient = new THREE.AmbientLight(0xffffff, 0.6);
-    scene.add(ambient);
+    /* =====================================================
+       🌟 BLOOM EFFECT
+    ===================================================== */
+    const composer = new EffectComposer(renderer);
+    composer.addPass(new RenderPass(scene, camera));
 
-    const dir = new THREE.DirectionalLight(0x88ccff, 1.2);
-    dir.position.set(3, 5, 2);
-    scene.add(dir);
+    const bloomPass = new UnrealBloomPass(
+      new THREE.Vector2(width, height),
+      0.7, // strength
+      0.4, // radius
+      0.1  // threshold
+    );
+    composer.addPass(bloomPass);
 
-    const backLight = new THREE.PointLight(0xff66cc, 0.8, 20);
-    backLight.position.set(-4, -2, -5);
-    scene.add(backLight);
+    /* =====================================================
+       💡 LIGHTING
+    ===================================================== */
+    scene.add(new THREE.AmbientLight(0xffffff, 0.6));
 
-    // Floating Books
+    const dirLight = new THREE.DirectionalLight(0x88ccff, 1.4);
+    dirLight.position.set(4, 5, 3);
+    scene.add(dirLight);
+
+    const magentaGlow = new THREE.PointLight(0xff33aa, 1, 15);
+    magentaGlow.position.set(-5, -1, -4);
+    scene.add(magentaGlow);
+
+    /* =====================================================
+       📚 FLOATING BOOKS (Upgraded Animation)
+    ===================================================== */
     const books = [];
-    const bookGeo = new THREE.BoxGeometry(0.35, 0.9, 0.12);
-
-    const palette = [
-      0x38bdf8,
-      0xa855f7,
-      0xf97316,
-      0x22c55e,
-      0xfacc15,
-      0x6366f1,
-    ];
-
     const group = new THREE.Group();
     scene.add(group);
 
-    const bookCount = 40;
-    for (let i = 0; i < bookCount; i++) {
+    const bookGeo = new THREE.BoxGeometry(0.35, 0.9, 0.12);
+    const palette = [0x38bdf8, 0xa855f7, 0xf97316, 0x22c55e, 0xfacc15, 0x6366f1];
+
+    for (let i = 0; i < 45; i++) {
       const color = palette[i % palette.length];
-      const material = new THREE.MeshStandardMaterial({
+
+      const mat = new THREE.MeshStandardMaterial({
         color,
         metalness: 0.3,
-        roughness: 0.35,
+        roughness: 0.3,
         emissive: color,
-        emissiveIntensity: 0.18,
+        emissiveIntensity: 0.35,
       });
 
-      const mesh = new THREE.Mesh(bookGeo, material);
+      const mesh = new THREE.Mesh(bookGeo, mat);
 
-      const radius = 3 + Math.random() * 3;
+      // Spiral orbit
       const angle = Math.random() * Math.PI * 2;
-      const height = (Math.random() - 0.5) * 4;
+      const radius = 3 + Math.random() * 4;
 
       mesh.position.set(
         Math.cos(angle) * radius,
-        height,
+        (Math.random() - 0.5) * 4,
         Math.sin(angle) * radius
       );
 
-      mesh.rotation.set(
-        Math.random() * 0.8 - 0.4,
-        Math.random() * Math.PI * 2,
-        Math.random() * 0.6 - 0.3
-      );
-
       mesh.userData = {
+        angle,
+        radius,
         floatOffset: Math.random() * Math.PI * 2,
-        floatSpeed: 0.4 + Math.random() * 0.5,
-        baseY: mesh.position.y,
+        floatSpeed: 0.5 + Math.random() * 0.3,
+        rotationSpeed: 0.005 + Math.random() * 0.003,
       };
 
       group.add(mesh);
       books.push(mesh);
     }
 
-    // Background Wireframe Plane
-    const planeGeo = new THREE.PlaneGeometry(40, 40, 40, 40);
-    const planeMat = new THREE.MeshBasicMaterial({
-      color: 0x0f172a,
-      wireframe: true,
-      opacity: 0.15,
+    /* =====================================================
+       ✨ FLOATING PARTICLES
+    ===================================================== */
+    const particlesGeometry = new THREE.BufferGeometry();
+    const particleCount = 600;
+    const positions = new Float32Array(particleCount * 3);
+
+    for (let i = 0; i < particleCount; i++) {
+      positions[i * 3] = (Math.random() - 0.5) * 15;
+      positions[i * 3 + 1] = (Math.random() - 0.5) * 10;
+      positions[i * 3 + 2] = (Math.random() - 0.5) * 15;
+    }
+
+    particlesGeometry.setAttribute(
+      "position",
+      new THREE.BufferAttribute(positions, 3)
+    );
+
+    const particlesMaterial = new THREE.PointsMaterial({
+      size: 0.04,
       transparent: true,
+      opacity: 0.6,
+      color: 0x88ccff,
     });
 
-    const plane = new THREE.Mesh(planeGeo, planeMat);
-    plane.rotation.x = -Math.PI / 2;
-    plane.position.y = -3;
-    scene.add(plane);
+    const particles = new THREE.Points(particlesGeometry, particlesMaterial);
+    scene.add(particles);
 
-    // Animation Loop
+    /* =====================================================
+       🖱 MOUSE PARALLAX
+    ===================================================== */
+    const mouse = { x: 0, y: 0 };
+    window.addEventListener("mousemove", (e) => {
+      mouse.x = (e.clientX / window.innerWidth - 0.5) * 2;
+      mouse.y = (e.clientY / window.innerHeight - 0.5) * 2;
+    });
+
+    /* =====================================================
+       🎥 ANIMATION LOOP
+    ===================================================== */
     const clock = new THREE.Clock();
-    let frameId;
 
     const animate = () => {
       const t = clock.getElapsedTime();
 
-      group.rotation.y = t * 0.04;
+      // Camera subtle motion
+      camera.position.x = Math.sin(t * 0.2) * 0.6;
+      camera.position.y = 2 + Math.sin(t * 0.3) * 0.2;
+      camera.lookAt(0, 0, 0);
 
+      // Mouse parallax
+      group.rotation.y += (mouse.x * 0.15 - group.rotation.y) * 0.02;
+
+      // Books orbit + float
       books.forEach((b) => {
-        const { floatOffset, floatSpeed, baseY } = b.userData;
-        b.position.y = baseY + Math.sin(t * floatSpeed + floatOffset) * 0.25;
-        b.rotation.x += 0.002;
-        b.rotation.z += 0.0015;
+        b.userData.angle += 0.0015;
+        b.position.x = Math.cos(b.userData.angle) * b.userData.radius;
+        b.position.z = Math.sin(b.userData.angle) * b.userData.radius;
+
+        b.position.y =
+          Math.sin(t * b.userData.floatSpeed + b.userData.floatOffset) * 0.35;
+
+        b.rotation.x += b.userData.rotationSpeed;
+        b.rotation.y += b.userData.rotationSpeed * 0.6;
       });
 
-      renderer.render(scene, camera);
-      frameId = requestAnimationFrame(animate);
+      particles.rotation.y += 0.0003;
+
+      composer.render();
+      requestAnimationFrame(animate);
     };
     animate();
 
+    /* =====================================================
+       📱 RESIZE HANDLER
+    ===================================================== */
     const handleResize = () => {
-      const { clientWidth, clientHeight } = container;
-      camera.aspect = clientWidth / clientHeight;
+      const w = container.clientWidth;
+      const h = container.clientHeight;
+      camera.aspect = w / h;
       camera.updateProjectionMatrix();
-      renderer.setSize(clientWidth, clientHeight);
+      renderer.setSize(w, h);
+      composer.setSize(w, h);
     };
 
     window.addEventListener("resize", handleResize);
 
+    /* =====================================================
+       🧹 CLEANUP
+    ===================================================== */
     return () => {
-      cancelAnimationFrame(frameId);
       window.removeEventListener("resize", handleResize);
-
       container.removeChild(renderer.domElement);
       renderer.dispose();
-      group.clear();
       scene.clear();
+      group.clear();
     };
   }, []);
 
@@ -156,7 +208,6 @@ export default function LibraryBackground3D() {
     <div
       ref={containerRef}
       className="absolute inset-0 -z-10 pointer-events-none"
-      style={{ filter: "saturate(1.2)" }}
     />
   );
 }
