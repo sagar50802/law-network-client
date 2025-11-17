@@ -45,7 +45,7 @@ export default function BooksPage() {
     fd.append("pdf", form.pdf);
     fd.append("cover", form.cover);
 
-    const res = await postForm("/api/library/upload", fd);
+    const res = await postForm("/api/admin/library/upload", fd)
 
     if (res.success) {
       alert("Book uploaded!");
