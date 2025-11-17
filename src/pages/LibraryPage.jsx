@@ -1,3 +1,4 @@
+// src/pages/LibraryPage.jsx
 import React, { useEffect, useState, useCallback } from "react";
 import LibraryShell from "../components/library/LibraryShell.jsx";
 import LibraryNav from "../components/library/LibraryNav.jsx";
@@ -5,6 +6,9 @@ import LibraryTabs from "../components/library/LibraryTabs.jsx";
 import SeatBanner from "../components/library/SeatBanner.jsx";
 import BookGrid from "../components/library/BookGrid.jsx";
 import BookDetailPanel from "../components/library/BookDetailPanel.jsx";
+
+// ⭐ NEW — 3D Background Component
+import LibraryBackground3D from "../components/library/LibraryBackground3D.jsx";
 
 // Adjust if your API base is different
 const API_URL =
@@ -51,7 +55,6 @@ export default function LibraryPage() {
     if (activeTab === "free") return !b.isPaid;
     if (activeTab === "paid") return b.isPaid;
     if (activeTab === "my") {
-      // TODO: later intersect with myBooks purchases
       return myBooks.some((p) => String(p.bookId) === String(b._id));
     }
     return true;
@@ -68,7 +71,10 @@ export default function LibraryPage() {
 
   return (
     <LibraryShell>
-      <div className="flex flex-col h-full">
+      {/* ⭐ 3D BACKGROUND BELOW EVERYTHING */}
+      <LibraryBackground3D />
+
+      <div className="relative z-10 flex flex-col h-full">
         {/* Top navigation inside library */}
         <LibraryNav />
 
