@@ -1,4 +1,4 @@
- // src/App.jsx
+// src/App.jsx
 import {
   BrowserRouter as Router,
   Routes,
@@ -40,12 +40,13 @@ import AdminLogin from "./pages/AdminLogin.jsx";
 import AdminConsultancyEditor from "./components/Admin/AdminConsultancyEditor.jsx";
 import AdminFooterTermsEditor from "./pages/AdminFooterTermsEditor.jsx";
 
-/* ---------- Library Admin Pages (NEW) ---------- */
+/* ---------- Library Admin Pages ---------- */
 import LibraryAdminPage from "./pages/admin/library/LibraryAdminPage.jsx";
 import PaymentsPage from "./pages/admin/library/PaymentsPage.jsx";
 import SeatsPage from "./pages/admin/library/SeatsPage.jsx";
 import BookPurchasesPage from "./pages/admin/library/BookPurchasesPage.jsx";
 import SettingsPage from "./pages/admin/library/SettingsPage.jsx";
+import BooksPage from "./pages/admin/library/BooksPage.jsx"; // ★ NEW
 
 /* ---------- NEW — Change Password ---------- */
 import ChangePassword from "./pages/ChangePassword.jsx";
@@ -178,7 +179,7 @@ function AppContent() {
           <Route path="/notebook" element={<NotebookPage />} />
           <Route path="/plagiarism" element={<Plagiarism />} />
           <Route path="/pdfdemo" element={<PdfDemo />} />
-          <Route path="/library" element={<LibraryPage />} /> {/* ★ ADDED */}
+          <Route path="/library" element={<LibraryPage />} />
 
           {/* LIVE */}
           <Route path="/live" element={<LiveChannelPage />} />
@@ -347,7 +348,7 @@ function AppContent() {
             }
           />
 
-          {/* LIBRARY ADMIN (NEW) */}
+          {/* LIBRARY ADMIN */}
           <Route
             path="/admin/library"
             element={
@@ -356,6 +357,7 @@ function AppContent() {
               </AdminRoute>
             }
           />
+
           <Route
             path="/admin/library/payments"
             element={
@@ -364,6 +366,7 @@ function AppContent() {
               </AdminRoute>
             }
           />
+
           <Route
             path="/admin/library/seats"
             element={
@@ -372,6 +375,7 @@ function AppContent() {
               </AdminRoute>
             }
           />
+
           <Route
             path="/admin/library/book-purchases"
             element={
@@ -380,6 +384,17 @@ function AppContent() {
               </AdminRoute>
             }
           />
+
+          {/* ★ NEW — UPLOAD BOOKS PAGE */}
+          <Route
+            path="/admin/library/books"
+            element={
+              <AdminRoute>
+                <BooksPage />
+              </AdminRoute>
+            }
+          />
+
           <Route
             path="/admin/library/settings"
             element={
