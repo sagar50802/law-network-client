@@ -11,7 +11,7 @@ export default function LibraryBackground3D() {
 
     // --- Scene, Camera, Renderer ---
     const scene = new THREE.Scene();
-    scene.fog = new THREE.FogExp2(0x020617, 0.18); // dark bluish fog
+    scene.fog = new THREE.FogExp2(0x020617, 0.18);
 
     const camera = new THREE.PerspectiveCamera(
       45,
@@ -27,11 +27,10 @@ export default function LibraryBackground3D() {
     });
     renderer.setPixelRatio(Math.min(window.devicePixelRatio, 2));
     renderer.setSize(container.clientWidth, container.clientHeight);
-    renderer.outputEncoding = THREE.sRGBEncoding;
-    renderer.setClearColor(0x020617, 1); // slate-950-ish
+    renderer.setClearColor(0x020617, 1);
     container.appendChild(renderer.domElement);
 
-    // --- Lights ---
+    // Lights
     const ambient = new THREE.AmbientLight(0xffffff, 0.6);
     scene.add(ambient);
 
@@ -43,17 +42,17 @@ export default function LibraryBackground3D() {
     backLight.position.set(-4, -2, -5);
     scene.add(backLight);
 
-    // --- Books (simple boxes) ---
+    // Floating Books
     const books = [];
     const bookGeo = new THREE.BoxGeometry(0.35, 0.9, 0.12);
 
     const palette = [
-      0x38bdf8, // sky-400
-      0xa855f7, // purple-500
-      0xf97316, // orange-500
-      0x22c55e, // green-500
-      0xfacc15, // yellow-400
-      0x6366f1, // indigo-500
+      0x38bdf8,
+      0xa855f7,
+      0xf97316,
+      0x22c55e,
+      0xfacc15,
+      0x6366f1,
     ];
 
     const group = new THREE.Group();
@@ -98,34 +97,32 @@ export default function LibraryBackground3D() {
       books.push(mesh);
     }
 
-    // --- Subtle background grid plane ---
+    // Background Wireframe Plane
     const planeGeo = new THREE.PlaneGeometry(40, 40, 40, 40);
     const planeMat = new THREE.MeshBasicMaterial({
       color: 0x0f172a,
       wireframe: true,
-      transparent: true,
       opacity: 0.15,
+      transparent: true,
     });
+
     const plane = new THREE.Mesh(planeGeo, planeMat);
     plane.rotation.x = -Math.PI / 2;
     plane.position.y = -3;
     scene.add(plane);
 
-    // --- Animation Loop ---
-    let frameId;
+    // Animation Loop
     const clock = new THREE.Clock();
+    let frameId;
 
     const animate = () => {
       const t = clock.getElapsedTime();
 
-      // rotate group slightly
       group.rotation.y = t * 0.04;
 
-      // float each book
       books.forEach((b) => {
         const { floatOffset, floatSpeed, baseY } = b.userData;
-        b.position.y =
-          baseY + Math.sin(t * floatSpeed + floatOffset) * 0.25;
+        b.position.y = baseY + Math.sin(t * floatSpeed + floatOffset) * 0.25;
         b.rotation.x += 0.002;
         b.rotation.z += 0.0015;
       });
@@ -135,9 +132,7 @@ export default function LibraryBackground3D() {
     };
     animate();
 
-    // --- Resize handler ---
     const handleResize = () => {
-      if (!container) return;
       const { clientWidth, clientHeight } = container;
       camera.aspect = clientWidth / clientHeight;
       camera.updateProjectionMatrix();
@@ -146,24 +141,14 @@ export default function LibraryBackground3D() {
 
     window.addEventListener("resize", handleResize);
 
-    // --- Cleanup ---
     return () => {
       cancelAnimationFrame(frameId);
       window.removeEventListener("resize", handleResize);
+
       container.removeChild(renderer.domElement);
       renderer.dispose();
-      scene.clear();
       group.clear();
-      planeGeo.dispose();
-      planeMat.dispose();
-      bookGeo.dispose();
-      books.forEach((b) => {
-        if (Array.isArray(b.material)) {
-          b.material.forEach((m) => m.dispose());
-        } else {
-          b.material.dispose();
-        }
-      });
+      scene.clear();
     };
   }, []);
 
@@ -171,9 +156,7 @@ export default function LibraryBackground3D() {
     <div
       ref={containerRef}
       className="absolute inset-0 -z-10 pointer-events-none"
-      style={{
-        filter: "saturate(1.2)",
-      }}
+      style={{ filter: "saturate(1.2)" }}
     />
   );
 }
