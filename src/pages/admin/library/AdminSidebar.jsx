@@ -13,8 +13,10 @@ export default function AdminSidebar() {
       <h2 className="text-lg font-bold mb-6">Library Admin</h2>
 
       <nav className="flex flex-col gap-3">
-
-        <Link to="/admin/library" className={`${isActive("/admin/library")} hover:text-amber-400`}>
+        <Link
+          to="/admin/library"
+          className={`${isActive("/admin/library")} hover:text-amber-400`}
+        >
           🏠 Dashboard
         </Link>
 
@@ -39,6 +41,14 @@ export default function AdminSidebar() {
           📖 Book Purchases
         </Link>
 
+        {/* ⭐ NEW: Upload Books page */}
+        <Link
+          to="/admin/library/books"
+          className={`${isActive("/admin/library/books")} hover:text-amber-400`}
+        >
+          📚 Upload Books
+        </Link>
+
         <Link
           to="/admin/library/settings"
           className={`${isActive("/admin/library/settings")} hover:text-amber-400`}
@@ -46,10 +56,7 @@ export default function AdminSidebar() {
           ⚙️ Settings
         </Link>
 
-        <Link
-          to="/"
-          className="text-slate-400 mt-auto hover:text-white"
-        >
+        <Link to="/" className="text-slate-400 mt-auto hover:text-white">
           ← Back to Site
         </Link>
       </nav>
