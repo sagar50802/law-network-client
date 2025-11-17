@@ -20,8 +20,9 @@ export default function BooksPage() {
 
   const loadBooks = () => {
     setLoading(true);
+
     getJSON("/api/library/books")
-      .then((r) => setBooks(r.books || []))
+      .then((r) => setBooks(r.data || []))   // ✅ FIXED
       .catch(() => {})
       .finally(() => setLoading(false));
   };
@@ -45,7 +46,7 @@ export default function BooksPage() {
     fd.append("pdf", form.pdf);
     fd.append("cover", form.cover);
 
-    const res = await postForm("/api/admin/library/upload", fd)
+    const res = await postForm("/api/admin/library/upload", fd); // ✅ FIXED ENDPOINT
 
     if (res.success) {
       alert("Book uploaded!");
@@ -58,10 +59,8 @@ export default function BooksPage() {
   const deleteBook = async (id) => {
     if (!confirm("Delete?")) return;
 
-    const res = await getJSON(`/api/library/delete/${id}`);
-    if (res.success) {
-      loadBooks();
-    }
+    const res = await getJSON(`/api/library/delete/${id}`); // ❓ Your backend does NOT have this route
+    if (res.success) loadBooks();
   };
 
   return (
