@@ -142,5 +142,14 @@ export async function upload(url, formData, init = {}) {
   return res.json();
 }
 
+/**
+ * Simple alias used by BooksPage.jsx
+ * so `postForm("/api/library/upload", fd)` works.
+ */
+export async function postForm(url, formData, init = {}) {
+  // Reuse the same logic as `upload`
+  return upload(url, formData, init);
+}
+
 // Expose these so other modules (and components) can reuse the resolved base/origin
 export { API_BASE, API_ORIGIN, buildUrl };
