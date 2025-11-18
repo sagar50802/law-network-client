@@ -1,10 +1,11 @@
+// src/pages/admin/library/BooksPage.jsx
 import { useState, useEffect } from "react";
-import { getJSON } from "../../../utils/api";
 import AdminSidebar from "./AdminSidebar";
 
-// Backend root
+// Backend root (🔥 MUST NOT include /api)
 const API =
-  import.meta.env.VITE_API || "https://law-network.onrender.com";
+  import.meta.env.VITE_API ||
+  "https://law-network-server.onrender.com";
 
 export default function BooksPage() {
   const [books, setBooks] = useState([]);
@@ -48,7 +49,7 @@ export default function BooksPage() {
     return json;
   }
 
-  /* ---------------- Upload File to R2 ---------------- */
+  /* ---------------- Upload to R2 ---------------- */
   async function uploadToR2(uploadUrl, file) {
     const putRes = await fetch(uploadUrl, {
       method: "PUT",
@@ -72,15 +73,15 @@ export default function BooksPage() {
         return;
       }
 
-      // 1️⃣ Request signed URLs
+      // Get signed URLs
       const pdfInfo = await getUploadUrl(form.pdf);
       const coverInfo = await getUploadUrl(form.cover);
 
-      // 2️⃣ Upload files directly
+      // Upload files directly
       await uploadToR2(pdfInfo.uploadUrl, form.pdf);
       await uploadToR2(coverInfo.uploadUrl, form.cover);
 
-      // 3️⃣ Save metadata
+      // Save metadata
       const metaRes = await fetch(`${API}/api/library/create`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -102,6 +103,8 @@ export default function BooksPage() {
       }
 
       alert("Book uploaded!");
+
+      // Reset form
       setForm({
         title: "",
         author: "",
@@ -129,7 +132,6 @@ export default function BooksPage() {
     else alert(json.message || "Delete failed");
   }
 
-  /* ---------------- UI ---------------- */
   return (
     <div className="flex min-h-screen bg-slate-900 text-slate-100">
       <AdminSidebar />
@@ -138,7 +140,7 @@ export default function BooksPage() {
         <h1 className="text-xl font-bold mb-6">📚 Upload Books</h1>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* LEFT PANEL */}
+          {/* LEFT */}
           <div className="p-4 bg-slate-800 rounded border border-slate-700">
             <h2 className="font-semibold text-lg mb-3">Upload New Book</h2>
 
@@ -146,18 +148,14 @@ export default function BooksPage() {
               className="w-full p-2 rounded bg-slate-700 mb-2"
               placeholder="Title"
               value={form.title}
-              onChange={(e) =>
-                setForm({ ...form, title: e.target.value })
-              }
+              onChange={(e) => setForm({ ...form, title: e.target.value })}
             />
 
             <input
               className="w-full p-2 rounded bg-slate-700 mb-2"
               placeholder="Author"
               value={form.author}
-              onChange={(e) =>
-                setForm({ ...form, author: e.target.value })
-              }
+              onChange={(e) => setForm({ ...form, author: e.target.value })}
             />
 
             <textarea
@@ -222,7 +220,7 @@ export default function BooksPage() {
             </button>
           </div>
 
-          {/* RIGHT PANEL */}
+          {/* RIGHT */}
           <div className="lg:col-span-2 p-4 bg-slate-800 rounded border border-slate-700">
             <h2 className="font-semibold text-lg mb-3">Uploaded Books</h2>
 
@@ -241,6 +239,7 @@ export default function BooksPage() {
                       src={b.coverUrl}
                       className="w-full h-40 object-cover rounded"
                     />
+
                     <h3 className="font-bold mt-2">{b.title}</h3>
                     <p className="text-sm text-slate-300 mb-2">
                       {b.author}
