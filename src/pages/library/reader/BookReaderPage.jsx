@@ -14,6 +14,9 @@ import "../../../pdf-worker";
 const API_URL =
   import.meta.env.VITE_API_URL || "https://law-network-server.onrender.com/api";
 
+// 🔹 Server origin (remove trailing /api so we can build absolute URLs)
+const SERVER_ORIGIN = API_URL.replace(/\/api\/?$/, "");
+
 export default function BookReaderPage() {
   const { bookId } = useParams();
   const navigate = useNavigate();
@@ -33,6 +36,26 @@ export default function BookReaderPage() {
   const [readTimeLeft, setReadTimeLeft] = useState(null);
 
   /* ============================================================
+     🔗 Helper: make sure pdfUrl is a FULL URL
+  ============================================================ */
+  function resolvePdfUrl(rawUrl) {
+    if (!rawUrl) return null;
+
+    // Already absolute
+    if (rawUrl.startsWith("http://") || rawUrl.startsWith("https://")) {
+      return rawUrl;
+    }
+
+    // Starts with "/" → attach server origin
+    if (rawUrl.startsWith("/")) {
+      return `${SERVER_ORIGIN}${rawUrl}`;
+    }
+
+    // Fallback
+    return `${SERVER_ORIGIN}/${rawUrl}`;
+  }
+
+  /* ============================================================
      📘 Load Metadata + Access
   ============================================================ */
   useEffect(() => {
@@ -42,14 +65,19 @@ export default function BookReaderPage() {
         const bookRes = await fetch(`${API_URL}/library/books/${bookId}`);
         const bookJson = await bookRes.json();
 
-        if (!bookJson.success) return navigate("/library");
+        if (!bookJson.success || !bookJson.data) {
+          console.error("Book not found:", bookJson);
+          navigate("/library");
+          return;
+        }
+
         setBook(bookJson.data);
+        const fullPdfUrl = resolvePdfUrl(bookJson.data.pdfUrl);
 
         /* 2️⃣ If FREE book → skip access check completely */
         if (!bookJson.data.isPaid) {
           setAccess({ canRead: true, reason: "free-book" });
-          loadPDF(bookJson.data.pdfUrl);
-          setLoading(false);
+          await loadPDF(fullPdfUrl);
           return;
         }
 
@@ -63,20 +91,22 @@ export default function BookReaderPage() {
 
         if (!accessJson.data?.canRead) {
           alert("You don't have reading access for this book.");
-          return navigate("/library");
+          navigate("/library");
+          return;
         }
 
         startTimers(accessJson.data);
 
         /* 4️⃣ Load PDF */
-        loadPDF(bookJson.data.pdfUrl);
+        await loadPDF(fullPdfUrl);
       } catch (err) {
         console.error("Reader load error:", err);
+        setLoading(false);
       }
     }
 
     load();
-  }, [bookId]);
+  }, [bookId, navigate]);
 
   /* ============================================================
      ⏳ Timers
@@ -106,26 +136,34 @@ export default function BookReaderPage() {
       alert("Your reading window has expired.");
       navigate("/library");
     }
-  }, [seatTimeLeft, readTimeLeft]);
+  }, [seatTimeLeft, readTimeLeft, navigate]);
 
   /* ============================================================
      📄 Load PDF
   ============================================================ */
   async function loadPDF(pdfUrl) {
     try {
+      if (!pdfUrl) {
+        console.error("No PDF URL found for this book.");
+        setLoading(false);
+        return;
+      }
+
       pdfjsLib.GlobalWorkerOptions.workerSrc =
         `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.js`;
 
-      const pdfTask = pdfjsLib.getDocument(pdfUrl);
+      // ✅ Always pass parameter object to avoid "need parameter object" error
+      const pdfTask = pdfjsLib.getDocument({ url: pdfUrl });
       const pdfDoc = await pdfTask.promise;
 
       setPdf(pdfDoc);
       setTotalPages(pdfDoc.numPages);
 
-      renderPage(1, pdfDoc);
+      await renderPage(1, pdfDoc);
       setLoading(false);
     } catch (err) {
       console.error("PDF load error:", err);
+      setLoading(false);
     }
   }
 
@@ -136,6 +174,8 @@ export default function BookReaderPage() {
     const viewport = page.getViewport({ scale: 1.5 });
 
     const canvas = canvasRef.current;
+    if (!canvas) return;
+
     const ctx = canvas.getContext("2d");
 
     canvas.width = viewport.width;
@@ -193,7 +233,7 @@ export default function BookReaderPage() {
     <div className="min-h-screen bg-black text-white flex flex-col items-center pb-10">
       {/* Header */}
       <div className="w-full bg-gray-900 p-4 flex justify-between items-center border-b border-gray-700">
-        <h2 className="text-xl font-bold">{book.title}</h2>
+        <h2 className="text-xl font-bold">{book?.title || "Book"}</h2>
         <button
           onClick={() => navigate("/library")}
           className="px-4 py-2 bg-red-600 hover:bg-red-500 rounded"
@@ -213,14 +253,14 @@ export default function BookReaderPage() {
       </div>
 
       {/* PDF */}
-      <canvas ref={canvasRef} className="mt-6 shadow-xl rounded" />
+      <canvas ref={canvasRef} className="mt-6 shadow-xl rounded bg-black" />
 
       {/* Controls */}
       <div className="flex mt-6 gap-4">
         <button
           onClick={prevPage}
           disabled={pageNum <= 1}
-          className="px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded"
+          className="px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded disabled:opacity-40"
         >
           ← Prev
         </button>
@@ -232,7 +272,7 @@ export default function BookReaderPage() {
         <button
           onClick={nextPage}
           disabled={pageNum >= totalPages}
-          className="px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded"
+          className="px-4 py-2 bg-gray-800 hover:bg-gray-700 rounded disabled:opacity-40"
         >
           Next →
         </button>
