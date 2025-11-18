@@ -24,32 +24,35 @@ export default function BookReaderPage() {
   const [readTimeLeft, setReadTimeLeft] = useState(null);
 
   /* -------------------------------------------------------------------------- */
-  /* Fetch Book + Access Permission                                             */
+  /* Load Book + Access Check                                                   */
   /* -------------------------------------------------------------------------- */
   useEffect(() => {
     async function load() {
       try {
+        /* 1. Load book metadata */
         const bookRes = await fetch(`${API_URL}/api/library/books/${bookId}`);
-        const bookData = await bookRes.json();
+        const bookJson = await bookRes.json();
 
-        if (!bookData.success) return navigate("/library");
-        setBook(bookData.data);
+        if (!bookJson.success) return navigate("/library");
+        setBook(bookJson.data);
 
+        /* 2. Load access permissions */
         const accessRes = await fetch(
           `${API_URL}/api/library/books/${bookId}/access`,
           { credentials: "include" }
         );
-        const accessData = await accessRes.json();
-        setAccess(accessData.data);
+        const accessJson = await accessRes.json();
+        setAccess(accessJson.data);
 
-        if (!accessData.data.canRead) {
-          alert("Access denied. Please purchase book or reserve seat.");
+        if (!accessJson.data.canRead) {
+          alert("You don't have reading access for this book.");
           return navigate("/library");
         }
 
-        startTimers(accessData.data);
+        startTimers(accessJson.data);
 
-        loadPDF(bookData.data.pdfFile);
+        /* 3. Load PDF correctly */
+        loadPDF(bookJson.data.pdfUrl); // FIXED
       } catch (err) {
         console.error("Reader load error:", err);
       }
@@ -59,53 +62,46 @@ export default function BookReaderPage() {
   }, [bookId]);
 
   /* -------------------------------------------------------------------------- */
-  /* Start Timers for Seat + Reading                                            */
+  /* Timers                                                                     */
   /* -------------------------------------------------------------------------- */
   function startTimers(data) {
     if (data.seatEndsAt) {
-      const end = new Date(data.seatEndsAt).getTime();
-      setSeatTimeLeft(end - Date.now());
+      setSeatTimeLeft(new Date(data.seatEndsAt).getTime() - Date.now());
     }
-
     if (data.purchaseExpiresAt) {
-      const end = new Date(data.purchaseExpiresAt).getTime();
-      setReadTimeLeft(end - Date.now());
+      setReadTimeLeft(new Date(data.purchaseExpiresAt).getTime() - Date.now());
     }
   }
 
-  /* Update timers every second */
   useEffect(() => {
     const interval = setInterval(() => {
-      setSeatTimeLeft((t) => (t !== null ? t - 1000 : null));
-      setReadTimeLeft((t) => (t !== null ? t - 1000 : null));
+      setSeatTimeLeft((t) => (t != null ? t - 1000 : null));
+      setReadTimeLeft((t) => (t != null ? t - 1000 : null));
     }, 1000);
 
     return () => clearInterval(interval);
   }, []);
 
-  /* -------------------------------------------------------------------------- */
-  /* Auto-lock if any timer expires                                             */
-  /* -------------------------------------------------------------------------- */
   useEffect(() => {
-    if (seatTimeLeft !== null && seatTimeLeft <= 0) {
-      alert("Your seat time expired. Reading session locked.");
-      navigate("/library");
+    if (seatTimeLeft != null && seatTimeLeft <= 0) {
+      alert("Your seat time has expired.");
+      return navigate("/library");
     }
-    if (readTimeLeft !== null && readTimeLeft <= 0) {
-      alert("Reading time expired. Purchase again to continue.");
-      navigate("/library");
+    if (readTimeLeft != null && readTimeLeft <= 0) {
+      alert("Your reading window has expired.");
+      return navigate("/library");
     }
   }, [seatTimeLeft, readTimeLeft]);
 
   /* -------------------------------------------------------------------------- */
-  /* Load & Render PDF                                                          */
+  /* Load PDF from R2                                                           */
   /* -------------------------------------------------------------------------- */
-  async function loadPDF(pdfPath) {
+  async function loadPDF(pdfUrl) {
     try {
       pdfjsLib.GlobalWorkerOptions.workerSrc =
         `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.js`;
 
-      const loadingTask = pdfjsLib.getDocument(`${API_URL}${pdfPath}`);
+      const loadingTask = pdfjsLib.getDocument(pdfUrl);
       const pdfDoc = await loadingTask.promise;
 
       setPdf(pdfDoc);
@@ -125,33 +121,24 @@ export default function BookReaderPage() {
     const viewport = page.getViewport({ scale: 1.5 });
 
     const canvas = canvasRef.current;
-    const context = canvas.getContext("2d");
+    const ctx = canvas.getContext("2d");
 
     canvas.width = viewport.width;
     canvas.height = viewport.height;
 
-    page.render({
-      canvasContext: context,
-      viewport,
-    });
+    await page.render({ canvasContext: ctx, viewport }).promise;
 
     setPageNum(num);
   }
 
-  /* -------------------------------------------------------------------------- */
-  /* Page Controls                                                              */
-  /* -------------------------------------------------------------------------- */
+  /* Controls */
   const nextPage = () => {
     if (pageNum < totalPages) renderPage(pageNum + 1);
   };
-
   const prevPage = () => {
     if (pageNum > 1) renderPage(pageNum - 1);
   };
 
-  /* -------------------------------------------------------------------------- */
-  /* Time Display Helper                                                        */
-  /* -------------------------------------------------------------------------- */
   function formatTime(ms) {
     if (ms == null) return null;
     if (ms <= 0) return "Expired";
@@ -165,21 +152,20 @@ export default function BookReaderPage() {
   }
 
   /* -------------------------------------------------------------------------- */
-  /* Audio ambience on mount                                                    */
+  /* Ambience                                                                   */
   /* -------------------------------------------------------------------------- */
   useEffect(() => {
-    ambience.current = new Audio("/library-ambience.mp3");
+    ambience.current = new Audio("/audio/library-ambience.mp3"); // FIXED PATH
     ambience.current.loop = true;
     ambience.current.volume = 0.4;
+
     ambience.current.play().catch(() => {});
 
-    return () => {
-      ambience.current.pause();
-    };
+    return () => ambience.current.pause();
   }, []);
 
   /* -------------------------------------------------------------------------- */
-  /* RENDER UI                                                                  */
+  /* UI                                                                         */
   /* -------------------------------------------------------------------------- */
   if (loading) return <div className="p-6 text-white">Loading reader...</div>;
 
@@ -188,7 +174,6 @@ export default function BookReaderPage() {
       {/* Header Bar */}
       <div className="w-full bg-gray-900 p-4 flex justify-between items-center border-b border-gray-700">
         <h2 className="text-xl font-bold">{book.title}</h2>
-
         <button
           onClick={() => navigate("/library")}
           className="px-4 py-2 bg-red-600 hover:bg-red-500 rounded"
