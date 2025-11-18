@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import * as pdfjsLib from "pdfjs-dist";
-import { loadFileAuto } from "../../../utils/loadFile"; // ⭐ NEW
+import { loadFileAuto } from "../../../utils/loadFile"; // ⭐ Auto-detect .mp3/.wav/.ogg
 import "../../../pdf-worker";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
@@ -30,14 +30,14 @@ export default function BookReaderPage() {
   useEffect(() => {
     async function load() {
       try {
-        /* 1. Load the book metadata */
+        /* 1️⃣ Load metadata */
         const bookRes = await fetch(`${API_URL}/api/library/books/${bookId}`);
         const bookJson = await bookRes.json();
 
         if (!bookJson.success) return navigate("/library");
         setBook(bookJson.data);
 
-        /* 2. Check access (free OR paid logic handled by backend) */
+        /* 2️⃣ Check reading access */
         const accessRes = await fetch(
           `${API_URL}/api/library/books/${bookId}/access`,
           { credentials: "include" }
@@ -45,14 +45,14 @@ export default function BookReaderPage() {
         const accessJson = await accessRes.json();
         setAccess(accessJson.data);
 
-        if (!accessJson.data.canRead) {
+        if (!accessJson.data?.canRead) {
           alert("You don't have reading access for this book.");
           return navigate("/library");
         }
 
         startTimers(accessJson.data);
 
-        /* 3. Load PDF from R2 using pdfUrl */
+        /* 3️⃣ Load PDF from R2 */
         loadPDF(bookJson.data.pdfUrl);
       } catch (err) {
         console.error("Reader load error:", err);
@@ -63,7 +63,7 @@ export default function BookReaderPage() {
   }, [bookId]);
 
   /* -------------------------------------------------------------------------- */
-  /* Timers                                                                     */
+  /* Timer Setup                                                                */
   /* -------------------------------------------------------------------------- */
   function startTimers(data) {
     if (data.seatEndsAt) {
@@ -74,29 +74,28 @@ export default function BookReaderPage() {
     }
   }
 
-  /* decrease timers every 1 sec */
   useEffect(() => {
-    const interval = setInterval(() => {
+    const tick = setInterval(() => {
       setSeatTimeLeft((t) => (t != null ? t - 1000 : null));
       setReadTimeLeft((t) => (t != null ? t - 1000 : null));
     }, 1000);
-    return () => clearInterval(interval);
+    return () => clearInterval(tick);
   }, []);
 
-  /* auto lock on expiry */
+  /* Auto-lock if expired */
   useEffect(() => {
     if (seatTimeLeft != null && seatTimeLeft <= 0) {
       alert("Your seat time has expired.");
-      navigate("/library");
+      return navigate("/library");
     }
     if (readTimeLeft != null && readTimeLeft <= 0) {
       alert("Your reading window has expired.");
-      navigate("/library");
+      return navigate("/library");
     }
   }, [seatTimeLeft, readTimeLeft]);
 
   /* -------------------------------------------------------------------------- */
-  /* Load PDF from R2                                                           */
+  /* Load PDF                                                                   */
   /* -------------------------------------------------------------------------- */
   async function loadPDF(pdfUrl) {
     try {
@@ -139,6 +138,7 @@ export default function BookReaderPage() {
     if (pageNum > 1) renderPage(pageNum - 1);
   };
 
+  /* Format time */
   function formatTime(ms) {
     if (ms == null) return null;
     if (ms <= 0) return "Expired";
@@ -152,14 +152,14 @@ export default function BookReaderPage() {
   }
 
   /* -------------------------------------------------------------------------- */
-  /* Ambience (auto detect .mp3/.wav/.ogg)                                      */
+  /* Ambience Audio (auto detect .mp3/.wav/.ogg)                                */
   /* -------------------------------------------------------------------------- */
   useEffect(() => {
     async function loadAudio() {
       const audioFile = await loadFileAuto("/audio/library-ambience");
 
       if (!audioFile) {
-        console.warn("No ambience audio found");
+        console.warn("⚠ No ambience audio found in /public/audio/");
         return;
       }
 
@@ -205,7 +205,7 @@ export default function BookReaderPage() {
       {/* PDF */}
       <canvas ref={canvasRef} className="mt-6 shadow-xl rounded" />
 
-      {/* Page Controls */}
+      {/* Controls */}
       <div className="flex mt-6 gap-4">
         <button
           onClick={prevPage}
