@@ -1,11 +1,8 @@
-// src/pages/admin/library/BooksPage.jsx
 import { useState, useEffect } from "react";
 import AdminSidebar from "./AdminSidebar";
 
-// Backend root (🔥 MUST NOT include /api)
 const API =
-  import.meta.env.VITE_API ||
-  "https://law-network-server.onrender.com";
+  import.meta.env.VITE_API || "https://law-network-server.onrender.com";
 
 export default function BooksPage() {
   const [books, setBooks] = useState([]);
@@ -21,21 +18,20 @@ export default function BooksPage() {
     cover: null,
   });
 
-  /* ---------------- Load Books ---------------- */
-  const loadBooks = () => {
+  /* Load Books */
+  function loadBooks() {
     setLoading(true);
-
     fetch(`${API}/api/library/books`)
       .then((r) => r.json())
       .then((json) => setBooks(json.data || []))
       .finally(() => setLoading(false));
-  };
+  }
 
   useEffect(() => {
     loadBooks();
   }, []);
 
-  /* ---------------- Get Signed URL ---------------- */
+  /* Signed URL from server */
   async function getUploadUrl(file) {
     const url = `${API}/api/library/upload-url?filename=${encodeURIComponent(
       file.name
@@ -44,45 +40,36 @@ export default function BooksPage() {
     const res = await fetch(url);
     const json = await res.json();
 
-    if (!json.success) throw new Error("Failed to get signed upload URL");
-
+    if (!json.success) throw new Error("Failed to get signed URL");
     return json;
   }
 
-  /* ---------------- Upload to R2 ---------------- */
+  /* Upload to Cloudflare R2 */
   async function uploadToR2(uploadUrl, file) {
-    const putRes = await fetch(uploadUrl, {
+    const put = await fetch(uploadUrl, {
       method: "PUT",
       body: file,
-      headers: {
-        "Content-Type": file.type,
-      },
+      headers: { "Content-Type": file.type },
     });
 
-    if (!putRes.ok) {
-      console.error("PUT ERROR:", await putRes.text());
-      throw new Error("Failed uploading file to R2");
-    }
+    if (!put.ok) throw new Error("R2 upload failed");
   }
 
-  /* ---------------- Upload Book ---------------- */
-  const uploadBook = async () => {
+  /* Upload Book */
+  async function uploadBook() {
     try {
       if (!form.title || !form.pdf || !form.cover) {
-        alert("Title, PDF and Cover are required");
+        alert("Title, PDF & Cover required");
         return;
       }
 
-      // Get signed URLs
       const pdfInfo = await getUploadUrl(form.pdf);
       const coverInfo = await getUploadUrl(form.cover);
 
-      // Upload files directly
       await uploadToR2(pdfInfo.uploadUrl, form.pdf);
       await uploadToR2(coverInfo.uploadUrl, form.cover);
 
-      // Save metadata
-      const metaRes = await fetch(`${API}/api/library/create`, {
+      const res = await fetch(`${API}/api/library/create`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -96,15 +83,10 @@ export default function BooksPage() {
         }),
       });
 
-      const metaJson = await metaRes.json();
-      if (!metaJson.success) {
-        alert(metaJson.message || "Failed to save book");
-        return;
-      }
+      const json = await res.json();
+      if (!json.success) return alert(json.message);
 
       alert("Book uploaded!");
-
-      // Reset form
       setForm({
         title: "",
         author: "",
@@ -120,16 +102,16 @@ export default function BooksPage() {
       console.error("Upload error:", err);
       alert("Upload failed");
     }
-  };
+  }
 
-  /* ---------------- Delete Book ---------------- */
   async function deleteBook(id) {
-    if (!confirm("Delete this book?")) return;
+    if (!confirm("Delete book?")) return;
 
-    const r = await fetch(`${API}/api/library/delete/${id}`);
-    const json = await r.json();
+    const res = await fetch(`${API}/api/library/delete/${id}`);
+    const json = await res.json();
+
     if (json.success) loadBooks();
-    else alert(json.message || "Delete failed");
+    else alert(json.message);
   }
 
   return (
@@ -140,26 +122,27 @@ export default function BooksPage() {
         <h1 className="text-xl font-bold mb-6">📚 Upload Books</h1>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* LEFT */}
+
+          {/* Upload Form */}
           <div className="p-4 bg-slate-800 rounded border border-slate-700">
             <h2 className="font-semibold text-lg mb-3">Upload New Book</h2>
 
             <input
-              className="w-full p-2 rounded bg-slate-700 mb-2"
+              className="w-full p-2 mb-2 bg-slate-700 rounded"
               placeholder="Title"
               value={form.title}
               onChange={(e) => setForm({ ...form, title: e.target.value })}
             />
 
             <input
-              className="w-full p-2 rounded bg-slate-700 mb-2"
+              className="w-full p-2 mb-2 bg-slate-700 rounded"
               placeholder="Author"
               value={form.author}
               onChange={(e) => setForm({ ...form, author: e.target.value })}
             />
 
             <textarea
-              className="w-full p-2 rounded bg-slate-700 mb-2"
+              className="w-full p-2 mb-2 bg-slate-700 rounded"
               placeholder="Description"
               value={form.description}
               onChange={(e) =>
@@ -167,26 +150,22 @@ export default function BooksPage() {
               }
             />
 
-            <label className="flex items-center gap-2 mb-2">
+            <label className="flex items-center gap-2 mb-3">
               <input
                 type="checkbox"
                 checked={form.free}
-                onChange={(e) =>
-                  setForm({ ...form, free: e.target.checked })
-                }
+                onChange={(e) => setForm({ ...form, free: e.target.checked })}
               />
               Free Book
             </label>
 
             {!form.free && (
               <input
-                className="w-full p-2 rounded bg-slate-700 mb-2"
+                className="w-full p-2 mb-2 bg-slate-700 rounded"
                 type="number"
                 placeholder="Price"
                 value={form.price}
-                onChange={(e) =>
-                  setForm({ ...form, price: e.target.value })
-                }
+                onChange={(e) => setForm({ ...form, price: e.target.value })}
               />
             )}
 
@@ -213,21 +192,21 @@ export default function BooksPage() {
             </label>
 
             <button
-              className="px-4 py-2 bg-green-600 rounded hover:bg-green-700"
               onClick={uploadBook}
+              className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded"
             >
               Upload Book
             </button>
           </div>
 
-          {/* RIGHT */}
+          {/* Books List */}
           <div className="lg:col-span-2 p-4 bg-slate-800 rounded border border-slate-700">
             <h2 className="font-semibold text-lg mb-3">Uploaded Books</h2>
 
             {loading ? (
               <p>Loading...</p>
             ) : books.length === 0 ? (
-              <p>No books uploaded yet</p>
+              <p>No books uploaded</p>
             ) : (
               <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
                 {books.map((b) => (
@@ -240,22 +219,20 @@ export default function BooksPage() {
                       className="w-full h-40 object-cover rounded"
                     />
 
-                    <h3 className="font-bold mt-2">{b.title}</h3>
-                    <p className="text-sm text-slate-300 mb-2">
-                      {b.author}
-                    </p>
+                    <h3 className="mt-2 font-bold">{b.title}</h3>
+                    <p className="text-sm text-slate-300">{b.author}</p>
 
                     <a
+                      className="text-blue-300 underline mt-1 mb-2"
                       href={b.pdfUrl}
                       target="_blank"
-                      className="text-blue-300 underline mb-2"
                     >
                       Preview PDF
                     </a>
 
                     <button
-                      className="mt-auto bg-red-600 px-3 py-1 rounded"
                       onClick={() => deleteBook(b._id)}
+                      className="mt-auto bg-red-600 px-3 py-1 rounded"
                     >
                       Delete
                     </button>
