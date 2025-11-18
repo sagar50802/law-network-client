@@ -19,13 +19,13 @@ export default function BookDetailPanel({
   const handleReadClick = () => {
     if (!book || !book._id) return;
 
-    // Free → open immediately
-    if (!book.isPaid) {
+    // Free → open directly
+    if (!isPaid) {
       navigate(`/library/reader/${book._id}`);
       return;
     }
 
-    // Paid → Reader page will check access
+    // Paid → ReaderPage will check seat/purchase
     navigate(`/library/reader/${book._id}`);
   };
 
