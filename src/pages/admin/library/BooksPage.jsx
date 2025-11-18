@@ -1,12 +1,13 @@
 // src/pages/admin/library/BooksPage.jsx
 
 import { useState, useEffect } from "react";
-import { getJSON, postForm } from "../../../utils/api";
+import { getJSON } from "../../../utils/api"; // postForm no longer needed
 import AdminSidebar from "./AdminSidebar";
 
 export default function BooksPage() {
   const [books, setBooks] = useState([]);
   const [loading, setLoading] = useState(true);
+  const [uploading, setUploading] = useState(false);
 
   const [form, setForm] = useState({
     title: "",
@@ -34,25 +35,80 @@ export default function BooksPage() {
     loadBooks();
   }, []);
 
-  /* ---------------- Upload a new book ---------------- */
+  /* ---------------- Helpers for R2 direct upload ---------------- */
+
+  // 1️⃣ Get signed upload URL + final public file URL from backend
+  const getR2UploadInfo = async (file) => {
+    const params = new URLSearchParams({
+      filename: file.name,
+      type: file.type || "application/octet-stream",
+    });
+
+    const res = await getJSON(`/api/library/upload-url?${params.toString()}`);
+
+    if (!res || !res.success) {
+      console.error("[BooksPage] getR2UploadInfo error:", res);
+      throw new Error(res?.message || "Failed to get upload URL");
+    }
+
+    // { success, uploadUrl, fileUrl }
+    return res;
+  };
+
+  // 2️⃣ Upload a file directly to R2 using the signed URL
+  const uploadFileToR2 = async (file, uploadUrl) => {
+    const putRes = await fetch(uploadUrl, {
+      method: "PUT",
+      body: file,
+    });
+
+    if (!putRes.ok) {
+      const text = await putRes.text().catch(() => "");
+      console.error("[BooksPage] R2 PUT error:", putRes.status, text);
+      throw new Error("Failed to upload file to storage");
+    }
+  };
+
+  /* ---------------- Upload a new book (direct to R2) ---------------- */
   const uploadBook = async () => {
     if (!form.title || !form.pdf || !form.cover) {
       alert("Title, PDF and Cover are required.");
       return;
     }
 
-    const fd = new FormData();
-    fd.append("title", form.title);
-    fd.append("author", form.author);
-    fd.append("description", form.description);
-    fd.append("free", form.free); // backend uses String(free) === "true"
-    fd.append("price", form.price);
-    fd.append("pdf", form.pdf);
-    fd.append("cover", form.cover);
+    setUploading(true);
 
     try {
-      // ✅ MUST MATCH routes/library.js -> router.post("/upload", ...)
-      const res = await postForm("/api/library/upload", fd);
+      // 1) Ask backend for signed URLs for both files
+      const [pdfInfo, coverInfo] = await Promise.all([
+        getR2UploadInfo(form.pdf),
+        getR2UploadInfo(form.cover),
+      ]);
+
+      // 2) Upload actual file bytes directly to R2
+      await Promise.all([
+        uploadFileToR2(form.pdf, pdfInfo.uploadUrl),
+        uploadFileToR2(form.cover, coverInfo.uploadUrl),
+      ]);
+
+      // 3) Tell backend to create the book record with the R2 URLs
+      const payload = {
+        title: form.title,
+        author: form.author,
+        description: form.description,
+        free: form.free,
+        price: form.price,
+        pdfUrl: pdfInfo.fileUrl,
+        coverUrl: coverInfo.fileUrl,
+      };
+
+      const res = await fetch("/api/library/create", {
+        method: "POST",
+        headers: {
+          "Content-Type": "application/json",
+        },
+        body: JSON.stringify(payload),
+      }).then((r) => r.json());
 
       if (res?.success) {
         alert("Book uploaded!");
@@ -65,24 +121,29 @@ export default function BooksPage() {
           pdf: null,
           cover: null,
         });
+        // reset file inputs visually
+        const pdfInput = document.getElementById("book-pdf-input");
+        const coverInput = document.getElementById("book-cover-input");
+        if (pdfInput) pdfInput.value = "";
+        if (coverInput) coverInput.value = "";
         loadBooks();
       } else {
-        console.error("[BooksPage] upload error response:", res);
-        alert(res?.message || "Upload failed");
+        console.error("[BooksPage] create-book error:", res);
+        alert(res?.message || "Failed to save book in database.");
       }
     } catch (err) {
       console.error("[BooksPage] uploadBook error:", err);
-      alert("Upload failed (network/server error).");
+      alert(err.message || "Upload failed (storage / server error).");
+    } finally {
+      setUploading(false);
     }
   };
 
-  /* ---------------- Delete a book (TODO backend route) ---------------- */
+  /* ---------------- Delete a book ---------------- */
   const deleteBook = async (id) => {
     if (!confirm("Delete this book?")) return;
 
     try {
-      // ⚠ Currently your backend does NOT have /api/library/delete/:id.
-      // When you add that route on the server, this will start working.
       const res = await getJSON(`/api/library/delete/${id}`);
       if (res?.success) {
         loadBooks();
@@ -154,6 +215,7 @@ export default function BooksPage() {
             <label className="block mb-2">
               PDF File:
               <input
+                id="book-pdf-input"
                 type="file"
                 accept="application/pdf"
                 onChange={(e) =>
@@ -165,6 +227,7 @@ export default function BooksPage() {
             <label className="block mb-4">
               Cover Image:
               <input
+                id="book-cover-input"
                 type="file"
                 accept="image/*"
                 onChange={(e) =>
@@ -174,10 +237,11 @@ export default function BooksPage() {
             </label>
 
             <button
-              className="px-4 py-2 bg-green-600 rounded hover:bg-green-700"
+              className="px-4 py-2 bg-green-600 rounded hover:bg-green-700 disabled:opacity-60 disabled:cursor-not-allowed"
               onClick={uploadBook}
+              disabled={uploading}
             >
-              Upload Book
+              {uploading ? "Uploading..." : "Upload Book"}
             </button>
           </div>
 
