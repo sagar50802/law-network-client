@@ -1,4 +1,5 @@
 import React from "react";
+import { useNavigate } from "react-router-dom";
 
 export default function BookDetailPanel({
   book,
@@ -8,16 +9,24 @@ export default function BookDetailPanel({
 }) {
   if (!book || !isOpen) return null;
 
+  const navigate = useNavigate();
   const isPaid = book.isPaid;
 
   const handleBuyClick = () => {
-    // TODO: go into UPI + screenshot flow (later)
     alert("Buy via UPI flow will be implemented in the next steps.");
   };
 
   const handleReadClick = () => {
-    // TODO: call /books/:bookId/access to check seat + purchase
-    alert("Reading access check will be wired after backend is ready.");
+    if (!book || !book._id) return;
+
+    // Free → open immediately
+    if (!book.isPaid) {
+      navigate(`/library/reader/${book._id}`);
+      return;
+    }
+
+    // Paid → Reader page will check access
+    navigate(`/library/reader/${book._id}`);
   };
 
   return (
@@ -74,7 +83,7 @@ export default function BookDetailPanel({
         {isPaid && (
           <p>
             <span className="text-slate-400">Reading Window:</span>{" "}
-            {book.defaultReadingHours || 24} hours (after approval)
+            {book.defaultReadingHours || 24} hours
           </p>
         )}
       </div>
