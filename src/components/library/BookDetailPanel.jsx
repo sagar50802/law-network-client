@@ -12,6 +12,9 @@ export default function BookDetailPanel({
   const navigate = useNavigate();
   const isPaid = book.isPaid;
 
+  // ⭐ Fallback: use coverUrl if previewImage is missing
+  const previewSrc = book.previewImage || book.coverUrl || null;
+
   const handleBuyClick = () => {
     alert("Buy via UPI flow will be implemented in the next steps.");
   };
@@ -29,6 +32,10 @@ export default function BookDetailPanel({
     navigate(`/library/reader/${book._id}`);
   };
 
+  // Optional: derive simple seat info text
+  const hasSeat = seatStatus?.hasActiveSeat;
+  const seatEndsAt = seatStatus?.seatEndsAt;
+
   return (
     <div className="hidden lg:flex w-80 xl:w-96 flex-col border border-slate-800 bg-black/70 rounded-xl p-3 backdrop-blur-md shadow-xl">
       <div className="flex items-center justify-between mb-2">
@@ -45,9 +52,9 @@ export default function BookDetailPanel({
 
       {/* Preview */}
       <div className="w-full aspect-[3/4] rounded-lg overflow-hidden border border-slate-800 bg-slate-900 mb-3">
-        {book.previewImage ? (
+        {previewSrc ? (
           <img
-            src={book.previewImage}
+            src={previewSrc}
             alt={`${book.title} preview`}
             className="w-full h-full object-cover"
           />
@@ -84,6 +91,16 @@ export default function BookDetailPanel({
           <p>
             <span className="text-slate-400">Reading Window:</span>{" "}
             {book.defaultReadingHours || 24} hours
+          </p>
+        )}
+
+        {/* Optional seat info (uses seatStatus passed from parent) */}
+        {seatStatus && (
+          <p className="text-[11px] text-slate-400">
+            Seat:{" "}
+            {hasSeat
+              ? `Active ${seatEndsAt ? "until " + new Date(seatEndsAt).toLocaleTimeString() : ""}`
+              : "No active seat"}
           </p>
         )}
       </div>
