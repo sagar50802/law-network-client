@@ -37,8 +37,15 @@ export default function LibraryPage() {
       try {
         const res = await fetch(`${API_URL}/api/library/books`);
         const json = await res.json();
+
         if (json.success) {
-          setBooks(json.data || []);
+          // ⭐ FIX: Ensure previewImage is always available
+          const fixedBooks = (json.data || []).map((b) => ({
+            ...b,
+            previewImage: b.previewImage || b.coverUrl || null,
+          }));
+
+          setBooks(fixedBooks);
         }
       } catch (err) {
         console.error("[Library] Error loading books:", err);
@@ -97,7 +104,7 @@ export default function LibraryPage() {
               />
             </div>
 
-            {/* Detail panel (side or overlay) */}
+            {/* Detail panel */}
             <BookDetailPanel
               book={selectedBook}
               isOpen={isDetailOpen}
