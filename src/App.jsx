@@ -32,7 +32,10 @@ import PodcastsPage from "./pages/PodcastsPage.jsx";
 import NotebookPage from "./pages/NotebookPage.jsx";
 import PdfDemo from "./pages/PdfDemo.jsx";
 import Plagiarism from "./pages/Plagiarism.jsx";
-import LibraryPage from "./pages/LibraryPage.jsx"; // ★ ADDED
+import LibraryPage from "./pages/LibraryPage.jsx"; // ★ Existing
+
+/* ---------- ADD: Book Reader Page ---------- */
+import BookReaderPage from "./pages/library/reader/BookReaderPage.jsx"; // ★ NEW
 
 /* ---------- Admin Pages ---------- */
 import AdminDashboard from "./pages/AdminDashboard.jsx";
@@ -180,6 +183,9 @@ function AppContent() {
           <Route path="/plagiarism" element={<Plagiarism />} />
           <Route path="/pdfdemo" element={<PdfDemo />} />
           <Route path="/library" element={<LibraryPage />} />
+
+          {/* ★ ADD BOOK READER ROUTE HERE */}
+          <Route path="/library/reader/:bookId" element={<BookReaderPage />} />
 
           {/* LIVE */}
           <Route path="/live" element={<LiveChannelPage />} />
@@ -385,7 +391,7 @@ function AppContent() {
             }
           />
 
-          {/* ★ NEW — UPLOAD BOOKS PAGE */}
+          {/* UPLOAD BOOKS PAGE */}
           <Route
             path="/admin/library/books"
             element={
@@ -404,7 +410,7 @@ function AppContent() {
             }
           />
 
-          {/* NEW — CHANGE PASSWORD */}
+          {/* CHANGE PASSWORD */}
           <Route
             path="/admin/change-password"
             element={
