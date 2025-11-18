@@ -1,7 +1,10 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import * as pdfjsLib from "pdfjs-dist";
-import { loadFileAuto } from "../../../utils/loadFile"; // ⭐ Auto-detect .mp3/.wav/.ogg
+
+// ⭐ Auto-detect audio extension (.mp3 / .wav / .ogg)
+import { loadFileAuto } from "../../../utils/loadFile";
+
 import "../../../pdf-worker";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
@@ -25,24 +28,25 @@ export default function BookReaderPage() {
   const [readTimeLeft, setReadTimeLeft] = useState(null);
 
   /* -------------------------------------------------------------------------- */
-  /* Load Book + Access Check                                                   */
+  /* Load Metadata + Access                                                     */
   /* -------------------------------------------------------------------------- */
   useEffect(() => {
     async function load() {
       try {
-        /* 1️⃣ Load metadata */
+        // 1️⃣ Load book metadata
         const bookRes = await fetch(`${API_URL}/api/library/books/${bookId}`);
         const bookJson = await bookRes.json();
 
         if (!bookJson.success) return navigate("/library");
         setBook(bookJson.data);
 
-        /* 2️⃣ Check reading access */
+        // 2️⃣ Access check
         const accessRes = await fetch(
           `${API_URL}/api/library/books/${bookId}/access`,
           { credentials: "include" }
         );
         const accessJson = await accessRes.json();
+
         setAccess(accessJson.data);
 
         if (!accessJson.data?.canRead) {
@@ -50,9 +54,10 @@ export default function BookReaderPage() {
           return navigate("/library");
         }
 
+        // Start timers
         startTimers(accessJson.data);
 
-        /* 3️⃣ Load PDF from R2 */
+        // 3️⃣ Load PDF
         loadPDF(bookJson.data.pdfUrl);
       } catch (err) {
         console.error("Reader load error:", err);
@@ -63,26 +68,26 @@ export default function BookReaderPage() {
   }, [bookId]);
 
   /* -------------------------------------------------------------------------- */
-  /* Timer Setup                                                                */
+  /* Timers                                                                     */
   /* -------------------------------------------------------------------------- */
   function startTimers(data) {
-    if (data.seatEndsAt) {
+    if (data.seatEndsAt)
       setSeatTimeLeft(new Date(data.seatEndsAt).getTime() - Date.now());
-    }
-    if (data.purchaseExpiresAt) {
+
+    if (data.purchaseExpiresAt)
       setReadTimeLeft(new Date(data.purchaseExpiresAt).getTime() - Date.now());
-    }
   }
 
   useEffect(() => {
-    const tick = setInterval(() => {
+    const interval = setInterval(() => {
       setSeatTimeLeft((t) => (t != null ? t - 1000 : null));
       setReadTimeLeft((t) => (t != null ? t - 1000 : null));
     }, 1000);
-    return () => clearInterval(tick);
+
+    return () => clearInterval(interval);
   }, []);
 
-  /* Auto-lock if expired */
+  // Auto redirect if expired
   useEffect(() => {
     if (seatTimeLeft != null && seatTimeLeft <= 0) {
       alert("Your seat time has expired.");
@@ -128,17 +133,16 @@ export default function BookReaderPage() {
     canvas.height = viewport.height;
 
     await page.render({ canvasContext: ctx, viewport }).promise;
+
     setPageNum(num);
   }
 
-  const nextPage = () => {
-    if (pageNum < totalPages) renderPage(pageNum + 1);
-  };
-  const prevPage = () => {
-    if (pageNum > 1) renderPage(pageNum - 1);
-  };
+  const nextPage = () =>
+    pageNum < totalPages && renderPage(pageNum + 1);
 
-  /* Format time */
+  const prevPage = () =>
+    pageNum > 1 && renderPage(pageNum - 1);
+
   function formatTime(ms) {
     if (ms == null) return null;
     if (ms <= 0) return "Expired";
@@ -152,7 +156,7 @@ export default function BookReaderPage() {
   }
 
   /* -------------------------------------------------------------------------- */
-  /* Ambience Audio (auto detect .mp3/.wav/.ogg)                                */
+  /* Ambience Audio (Auto detect extension)                                     */
   /* -------------------------------------------------------------------------- */
   useEffect(() => {
     async function loadAudio() {
@@ -170,6 +174,7 @@ export default function BookReaderPage() {
     }
 
     loadAudio();
+
     return () => ambience.current?.pause();
   }, []);
 
