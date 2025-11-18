@@ -1,6 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import * as pdfjsLib from "pdfjs-dist";
+import { loadFileAuto } from "../../../utils/loadFile"; // ⭐ NEW
 import "../../../pdf-worker";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
@@ -29,14 +30,14 @@ export default function BookReaderPage() {
   useEffect(() => {
     async function load() {
       try {
-        /* 1. Load book metadata */
+        /* 1. Load the book metadata */
         const bookRes = await fetch(`${API_URL}/api/library/books/${bookId}`);
         const bookJson = await bookRes.json();
 
         if (!bookJson.success) return navigate("/library");
         setBook(bookJson.data);
 
-        /* 2. Load access permissions */
+        /* 2. Check access (free OR paid logic handled by backend) */
         const accessRes = await fetch(
           `${API_URL}/api/library/books/${bookId}/access`,
           { credentials: "include" }
@@ -51,8 +52,8 @@ export default function BookReaderPage() {
 
         startTimers(accessJson.data);
 
-        /* 3. Load PDF correctly */
-        loadPDF(bookJson.data.pdfUrl); // FIXED
+        /* 3. Load PDF from R2 using pdfUrl */
+        loadPDF(bookJson.data.pdfUrl);
       } catch (err) {
         console.error("Reader load error:", err);
       }
@@ -73,23 +74,24 @@ export default function BookReaderPage() {
     }
   }
 
+  /* decrease timers every 1 sec */
   useEffect(() => {
     const interval = setInterval(() => {
       setSeatTimeLeft((t) => (t != null ? t - 1000 : null));
       setReadTimeLeft((t) => (t != null ? t - 1000 : null));
     }, 1000);
-
     return () => clearInterval(interval);
   }, []);
 
+  /* auto lock on expiry */
   useEffect(() => {
     if (seatTimeLeft != null && seatTimeLeft <= 0) {
       alert("Your seat time has expired.");
-      return navigate("/library");
+      navigate("/library");
     }
     if (readTimeLeft != null && readTimeLeft <= 0) {
       alert("Your reading window has expired.");
-      return navigate("/library");
+      navigate("/library");
     }
   }, [seatTimeLeft, readTimeLeft]);
 
@@ -127,11 +129,9 @@ export default function BookReaderPage() {
     canvas.height = viewport.height;
 
     await page.render({ canvasContext: ctx, viewport }).promise;
-
     setPageNum(num);
   }
 
-  /* Controls */
   const nextPage = () => {
     if (pageNum < totalPages) renderPage(pageNum + 1);
   };
@@ -152,26 +152,36 @@ export default function BookReaderPage() {
   }
 
   /* -------------------------------------------------------------------------- */
-  /* Ambience                                                                   */
+  /* Ambience (auto detect .mp3/.wav/.ogg)                                      */
   /* -------------------------------------------------------------------------- */
   useEffect(() => {
-    ambience.current = new Audio("/audio/library-ambience.mp3"); // FIXED PATH
-    ambience.current.loop = true;
-    ambience.current.volume = 0.4;
+    async function loadAudio() {
+      const audioFile = await loadFileAuto("/audio/library-ambience");
 
-    ambience.current.play().catch(() => {});
+      if (!audioFile) {
+        console.warn("No ambience audio found");
+        return;
+      }
 
-    return () => ambience.current.pause();
+      ambience.current = new Audio(audioFile);
+      ambience.current.loop = true;
+      ambience.current.volume = 0.4;
+      ambience.current.play().catch(() => {});
+    }
+
+    loadAudio();
+    return () => ambience.current?.pause();
   }, []);
 
   /* -------------------------------------------------------------------------- */
   /* UI                                                                         */
   /* -------------------------------------------------------------------------- */
-  if (loading) return <div className="p-6 text-white">Loading reader...</div>;
+  if (loading)
+    return <div className="p-6 text-white">Loading reader...</div>;
 
   return (
     <div className="min-h-screen bg-black text-white flex flex-col items-center pb-10">
-      {/* Header Bar */}
+      {/* Header */}
       <div className="w-full bg-gray-900 p-4 flex justify-between items-center border-b border-gray-700">
         <h2 className="text-xl font-bold">{book.title}</h2>
         <button
@@ -192,10 +202,10 @@ export default function BookReaderPage() {
         )}
       </div>
 
-      {/* PDF Canvas */}
+      {/* PDF */}
       <canvas ref={canvasRef} className="mt-6 shadow-xl rounded" />
 
-      {/* Controls */}
+      {/* Page Controls */}
       <div className="flex mt-6 gap-4">
         <button
           onClick={prevPage}
