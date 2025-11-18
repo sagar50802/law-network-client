@@ -1,7 +1,7 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import * as pdfjsLib from "pdfjs-dist";
-import "../../pdf-worker";
+import "../../../pdf-worker";
 
 const API_URL = import.meta.env.VITE_API_URL || "http://localhost:5000";
 
