@@ -4,11 +4,19 @@ export async function loadImageAuto(basePath) {
 
   for (const ext of exts) {
     const url = basePath + ext;
+
     try {
-      const res = await fetch(url, { method: "HEAD" });
-      if (res.ok) return url; // Found!
-    } catch {}
+      const res = await fetch(url, {
+        method: "GET",
+        cache: "no-store",
+      });
+
+      if (res.ok) return url; // Found the file!
+    } catch (err) {
+      // ignore and try next extension
+    }
   }
 
-  return null; // no file found
+  // Nothing found
+  return null;
 }
