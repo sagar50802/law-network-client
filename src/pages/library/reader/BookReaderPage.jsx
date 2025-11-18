@@ -71,11 +71,32 @@ export default function BookReaderPage() {
           return;
         }
 
-        setBook(bookJson.data);
-        const fullPdfUrl = resolvePdfUrl(bookJson.data.pdfUrl);
+        const data = bookJson.data;
+        setBook(data);
+
+        // 🔍 Try multiple possible fields for the PDF path
+        const rawPdfUrl =
+          data.pdfUrl ||
+          data.pdf ||
+          data.pdfPath ||
+          data.fileUrl ||
+          data.file ||
+          data.path ||
+          null;
+
+        if (!rawPdfUrl) {
+          console.error(
+            "No PDF URL field on this book document. Got:",
+            data
+          );
+          setLoading(false);
+          return;
+        }
+
+        const fullPdfUrl = resolvePdfUrl(rawPdfUrl);
 
         /* 2️⃣ If FREE book → skip access check completely */
-        if (!bookJson.data.isPaid) {
+        if (!data.isPaid) {
           setAccess({ canRead: true, reason: "free-book" });
           await loadPDF(fullPdfUrl);
           return;
