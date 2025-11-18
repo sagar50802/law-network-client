@@ -1,14 +1,11 @@
-// src/utils/loadImage.js
-export async function loadImageAuto(basePath) {
-  const extensions = ["png", "jpg", "jpeg", "webp"];
-
-  for (const ext of extensions) {
+// Auto-detect existing file with multiple extensions
+export async function loadFileAuto(basePath, exts = ["png", "jpg", "jpeg", "webp", "mp3", "wav"]) {
+  for (const ext of exts) {
     const url = `${basePath}.${ext}`;
     try {
       const res = await fetch(url, { method: "HEAD" });
-      if (res.ok) return url;   // file exists
+      if (res.ok) return url;
     } catch {}
   }
-
-  return null;  // no file found
+  return null;
 }
