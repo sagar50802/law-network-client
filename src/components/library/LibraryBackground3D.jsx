@@ -1,13 +1,33 @@
 // 🚀 src/components/library/LibraryBackground3D.jsx
-import { useEffect, useRef } from "react";
+import { useEffect, useRef, useState } from "react";
 import * as THREE from "three";
 import { EffectComposer } from "three/examples/jsm/postprocessing/EffectComposer.js";
 import { RenderPass } from "three/examples/jsm/postprocessing/RenderPass.js";
 import { UnrealBloomPass } from "three/examples/jsm/postprocessing/UnrealBloomPass.js";
 
+// ⭐ NEW – auto image loader
+import { loadImageAuto } from "../../utils/loadImage";
+
 export default function LibraryBackground3D() {
   const containerRef = useRef(null);
 
+  // ⭐ Background image state
+  const [bg, setBg] = useState("/backgrounds/bg1.png"); // fallback
+
+  /* =========================================================================
+     ⭐ LOAD BACKGROUND IMAGE (png/jpg/jpeg/webp automatically)
+  ========================================================================= */
+  useEffect(() => {
+    async function loadBG() {
+      const found = await loadImageAuto("/backgrounds/library-room");
+      if (found) setBg(found);
+    }
+    loadBG();
+  }, []);
+
+  /* =========================================================================
+     ⭐ THREE.JS BACKGROUND ANIMATION
+  ========================================================================= */
   useEffect(() => {
     const container = containerRef.current;
     if (!container) return;
@@ -41,9 +61,9 @@ export default function LibraryBackground3D() {
 
     const bloomPass = new UnrealBloomPass(
       new THREE.Vector2(width, height),
-      0.7, // strength
-      0.4, // radius
-      0.1  // threshold
+      0.7,
+      0.4,
+      0.1
     );
     composer.addPass(bloomPass);
 
@@ -61,7 +81,7 @@ export default function LibraryBackground3D() {
     scene.add(magentaGlow);
 
     /* =====================================================
-       📚 FLOATING BOOKS (Upgraded Animation)
+       📚 FLOATING BOOKS
     ===================================================== */
     const books = [];
     const group = new THREE.Group();
@@ -83,7 +103,6 @@ export default function LibraryBackground3D() {
 
       const mesh = new THREE.Mesh(bookGeo, mat);
 
-      // Spiral orbit
       const angle = Math.random() * Math.PI * 2;
       const radius = 3 + Math.random() * 4;
 
@@ -134,7 +153,7 @@ export default function LibraryBackground3D() {
     scene.add(particles);
 
     /* =====================================================
-       🖱 MOUSE PARALLAX
+       🖱 PARALLAX
     ===================================================== */
     const mouse = { x: 0, y: 0 };
     window.addEventListener("mousemove", (e) => {
@@ -150,15 +169,12 @@ export default function LibraryBackground3D() {
     const animate = () => {
       const t = clock.getElapsedTime();
 
-      // Camera subtle motion
       camera.position.x = Math.sin(t * 0.2) * 0.6;
       camera.position.y = 2 + Math.sin(t * 0.3) * 0.2;
       camera.lookAt(0, 0, 0);
 
-      // Mouse parallax
       group.rotation.y += (mouse.x * 0.15 - group.rotation.y) * 0.02;
 
-      // Books orbit + float
       books.forEach((b) => {
         b.userData.angle += 0.0015;
         b.position.x = Math.cos(b.userData.angle) * b.userData.radius;
@@ -204,10 +220,28 @@ export default function LibraryBackground3D() {
     };
   }, []);
 
+  /* =========================================================================
+     ⭐ UI RETURN — BACKGROUND + 3D LAYER
+  ========================================================================= */
   return (
-    <div
-      ref={containerRef}
-      className="absolute inset-0 -z-10 pointer-events-none"
-    />
+    <>
+      {/* ⭐ IMAGE BACKGROUND */}
+      <div
+        className="absolute inset-0 -z-20"
+        style={{
+          backgroundImage: `url(${bg})`,
+          backgroundSize: "cover",
+          backgroundPosition: "center",
+          backgroundRepeat: "no-repeat",
+          opacity: 0.28,
+        }}
+      />
+
+      {/* ⭐ THREE.JS LAYER */}
+      <div
+        ref={containerRef}
+        className="absolute inset-0 -z-10 pointer-events-none"
+      />
+    </>
   );
 }
