@@ -2,19 +2,25 @@ import { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import * as pdfjsLib from "pdfjs-dist";
 
-import { loadFileAuto } from "../../../utils/loadFile";
 import "../../../pdf-worker";
 
-// backend root (MUST NOT include /api)
+// Correct backend root: MUST NOT include /api
 const API =
-  import.meta.env.VITE_API ||
-  "https://law-network-server.onrender.com";
+  import.meta.env.VITE_API_URL?.replace(/\/api\/?$/, "") ||
+  import.meta.env.VITE_API?.replace(/\/api\/?$/, "") ||
+  "https://law-network.onrender.com";
 
-// build absolute R2 URLs
+// Fix PDF URL building for R2
 function resolvePdfUrl(url) {
   if (!url) return null;
+
+  // Already full R2 URL
   if (url.startsWith("http")) return url;
+
+  // Begins with / → attach domain
   if (url.startsWith("/")) return API + url;
+
+  // Raw path (no /)
   return API + "/" + url;
 }
 
@@ -34,6 +40,7 @@ export default function BookReaderPage() {
   useEffect(() => {
     async function load() {
       try {
+        // FIX: use API without double /api
         const res = await fetch(`${API}/api/library/books/${bookId}`);
         const json = await res.json();
 
@@ -51,15 +58,16 @@ export default function BookReaderPage() {
           null;
 
         if (!raw) {
-          console.error("No pdfUrl on book:", data);
-          alert("Book has no PDF.");
+          console.error("No PDF URL on book:", data);
+          alert("This book has no PDF file.");
           return;
         }
 
-        const url = resolvePdfUrl(raw);
-        await loadPDF(url);
+        const finalUrl = resolvePdfUrl(raw);
+        await loadPDF(finalUrl);
       } catch (err) {
         console.error("Reader load error:", err);
+        setLoading(false);
       }
     }
 
@@ -71,6 +79,7 @@ export default function BookReaderPage() {
       pdfjsLib.GlobalWorkerOptions.workerSrc =
         `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.js`;
 
+      // FIX: always pass { url }
       const task = pdfjsLib.getDocument({ url });
       const doc = await task.promise;
 
@@ -89,7 +98,7 @@ export default function BookReaderPage() {
     if (!doc) return;
 
     const page = await doc.getPage(num);
-    const viewport = page.getViewport({ scale: 1.4 });
+    const viewport = page.getViewport({ scale: 1.35 });
 
     const canvas = canvasRef.current;
     const ctx = canvas.getContext("2d");
