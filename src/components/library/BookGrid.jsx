@@ -16,7 +16,7 @@ export default function BookGrid({ books = [], onSelectBook }) {
         <BookCard
           key={book._id}
           book={book}
-          onSelect={() => onSelectBook && onSelectBook(book)}
+          onClick={() => onSelectBook && onSelectBook(book)}  // 👈 FIXED
         />
       ))}
     </div>
