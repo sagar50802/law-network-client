@@ -1,5 +1,5 @@
 // src/pages/admin/library/BooksPage.jsx
-import { useState, useEffect } from "react";
+import React, { useState, useEffect } from "react";
 import AdminSidebar from "./AdminSidebar";
 
 /* ------------------------------------------------------------
@@ -26,25 +26,25 @@ export default function BooksPage() {
     cover: null,
   });
 
-  /* ------------------------------------------------------------
-     Load Books (public list)
-  ------------------------------------------------------------ */
-  function loadBooks() {
-    setLoading(true);
-
-    fetch(`${API_BASE}/library/books`)
-      .then((r) => r.json())
-      .then((json) => setBooks(json.data || []))
-      .finally(() => setLoading(false));
+  /* Load Books */
+  async function loadBooks() {
+    try {
+      setLoading(true);
+      const res = await fetch(`${API_BASE}/library/books`);
+      const json = await res.json();
+      setBooks(json.data || []);
+    } catch (err) {
+      console.error("Load books error:", err);
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
     loadBooks();
   }, []);
 
-  /* ------------------------------------------------------------
-     Signed URL from server  (R2 upload)
-  ------------------------------------------------------------ */
+  /* Signed URL from server */
   async function getUploadUrl(file) {
     const url = `${API_BASE}/library/upload-url?filename=${encodeURIComponent(
       file.name
@@ -58,7 +58,7 @@ export default function BooksPage() {
       throw new Error("Failed to get signed URL");
     }
 
-    return json;
+    return json; // { success, uploadUrl, fileUrl }
   }
 
   /* Upload to Cloudflare R2 */
@@ -72,12 +72,7 @@ export default function BooksPage() {
     if (!put.ok) throw new Error("R2 upload failed");
   }
 
-  /* ------------------------------------------------------------
-     Upload Book (admin)
-     1) Get signed URLs
-     2) Upload PDF & cover to R2
-     3) Call admin create endpoint
-  ------------------------------------------------------------ */
+  /* Upload Book */
   async function uploadBook() {
     try {
       if (!form.title || !form.pdf || !form.cover) {
@@ -85,18 +80,18 @@ export default function BooksPage() {
         return;
       }
 
-      // 1: signed URLs
+      // Step 1: signed URLs
       const pdfInfo = await getUploadUrl(form.pdf);
       const coverInfo = await getUploadUrl(form.cover);
 
-      // 2: upload to R2
+      // Step 2: upload to R2
       await uploadToR2(pdfInfo.uploadUrl, form.pdf);
       await uploadToR2(coverInfo.uploadUrl, form.cover);
 
-      // 3: create book via ADMIN endpoint
-      const res = await fetch(`${API_BASE}/admin/library/books/create`, {
+      // Step 3: create book (ADMIN endpoint)
+      const res = await fetch(`${API_BASE}/admin/library/create`, {
         method: "POST",
-        credentials: "include", // ⭐ send cookies for admin auth
+        credentials: "include", // ⭐ send admin cookie
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: form.title,
@@ -130,25 +125,27 @@ export default function BooksPage() {
       loadBooks();
     } catch (err) {
       console.error("Upload error:", err);
-      alert("Upload failed");
+      alert(err.message || "Upload failed");
     }
   }
 
-  /* ------------------------------------------------------------
-     Delete Book (admin)
-  ------------------------------------------------------------ */
+  /* Delete Book */
   async function deleteBook(id) {
     if (!confirm("Delete book?")) return;
 
-    const res = await fetch(`${API_BASE}/admin/library/books/${id}`, {
-      method: "DELETE",
-      credentials: "include", // admin auth
-    });
+    try {
+      const res = await fetch(`${API_BASE}/library/delete/${id}`, {
+        method: "GET",
+        credentials: "include",
+      });
+      const json = await res.json();
 
-    const json = await res.json();
-
-    if (json.success) loadBooks();
-    else alert(json.message || "Delete failed");
+      if (json.success) loadBooks();
+      else alert(json.message || "Delete failed");
+    } catch (err) {
+      console.error("Delete error:", err);
+      alert("Delete failed");
+    }
   }
 
   /* ------------------------------------------------------------
@@ -193,9 +190,7 @@ export default function BooksPage() {
               <input
                 type="checkbox"
                 checked={form.free}
-                onChange={(e) =>
-                  setForm({ ...form, free: e.target.checked })
-                }
+                onChange={(e) => setForm({ ...form, free: e.target.checked })}
               />
               Free Book
             </label>
@@ -218,7 +213,7 @@ export default function BooksPage() {
                 type="file"
                 accept="application/pdf"
                 onChange={(e) =>
-                  setForm({ ...form, pdf: e.target.files[0] })
+                  setForm({ ...form, pdf: e.target.files[0] || null })
                 }
               />
             </label>
@@ -229,7 +224,7 @@ export default function BooksPage() {
                 type="file"
                 accept="image/*"
                 onChange={(e) =>
-                  setForm({ ...form, cover: e.target.files[0] })
+                  setForm({ ...form, cover: e.target.files[0] || null })
                 }
               />
             </label>
@@ -259,6 +254,7 @@ export default function BooksPage() {
                   >
                     <img
                       src={b.coverUrl}
+                      alt={b.title}
                       className="w-full h-40 object-cover rounded"
                     />
 
