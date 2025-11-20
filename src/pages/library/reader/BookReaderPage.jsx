@@ -4,20 +4,28 @@ import * as pdfjsLib from "pdfjs-dist";
 
 import "../../../pdf-worker";
 
-// Backend root (already correct in your .env)
-const API = import.meta.env.VITE_API;
+/* ------------------------------------------------------------
+   🔥 FIXED API ROOT
+------------------------------------------------------------ */
+const API_RAW =
+  import.meta.env.VITE_API_URL ||
+  import.meta.env.VITE_BACKEND_URL ||
+  "";
 
-// Convert stored book PDF URL → absolute URL
+const API = API_RAW.replace(/\/api\/?$/, ""); // remove trailing /api
+
+/* ------------------------------------------------------------
+   SAFE PDF URL RESOLVER
+------------------------------------------------------------ */
 function resolvePdfUrl(url) {
   if (!url) return null;
 
-  // Already full R2 or external URL
+  // Already full Cloudflare R2 URL
   if (url.startsWith("http")) return url;
 
-  // Begins with slash → attach domain
+  // API root without /api + relative path
   if (url.startsWith("/")) return API + url;
 
-  // Raw relative path
   return API + "/" + url;
 }
 
@@ -62,6 +70,8 @@ export default function BookReaderPage() {
         }
 
         const finalUrl = resolvePdfUrl(raw);
+        console.log("📄 FINAL PDF URL:", finalUrl);
+
         await loadPDF(finalUrl);
 
       } catch (err) {
@@ -92,6 +102,7 @@ export default function BookReaderPage() {
 
     } catch (err) {
       console.error("PDF load error:", err);
+      alert("Could not load PDF");
       setLoading(false);
     }
   }
@@ -106,10 +117,10 @@ export default function BookReaderPage() {
     const viewport = page.getViewport({ scale: 1.35 });
 
     const canvas = canvasRef.current;
-    if (!canvas) return; // mobile safari fix
+    if (!canvas) return;
 
     const ctx = canvas.getContext("2d");
-    if (!ctx) return; // extra safety
+    if (!ctx) return;
 
     canvas.width = viewport.width;
     canvas.height = viewport.height;
