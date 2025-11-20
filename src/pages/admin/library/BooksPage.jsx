@@ -1,8 +1,12 @@
 import { useState, useEffect } from "react";
 import AdminSidebar from "./AdminSidebar";
 
+// ❤️ IMPORTANT FIX:
+// Your VITE_API_URL = https://law-network.onrender.com/api
+// We remove the trailing /api so frontend does NOT double it.
 const API =
-  import.meta.env.VITE_API || "https://law-network-server.onrender.com";
+  (import.meta.env.VITE_API_URL || import.meta.env.VITE_API || "https://law-network-server.onrender.com")
+    .replace(/\/api\/?$/, "");
 
 export default function BooksPage() {
   const [books, setBooks] = useState([]);
@@ -21,6 +25,7 @@ export default function BooksPage() {
   /* Load Books */
   function loadBooks() {
     setLoading(true);
+
     fetch(`${API}/api/library/books`)
       .then((r) => r.json())
       .then((json) => setBooks(json.data || []))
@@ -40,7 +45,11 @@ export default function BooksPage() {
     const res = await fetch(url);
     const json = await res.json();
 
-    if (!json.success) throw new Error("Failed to get signed URL");
+    if (!json.success) {
+      console.error("Signed URL error:", json);
+      throw new Error("Failed to get signed URL");
+    }
+
     return json;
   }
 
@@ -63,12 +72,15 @@ export default function BooksPage() {
         return;
       }
 
+      // 🔥 Step 1: get signed URLs
       const pdfInfo = await getUploadUrl(form.pdf);
       const coverInfo = await getUploadUrl(form.cover);
 
+      // 🔥 Step 2: upload files directly to R2
       await uploadToR2(pdfInfo.uploadUrl, form.pdf);
       await uploadToR2(coverInfo.uploadUrl, form.cover);
 
+      // 🔥 Step 3: create book metadata
       const res = await fetch(`${API}/api/library/create`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
@@ -77,16 +89,17 @@ export default function BooksPage() {
           author: form.author,
           description: form.description,
           free: form.free,
-          price: form.price,
+          price: form.free ? 0 : form.price,
           pdfUrl: pdfInfo.fileUrl,
           coverUrl: coverInfo.fileUrl,
         }),
       });
 
       const json = await res.json();
-      if (!json.success) return alert(json.message);
+      if (!json.success) return alert(json.message || "Create failed");
 
       alert("Book uploaded!");
+
       setForm({
         title: "",
         author: "",
@@ -122,7 +135,6 @@ export default function BooksPage() {
         <h1 className="text-xl font-bold mb-6">📚 Upload Books</h1>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-
           {/* Upload Form */}
           <div className="p-4 bg-slate-800 rounded border border-slate-700">
             <h2 className="font-semibold text-lg mb-3">Upload New Book</h2>
