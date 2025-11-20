@@ -3,14 +3,12 @@ import React, { useState, useEffect } from "react";
 import AdminSidebar from "./AdminSidebar";
 
 /* ------------------------------------------------------------
-   ✅ Standardized API constants for admin
+   API BASE
 ------------------------------------------------------------ */
 const API_BASE =
   import.meta.env.VITE_API_URL ||
-  `${(import.meta.env.VITE_BACKEND_URL || "http://localhost:5000").replace(
-    /\/$/,
-    ""
-  )}/api`;
+  `${(import.meta.env.VITE_BACKEND_URL || "http://localhost:5000")
+    .replace(/\/$/, "")}/api`;
 
 export default function BooksPage() {
   const [books, setBooks] = useState([]);
@@ -26,12 +24,16 @@ export default function BooksPage() {
     cover: null,
   });
 
-  /* Load Books */
+  /* ------------------------------------------------------------
+     LOAD BOOKS (Public endpoint)
+  ------------------------------------------------------------ */
   async function loadBooks() {
     try {
       setLoading(true);
+
       const res = await fetch(`${API_BASE}/library/books`);
       const json = await res.json();
+
       setBooks(json.data || []);
     } catch (err) {
       console.error("Load books error:", err);
@@ -44,7 +46,9 @@ export default function BooksPage() {
     loadBooks();
   }, []);
 
-  /* Signed URL from server */
+  /* ------------------------------------------------------------
+     GET SIGNED UPLOAD URL
+  ------------------------------------------------------------ */
   async function getUploadUrl(file) {
     const url = `${API_BASE}/library/upload-url?filename=${encodeURIComponent(
       file.name
@@ -53,30 +57,30 @@ export default function BooksPage() {
     const res = await fetch(url);
     const json = await res.json();
 
-    if (!json.success) {
-      console.error("Signed URL error:", json);
-      throw new Error("Failed to get signed URL");
-    }
-
-    return json; // { success, uploadUrl, fileUrl }
+    if (!json.success) throw new Error("Failed to get signed URL");
+    return json; // { uploadUrl, fileUrl }
   }
 
-  /* Upload to Cloudflare R2 */
+  /* ------------------------------------------------------------
+     UPLOAD TO R2
+  ------------------------------------------------------------ */
   async function uploadToR2(uploadUrl, file) {
-    const put = await fetch(uploadUrl, {
+    const res = await fetch(uploadUrl, {
       method: "PUT",
       body: file,
       headers: { "Content-Type": file.type },
     });
 
-    if (!put.ok) throw new Error("R2 upload failed");
+    if (!res.ok) throw new Error("R2 upload failed");
   }
 
-  /* Upload Book */
+  /* ------------------------------------------------------------
+     CREATE BOOK (ADMIN)
+  ------------------------------------------------------------ */
   async function uploadBook() {
     try {
       if (!form.title || !form.pdf || !form.cover) {
-        alert("Title, PDF & Cover required");
+        alert("Title, PDF, Cover required");
         return;
       }
 
@@ -88,10 +92,10 @@ export default function BooksPage() {
       await uploadToR2(pdfInfo.uploadUrl, form.pdf);
       await uploadToR2(coverInfo.uploadUrl, form.cover);
 
-      // Step 3: create book (ADMIN endpoint)
+      // Step 3: create book (ADMIN route)
       const res = await fetch(`${API_BASE}/admin/library/create`, {
         method: "POST",
-        credentials: "include", // ⭐ send admin cookie
+        credentials: "include", // ⭐ REQUIRED (admin cookie)
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: form.title,
@@ -105,13 +109,13 @@ export default function BooksPage() {
       });
 
       const json = await res.json();
+
       if (!json.success) {
-        alert(json.message || "Create failed");
+        alert(json.message || "Failed to create book");
         return;
       }
 
       alert("Book uploaded!");
-
       setForm({
         title: "",
         author: "",
@@ -129,7 +133,9 @@ export default function BooksPage() {
     }
   }
 
-  /* Delete Book */
+  /* ------------------------------------------------------------
+     DELETE BOOK (PUBLIC DELETE ROUTE)
+  ------------------------------------------------------------ */
   async function deleteBook(id) {
     if (!confirm("Delete book?")) return;
 
@@ -138,6 +144,7 @@ export default function BooksPage() {
         method: "GET",
         credentials: "include",
       });
+
       const json = await res.json();
 
       if (json.success) loadBooks();
@@ -201,9 +208,7 @@ export default function BooksPage() {
                 type="number"
                 placeholder="Price"
                 value={form.price}
-                onChange={(e) =>
-                  setForm({ ...form, price: e.target.value })
-                }
+                onChange={(e) => setForm({ ...form, price: e.target.value })}
               />
             )}
 
