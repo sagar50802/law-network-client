@@ -5,7 +5,7 @@ import * as pdfjsLib from "pdfjs-dist";
 import "../../../pdf-worker";
 
 /* ------------------------------------------------------------
-   ✅ API CONSTANTS
+   API CONSTANTS
 ------------------------------------------------------------ */
 const API_BASE =
   import.meta.env.VITE_API_URL ||
@@ -15,18 +15,17 @@ const API_BASE =
 const API_ROOT = API_BASE.replace(/\/api\/?$/, "");
 
 /* ------------------------------------------------------------
-   ✅ SAFE PDF URL RESOLVER
+   SAFE PDF URL RESOLVER
 ------------------------------------------------------------ */
 function resolvePdfUrl(url) {
   if (!url) return null;
 
-  // full external/R2 url
-  if (url.startsWith("http")) return url;
+  url = String(url).trim();
+  if (!url) return null;
 
-  // /something.pdf --> attach domain root
+  if (url.startsWith("http")) return url;
   if (url.startsWith("/")) return API_ROOT + url;
 
-  // plain relative path
   return `${API_ROOT}/${url.replace(/^\/+/, "")}`;
 }
 
@@ -43,25 +42,27 @@ export default function BookReaderPage() {
 
   const canvasRef = useRef(null);
 
-  /* ------------------------------------------------------------ */
-  /* Load Book Metadata + PDF                                     */
-  /* ------------------------------------------------------------ */
+  /* ------------------------------------------------------------
+     Load Book Metadata + PDF
+  ------------------------------------------------------------ */
   useEffect(() => {
     async function load() {
       try {
         const res = await fetch(`${API_BASE}/library/books/${bookId}`);
         const json = await res.json();
 
-        if (!json.success) return navigate("/library");
+        if (!json.success) {
+          navigate("/library");
+          return;
+        }
 
         const data = json.data;
         setBook(data);
 
-        // Only correct field now
         const raw = data.pdfUrl;
-
-        if (!raw) {
+        if (!raw || !String(raw).trim()) {
           alert("This book has no PDF file.");
+          navigate("/library");
           return;
         }
 
@@ -71,6 +72,7 @@ export default function BookReaderPage() {
         await loadPDF(finalUrl);
       } catch (err) {
         console.error("Reader load error:", err);
+        navigate("/library");
       } finally {
         setLoading(false);
       }
@@ -79,9 +81,9 @@ export default function BookReaderPage() {
     load();
   }, [bookId, navigate]);
 
-  /* ------------------------------------------------------------ */
-  /* Load PDF with PDF.js                                         */
-  /* ------------------------------------------------------------ */
+  /* ------------------------------------------------------------
+     Load PDF
+  ------------------------------------------------------------ */
   async function loadPDF(url) {
     try {
       pdfjsLib.GlobalWorkerOptions.workerSrc =
@@ -100,9 +102,9 @@ export default function BookReaderPage() {
     }
   }
 
-  /* ------------------------------------------------------------ */
-  /* Render a single page                                         */
-  /* ------------------------------------------------------------ */
+  /* ------------------------------------------------------------
+     Render Page
+  ------------------------------------------------------------ */
   async function renderPage(num, doc = pdf) {
     if (!doc) return;
 
@@ -123,18 +125,21 @@ export default function BookReaderPage() {
     setPageNum(num);
   }
 
-  const nextPage = () =>
-    pageNum < totalPages && renderPage(pageNum + 1);
+  const nextPage = () => {
+    if (pageNum < totalPages) renderPage(pageNum + 1);
+  };
 
-  const prevPage = () =>
-    pageNum > 1 && renderPage(pageNum - 1);
+  const prevPage = () => {
+    if (pageNum > 1) renderPage(pageNum - 1);
+  };
 
-  if (loading)
+  if (loading) {
     return <div className="p-6 text-white">Loading PDF...</div>;
+  }
 
-  /* ------------------------------------------------------------ */
-  /* UI                                                           */
-  /* ------------------------------------------------------------ */
+  /* ------------------------------------------------------------
+     UI
+  ------------------------------------------------------------ */
   return (
     <div className="min-h-screen bg-black text-white flex flex-col items-center pb-10">
       <div className="w-full bg-gray-900 px-4 py-3 flex justify-between items-center">
@@ -154,7 +159,7 @@ export default function BookReaderPage() {
         <button
           onClick={prevPage}
           disabled={pageNum <= 1}
-          className="px-4 py-2 bg-gray-700 rounded"
+          className="px-4 py-2 bg-gray-700 rounded disabled:opacity-40"
         >
           ← Prev
         </button>
@@ -166,7 +171,7 @@ export default function BookReaderPage() {
         <button
           onClick={nextPage}
           disabled={pageNum >= totalPages}
-          className="px-4 py-2 bg-gray-700 rounded"
+          className="px-4 py-2 bg-gray-700 rounded disabled:opacity-40"
         >
           Next →
         </button>
