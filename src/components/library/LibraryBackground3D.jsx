@@ -196,20 +196,21 @@ export default function LibraryBackground3D() {
     <>
       {/* ⭐ STATIC IMAGE BACKGROUND */}
       <div
-        className="absolute inset-0 -z-20"
+        className="absolute inset-0 -z-30"
         style={{
           backgroundImage: `url(${bg})`,
           backgroundSize: "cover",
           backgroundPosition: "center",
           backgroundRepeat: "no-repeat",
           opacity: 0.28,
+          pointerEvents: "none",   // 👈 Prevent image overlay blocking clicks
         }}
       />
 
       {/* ⭐ THREE.JS CANVAS */}
       <div
         ref={containerRef}
-        className="absolute inset-0 -z-10 pointer-events-none"
+        className="absolute inset-0 -z-20 pointer-events-none" // 👈 FIX: no click-blocking
       />
     </>
   );
