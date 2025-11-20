@@ -5,16 +5,13 @@ import * as pdfjsLib from "pdfjs-dist";
 import "../../../pdf-worker";
 
 /* ------------------------------------------------------------
-   ✅ Standardized API constants
+   ✅ API CONSTANTS
 ------------------------------------------------------------ */
 const API_BASE =
   import.meta.env.VITE_API_URL ||
-  `${(import.meta.env.VITE_BACKEND_URL || "http://localhost:5000").replace(
-    /\/$/,
-    ""
-  )}/api`;
+  `${(import.meta.env.VITE_BACKEND_URL || "http://localhost:5000")
+    .replace(/\/$/, "")}/api`;
 
-// Root without /api – used for static/relative URLs
 const API_ROOT = API_BASE.replace(/\/api\/?$/, "");
 
 /* ------------------------------------------------------------
@@ -23,13 +20,13 @@ const API_ROOT = API_BASE.replace(/\/api\/?$/, "");
 function resolvePdfUrl(url) {
   if (!url) return null;
 
-  // Already a full R2 / external URL
+  // full external/R2 url
   if (url.startsWith("http")) return url;
 
-  // Starts with "/" → attach domain root (no /api)
+  // /something.pdf --> attach domain root
   if (url.startsWith("/")) return API_ROOT + url;
 
-  // Raw relative path → root + "/" + cleaned path
+  // plain relative path
   return `${API_ROOT}/${url.replace(/^\/+/, "")}`;
 }
 
@@ -52,7 +49,6 @@ export default function BookReaderPage() {
   useEffect(() => {
     async function load() {
       try {
-        // ✅ API_BASE already includes /api
         const res = await fetch(`${API_BASE}/library/books/${bookId}`);
         const json = await res.json();
 
@@ -61,13 +57,8 @@ export default function BookReaderPage() {
         const data = json.data;
         setBook(data);
 
-        const raw =
-          data.pdfUrl ||
-          data.fileUrl ||
-          data.file ||
-          data.path ||
-          data.pdf ||
-          null;
+        // Only correct field now
+        const raw = data.pdfUrl;
 
         if (!raw) {
           alert("This book has no PDF file.");
@@ -80,6 +71,7 @@ export default function BookReaderPage() {
         await loadPDF(finalUrl);
       } catch (err) {
         console.error("Reader load error:", err);
+      } finally {
         setLoading(false);
       }
     }
@@ -102,16 +94,14 @@ export default function BookReaderPage() {
       setTotalPages(doc.numPages);
 
       await renderPage(1, doc);
-      setLoading(false);
     } catch (err) {
       console.error("PDF load error:", err);
       alert("Could not load PDF");
-      setLoading(false);
     }
   }
 
   /* ------------------------------------------------------------ */
-  /* Render a single PDF page                                     */
+  /* Render a single page                                         */
   /* ------------------------------------------------------------ */
   async function renderPage(num, doc = pdf) {
     if (!doc) return;
@@ -129,12 +119,15 @@ export default function BookReaderPage() {
     canvas.height = viewport.height;
 
     await page.render({ canvasContext: ctx, viewport }).promise;
+
     setPageNum(num);
   }
 
-  const nextPage = () => pageNum < totalPages && renderPage(pageNum + 1);
+  const nextPage = () =>
+    pageNum < totalPages && renderPage(pageNum + 1);
 
-  const prevPage = () => pageNum > 1 && renderPage(pageNum - 1);
+  const prevPage = () =>
+    pageNum > 1 && renderPage(pageNum - 1);
 
   if (loading)
     return <div className="p-6 text-white">Loading PDF...</div>;
