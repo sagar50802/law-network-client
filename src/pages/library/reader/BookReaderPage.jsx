@@ -4,23 +4,20 @@ import * as pdfjsLib from "pdfjs-dist";
 
 import "../../../pdf-worker";
 
-// Correct backend root: MUST NOT include /api
-const API =
-  import.meta.env.VITE_API_URL?.replace(/\/api\/?$/, "") ||
-  import.meta.env.VITE_API?.replace(/\/api\/?$/, "") ||
-  "https://law-network.onrender.com";
+// Backend root (already correct in your .env)
+const API = import.meta.env.VITE_API;
 
-// Fix PDF URL building for R2
+// Convert stored book PDF URL → absolute URL
 function resolvePdfUrl(url) {
   if (!url) return null;
 
-  // Already full R2 URL
+  // Already full R2 or external URL
   if (url.startsWith("http")) return url;
 
-  // Begins with / → attach domain
+  // Begins with slash → attach domain
   if (url.startsWith("/")) return API + url;
 
-  // Raw path (no /)
+  // Raw relative path
   return API + "/" + url;
 }
 
@@ -37,10 +34,12 @@ export default function BookReaderPage() {
 
   const canvasRef = useRef(null);
 
+  /* ------------------------------------------------------------ */
+  /* Load Book Metadata + PDF                                     */
+  /* ------------------------------------------------------------ */
   useEffect(() => {
     async function load() {
       try {
-        // FIX: use API without double /api
         const res = await fetch(`${API}/api/library/books/${bookId}`);
         const json = await res.json();
 
@@ -51,20 +50,20 @@ export default function BookReaderPage() {
 
         const raw =
           data.pdfUrl ||
-          data.pdf ||
           data.fileUrl ||
           data.file ||
           data.path ||
+          data.pdf ||
           null;
 
         if (!raw) {
-          console.error("No PDF URL on book:", data);
           alert("This book has no PDF file.");
           return;
         }
 
         const finalUrl = resolvePdfUrl(raw);
         await loadPDF(finalUrl);
+
       } catch (err) {
         console.error("Reader load error:", err);
         setLoading(false);
@@ -74,12 +73,14 @@ export default function BookReaderPage() {
     load();
   }, [bookId]);
 
+  /* ------------------------------------------------------------ */
+  /* Load PDF with PDF.js                                         */
+  /* ------------------------------------------------------------ */
   async function loadPDF(url) {
     try {
       pdfjsLib.GlobalWorkerOptions.workerSrc =
         `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.js`;
 
-      // FIX: always pass { url }
       const task = pdfjsLib.getDocument({ url });
       const doc = await task.promise;
 
@@ -88,12 +89,16 @@ export default function BookReaderPage() {
 
       await renderPage(1, doc);
       setLoading(false);
+
     } catch (err) {
       console.error("PDF load error:", err);
       setLoading(false);
     }
   }
 
+  /* ------------------------------------------------------------ */
+  /* Render a single PDF page                                     */
+  /* ------------------------------------------------------------ */
   async function renderPage(num, doc = pdf) {
     if (!doc) return;
 
@@ -101,7 +106,10 @@ export default function BookReaderPage() {
     const viewport = page.getViewport({ scale: 1.35 });
 
     const canvas = canvasRef.current;
+    if (!canvas) return; // mobile safari fix
+
     const ctx = canvas.getContext("2d");
+    if (!ctx) return; // extra safety
 
     canvas.width = viewport.width;
     canvas.height = viewport.height;
@@ -119,9 +127,12 @@ export default function BookReaderPage() {
   if (loading)
     return <div className="p-6 text-white">Loading PDF...</div>;
 
+  /* ------------------------------------------------------------ */
+  /* UI                                                           */
+  /* ------------------------------------------------------------ */
   return (
     <div className="min-h-screen bg-black text-white flex flex-col items-center pb-10">
-
+      
       <div className="w-full bg-gray-900 px-4 py-3 flex justify-between items-center">
         <h2 className="font-bold text-xl">{book?.title}</h2>
 
