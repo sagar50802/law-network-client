@@ -1,12 +1,15 @@
 import { useState, useEffect } from "react";
 import AdminSidebar from "./AdminSidebar";
 
-// ❤️ IMPORTANT FIX:
-// Your VITE_API_URL = https://law-network.onrender.com/api
-// We remove the trailing /api so frontend does NOT double it.
-const API =
-  (import.meta.env.VITE_API_URL || import.meta.env.VITE_API || "https://law-network-server.onrender.com")
-    .replace(/\/api\/?$/, "");
+/* ------------------------------------------------------------
+   ✅ Standardized API constants for admin
+------------------------------------------------------------ */
+const API_BASE =
+  import.meta.env.VITE_API_URL ||
+  `${(import.meta.env.VITE_BACKEND_URL || "http://localhost:5000").replace(
+    /\/$/,
+    ""
+  )}/api`;
 
 export default function BooksPage() {
   const [books, setBooks] = useState([]);
@@ -26,7 +29,8 @@ export default function BooksPage() {
   function loadBooks() {
     setLoading(true);
 
-    fetch(`${API}/api/library/books`)
+    // ✅ API_BASE already has /api
+    fetch(`${API_BASE}/library/books`)
       .then((r) => r.json())
       .then((json) => setBooks(json.data || []))
       .finally(() => setLoading(false));
@@ -38,7 +42,7 @@ export default function BooksPage() {
 
   /* Signed URL from server */
   async function getUploadUrl(file) {
-    const url = `${API}/api/library/upload-url?filename=${encodeURIComponent(
+    const url = `${API_BASE}/library/upload-url?filename=${encodeURIComponent(
       file.name
     )}&type=${encodeURIComponent(file.type)}`;
 
@@ -81,7 +85,7 @@ export default function BooksPage() {
       await uploadToR2(coverInfo.uploadUrl, form.cover);
 
       // 🔥 Step 3: create book metadata
-      const res = await fetch(`${API}/api/library/create`, {
+      const res = await fetch(`${API_BASE}/library/create`, {
         method: "POST",
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
@@ -120,141 +124,11 @@ export default function BooksPage() {
   async function deleteBook(id) {
     if (!confirm("Delete book?")) return;
 
-    const res = await fetch(`${API}/api/library/delete/${id}`);
+    const res = await fetch(`${API_BASE}/library/delete/${id}`);
     const json = await res.json();
 
     if (json.success) loadBooks();
     else alert(json.message);
   }
 
-  return (
-    <div className="flex min-h-screen bg-slate-900 text-slate-100">
-      <AdminSidebar />
-
-      <div className="flex-1 p-6">
-        <h1 className="text-xl font-bold mb-6">📚 Upload Books</h1>
-
-        <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Upload Form */}
-          <div className="p-4 bg-slate-800 rounded border border-slate-700">
-            <h2 className="font-semibold text-lg mb-3">Upload New Book</h2>
-
-            <input
-              className="w-full p-2 mb-2 bg-slate-700 rounded"
-              placeholder="Title"
-              value={form.title}
-              onChange={(e) => setForm({ ...form, title: e.target.value })}
-            />
-
-            <input
-              className="w-full p-2 mb-2 bg-slate-700 rounded"
-              placeholder="Author"
-              value={form.author}
-              onChange={(e) => setForm({ ...form, author: e.target.value })}
-            />
-
-            <textarea
-              className="w-full p-2 mb-2 bg-slate-700 rounded"
-              placeholder="Description"
-              value={form.description}
-              onChange={(e) =>
-                setForm({ ...form, description: e.target.value })
-              }
-            />
-
-            <label className="flex items-center gap-2 mb-3">
-              <input
-                type="checkbox"
-                checked={form.free}
-                onChange={(e) => setForm({ ...form, free: e.target.checked })}
-              />
-              Free Book
-            </label>
-
-            {!form.free && (
-              <input
-                className="w-full p-2 mb-2 bg-slate-700 rounded"
-                type="number"
-                placeholder="Price"
-                value={form.price}
-                onChange={(e) => setForm({ ...form, price: e.target.value })}
-              />
-            )}
-
-            <label className="block mb-2">
-              PDF:
-              <input
-                type="file"
-                accept="application/pdf"
-                onChange={(e) =>
-                  setForm({ ...form, pdf: e.target.files[0] })
-                }
-              />
-            </label>
-
-            <label className="block mb-4">
-              Cover:
-              <input
-                type="file"
-                accept="image/*"
-                onChange={(e) =>
-                  setForm({ ...form, cover: e.target.files[0] })
-                }
-              />
-            </label>
-
-            <button
-              onClick={uploadBook}
-              className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded"
-            >
-              Upload Book
-            </button>
-          </div>
-
-          {/* Books List */}
-          <div className="lg:col-span-2 p-4 bg-slate-800 rounded border border-slate-700">
-            <h2 className="font-semibold text-lg mb-3">Uploaded Books</h2>
-
-            {loading ? (
-              <p>Loading...</p>
-            ) : books.length === 0 ? (
-              <p>No books uploaded</p>
-            ) : (
-              <div className="grid grid-cols-1 sm:grid-cols-2 lg:grid-cols-3 gap-4">
-                {books.map((b) => (
-                  <div
-                    key={b._id}
-                    className="bg-slate-700 p-3 rounded flex flex-col"
-                  >
-                    <img
-                      src={b.coverUrl}
-                      className="w-full h-40 object-cover rounded"
-                    />
-
-                    <h3 className="mt-2 font-bold">{b.title}</h3>
-                    <p className="text-sm text-slate-300">{b.author}</p>
-
-                    <a
-                      className="text-blue-300 underline mt-1 mb-2"
-                      href={b.pdfUrl}
-                      target="_blank"
-                    >
-                      Preview PDF
-                    </a>
-
-                    <button
-                      onClick={() => deleteBook(b._id)}
-                      className="mt-auto bg-red-600 px-3 py-1 rounded"
-                    >
-                      Delete
-                    </button>
-                  </div>
-                ))}
-              </div>
-            )}
-          </div>
-        </div>
-      </div>
-    </div>
-  );
-}
+  // ... ⬇️ keep the rest of your JSX exactly as it was (no changes needed)
