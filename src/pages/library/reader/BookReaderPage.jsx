@@ -5,28 +5,32 @@ import * as pdfjsLib from "pdfjs-dist";
 import "../../../pdf-worker";
 
 /* ------------------------------------------------------------
-   🔥 FIXED API ROOT
+   ✅ Standardized API constants
 ------------------------------------------------------------ */
-const API_RAW =
+const API_BASE =
   import.meta.env.VITE_API_URL ||
-  import.meta.env.VITE_BACKEND_URL ||
-  "";
+  `${(import.meta.env.VITE_BACKEND_URL || "http://localhost:5000").replace(
+    /\/$/,
+    ""
+  )}/api`;
 
-const API = API_RAW.replace(/\/api\/?$/, ""); // remove trailing /api
+// Root without /api – used for static/relative URLs
+const API_ROOT = API_BASE.replace(/\/api\/?$/, "");
 
 /* ------------------------------------------------------------
-   SAFE PDF URL RESOLVER
+   ✅ SAFE PDF URL RESOLVER
 ------------------------------------------------------------ */
 function resolvePdfUrl(url) {
   if (!url) return null;
 
-  // Already full Cloudflare R2 URL
+  // Already a full R2 / external URL
   if (url.startsWith("http")) return url;
 
-  // API root without /api + relative path
-  if (url.startsWith("/")) return API + url;
+  // Starts with "/" → attach domain root (no /api)
+  if (url.startsWith("/")) return API_ROOT + url;
 
-  return API + "/" + url;
+  // Raw relative path → root + "/" + cleaned path
+  return `${API_ROOT}/${url.replace(/^\/+/, "")}`;
 }
 
 export default function BookReaderPage() {
@@ -48,7 +52,8 @@ export default function BookReaderPage() {
   useEffect(() => {
     async function load() {
       try {
-        const res = await fetch(`${API}/api/library/books/${bookId}`);
+        // ✅ API_BASE already includes /api
+        const res = await fetch(`${API_BASE}/library/books/${bookId}`);
         const json = await res.json();
 
         if (!json.success) return navigate("/library");
@@ -73,7 +78,6 @@ export default function BookReaderPage() {
         console.log("📄 FINAL PDF URL:", finalUrl);
 
         await loadPDF(finalUrl);
-
       } catch (err) {
         console.error("Reader load error:", err);
         setLoading(false);
@@ -81,7 +85,7 @@ export default function BookReaderPage() {
     }
 
     load();
-  }, [bookId]);
+  }, [bookId, navigate]);
 
   /* ------------------------------------------------------------ */
   /* Load PDF with PDF.js                                         */
@@ -99,7 +103,6 @@ export default function BookReaderPage() {
 
       await renderPage(1, doc);
       setLoading(false);
-
     } catch (err) {
       console.error("PDF load error:", err);
       alert("Could not load PDF");
@@ -129,11 +132,9 @@ export default function BookReaderPage() {
     setPageNum(num);
   }
 
-  const nextPage = () =>
-    pageNum < totalPages && renderPage(pageNum + 1);
+  const nextPage = () => pageNum < totalPages && renderPage(pageNum + 1);
 
-  const prevPage = () =>
-    pageNum > 1 && renderPage(pageNum - 1);
+  const prevPage = () => pageNum > 1 && renderPage(pageNum - 1);
 
   if (loading)
     return <div className="p-6 text-white">Loading PDF...</div>;
@@ -143,7 +144,6 @@ export default function BookReaderPage() {
   /* ------------------------------------------------------------ */
   return (
     <div className="min-h-screen bg-black text-white flex flex-col items-center pb-10">
-      
       <div className="w-full bg-gray-900 px-4 py-3 flex justify-between items-center">
         <h2 className="font-bold text-xl">{book?.title}</h2>
 
