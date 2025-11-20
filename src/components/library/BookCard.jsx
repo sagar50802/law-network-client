@@ -10,9 +10,9 @@ export default function BookCard({ book, onClick }) {
       className="relative z-40 group flex flex-col rounded-xl overflow-hidden border border-slate-700/80 bg-black/60 hover:bg-black/80 transition"
     >
       <div className="aspect-[3/4] w-full overflow-hidden bg-slate-900">
-        {book.coverImage ? (
+        {book.coverUrl ? (
           <img
-            src={book.coverImage}
+            src={book.coverUrl}
             alt={book.title}
             className="w-full h-full object-cover group-hover:scale-105 transition-transform duration-500"
           />
