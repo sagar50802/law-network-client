@@ -1,3 +1,4 @@
+// src/pages/admin/library/BooksPage.jsx
 import { useState, useEffect } from "react";
 import AdminSidebar from "./AdminSidebar";
 
@@ -25,7 +26,9 @@ export default function BooksPage() {
     cover: null,
   });
 
-  /* Load Books */
+  /* ------------------------------------------------------------
+     Load Books (public list)
+  ------------------------------------------------------------ */
   function loadBooks() {
     setLoading(true);
 
@@ -39,7 +42,9 @@ export default function BooksPage() {
     loadBooks();
   }, []);
 
-  /* Signed URL from server */
+  /* ------------------------------------------------------------
+     Signed URL from server  (R2 upload)
+  ------------------------------------------------------------ */
   async function getUploadUrl(file) {
     const url = `${API_BASE}/library/upload-url?filename=${encodeURIComponent(
       file.name
@@ -67,7 +72,12 @@ export default function BooksPage() {
     if (!put.ok) throw new Error("R2 upload failed");
   }
 
-  /* Upload Book */
+  /* ------------------------------------------------------------
+     Upload Book (admin)
+     1) Get signed URLs
+     2) Upload PDF & cover to R2
+     3) Call admin create endpoint
+  ------------------------------------------------------------ */
   async function uploadBook() {
     try {
       if (!form.title || !form.pdf || !form.cover) {
@@ -75,17 +85,18 @@ export default function BooksPage() {
         return;
       }
 
-      // Step 1: signed URLs
+      // 1: signed URLs
       const pdfInfo = await getUploadUrl(form.pdf);
       const coverInfo = await getUploadUrl(form.cover);
 
-      // Step 2: upload to R2
+      // 2: upload to R2
       await uploadToR2(pdfInfo.uploadUrl, form.pdf);
       await uploadToR2(coverInfo.uploadUrl, form.cover);
 
-      // Step 3: create book
-      const res = await fetch(`${API_BASE}/library/create`, {
+      // 3: create book via ADMIN endpoint
+      const res = await fetch(`${API_BASE}/admin/library/books/create`, {
         method: "POST",
+        credentials: "include", // ⭐ send cookies for admin auth
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: form.title,
@@ -99,7 +110,10 @@ export default function BooksPage() {
       });
 
       const json = await res.json();
-      if (!json.success) return alert(json.message || "Create failed");
+      if (!json.success) {
+        alert(json.message || "Create failed");
+        return;
+      }
 
       alert("Book uploaded!");
 
@@ -120,15 +134,21 @@ export default function BooksPage() {
     }
   }
 
-  /* Delete Book */
+  /* ------------------------------------------------------------
+     Delete Book (admin)
+  ------------------------------------------------------------ */
   async function deleteBook(id) {
     if (!confirm("Delete book?")) return;
 
-    const res = await fetch(`${API_BASE}/library/delete/${id}`);
+    const res = await fetch(`${API_BASE}/admin/library/books/${id}`, {
+      method: "DELETE",
+      credentials: "include", // admin auth
+    });
+
     const json = await res.json();
 
     if (json.success) loadBooks();
-    else alert(json.message);
+    else alert(json.message || "Delete failed");
   }
 
   /* ------------------------------------------------------------
@@ -173,7 +193,9 @@ export default function BooksPage() {
               <input
                 type="checkbox"
                 checked={form.free}
-                onChange={(e) => setForm({ ...form, free: e.target.checked })}
+                onChange={(e) =>
+                  setForm({ ...form, free: e.target.checked })
+                }
               />
               Free Book
             </label>
@@ -190,7 +212,7 @@ export default function BooksPage() {
               />
             )}
 
-            <label className="block mb-2">
+            <label className="block mb-2 text-sm">
               PDF:
               <input
                 type="file"
@@ -201,7 +223,7 @@ export default function BooksPage() {
               />
             </label>
 
-            <label className="block mb-4">
+            <label className="block mb-4 text-sm">
               Cover:
               <input
                 type="file"
@@ -243,13 +265,16 @@ export default function BooksPage() {
                     <h3 className="mt-2 font-bold">{b.title}</h3>
                     <p className="text-sm text-slate-300">{b.author}</p>
 
-                    <a
-                      className="text-blue-300 underline mt-1 mb-2"
-                      href={b.pdfUrl}
-                      target="_blank"
-                    >
-                      Preview PDF
-                    </a>
+                    {b.pdfUrl && (
+                      <a
+                        className="text-blue-300 underline mt-1 mb-2"
+                        href={b.pdfUrl}
+                        target="_blank"
+                        rel="noreferrer"
+                      >
+                        Preview PDF
+                      </a>
+                    )}
 
                     <button
                       onClick={() => deleteBook(b._id)}
