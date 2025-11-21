@@ -1,3 +1,4 @@
+// src/pages/admin/library/BooksPage.jsx
 import React, { useState, useEffect } from "react";
 import AdminSidebar from "./AdminSidebar";
 
@@ -9,12 +10,13 @@ const API_BASE =
   `${(import.meta.env.VITE_BACKEND_URL || "http://localhost:5000")
     .replace(/\/$/, "")}/api`;
 
-// MUST MATCH process.env.ADMIN_PANEL_KEY on the server
+// ⭐ THIS IS THE FIX ⭐
+// Your backend uses ADMIN_PANEL_KEY
+// So frontend must read VITE_ADMIN_PANEL_KEY
 const ADMIN_TOKEN = import.meta.env.VITE_ADMIN_PANEL_KEY || "";
 
-/* ------------------------------------------------------------
-   Component
------------------------------------------------------------- */
+/* ------------------------------------------------------------ */
+
 export default function BooksPage() {
   const [books, setBooks] = useState([]);
   const [loading, setLoading] = useState(true);
@@ -29,9 +31,7 @@ export default function BooksPage() {
     cover: null,
   });
 
-  /* ------------------------------------------------------------
-     Load existing books
-  ------------------------------------------------------------ */
+  /* Load existing books */
   async function loadBooks() {
     try {
       setLoading(true);
@@ -49,9 +49,7 @@ export default function BooksPage() {
     loadBooks();
   }, []);
 
-  /* ------------------------------------------------------------
-     Signed URL helper
-  ------------------------------------------------------------ */
+  /* Signed URL helper */
   async function getUploadUrl(file) {
     const res = await fetch(
       `${API_BASE}/library/upload-url?filename=${encodeURIComponent(
@@ -62,27 +60,20 @@ export default function BooksPage() {
     const json = await res.json();
     if (!json.success) throw new Error("Failed to get signed URL");
 
-    return json; // { success, uploadUrl, fileUrl }
+    return json; // { uploadUrl, fileUrl }
   }
 
-  /* ------------------------------------------------------------
-     Upload file to R2
-  ------------------------------------------------------------ */
   async function uploadToR2(uploadUrl, file) {
     const put = await fetch(uploadUrl, {
       method: "PUT",
       body: file,
-      headers: {
-        "Content-Type": file.type,
-      },
+      headers: { "Content-Type": file.type },
     });
 
     if (!put.ok) throw new Error("R2 upload failed");
   }
 
-  /* ------------------------------------------------------------
-     Upload a new book
-  ------------------------------------------------------------ */
+  /* Upload Book */
   async function uploadBook() {
     try {
       if (!form.title || !form.pdf || !form.cover) {
@@ -90,21 +81,21 @@ export default function BooksPage() {
         return;
       }
 
-      // 1) Get signed URLs
+      // 1) Get signed upload URLs
       const pdfInfo = await getUploadUrl(form.pdf);
       const coverInfo = await getUploadUrl(form.cover);
 
-      // 2) Upload to R2
+      // 2) Upload to Cloudflare R2
       await uploadToR2(pdfInfo.uploadUrl, form.pdf);
       await uploadToR2(coverInfo.uploadUrl, form.cover);
 
-      // 3) Create book in backend
+      // 3) Create in database
       const payload = {
         title: form.title,
         author: form.author,
         description: form.description,
         free: form.free,
-        price: form.free ? 0 : Number(form.price),
+        price: form.free ? 0 : form.price,
         pdfUrl: pdfInfo.fileUrl,
         coverUrl: coverInfo.fileUrl,
       };
@@ -114,12 +105,13 @@ export default function BooksPage() {
         credentials: "include",
         headers: {
           "Content-Type": "application/json",
-          "x-admin-token": ADMIN_TOKEN,
+          "x-admin-token": ADMIN_TOKEN, // ⭐ FIXED ⭐
         },
         body: JSON.stringify(payload),
       });
 
       const json = await res.json();
+
       if (!json.success) {
         alert(json.message || "Create failed");
         return;
@@ -144,9 +136,7 @@ export default function BooksPage() {
     }
   }
 
-  /* ------------------------------------------------------------
-     Delete book
-  ------------------------------------------------------------ */
+  /* Delete book */
   async function deleteBook(id) {
     if (!confirm("Delete book?")) return;
 
@@ -155,25 +145,19 @@ export default function BooksPage() {
         method: "GET",
         credentials: "include",
         headers: {
-          "x-admin-token": ADMIN_TOKEN,
+          "x-admin-token": ADMIN_TOKEN, // ⭐ FIXED ⭐
         },
       });
 
       const json = await res.json();
-      if (json.success) {
-        loadBooks();
-      } else {
-        alert(json.message || "Delete failed");
-      }
+      if (json.success) loadBooks();
+      else alert(json.message || "Delete failed");
     } catch (err) {
       console.error("Delete error:", err);
       alert("Delete failed");
     }
   }
 
-  /* ------------------------------------------------------------
-     UI
-  ------------------------------------------------------------ */
   return (
     <div className="flex min-h-screen bg-slate-900 text-slate-100">
       <AdminSidebar />
@@ -190,18 +174,14 @@ export default function BooksPage() {
               className="w-full p-2 mb-2 bg-slate-700 rounded"
               placeholder="Title"
               value={form.title}
-              onChange={(e) =>
-                setForm({ ...form, title: e.target.value })
-              }
+              onChange={(e) => setForm({ ...form, title: e.target.value })}
             />
 
             <input
               className="w-full p-2 mb-2 bg-slate-700 rounded"
               placeholder="Author"
               value={form.author}
-              onChange={(e) =>
-                setForm({ ...form, author: e.target.value })
-              }
+              onChange={(e) => setForm({ ...form, author: e.target.value })}
             />
 
             <textarea
@@ -242,7 +222,7 @@ export default function BooksPage() {
                 type="file"
                 accept="application/pdf"
                 onChange={(e) =>
-                  setForm({ ...form, pdf: e.target.files[0] })
+                  setForm({ ...form, pdf: e.target.files[0] || null })
                 }
               />
             </label>
@@ -253,7 +233,7 @@ export default function BooksPage() {
                 type="file"
                 accept="image/*"
                 onChange={(e) =>
-                  setForm({ ...form, cover: e.target.files[0] })
+                  setForm({ ...form, cover: e.target.files[0] || null })
                 }
               />
             </label>
