@@ -1,6 +1,8 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import * as pdfjsLib from "pdfjs-dist";
+
+// Load worker from local file (Vite-safe)
 import "../../../pdf-worker";
 
 /* ------------------------------------------------------------
@@ -14,14 +16,19 @@ const API_BASE =
 const API_ROOT = API_BASE.replace(/\/api\/?$/, "");
 
 /* ------------------------------------------------------------
-   SAFE PDF URL RESOLVER
+   SAFE PDF URL HANDLER — supports:
+   - Cloudflare R2 links
+   - Render absolute links
+   - Backend static links (/uploads/..)
 ------------------------------------------------------------ */
 function resolvePdfUrl(url) {
   if (!url) return null;
-  url = String(url).trim();
 
-  if (url.startsWith("http")) return url;
-  if (url.startsWith("/")) return API_ROOT + url;
+  url = String(url).trim();
+  if (!url) return null;
+
+  if (url.startsWith("http")) return url; // R2 or any full URL
+  if (url.startsWith("/")) return API_ROOT + url; // backend file
 
   return `${API_ROOT}/${url.replace(/^\/+/, "")}`;
 }
@@ -33,13 +40,14 @@ export default function BookReaderPage() {
   const [loading, setLoading] = useState(true);
   const [book, setBook] = useState(null);
   const [pdf, setPdf] = useState(null);
+
   const [pageNum, setPageNum] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
 
   const canvasRef = useRef(null);
 
   /* ------------------------------------------------------------
-     Load book metadata + PDF
+     Load Book Metadata + PDF
   ------------------------------------------------------------ */
   useEffect(() => {
     async function load() {
@@ -47,33 +55,38 @@ export default function BookReaderPage() {
         const res = await fetch(`${API_BASE}/library/books/${bookId}`);
         const json = await res.json();
 
-        if (!json.success) return navigate("/library");
+        if (!json.success) {
+          navigate("/library");
+          return;
+        }
 
         const data = json.data;
         setBook(data);
 
-        const raw = data.pdfUrl;
-        if (!raw) {
+        const rawUrl = data.pdfUrl;
+        if (!rawUrl || !String(rawUrl).trim()) {
           alert("This book has no PDF file.");
-          return navigate("/library");
+          navigate("/library");
+          return;
         }
 
-        const finalUrl = resolvePdfUrl(raw);
-        console.log("📄 FINAL PDF URL:", finalUrl);
+        const finalUrl = resolvePdfUrl(rawUrl);
+        console.log("📄 Final resolved PDF URL:", finalUrl);
 
         await loadPDF(finalUrl);
       } catch (err) {
-        console.error("Reader load error:", err);
+        console.error("Error loading PDF:", err);
         navigate("/library");
       } finally {
         setLoading(false);
       }
     }
+
     load();
   }, [bookId, navigate]);
 
   /* ------------------------------------------------------------
-     Load PDF
+     Load PDF Document
   ------------------------------------------------------------ */
   async function loadPDF(url) {
     try {
@@ -89,12 +102,12 @@ export default function BookReaderPage() {
       await renderPage(1, doc);
     } catch (err) {
       console.error("PDF load error:", err);
-      alert("Failed to load PDF.");
+      alert("Could not load PDF.");
     }
   }
 
   /* ------------------------------------------------------------
-     Render Page
+     Render a Page
   ------------------------------------------------------------ */
   async function renderPage(num, doc = pdf) {
     if (!doc) return;
@@ -104,6 +117,7 @@ export default function BookReaderPage() {
 
     const canvas = canvasRef.current;
     if (!canvas) return;
+
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
@@ -115,17 +129,27 @@ export default function BookReaderPage() {
     setPageNum(num);
   }
 
-  const nextPage = () =>
-    pageNum < totalPages && renderPage(pageNum + 1);
-  const prevPage = () =>
-    pageNum > 1 && renderPage(pageNum - 1);
+  const nextPage = () => {
+    if (pageNum < totalPages) renderPage(pageNum + 1);
+  };
 
-  if (loading) return <div className="p-6 text-white">Loading PDF...</div>;
+  const prevPage = () => {
+    if (pageNum > 1) renderPage(pageNum - 1);
+  };
+
+  /* ------------------------------------------------------------
+     UI
+  ------------------------------------------------------------ */
+  if (loading) {
+    return <div className="p-6 text-white">Loading PDF...</div>;
+  }
 
   return (
     <div className="min-h-screen bg-black text-white flex flex-col items-center pb-10">
+      {/* HEADER */}
       <div className="w-full bg-gray-900 px-4 py-3 flex justify-between items-center">
         <h2 className="font-bold text-xl">{book?.title}</h2>
+
         <button
           onClick={() => navigate("/library")}
           className="bg-red-600 px-4 py-2 rounded"
@@ -134,8 +158,10 @@ export default function BookReaderPage() {
         </button>
       </div>
 
+      {/* PDF CANVAS */}
       <canvas ref={canvasRef} className="mt-6 rounded shadow-xl" />
 
+      {/* CONTROLS */}
       <div className="flex gap-4 mt-6">
         <button
           onClick={prevPage}
