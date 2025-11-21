@@ -3,18 +3,12 @@ import React from "react";
 export default function BookCard({ book = {}, onClick = null }) {
   if (!book) return null;
 
-  const { title, author, coverUrl } = book;
-
-  const handleClick = () => {
-    if (typeof onClick === "function") {
-      onClick(book);
-    }
-  };
+  const { title, author, coverUrl, isPaid, basePrice } = book;
 
   return (
     <button
       type="button"
-      onClick={handleClick}
+      onClick={() => onClick && onClick(book)}
       className="relative z-40 group flex flex-col rounded-xl overflow-hidden 
                  border border-slate-700/80 bg-black/60 hover:bg-black/80 
                  transition focus:outline-none focus:ring-2 focus:ring-blue-500"
@@ -43,8 +37,12 @@ export default function BookCard({ book = {}, onClick = null }) {
         </h3>
 
         {author && (
-          <p classaph="mt-1 text-[10px] text-slate-400">
-            by {author}
+          <p className="mt-1 text-[10px] text-slate-400">by {author}</p>
+        )}
+
+        {isPaid && (
+          <p className="mt-1 text-[10px] text-amber-400">
+            Paid • ₹{basePrice ?? 0}
           </p>
         )}
       </div>
