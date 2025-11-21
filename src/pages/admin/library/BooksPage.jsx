@@ -1,16 +1,15 @@
-// src/pages/admin/library/BooksPage.jsx
 import React, { useState, useEffect } from "react";
 import AdminSidebar from "./AdminSidebar";
 
 /* ------------------------------------------------------------
-   ✅ API CONSTANTS
+   API CONSTANTS
 ------------------------------------------------------------ */
 const API_BASE =
   import.meta.env.VITE_API_URL ||
   `${(import.meta.env.VITE_BACKEND_URL || "http://localhost:5000")
     .replace(/\/$/, "")}/api`;
 
-// 🔑 must match your backend: process.env.ADMIN_PANEL_KEY
+// MUST MATCH process.env.ADMIN_PANEL_KEY on the server
 const ADMIN_TOKEN = import.meta.env.VITE_ADMIN_PANEL_KEY || "";
 
 /* ------------------------------------------------------------
@@ -31,7 +30,7 @@ export default function BooksPage() {
   });
 
   /* ------------------------------------------------------------
-     Load Books (Public endpoint)
+     Load existing books
   ------------------------------------------------------------ */
   async function loadBooks() {
     try {
@@ -51,7 +50,7 @@ export default function BooksPage() {
   }, []);
 
   /* ------------------------------------------------------------
-     Get Signed Upload URL (R2)
+     Signed URL helper
   ------------------------------------------------------------ */
   async function getUploadUrl(file) {
     const res = await fetch(
@@ -63,27 +62,26 @@ export default function BooksPage() {
     const json = await res.json();
     if (!json.success) throw new Error("Failed to get signed URL");
 
-    return json; // uploadUrl + fileUrl
+    return json; // { success, uploadUrl, fileUrl }
   }
 
   /* ------------------------------------------------------------
-     Upload File to R2
+     Upload file to R2
   ------------------------------------------------------------ */
   async function uploadToR2(uploadUrl, file) {
     const put = await fetch(uploadUrl, {
       method: "PUT",
       body: file,
-      headers: { "Content-Type": file.type },
+      headers: {
+        "Content-Type": file.type,
+      },
     });
 
-    if (!put.ok) {
-      console.error("R2 upload error:", put.status, await put.text());
-      throw new Error("R2 upload failed");
-    }
+    if (!put.ok) throw new Error("R2 upload failed");
   }
 
   /* ------------------------------------------------------------
-     Upload Book Flow (PDF + Cover)
+     Upload a new book
   ------------------------------------------------------------ */
   async function uploadBook() {
     try {
@@ -92,21 +90,21 @@ export default function BooksPage() {
         return;
       }
 
-      // step 1 → signed urls
+      // 1) Get signed URLs
       const pdfInfo = await getUploadUrl(form.pdf);
       const coverInfo = await getUploadUrl(form.cover);
 
-      // step 2 → upload to r2
+      // 2) Upload to R2
       await uploadToR2(pdfInfo.uploadUrl, form.pdf);
       await uploadToR2(coverInfo.uploadUrl, form.cover);
 
-      // step 3 → create book
+      // 3) Create book in backend
       const payload = {
         title: form.title,
         author: form.author,
         description: form.description,
         free: form.free,
-        price: form.free ? 0 : form.price,
+        price: form.free ? 0 : Number(form.price),
         pdfUrl: pdfInfo.fileUrl,
         coverUrl: coverInfo.fileUrl,
       };
@@ -116,7 +114,7 @@ export default function BooksPage() {
         credentials: "include",
         headers: {
           "Content-Type": "application/json",
-          "x-admin-token": ADMIN_TOKEN, // MUST MATCH backend
+          "x-admin-token": ADMIN_TOKEN,
         },
         body: JSON.stringify(payload),
       });
@@ -129,7 +127,6 @@ export default function BooksPage() {
 
       alert("Book uploaded!");
 
-      // reset form
       setForm({
         title: "",
         author: "",
@@ -148,7 +145,7 @@ export default function BooksPage() {
   }
 
   /* ------------------------------------------------------------
-     Delete Book (Admin)
+     Delete book
   ------------------------------------------------------------ */
   async function deleteBook(id) {
     if (!confirm("Delete book?")) return;
@@ -157,12 +154,17 @@ export default function BooksPage() {
       const res = await fetch(`${API_BASE}/admin/library/delete/${id}`, {
         method: "GET",
         credentials: "include",
-        headers: { "x-admin-token": ADMIN_TOKEN },
+        headers: {
+          "x-admin-token": ADMIN_TOKEN,
+        },
       });
-      const json = await res.json();
 
-      if (json.success) loadBooks();
-      else alert(json.message || "Delete failed");
+      const json = await res.json();
+      if (json.success) {
+        loadBooks();
+      } else {
+        alert(json.message || "Delete failed");
+      }
     } catch (err) {
       console.error("Delete error:", err);
       alert("Delete failed");
@@ -184,23 +186,24 @@ export default function BooksPage() {
           <div className="p-4 bg-slate-800 rounded border border-slate-700">
             <h2 className="font-semibold text-lg mb-3">Upload New Book</h2>
 
-            {/* Title */}
             <input
               className="w-full p-2 mb-2 bg-slate-700 rounded"
               placeholder="Title"
               value={form.title}
-              onChange={(e) => setForm({ ...form, title: e.target.value })}
+              onChange={(e) =>
+                setForm({ ...form, title: e.target.value })
+              }
             />
 
-            {/* Author */}
             <input
               className="w-full p-2 mb-2 bg-slate-700 rounded"
               placeholder="Author"
               value={form.author}
-              onChange={(e) => setForm({ ...form, author: e.target.value })}
+              onChange={(e) =>
+                setForm({ ...form, author: e.target.value })
+              }
             />
 
-            {/* Description */}
             <textarea
               className="w-full p-2 mb-2 bg-slate-700 rounded"
               placeholder="Description"
@@ -210,12 +213,13 @@ export default function BooksPage() {
               }
             />
 
-            {/* Free / Paid Toggle */}
             <label className="flex items-center gap-2 mb-3">
               <input
                 type="checkbox"
                 checked={form.free}
-                onChange={(e) => setForm({ ...form, free: e.target.checked })}
+                onChange={(e) =>
+                  setForm({ ...form, free: e.target.checked })
+                }
               />
               Free Book
             </label>
@@ -232,26 +236,24 @@ export default function BooksPage() {
               />
             )}
 
-            {/* PDF upload */}
             <label className="block mb-2 text-sm">
               PDF:
               <input
                 type="file"
                 accept="application/pdf"
                 onChange={(e) =>
-                  setForm({ ...form, pdf: e.target.files[0] || null })
+                  setForm({ ...form, pdf: e.target.files[0] })
                 }
               />
             </label>
 
-            {/* Cover upload */}
             <label className="block mb-4 text-sm">
               Cover:
               <input
                 type="file"
                 accept="image/*"
                 onChange={(e) =>
-                  setForm({ ...form, cover: e.target.files[0] || null })
+                  setForm({ ...form, cover: e.target.files[0] })
                 }
               />
             </label>
@@ -275,22 +277,24 @@ export default function BooksPage() {
             ) : (
               <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                 {books.map((b) => (
-                  <div key={b._id} className="bg-slate-700 p-3 rounded">
+                  <div
+                    key={b._id}
+                    className="bg-slate-700 p-3 rounded flex flex-col"
+                  >
                     <img
                       src={b.coverUrl}
                       alt={b.title}
                       className="w-full h-40 object-cover rounded"
                     />
-
-                    <h3 className="mt-2 font-bold text-sm">{b.title}</h3>
-                    <p className="text-xs text-slate-300">{b.author}</p>
+                    <h3 className="mt-2 font-bold">{b.title}</h3>
+                    <p className="text-sm text-slate-300">{b.author}</p>
 
                     {b.pdfUrl && (
                       <a
                         href={b.pdfUrl}
                         target="_blank"
                         rel="noreferrer"
-                        className="text-xs text-blue-300 underline mt-1 block"
+                        className="text-xs text-blue-300 underline mt-1"
                       >
                         Preview PDF
                       </a>
