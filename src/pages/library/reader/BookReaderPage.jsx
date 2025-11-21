@@ -1,9 +1,6 @@
-// src/pages/library/BookReaderPage.jsx
 import { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import * as pdfjsLib from "pdfjs-dist";
-
-// Load worker from local file (Vite-safe)
 import "../../../pdf-worker";
 
 /* ------------------------------------------------------------
@@ -17,7 +14,7 @@ const API_BASE =
 const API_ROOT = API_BASE.replace(/\/api\/?$/, "");
 
 /* ------------------------------------------------------------
-   SAFE PDF URL HANDLER
+   Resolve PDF URL
 ------------------------------------------------------------ */
 function resolvePdfUrl(url) {
   if (!url) return null;
@@ -25,8 +22,8 @@ function resolvePdfUrl(url) {
   url = String(url).trim();
   if (!url) return null;
 
-  if (url.startsWith("http")) return url; // R2 or any full URL
-  if (url.startsWith("/")) return API_ROOT + url; // backend file
+  if (url.startsWith("http")) return url;
+  if (url.startsWith("/")) return API_ROOT + url;
 
   return `${API_ROOT}/${url.replace(/^\/+/, "")}`;
 }
@@ -42,13 +39,11 @@ export default function BookReaderPage() {
   const [pageNum, setPageNum] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
 
-  // 🔍 zoom state
-  const [scale, setScale] = useState(1.1); // default zoom
-
+  const [zoom, setZoom] = useState(1); // ⭐ REAL ZOOM
   const canvasRef = useRef(null);
 
   /* ------------------------------------------------------------
-     Load Book Metadata + PDF
+     Load Book + PDF
   ------------------------------------------------------------ */
   useEffect(() => {
     async function load() {
@@ -64,19 +59,10 @@ export default function BookReaderPage() {
         const data = json.data;
         setBook(data);
 
-        const rawUrl = data.pdfUrl;
-        if (!rawUrl || !String(rawUrl).trim()) {
-          alert("This book has no PDF file.");
-          navigate("/library");
-          return;
-        }
-
-        const finalUrl = resolvePdfUrl(rawUrl);
-        console.log("📄 Final resolved PDF URL:", finalUrl);
-
+        const finalUrl = resolvePdfUrl(data.pdfUrl);
         await loadPDF(finalUrl);
       } catch (err) {
-        console.error("Error loading PDF:", err);
+        console.error("Load PDF error:", err);
         navigate("/library");
       } finally {
         setLoading(false);
@@ -84,10 +70,10 @@ export default function BookReaderPage() {
     }
 
     load();
-  }, [bookId, navigate]);
+  }, [bookId]);
 
   /* ------------------------------------------------------------
-     Load PDF Document
+     Load PDF
   ------------------------------------------------------------ */
   async function loadPDF(url) {
     try {
@@ -100,30 +86,31 @@ export default function BookReaderPage() {
       setPdf(doc);
       setTotalPages(doc.numPages);
 
-      await renderPage(1, doc, scale);
+      await renderPage(1, doc, zoom);
     } catch (err) {
-      console.error("PDF load error:", err);
-      alert("Could not load PDF.");
+      console.error(err);
+      alert("Unable to load PDF");
     }
   }
 
   /* ------------------------------------------------------------
-     Render a Page (respects current zoom)
+     Render Page with REAL ZOOM
   ------------------------------------------------------------ */
-  async function renderPage(num, doc = pdf, customScale) {
+  async function renderPage(num, doc = pdf, z = zoom) {
     if (!doc) return;
 
-    const effectiveScale = customScale ?? scale;
     const page = await doc.getPage(num);
-    const viewport = page.getViewport({ scale: effectiveScale });
+
+    // ⭐ Dynamic scale based on zoom + responsive width
+    const containerWidth = window.innerWidth * 0.9;
+    const baseViewport = page.getViewport({ scale: 1 });
+    const autoScale = containerWidth / baseViewport.width;
+
+    const viewport = page.getViewport({ scale: autoScale * z });
 
     const canvas = canvasRef.current;
-    if (!canvas) return;
-
     const ctx = canvas.getContext("2d");
-    if (!ctx) return;
 
-    // For responsiveness, let CSS handle visual size
     canvas.width = viewport.width;
     canvas.height = viewport.height;
 
@@ -144,63 +131,48 @@ export default function BookReaderPage() {
   };
 
   /* ------------------------------------------------------------
-     Zoom handlers
+     ZOOM Controls
   ------------------------------------------------------------ */
   const zoomIn = () => {
-    if (!pdf) return;
-    const newScale = Math.min(scale + 0.2, 3); // max 3x
-    setScale(newScale);
-    renderPage(pageNum, pdf, newScale);
+    const newZoom = zoom + 0.2;
+    setZoom(newZoom);
+    renderPage(pageNum, pdf, newZoom);
   };
 
   const zoomOut = () => {
-    if (!pdf) return;
-    const newScale = Math.max(scale - 0.2, 0.5); // min 0.5x
-    setScale(newScale);
-    renderPage(pageNum, pdf, newScale);
+    const newZoom = Math.max(0.4, zoom - 0.2);
+    setZoom(newZoom);
+    renderPage(pageNum, pdf, newZoom);
   };
 
   const resetZoom = () => {
-    if (!pdf) return;
-    const base = 1.1;
-    setScale(base);
-    renderPage(pageNum, pdf, base);
+    setZoom(1);
+    renderPage(pageNum, pdf, 1);
   };
 
   /* ------------------------------------------------------------
      UI
   ------------------------------------------------------------ */
-  if (loading) {
-    return (
-      <div className="min-h-screen bg-black text-white flex items-center justify-center">
-        Loading PDF...
-      </div>
-    );
-  }
+  if (loading) return <div className="p-6 text-white">Loading PDF...</div>;
 
   return (
-    <div className="min-h-screen bg-black text-white flex flex-col pb-10">
-      {/* HEADER */}
-      <div className="w-full bg-gray-900 px-4 py-3 flex justify-between items-center">
-        <h2 className="font-bold text-lg sm:text-xl truncate max-w-[70%]">
-          {book?.title}
-        </h2>
+    <div className="min-h-screen bg-black text-white flex flex-col items-center pb-10">
 
+      {/* Header */}
+      <div className="w-full bg-gray-900 px-4 py-3 flex justify-between items-center">
+        <h2 className="font-bold text-lg">{book?.title}</h2>
         <button
           onClick={() => navigate("/library")}
-          className="bg-red-600 px-3 py-1 sm:px-4 sm:py-2 rounded text-sm sm:text-base"
+          className="bg-red-600 px-4 py-2 rounded"
         >
           Exit
         </button>
       </div>
 
-      {/* CONTROLS */}
-      <div className="w-full flex flex-wrap items-center justify-center gap-3 mt-4 px-4 text-xs sm:text-sm">
-        <button
-          onClick={prevPage}
-          disabled={pageNum <= 1}
-          className="px-3 py-1 bg-gray-700 rounded disabled:opacity-40"
-        >
+      {/* Controls */}
+      <div className="flex gap-3 mt-4 flex-wrap justify-center">
+        <button onClick={prevPage} disabled={pageNum <= 1}
+          className="px-3 py-1 bg-gray-700 rounded disabled:opacity-40">
           ← Prev
         </button>
 
@@ -208,49 +180,32 @@ export default function BookReaderPage() {
           Page {pageNum} / {totalPages}
         </span>
 
-        <button
-          onClick={nextPage}
-          disabled={pageNum >= totalPages}
-          className="px-3 py-1 bg-gray-700 rounded disabled:opacity-40"
-        >
+        <button onClick={nextPage} disabled={pageNum >= totalPages}
+          className="px-3 py-1 bg-gray-700 rounded disabled:opacity-40">
           Next →
         </button>
 
-        {/* Zoom controls */}
-        <div className="flex items-center gap-2 ml-4">
-          <button
-            onClick={zoomOut}
-            className="px-2 py-1 bg-gray-700 rounded"
-          >
-            −
-          </button>
-          <span className="px-2 py-1 bg-gray-800 rounded">
-            {Math.round(scale * 100)}%
-          </span>
-          <button
-            onClick={zoomIn}
-            className="px-2 py-1 bg-gray-700 rounded"
-          >
-            +
-          </button>
-          <button
-            onClick={resetZoom}
-            className="px-2 py-1 bg-gray-700 rounded hidden sm:inline-block"
-          >
-            Reset
-          </button>
-        </div>
+        {/* Zoom Buttons */}
+        <button onClick={zoomOut} className="px-3 py-1 bg-gray-700 rounded">
+          –
+        </button>
+
+        <span className="px-3 py-1 bg-gray-800 rounded">
+          {(zoom * 100).toFixed(0)}%
+        </span>
+
+        <button onClick={zoomIn} className="px-3 py-1 bg-gray-700 rounded">
+          +
+        </button>
+
+        <button onClick={resetZoom} className="px-3 py-1 bg-blue-700 rounded">
+          Reset
+        </button>
       </div>
 
-      {/* PDF CANVAS (responsive container) */}
-      <div className="flex-1 flex items-center justify-center mt-4 px-2 sm:px-4">
-        <div className="w-full max-w-5xl flex justify-center">
-          <canvas
-            ref={canvasRef}
-            className="w-full h-auto max-h-[80vh] rounded shadow-xl bg-black"
-            style={{ maxWidth: "100%" }}
-          />
-        </div>
+      {/* PDF Canvas */}
+      <div className="mt-6 w-full flex justify-center overflow-auto">
+        <canvas ref={canvasRef} className="rounded shadow-lg" />
       </div>
     </div>
   );
