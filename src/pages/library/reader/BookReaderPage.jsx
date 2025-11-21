@@ -1,7 +1,6 @@
 import { useEffect, useRef, useState } from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import * as pdfjsLib from "pdfjs-dist";
-
 import "../../../pdf-worker";
 
 /* ------------------------------------------------------------
@@ -19,9 +18,7 @@ const API_ROOT = API_BASE.replace(/\/api\/?$/, "");
 ------------------------------------------------------------ */
 function resolvePdfUrl(url) {
   if (!url) return null;
-
   url = String(url).trim();
-  if (!url) return null;
 
   if (url.startsWith("http")) return url;
   if (url.startsWith("/")) return API_ROOT + url;
@@ -36,14 +33,13 @@ export default function BookReaderPage() {
   const [loading, setLoading] = useState(true);
   const [book, setBook] = useState(null);
   const [pdf, setPdf] = useState(null);
-
   const [pageNum, setPageNum] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
 
   const canvasRef = useRef(null);
 
   /* ------------------------------------------------------------
-     Load Book Metadata + PDF
+     Load book metadata + PDF
   ------------------------------------------------------------ */
   useEffect(() => {
     async function load() {
@@ -51,19 +47,15 @@ export default function BookReaderPage() {
         const res = await fetch(`${API_BASE}/library/books/${bookId}`);
         const json = await res.json();
 
-        if (!json.success) {
-          navigate("/library");
-          return;
-        }
+        if (!json.success) return navigate("/library");
 
         const data = json.data;
         setBook(data);
 
         const raw = data.pdfUrl;
-        if (!raw || !String(raw).trim()) {
+        if (!raw) {
           alert("This book has no PDF file.");
-          navigate("/library");
-          return;
+          return navigate("/library");
         }
 
         const finalUrl = resolvePdfUrl(raw);
@@ -77,7 +69,6 @@ export default function BookReaderPage() {
         setLoading(false);
       }
     }
-
     load();
   }, [bookId, navigate]);
 
@@ -98,7 +89,7 @@ export default function BookReaderPage() {
       await renderPage(1, doc);
     } catch (err) {
       console.error("PDF load error:", err);
-      alert("Could not load PDF");
+      alert("Failed to load PDF.");
     }
   }
 
@@ -113,7 +104,6 @@ export default function BookReaderPage() {
 
     const canvas = canvasRef.current;
     if (!canvas) return;
-
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
@@ -125,26 +115,17 @@ export default function BookReaderPage() {
     setPageNum(num);
   }
 
-  const nextPage = () => {
-    if (pageNum < totalPages) renderPage(pageNum + 1);
-  };
+  const nextPage = () =>
+    pageNum < totalPages && renderPage(pageNum + 1);
+  const prevPage = () =>
+    pageNum > 1 && renderPage(pageNum - 1);
 
-  const prevPage = () => {
-    if (pageNum > 1) renderPage(pageNum - 1);
-  };
+  if (loading) return <div className="p-6 text-white">Loading PDF...</div>;
 
-  if (loading) {
-    return <div className="p-6 text-white">Loading PDF...</div>;
-  }
-
-  /* ------------------------------------------------------------
-     UI
-  ------------------------------------------------------------ */
   return (
     <div className="min-h-screen bg-black text-white flex flex-col items-center pb-10">
       <div className="w-full bg-gray-900 px-4 py-3 flex justify-between items-center">
         <h2 className="font-bold text-xl">{book?.title}</h2>
-
         <button
           onClick={() => navigate("/library")}
           className="bg-red-600 px-4 py-2 rounded"
