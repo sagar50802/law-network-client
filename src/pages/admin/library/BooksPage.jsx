@@ -3,19 +3,28 @@ import React, { useState, useEffect } from "react";
 import AdminSidebar from "./AdminSidebar";
 
 /* ------------------------------------------------------------
-   API CONSTANTS
+   API URL (your Render client env vars)
 ------------------------------------------------------------ */
 const API_BASE =
   import.meta.env.VITE_API_URL ||
-  `${(import.meta.env.VITE_BACKEND_URL || "http://localhost:5000")
+  `${(import.meta.env.VITE_BACKEND_URL || "https://law-network-server.onrender.com")
     .replace(/\/$/, "")}/api`;
 
-// ⭐ THIS IS THE FIX ⭐
-// Your backend uses ADMIN_PANEL_KEY
-// So frontend must read VITE_ADMIN_PANEL_KEY
-const ADMIN_TOKEN = import.meta.env.VITE_ADMIN_PANEL_KEY || "";
+/* ------------------------------------------------------------
+   ADMIN TOKEN FIX 🔥 (your environment variable)
+------------------------------------------------------------ */
+// Your Render env uses VITE_OWNER_KEY = LAWNOWNER2025
+const ADMIN_TOKEN =
+  import.meta.env.VITE_OWNER_KEY ||
+  import.meta.env.VITE_ADMIN_TOKEN ||
+  import.meta.env.VITE_ADMIN_PANEL_KEY ||
+  "";
 
-/* ------------------------------------------------------------ */
+/* Final header (MUST match server.js logic) */
+const adminHeaders = {
+  "x-admin-token": ADMIN_TOKEN,
+  "Content-Type": "application/json",
+};
 
 export default function BooksPage() {
   const [books, setBooks] = useState([]);
@@ -31,7 +40,9 @@ export default function BooksPage() {
     cover: null,
   });
 
-  /* Load existing books */
+  /* ------------------------------------------------------------
+     Load existing books
+  ------------------------------------------------------------ */
   async function loadBooks() {
     try {
       setLoading(true);
@@ -49,18 +60,20 @@ export default function BooksPage() {
     loadBooks();
   }, []);
 
-  /* Signed URL helper */
+  /* ------------------------------------------------------------
+     Get Cloudflare R2 Signed URL
+  ------------------------------------------------------------ */
   async function getUploadUrl(file) {
-    const res = await fetch(
-      `${API_BASE}/library/upload-url?filename=${encodeURIComponent(
-        file.name
-      )}&type=${encodeURIComponent(file.type)}`
-    );
+    const url = `${API_BASE}/library/upload-url?filename=${encodeURIComponent(
+      file.name
+    )}&type=${encodeURIComponent(file.type)}`;
 
+    const res = await fetch(url);
     const json = await res.json();
-    if (!json.success) throw new Error("Failed to get signed URL");
 
-    return json; // { uploadUrl, fileUrl }
+    if (!json.success) throw new Error("Failed to get upload URL");
+
+    return json;
   }
 
   async function uploadToR2(uploadUrl, file) {
@@ -73,7 +86,9 @@ export default function BooksPage() {
     if (!put.ok) throw new Error("R2 upload failed");
   }
 
-  /* Upload Book */
+  /* ------------------------------------------------------------
+     Upload Book
+  ------------------------------------------------------------ */
   async function uploadBook() {
     try {
       if (!form.title || !form.pdf || !form.cover) {
@@ -81,16 +96,16 @@ export default function BooksPage() {
         return;
       }
 
-      // 1) Get signed upload URLs
+      // 1) Signed URLs
       const pdfInfo = await getUploadUrl(form.pdf);
       const coverInfo = await getUploadUrl(form.cover);
 
-      // 2) Upload to Cloudflare R2
+      // 2) Upload files to R2
       await uploadToR2(pdfInfo.uploadUrl, form.pdf);
       await uploadToR2(coverInfo.uploadUrl, form.cover);
 
-      // 3) Create in database
-      const payload = {
+      // 3) Create book using admin API
+      const body = {
         title: form.title,
         author: form.author,
         description: form.description,
@@ -103,15 +118,11 @@ export default function BooksPage() {
       const res = await fetch(`${API_BASE}/admin/library/create`, {
         method: "POST",
         credentials: "include",
-        headers: {
-          "Content-Type": "application/json",
-          "x-admin-token": ADMIN_TOKEN, // ⭐ FIXED ⭐
-        },
-        body: JSON.stringify(payload),
+        headers: adminHeaders,
+        body: JSON.stringify(body),
       });
 
       const json = await res.json();
-
       if (!json.success) {
         alert(json.message || "Create failed");
         return;
@@ -132,24 +143,25 @@ export default function BooksPage() {
       loadBooks();
     } catch (err) {
       console.error("Upload error:", err);
-      alert(err.message || "Upload failed");
+      alert(err.message);
     }
   }
 
-  /* Delete book */
+  /* ------------------------------------------------------------
+     Delete Book
+  ------------------------------------------------------------ */
   async function deleteBook(id) {
     if (!confirm("Delete book?")) return;
 
     try {
       const res = await fetch(`${API_BASE}/admin/library/delete/${id}`, {
         method: "GET",
+        headers: adminHeaders,
         credentials: "include",
-        headers: {
-          "x-admin-token": ADMIN_TOKEN, // ⭐ FIXED ⭐
-        },
       });
 
       const json = await res.json();
+
       if (json.success) loadBooks();
       else alert(json.message || "Delete failed");
     } catch (err) {
@@ -158,6 +170,9 @@ export default function BooksPage() {
     }
   }
 
+  /* ------------------------------------------------------------
+     UI
+  ------------------------------------------------------------ */
   return (
     <div className="flex min-h-screen bg-slate-900 text-slate-100">
       <AdminSidebar />
@@ -197,9 +212,7 @@ export default function BooksPage() {
               <input
                 type="checkbox"
                 checked={form.free}
-                onChange={(e) =>
-                  setForm({ ...form, free: e.target.checked })
-                }
+                onChange={(e) => setForm({ ...form, free: e.target.checked })}
               />
               Free Book
             </label>
@@ -266,6 +279,7 @@ export default function BooksPage() {
                       alt={b.title}
                       className="w-full h-40 object-cover rounded"
                     />
+
                     <h3 className="mt-2 font-bold">{b.title}</h3>
                     <p className="text-sm text-slate-300">{b.author}</p>
 
