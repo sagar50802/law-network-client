@@ -21,76 +21,66 @@ export default function BooksPage() {
     cover: null,
   });
 
-  /* ---------------------------------------------
-     Load Books
-  --------------------------------------------- */
   async function loadBooks() {
-    setLoading(true);
-    const res = await fetch(`${API_BASE}/library/books`);
-    const json = await res.json();
-    setBooks(json.data || []);
-    setLoading(false);
+    try {
+      const res = await fetch(`${API_BASE}/library/books`);
+      const json = await res.json();
+      setBooks(json.data || []);
+    } finally {
+      setLoading(false);
+    }
   }
 
   useEffect(() => {
     loadBooks();
   }, []);
 
-  /* ---------------------------------------------
-     Signed Upload URL
-  --------------------------------------------- */
   async function getUploadUrl(file) {
     const res = await fetch(
       `${API_BASE}/library/upload-url?filename=${encodeURIComponent(
         file.name
       )}&type=${encodeURIComponent(file.type)}`
     );
-
     const json = await res.json();
     if (!json.success) throw new Error("Signed URL failed");
     return json;
   }
 
-  /* ---------------------------------------------
-     Upload to R2
-  --------------------------------------------- */
   async function uploadToR2(uploadUrl, file) {
     const put = await fetch(uploadUrl, {
       method: "PUT",
       body: file,
       headers: { "Content-Type": file.type },
     });
-
     if (!put.ok) throw new Error("R2 upload failed");
   }
 
-  /* ---------------------------------------------
-     Upload Book (Admin only)
-  --------------------------------------------- */
   async function uploadBook() {
     try {
       if (!form.title || !form.pdf || !form.cover) {
-        alert("Title, PDF, and Cover required");
+        alert("Title, PDF, Cover required");
         return;
       }
 
+      // Get signed urls
       const pdfInfo = await getUploadUrl(form.pdf);
       const coverInfo = await getUploadUrl(form.cover);
 
+      // Upload files
       await uploadToR2(pdfInfo.uploadUrl, form.pdf);
       await uploadToR2(coverInfo.uploadUrl, form.cover);
 
-      // ⭐ FIXED ENDPOINT — MUST BE /admin/library/create
+      // Create book using ADMIN ROUTE ✔
       const res = await fetch(`${API_BASE}/admin/library/create`, {
         method: "POST",
-        credentials: "include", // SEND ADMIN COOKIE
+        credentials: "include", // REQUIRED for admin cookie
         headers: { "Content-Type": "application/json" },
         body: JSON.stringify({
           title: form.title,
           author: form.author,
           description: form.description,
           free: form.free,
-          price: form.free ? 0 : Number(form.price),
+          price: form.free ? 0 : form.price,
           pdfUrl: pdfInfo.fileUrl,
           coverUrl: coverInfo.fileUrl,
         }),
@@ -103,6 +93,7 @@ export default function BooksPage() {
       }
 
       alert("Book uploaded!");
+
       setForm({
         title: "",
         author: "",
@@ -120,9 +111,6 @@ export default function BooksPage() {
     }
   }
 
-  /* ---------------------------------------------
-     Delete Book (Admin)
-  --------------------------------------------- */
   async function deleteBook(id) {
     if (!confirm("Delete book?")) return;
 
@@ -130,13 +118,12 @@ export default function BooksPage() {
       method: "GET",
       credentials: "include",
     });
-
     const json = await res.json();
+
     if (json.success) loadBooks();
     else alert(json.message);
   }
 
-  /* --------------------------------------------- */
   return (
     <div className="flex min-h-screen bg-slate-900 text-slate-100">
       <AdminSidebar />
@@ -145,7 +132,6 @@ export default function BooksPage() {
         <h1 className="text-xl font-bold mb-6">📚 Upload Books</h1>
 
         <div className="grid grid-cols-1 lg:grid-cols-3 gap-6">
-          {/* Upload Form */}
           <div className="p-4 bg-slate-800 rounded border border-slate-700">
             <h2 className="font-semibold text-lg mb-3">Upload New Book</h2>
 
@@ -167,9 +153,7 @@ export default function BooksPage() {
               className="w-full p-2 mb-2 bg-slate-700 rounded"
               placeholder="Description"
               value={form.description}
-              onChange={(e) =>
-                setForm({ ...form, description: e.target.value })
-              }
+              onChange={(e) => setForm({ ...form, description: e.target.value })}
             />
 
             <label className="flex items-center gap-2 mb-3">
@@ -183,8 +167,8 @@ export default function BooksPage() {
 
             {!form.free && (
               <input
-                type="number"
                 className="w-full p-2 mb-2 bg-slate-700 rounded"
+                type="number"
                 placeholder="Price"
                 value={form.price}
                 onChange={(e) =>
@@ -193,7 +177,7 @@ export default function BooksPage() {
               />
             )}
 
-            <label className="block mb-2">
+            <label className="block mb-2 text-sm">
               PDF:
               <input
                 type="file"
@@ -204,7 +188,7 @@ export default function BooksPage() {
               />
             </label>
 
-            <label className="block mb-4">
+            <label className="block mb-4 text-sm">
               Cover:
               <input
                 type="file"
@@ -217,13 +201,12 @@ export default function BooksPage() {
 
             <button
               onClick={uploadBook}
-              className="px-4 py-2 bg-green-600 hover:bg-green-700 rounded"
+              className="px-4 py-2 bg-green-600 rounded"
             >
               Upload Book
             </button>
           </div>
 
-          {/* Book List */}
           <div className="lg:col-span-2 p-4 bg-slate-800 rounded border border-slate-700">
             <h2 className="font-semibold text-lg mb-3">Uploaded Books</h2>
 
@@ -232,24 +215,18 @@ export default function BooksPage() {
             ) : books.length === 0 ? (
               <p>No books uploaded</p>
             ) : (
-              <div className="grid grid-cols-2 lg:grid-cols-3 gap-4">
+              <div className="grid grid-cols-2 sm:grid-cols-3 md:grid-cols-4 gap-4">
                 {books.map((b) => (
-                  <div
-                    key={b._id}
-                    className="bg-slate-700 p-3 rounded flex flex-col"
-                  >
+                  <div key={b._id} className="bg-slate-700 p-3 rounded">
                     <img
                       src={b.coverUrl}
-                      alt={b.title}
                       className="w-full h-40 object-cover rounded"
                     />
-
                     <h3 className="mt-2 font-bold">{b.title}</h3>
-                    <p className="text-sm text-slate-300">{b.author}</p>
-
+                    <p className="text-sm">{b.author}</p>
                     <button
                       onClick={() => deleteBook(b._id)}
-                      className="mt-auto bg-red-600 px-3 py-1 rounded"
+                      className="mt-3 bg-red-600 w-full py-1 rounded"
                     >
                       Delete
                     </button>
