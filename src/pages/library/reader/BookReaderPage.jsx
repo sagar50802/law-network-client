@@ -23,12 +23,11 @@ const API_ROOT = API_BASE.replace(/\/api\/?$/, "");
 ------------------------------------------------------------ */
 function resolvePdfUrl(url) {
   if (!url) return null;
-
   url = String(url).trim();
   if (!url) return null;
 
-  if (url.startsWith("http")) return url; // R2 or any full URL
-  if (url.startsWith("/")) return API_ROOT + url; // backend file
+  if (url.startsWith("http")) return url; 
+  if (url.startsWith("/")) return API_ROOT + url;
 
   return `${API_ROOT}/${url.replace(/^\/+/, "")}`;
 }
@@ -71,8 +70,6 @@ export default function BookReaderPage() {
         }
 
         const finalUrl = resolvePdfUrl(rawUrl);
-        console.log("📄 Final resolved PDF URL:", finalUrl);
-
         await loadPDF(finalUrl);
       } catch (err) {
         console.error("Error loading PDF:", err);
@@ -107,13 +104,23 @@ export default function BookReaderPage() {
   }
 
   /* ------------------------------------------------------------
-     Render a Page
+     Render a Page (RESPONSIVE VERSION)
   ------------------------------------------------------------ */
   async function renderPage(num, doc = pdf) {
     if (!doc) return;
 
     const page = await doc.getPage(num);
-    const viewport = page.getViewport({ scale: 1.35 });
+
+    // STEP 1: Viewport at scale=1
+    const unscaledViewport = page.getViewport({ scale: 1 });
+
+    // STEP 2: Get available screen width
+    const screenWidth = window.innerWidth * 0.95;
+
+    // STEP 3: Auto-scale based on screen width
+    const scale = screenWidth / unscaledViewport.width;
+
+    const viewport = page.getViewport({ scale });
 
     const canvas = canvasRef.current;
     if (!canvas) return;
@@ -121,8 +128,12 @@ export default function BookReaderPage() {
     const ctx = canvas.getContext("2d");
     if (!ctx) return;
 
+    // STEP 4: Apply responsive resizing
     canvas.width = viewport.width;
     canvas.height = viewport.height;
+
+    canvas.style.width = "100%";
+    canvas.style.height = "auto";
 
     await page.render({ canvasContext: ctx, viewport }).promise;
 
@@ -148,7 +159,7 @@ export default function BookReaderPage() {
     <div className="min-h-screen bg-black text-white flex flex-col items-center pb-10">
       {/* HEADER */}
       <div className="w-full bg-gray-900 px-4 py-3 flex justify-between items-center">
-        <h2 className="font-bold text-xl">{book?.title}</h2>
+        <h2 className="font-bold text-lg sm:text-xl truncate">{book?.title}</h2>
 
         <button
           onClick={() => navigate("/library")}
@@ -158,8 +169,13 @@ export default function BookReaderPage() {
         </button>
       </div>
 
-      {/* PDF CANVAS */}
-      <canvas ref={canvasRef} className="mt-6 rounded shadow-xl" />
+      {/* PDF CANVAS (Responsive container) */}
+      <div className="w-full flex justify-center px-2 mt-4">
+        <canvas
+          ref={canvasRef}
+          className="rounded shadow-xl max-w-full h-auto"
+        />
+      </div>
 
       {/* CONTROLS */}
       <div className="flex gap-4 mt-6">
@@ -171,7 +187,7 @@ export default function BookReaderPage() {
           ← Prev
         </button>
 
-        <span className="px-3 py-2 bg-gray-800 rounded">
+        <span className="px-3 py-2 bg-gray-800 rounded text-sm">
           Page {pageNum} / {totalPages}
         </span>
 
@@ -183,6 +199,8 @@ export default function BookReaderPage() {
           Next →
         </button>
       </div>
+
+      <div className="h-10" />
     </div>
   );
 }
