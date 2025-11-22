@@ -32,10 +32,11 @@ import PodcastsPage from "./pages/PodcastsPage.jsx";
 import NotebookPage from "./pages/NotebookPage.jsx";
 import PdfDemo from "./pages/PdfDemo.jsx";
 import Plagiarism from "./pages/Plagiarism.jsx";
-import LibraryPage from "./pages/LibraryPage.jsx"; // ★ Existing
+import LibraryPage from "./pages/LibraryPage.jsx"; 
 
-/* ---------- ADD: Book Reader Page ---------- */
-import BookReaderPage from "./pages/library/reader/BookReaderPage.jsx"; // ★ NEW
+/* ---------- BOOK READERS ---------- */
+import BookReaderPage from "./pages/library/reader/BookReaderPage.jsx";
+import BookFlipViewerPage from "./pages/library/reader/BookFlipViewerPage.jsx"; // ★ NEW
 
 /* ---------- Admin Pages ---------- */
 import AdminDashboard from "./pages/AdminDashboard.jsx";
@@ -49,7 +50,7 @@ import PaymentsPage from "./pages/admin/library/PaymentsPage.jsx";
 import SeatsPage from "./pages/admin/library/SeatsPage.jsx";
 import BookPurchasesPage from "./pages/admin/library/BookPurchasesPage.jsx";
 import SettingsPage from "./pages/admin/library/SettingsPage.jsx";
-import BooksPage from "./pages/admin/library/BooksPage.jsx"; // ★ NEW
+import BooksPage from "./pages/admin/library/BooksPage.jsx";
 
 /* ---------- NEW — Change Password ---------- */
 import ChangePassword from "./pages/ChangePassword.jsx";
@@ -184,8 +185,12 @@ function AppContent() {
           <Route path="/pdfdemo" element={<PdfDemo />} />
           <Route path="/library" element={<LibraryPage />} />
 
-          {/* ★ ADD BOOK READER ROUTE HERE */}
+          {/* ---- BOOK READERS ---- */}
           <Route path="/library/reader/:bookId" element={<BookReaderPage />} />
+
+          {/* ★ NEW FLIP VIEWER ROUTE */}
+          <Route path="/library/flip/:bookId" element={<BookFlipViewerPage />} />
+
 
           {/* LIVE */}
           <Route path="/live" element={<LiveChannelPage />} />
@@ -391,7 +396,6 @@ function AppContent() {
             }
           />
 
-          {/* UPLOAD BOOKS PAGE */}
           <Route
             path="/admin/library/books"
             element={
