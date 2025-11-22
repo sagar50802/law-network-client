@@ -1,10 +1,15 @@
 // src/pages/library/reader/BookReaderPage.jsx
-import { useEffect, useRef, useState } from "react";
+import React, {
+  useEffect,
+  useRef,
+  useState,
+  useCallback,
+} from "react";
 import { useParams, useNavigate } from "react-router-dom";
 import * as pdfjsLib from "pdfjs-dist";
 
-// ✅ CORRECT WORKER PATH (2 levels up, not 3)
-import "../../utils/pdf-worker.js";
+// 🔧 IMPORTANT: this is your existing worker under src/pdf-worker.js
+import "../../../pdf-worker.js";
 
 /* ------------------------------------------------------------
    API CONSTANTS
@@ -17,214 +22,416 @@ const API_BASE =
 const API_ROOT = API_BASE.replace(/\/api\/?$/, "");
 
 /* ------------------------------------------------------------
-   SAFE PDF URL HANDLER
+   SAFE PDF URL HANDLER — supports:
+   - Cloudflare R2 links
+   - Render absolute links
+   - Backend static links (/uploads/..)
 ------------------------------------------------------------ */
 function resolvePdfUrl(url) {
   if (!url) return null;
-  url = String(url).trim();
+  const clean = String(url).trim();
+  if (!clean) return null;
 
-  if (url.startsWith("http")) return url;
-  if (url.startsWith("/")) return API_ROOT + url;
-
-  return `${API_ROOT}/${url.replace(/^\/+/, "")}`;
+  if (clean.startsWith("http")) return clean;
+  if (clean.startsWith("/")) return API_ROOT + clean;
+  return `${API_ROOT}/${clean.replace(/^\/+/, "")}`;
 }
 
+/* ------------------------------------------------------------
+   MAIN COMPONENT
+------------------------------------------------------------ */
 export default function BookReaderPage() {
   const { bookId } = useParams();
   const navigate = useNavigate();
 
-  const [loading, setLoading] = useState(true);
   const [book, setBook] = useState(null);
-  const [pdf, setPdf] = useState(null);
-
+  const [pdfDoc, setPdfDoc] = useState(null);
   const [pageNum, setPageNum] = useState(1);
   const [totalPages, setTotalPages] = useState(0);
-
-  const [scale, setScale] = useState(1.2); // 🔥 Mobile-friendly zoom
+  const [scale, setScale] = useState(1);
+  const [initialised, setInitialised] = useState(false);
+  const [loading, setLoading] = useState(true);
+  const [blurred, setBlurred] = useState(false);
 
   const canvasRef = useRef(null);
+  const containerRef = useRef(null);
+  const animationFrameRef = useRef(null);
+  const isRenderingRef = useRef(false);
 
   /* ------------------------------------------------------------
-     Load Book Metadata + PDF
+     SECURITY: disable print, text selection, right click, copy
   ------------------------------------------------------------ */
   useEffect(() => {
+    // disable print (hide everything during print)
+    const style = document.createElement("style");
+    style.id = "no-print-style";
+    style.innerHTML = `
+      @media print {
+        body * {
+          display: none !important;
+        }
+      }
+    `;
+    document.head.appendChild(style);
+
+    // keydown: block Ctrl+P / Cmd+P and PrintScreen -> blur
+    const onKeyDown = (e) => {
+      const key = e.key.toLowerCase();
+
+      // block browser print
+      if (
+        (e.ctrlKey || e.metaKey) &&
+        (key === "p")
+      ) {
+        e.preventDefault();
+        e.stopPropagation();
+        setBlurred(true);
+        alert("Printing is disabled.");
+      }
+
+      // basic PrintScreen detection
+      if (key === "printscreen") {
+        setBlurred(true);
+        alert("Screenshots are discouraged for this content.");
+      }
+    };
+
+    // visibility change (very rough anti-screenshot)
+    const onVisibilityChange = () => {
+      if (document.visibilityState === "hidden") {
+        setBlurred(true);
+      }
+    };
+
+    window.addEventListener("keydown", onKeyDown, true);
+    document.addEventListener(
+      "visibilitychange",
+      onVisibilityChange,
+      true
+    );
+
+    return () => {
+      window.removeEventListener("keydown", onKeyDown, true);
+      document.removeEventListener(
+        "visibilitychange",
+        onVisibilityChange,
+        true
+      );
+      if (style.parentNode) style.parentNode.removeChild(style);
+    };
+  }, []);
+
+  /* ------------------------------------------------------------
+     LOAD BOOK METADATA + PDF
+  ------------------------------------------------------------ */
+  useEffect(() => {
+    let cancelled = false;
+
     async function load() {
       try {
+        setLoading(true);
+
         const res = await fetch(`${API_BASE}/library/books/${bookId}`);
         const json = await res.json();
 
-        if (!json.success) {
+        if (!json.success || !json.data) {
           navigate("/library");
           return;
         }
 
-        setBook(json.data);
+        if (cancelled) return;
 
-        const rawUrl = json.data.pdfUrl;
-        if (!rawUrl) {
+        const data = json.data;
+        setBook(data);
+
+        const rawUrl = data.pdfUrl;
+        if (!rawUrl || !String(rawUrl).trim()) {
           alert("This book has no PDF file.");
           navigate("/library");
           return;
         }
 
         const finalUrl = resolvePdfUrl(rawUrl);
-        console.log("📄 Final PDF URL:", finalUrl);
+        console.log("📄 Final resolved PDF URL:", finalUrl);
 
-        await loadPDF(finalUrl);
+        // pdf.js will use worker from pdf-worker.js
+        const loadingTask = pdfjsLib.getDocument({
+          url: finalUrl,
+          withCredentials: false,
+        });
+
+        const doc = await loadingTask.promise;
+        if (cancelled) return;
+
+        setPdfDoc(doc);
+        setTotalPages(doc.numPages);
+        setPageNum(1);
+        setInitialised(false); // recalc fit-to-width on first render
       } catch (err) {
-        console.error("Reader load error:", err);
+        console.error("Error loading PDF:", err);
+        alert("Unable to load PDF.");
         navigate("/library");
       } finally {
-        setLoading(false);
+        if (!cancelled) setLoading(false);
       }
     }
 
     load();
+
+    return () => {
+      cancelled = true;
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
   }, [bookId, navigate]);
 
   /* ------------------------------------------------------------
-     Load PDF
+     RENDER PAGE (respects current scale)
   ------------------------------------------------------------ */
-  async function loadPDF(url) {
-    try {
-      pdfjsLib.GlobalWorkerOptions.workerSrc =
-        `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.js`;
+  const renderPage = useCallback(
+    async (num, overrideScale) => {
+      if (!pdfDoc || !canvasRef.current || !containerRef.current) return;
+      if (isRenderingRef.current) return; // avoid overlaps
 
-      const task = pdfjsLib.getDocument({ url });
-      const doc = await task.promise;
+      isRenderingRef.current = true;
 
-      setPdf(doc);
-      setTotalPages(doc.numPages);
-      await renderPage(1, doc);
-    } catch (err) {
-      console.error("PDF load error:", err);
-      alert("Failed to load PDF.");
-    }
-  }
+      try {
+        const page = await pdfDoc.getPage(num);
+
+        // Determine base viewport at scale 1
+        const unscaled = page.getViewport({ scale: 1 });
+
+        let newScale = overrideScale ?? scale;
+
+        // First render: compute "fit to width"
+        if (!initialised) {
+          const containerWidth =
+            containerRef.current.clientWidth || unscaled.width;
+          const fitted = (containerWidth * 0.98) / unscaled.width;
+          newScale = fitted || 1;
+          setScale(fitted || 1);
+          setInitialised(true);
+        }
+
+        const viewport = page.getViewport({ scale: newScale });
+
+        const canvas = canvasRef.current;
+        const ctx = canvas.getContext("2d", { alpha: false });
+
+        canvas.width = viewport.width;
+        canvas.height = viewport.height;
+
+        // make canvas responsive on screen
+        canvas.style.width = "100%";
+        canvas.style.height = "auto";
+
+        await page.render({
+          canvasContext: ctx,
+          viewport,
+        }).promise;
+
+        setPageNum(num);
+      } catch (err) {
+        console.error("Render page error:", err);
+      } finally {
+        isRenderingRef.current = false;
+      }
+    },
+    [pdfDoc, scale, initialised]
+  );
 
   /* ------------------------------------------------------------
-     Render a Page
+     WHEN pdfDoc OR pageNum OR scale CHANGES → RENDER
   ------------------------------------------------------------ */
-  async function renderPage(num, doc = pdf) {
-    if (!doc) return;
+  useEffect(() => {
+    if (!pdfDoc || !canvasRef.current || !containerRef.current) return;
 
-    const page = await doc.getPage(num);
+    // use rAF to ensure DOM painted
+    animationFrameRef.current = requestAnimationFrame(() => {
+      renderPage(pageNum);
+    });
 
-    // 🔥 Auto-scale for mobile width
-    let autoScale = scale;
-    if (window.innerWidth < 600) {
-      autoScale = 0.9; // smaller zoom for mobile
-    }
+    return () => {
+      if (animationFrameRef.current) {
+        cancelAnimationFrame(animationFrameRef.current);
+      }
+    };
+  }, [pdfDoc, pageNum, scale, renderPage]);
 
-    const viewport = page.getViewport({ scale: autoScale });
+  /* ------------------------------------------------------------
+     HANDLE WINDOW RESIZE → re-fit width
+  ------------------------------------------------------------ */
+  useEffect(() => {
+    const onResize = () => {
+      if (!pdfDoc) return;
+      setInitialised(false); // forces recalculation of fit-to-width
+      renderPage(pageNum);
+    };
 
-    const canvas = canvasRef.current;
-    if (!canvas) return;
+    window.addEventListener("resize", onResize);
+    return () => window.removeEventListener("resize", onResize);
+  }, [pdfDoc, pageNum, renderPage]);
 
-    const ctx = canvas.getContext("2d");
-    canvas.width = viewport.width;
-    canvas.height = viewport.height;
-
-    await page.render({ canvasContext: ctx, viewport }).promise;
-
-    setPageNum(num);
-  }
-
+  /* ------------------------------------------------------------
+     CONTROLS
+  ------------------------------------------------------------ */
   const nextPage = () => {
-    if (pageNum < totalPages) renderPage(pageNum + 1);
+    if (pageNum < totalPages) {
+      setPageNum((p) => p + 1);
+    }
   };
 
   const prevPage = () => {
-    if (pageNum > 1) renderPage(pageNum - 1);
+    if (pageNum > 1) {
+      setPageNum((p) => p - 1);
+    }
   };
 
   const zoomIn = () => {
-    setScale((s) => {
-      const newScale = s + 0.2;
-      renderPage(pageNum);
-      return newScale;
-    });
+    setScale((s) => Math.min(s + 0.1, 2.5));
   };
 
   const zoomOut = () => {
-    setScale((s) => {
-      const newScale = Math.max(0.6, s - 0.2);
-      renderPage(pageNum);
-      return newScale;
-    });
+    setScale((s) => Math.max(s - 0.1, 0.4));
+  };
+
+  const resetZoom = () => {
+    setInitialised(false); // recompute fit-to-width
+    setScale(1);
+  };
+
+  const zoomPercent = Math.round(scale * 100);
+
+  /* ------------------------------------------------------------
+     EVENT GUARDS (disable right-click / copy / selection)
+  ------------------------------------------------------------ */
+  const guardEvent = (e) => {
+    e.preventDefault();
+    e.stopPropagation();
+    return false;
   };
 
   /* ------------------------------------------------------------
      UI
   ------------------------------------------------------------ */
-  if (loading) {
-    return (
-      <div className="p-6 text-white text-center text-xl">
-        Loading PDF…
-      </div>
-    );
-  }
-
   return (
-    <div className="min-h-screen bg-black text-white flex flex-col items-center">
+    <div
+      className="fixed inset-0 z-50 bg-black text-white flex flex-col"
+      onContextMenu={guardEvent}
+      onCopy={guardEvent}
+      onCut={guardEvent}
+      onPaste={guardEvent}
+      style={{
+        WebkitUserSelect: "none",
+        userSelect: "none",
+      }}
+    >
+      {/* TOP BAR */}
+      <div className="flex items-center justify-between px-4 py-2 bg-slate-900 border-b border-slate-800">
+        <div className="flex items-center gap-4">
+          <span className="font-semibold text-sm sm:text-base truncate max-w-[40vw]">
+            {book?.title || "Loading..."}
+          </span>
 
-      {/* HEADER */}
-      <div className="w-full bg-gray-900 px-4 py-3 flex justify-between items-center">
-        <h2 className="font-bold text-lg">{book?.title}</h2>
+          {totalPages > 0 && (
+            <div className="flex items-center gap-2 text-xs sm:text-sm">
+              <button
+                onClick={prevPage}
+                disabled={pageNum <= 1}
+                className="px-2 py-1 rounded bg-slate-800 disabled:opacity-40"
+              >
+                ← Prev
+              </button>
+              <span className="px-2 py-1 rounded bg-slate-800">
+                Page {pageNum} / {totalPages}
+              </span>
+              <button
+                onClick={nextPage}
+                disabled={pageNum >= totalPages}
+                className="px-2 py-1 rounded bg-slate-800 disabled:opacity-40"
+              >
+                Next →
+              </button>
+            </div>
+          )}
+
+          {/* ZOOM */}
+          {totalPages > 0 && (
+            <div className="flex items-center gap-1 ml-4 text-xs sm:text-sm">
+              <button
+                onClick={zoomOut}
+                className="px-2 py-1 rounded bg-slate-800"
+              >
+                −
+              </button>
+              <span className="px-2 py-1 rounded bg-slate-800 min-w-[52px] text-center">
+                {zoomPercent}%
+              </span>
+              <button
+                onClick={zoomIn}
+                className="px-2 py-1 rounded bg-slate-800"
+              >
+                +
+              </button>
+              <button
+                onClick={resetZoom}
+                className="ml-1 px-2 py-1 rounded bg-slate-800"
+              >
+                Reset
+              </button>
+            </div>
+          )}
+        </div>
+
         <button
           onClick={() => navigate("/library")}
-          className="bg-red-600 px-4 py-2 rounded"
+          className="px-3 py-1 rounded bg-red-600 hover:bg-red-700 text-xs sm:text-sm"
         >
           Exit
         </button>
       </div>
 
-      {/* CANVAS */}
-      <div className="w-full flex justify-center overflow-auto mt-4 px-2">
-        <canvas
-          ref={canvasRef}
-          className="shadow-xl rounded border border-gray-700"
-          style={{ maxWidth: "100%" }}
-        />
-      </div>
+      {/* MAIN AREA */}
+      <div
+        ref={containerRef}
+        className="flex-1 overflow-auto flex items-center justify-center bg-black"
+      >
+        {loading || !pdfDoc ? (
+          <div className="text-sm text-slate-300 animate-pulse">
+            Loading PDF…
+          </div>
+        ) : (
+          <div className="w-full h-full flex items-center justify-center">
+            {/* Canvas wrapper for max width on large screens */}
+            <div className="max-w-5xl w-full px-2 sm:px-4 py-4">
+              <canvas
+                ref={canvasRef}
+                className={`w-full h-auto mx-auto shadow-2xl rounded ${
+                  blurred ? "blur-xl" : ""
+                }`}
+              />
+            </div>
+          </div>
+        )}
 
-      {/* CONTROLS */}
-      <div className="flex gap-3 mt-6 flex-wrap justify-center">
-
-        <button
-          onClick={prevPage}
-          disabled={pageNum <= 1}
-          className="px-4 py-2 bg-gray-700 rounded disabled:opacity-40"
-        >
-          ← Prev
-        </button>
-
-        <button
-          onClick={zoomOut}
-          className="px-4 py-2 bg-gray-700 rounded"
-        >
-          – Zoom Out
-        </button>
-
-        <span className="px-3 py-2 bg-gray-800 rounded">
-          Page {pageNum} / {totalPages}
-        </span>
-
-        <button
-          onClick={zoomIn}
-          className="px-4 py-2 bg-gray-700 rounded"
-        >
-          + Zoom In
-        </button>
-
-        <button
-          onClick={nextPage}
-          disabled={pageNum >= totalPages}
-          className="px-4 py-2 bg-gray-700 rounded disabled:opacity-40"
-        >
-          Next →
-        </button>
-
+        {/* BLUR OVERLAY WHEN PROTECTED */}
+        {blurred && (
+          <div
+            className="pointer-events-none fixed inset-0 flex items-center justify-center bg-black/60 text-center px-4"
+            style={{ zIndex: 60 }}
+          >
+            <div className="max-w-md">
+              <p className="font-semibold mb-2">
+                Screen Protection Enabled
+              </p>
+              <p className="text-sm text-slate-300">
+                For security reasons, viewing has been temporarily
+                blurred. Reload the page to continue reading.
+              </p>
+            </div>
+          </div>
+        )}
       </div>
     </div>
   );
