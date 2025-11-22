@@ -69,8 +69,8 @@ export default function BookFlipViewer({ pdfUrl, onExit }) {
     const PageFlip = window.PageFlip;
 
     const flip = new PageFlip(bookRef.current, {
-      width: 500,
-      height: 700,
+      width: 600,
+      height: 800,
       size: "stretch",
       minWidth: 300,
       minHeight: 400,
@@ -81,7 +81,10 @@ export default function BookFlipViewer({ pdfUrl, onExit }) {
       mobileScrollSupport: true,
     });
 
-    flip.loadFromImages(imagesRef.current);
+    // delay ensures correct rendering (PageFlip internal requirement)
+    setTimeout(() => {
+      flip.loadFromImages(imagesRef.current);
+    }, 50);
   }
 
   return (
@@ -107,7 +110,12 @@ export default function BookFlipViewer({ pdfUrl, onExit }) {
             ref={bookRef}
             id="flipbook"
             className="shadow-2xl"
-            style={{ width: "100%", height: "100%" }}
+            style={{
+              width: "100%",
+              height: "100%",
+              maxWidth: "900px",
+              maxHeight: "90vh",
+            }}
           ></div>
         )}
       </div>
