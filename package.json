@@ -23,7 +23,10 @@
     "react-router-dom": "^7.8.1",
     "react-icons": "^5.2.1",
     "html2canvas": "^1.4.1",
-    "three": "^0.164.0"
+    "three": "^0.164.0",
+
+    /* 🔥 NEW FOR 3D FLIP */
+    "page-flip": "^2.0.7"
   },
   "devDependencies": {
     "@tailwindcss/postcss": "^4.1.12",
