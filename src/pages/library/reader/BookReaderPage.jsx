@@ -79,10 +79,7 @@ export default function BookReaderPage() {
       const key = e.key.toLowerCase();
 
       // block browser print
-      if (
-        (e.ctrlKey || e.metaKey) &&
-        (key === "p")
-      ) {
+      if ((e.ctrlKey || e.metaKey) && key === "p") {
         e.preventDefault();
         e.stopPropagation();
         setBlurred(true);
@@ -384,12 +381,26 @@ export default function BookReaderPage() {
           )}
         </div>
 
-        <button
-          onClick={() => navigate("/library")}
-          className="px-3 py-1 rounded bg-red-600 hover:bg-red-700 text-xs sm:text-sm"
-        >
-          Exit
-        </button>
+        {/* RIGHT SIDE BUTTONS (NEW: 3D Flip View) */}
+        <div className="flex items-center gap-2">
+          {book && (
+            <button
+              onClick={() =>
+                navigate(`/library/flip/${book._id || bookId}`)
+              }
+              className="px-3 py-1 rounded bg-blue-600 hover:bg-blue-700 text-xs sm:text-sm"
+            >
+              3D Flip View
+            </button>
+          )}
+
+          <button
+            onClick={() => navigate("/library")}
+            className="px-3 py-1 rounded bg-red-600 hover:bg-red-700 text-xs sm:text-sm"
+          >
+            Exit
+          </button>
+        </div>
       </div>
 
       {/* MAIN AREA */}
