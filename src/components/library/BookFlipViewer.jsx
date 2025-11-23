@@ -14,12 +14,12 @@ import * as pdfjsLib from "pdfjs-dist";
  */
 
 export default function BookFlipViewer({ pdfUrl, onExit }) {
-  const bookRef = useRef(null);
-  const flipRef = useRef(null);
-  const soundRef = useRef(null);
+  const bookRef = useRef(null);        // container for PageFlip
+  const flipRef = useRef(null);        // PageFlip instance
+  const soundRef = useRef(null);       // page flip sound
 
   const [loading, setLoading] = useState(true);
-  const [pages, setPages] = useState([]);
+  const [pages, setPages] = useState([]);          // array of data URLs
   const [currentPage, setCurrentPage] = useState(0);
   const [autoFlip, setAutoFlip] = useState(false);
 
@@ -35,7 +35,7 @@ export default function BookFlipViewer({ pdfUrl, onExit }) {
       try {
         setLoading(true);
 
-        // Use CDN worker for flip-view (keeps it independent)
+        // Use CDN worker for this viewer (keeps it independent)
         pdfjsLib.GlobalWorkerOptions.workerSrc =
           `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.js`;
 
@@ -52,7 +52,7 @@ export default function BookFlipViewer({ pdfUrl, onExit }) {
         for (let i = 1; i <= doc.numPages; i++) {
           const page = await doc.getPage(i);
 
-          // render at good quality — not too heavy
+          // Render at decent quality without being too heavy
           const viewport = page.getViewport({ scale: 1.4 });
           const canvas = document.createElement("canvas");
           const ctx = canvas.getContext("2d");
@@ -76,7 +76,7 @@ export default function BookFlipViewer({ pdfUrl, onExit }) {
       }
     }
 
-    loadPdf();
+    if (pdfUrl) loadPdf();
 
     return () => {
       cancelled = true;
@@ -138,10 +138,10 @@ export default function BookFlipViewer({ pdfUrl, onExit }) {
         size: "stretch",
         minWidth: 320,
         minHeight: 400,
-        maxWidth: 1400,
+        maxWidth: 1600,
         maxHeight: 1800,
-        showCover: true, // hardcover style
-        usePortrait: false, // double-page on desktop
+        showCover: true,       // hardcover style
+        usePortrait: false,    // double-page on desktop
         flippingTime: 800,
         maxShadowOpacity: 0.6,
         drawShadow: true,
@@ -152,7 +152,7 @@ export default function BookFlipViewer({ pdfUrl, onExit }) {
       flip.loadFromImages(pages);
       flipRef.current = flip;
 
-      // Prepare simple flip sound (optional file in /public/page-flip.mp3)
+      // Prepare simple flip sound (optional file: /public/page-flip.mp3)
       try {
         soundRef.current = new Audio("/page-flip.mp3");
         soundRef.current.volume = 0.4;
@@ -209,7 +209,7 @@ export default function BookFlipViewer({ pdfUrl, onExit }) {
       } else {
         flip.flipNext();
       }
-    }, 4000); // every 4s
+    }, 4000); // every 4 seconds
 
     return () => {
       if (autoFlipTimerRef.current) {
@@ -286,8 +286,11 @@ export default function BookFlipViewer({ pdfUrl, onExit }) {
           </div>
         )}
 
-        {/* Flip container */}
-        <div className="flex-1 flex items-center justify-center p-2 sm:p-4">
+        {/* Flip container – FULL SCREEN HEIGHT */}
+        <div
+          className="flex-1 flex justify-center items-center p-0 bg-black"
+          style={{ height: "calc(100vh - 60px)" }} // ~60px header approximation
+        >
           {loading ? (
             <div className="text-slate-200 text-sm sm:text-base">
               Loading 3D book…
@@ -301,7 +304,11 @@ export default function BookFlipViewer({ pdfUrl, onExit }) {
               ref={bookRef}
               id="flipbook"
               className="shadow-2xl bg-slate-900/40"
-              style={{ width: "100%", height: "100%" }}
+              style={{
+                width: "100%",
+                height: "100%",
+                maxHeight: "100%",
+              }}
             />
           )}
         </div>
