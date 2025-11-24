@@ -1,1 +1,19 @@
+/* Basic PageFlip container styles */
+#flipbook, .page {
+  width: 100%;
+  height: 100%;
+  position: relative;
+  background: #000;
+}
+
+.page img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+}
+
+/* Smooth transition (fake 3d for browser.min.js version) */
+.page {
+  transition: transform 0.8s ease;
+}
 
