@@ -8,28 +8,43 @@ import * as pdfjsLib from "pdfjs-dist";
  * - Uses StPageFlip (PageFlip) via CDN
  * - Features:
  *    - page turning sound
- *    - hardcover / double page
+ *    - hardcover / double page (spreads)
  *    - auto-flip toggle
  *    - thumbnail sidebar (click to jump)
+ *
+ * NOTE: each "page" in PageFlip is now a **spread**:
+ *   [1+2], [3+4], [5+6], ...
  */
 
 export default function BookFlipViewer({ pdfUrl, onExit }) {
-  const bookRef = useRef(null);        // container for PageFlip
-  const flipRef = useRef(null);        // PageFlip instance
-  const soundRef = useRef(null);       // page flip sound
+  const bookRef = useRef(null); // container for PageFlip
+  const flipRef = useRef(null); // PageFlip instance
+  const soundRef = useRef(null); // page flip sound
 
   const [loading, setLoading] = useState(true);
-  const [pages, setPages] = useState([]);          // array of data URLs
-  const [currentPage, setCurrentPage] = useState(0);
+  const [pages, setPages] = useState([]); // array of spread data URLs
+  const [currentPage, setCurrentPage] = useState(0); // spread index
   const [autoFlip, setAutoFlip] = useState(false);
 
   const autoFlipTimerRef = useRef(null);
 
   /* ------------------------------------------------------------
-     Load PDF -> render to images
+     Load PDF -> render to DOUBLE-PAGE spreads
   ------------------------------------------------------------ */
   useEffect(() => {
     let cancelled = false;
+
+    async function renderPdfPageToCanvas(page, scale) {
+      const viewport = page.getViewport({ scale });
+      const canvas = document.createElement("canvas");
+      const ctx = canvas.getContext("2d");
+
+      canvas.width = viewport.width;
+      canvas.height = viewport.height;
+
+      await page.render({ canvasContext: ctx, viewport }).promise;
+      return canvas;
+    }
 
     async function loadPdf() {
       try {
@@ -47,27 +62,50 @@ export default function BookFlipViewer({ pdfUrl, onExit }) {
         const doc = await task.promise;
         if (cancelled) return;
 
-        const imgs = [];
+        const spreads = [];
+        const totalPages = doc.numPages || 0;
 
-        for (let i = 1; i <= doc.numPages; i++) {
-          const page = await doc.getPage(i);
+        // Build spreads: [1+2], [3+4], ...
+        for (let i = 1; i <= totalPages; i += 2) {
+          const pageLeft = await doc.getPage(i);
+          const leftCanvas = await renderPdfPageToCanvas(pageLeft, 1.4);
 
-          // Render at decent quality without being too heavy
-          const viewport = page.getViewport({ scale: 1.4 });
-          const canvas = document.createElement("canvas");
-          const ctx = canvas.getContext("2d");
+          let rightCanvas = null;
+          if (i + 1 <= totalPages) {
+            const pageRight = await doc.getPage(i + 1);
+            rightCanvas = await renderPdfPageToCanvas(pageRight, 1.4);
+          }
 
-          canvas.width = viewport.width;
-          canvas.height = viewport.height;
+          // Spread canvas = left + right side-by-side
+          const spreadCanvas = document.createElement("canvas");
+          const spreadCtx = spreadCanvas.getContext("2d");
 
-          await page.render({ canvasContext: ctx, viewport }).promise;
+          const spreadHeight = leftCanvas.height;
+          const spreadWidth =
+            leftCanvas.width + (rightCanvas ? rightCanvas.width : leftCanvas.width);
 
-          const img = canvas.toDataURL("image/jpeg", 0.8);
-          imgs.push(img);
+          spreadCanvas.width = spreadWidth;
+          spreadCanvas.height = spreadHeight;
+
+          // background
+          spreadCtx.fillStyle = "#000";
+          spreadCtx.fillRect(0, 0, spreadWidth, spreadHeight);
+
+          // draw left
+          spreadCtx.drawImage(leftCanvas, 0, 0);
+
+          // draw right if exists, otherwise leave blank "inside cover"
+          if (rightCanvas) {
+            spreadCtx.drawImage(rightCanvas, leftCanvas.width, 0);
+          }
+
+          const img = spreadCanvas.toDataURL("image/jpeg", 0.85);
+          spreads.push(img);
         }
 
         if (!cancelled) {
-          setPages(imgs);
+          setPages(spreads);
+          setCurrentPage(0);
         }
       } catch (err) {
         console.error("[Flip] PDF load error:", err);
@@ -111,7 +149,7 @@ export default function BookFlipViewer({ pdfUrl, onExit }) {
   }
 
   /* ------------------------------------------------------------
-     Init flipbook once images are ready
+     Init flipbook once spreads are ready
   ------------------------------------------------------------ */
   useEffect(() => {
     if (!bookRef.current) return;
@@ -140,8 +178,8 @@ export default function BookFlipViewer({ pdfUrl, onExit }) {
         minHeight: 400,
         maxWidth: 1600,
         maxHeight: 1800,
-        showCover: true,       // hardcover style
-        usePortrait: false,    // double-page on desktop
+        showCover: true, // hardcover style
+        usePortrait: false, // double-page on desktop
         flippingTime: 800,
         maxShadowOpacity: 0.6,
         drawShadow: true,
@@ -149,6 +187,7 @@ export default function BookFlipViewer({ pdfUrl, onExit }) {
         mobileScrollSupport: true,
       });
 
+      // Each item in `pages` is already a spread image
       flip.loadFromImages(pages);
       flipRef.current = flip;
 
@@ -169,7 +208,7 @@ export default function BookFlipViewer({ pdfUrl, onExit }) {
         }
       });
 
-      // Start at first page
+      // Start at first spread
       setCurrentPage(0);
     }
 
@@ -220,7 +259,7 @@ export default function BookFlipViewer({ pdfUrl, onExit }) {
   }, [autoFlip, pages.length]);
 
   /* ------------------------------------------------------------
-     Thumbnail click handler
+     Thumbnail click handler (uses spreads)
   ------------------------------------------------------------ */
   const goToPage = (index) => {
     if (!flipRef.current) return;
@@ -239,7 +278,7 @@ export default function BookFlipViewer({ pdfUrl, onExit }) {
 
           {pages.length > 0 && (
             <span className="text-xs sm:text-sm text-slate-300">
-              Page {currentPage + 1} / {pages.length}
+              Spread {currentPage + 1} / {pages.length}
             </span>
           )}
 
@@ -278,7 +317,7 @@ export default function BookFlipViewer({ pdfUrl, onExit }) {
               >
                 <img
                   src={src}
-                  alt={`Page ${idx + 1}`}
+                  alt={`Spread ${idx + 1}`}
                   className="w-full h-auto block"
                 />
               </button>
