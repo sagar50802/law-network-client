@@ -2,10 +2,10 @@ import { useEffect, useRef, useState } from "react";
 import * as pdfjsLib from "pdfjs-dist";
 
 /**
- * 3D Flip Viewer — Stable Version
- * - Uses local /public/pageflip engine (double-page + 3D flip)
- * - Supports zoom + fullscreen
- * - Thumbnails + auto flip + page sound
+ * 3D Flip Viewer — Stable Version (Updated)
+ * - Real flip classes (flip-next / flip-prev)
+ * - Works with your local pageflip engine
+ * - Double-page, zoom, fullscreen, auto flip
  */
 
 export default function BookFlipViewer({ pdfUrl, onExit }) {
@@ -22,7 +22,7 @@ export default function BookFlipViewer({ pdfUrl, onExit }) {
   const autoFlipTimerRef = useRef(null);
 
   /* ------------------------------------------------------------
-     Load PDF → Convert every page to an image
+     Load PDF => Render all pages to images
   ------------------------------------------------------------ */
   useEffect(() => {
     let cancelled = false;
@@ -30,7 +30,6 @@ export default function BookFlipViewer({ pdfUrl, onExit }) {
     async function loadPdf() {
       try {
         setLoading(true);
-
         pdfjsLib.GlobalWorkerOptions.workerSrc =
           `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.js`;
 
@@ -44,18 +43,17 @@ export default function BookFlipViewer({ pdfUrl, onExit }) {
           const viewport = page.getViewport({ scale: 1.4 });
 
           const canvas = document.createElement("canvas");
-          const ctx = canvas.getContext("2d");
-
           canvas.width = viewport.width;
           canvas.height = viewport.height;
 
-          await page.render({ canvasContext: ctx, viewport }).promise;
+          await page.render({
+            canvasContext: canvas.getContext("2d"),
+            viewport,
+          }).promise;
+
           arr.push(canvas.toDataURL("image/jpeg", 0.85));
         }
-
         if (!cancelled) setPages(arr);
-      } catch (err) {
-        console.error("[Flip] PDF Load Error:", err);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -66,7 +64,7 @@ export default function BookFlipViewer({ pdfUrl, onExit }) {
   }, [pdfUrl]);
 
   /* ------------------------------------------------------------
-     Load Local JS + CSS (public/pageflip)
+     Load Local JS + CSS
   ------------------------------------------------------------ */
   function loadPageFlipAssets() {
     return new Promise((resolve) => {
@@ -83,13 +81,27 @@ export default function BookFlipViewer({ pdfUrl, onExit }) {
       const script = document.createElement("script");
       script.src = "/pageflip/page-flip.browser.min.js";
       script.onload = () => resolve();
-      script.onerror = () => console.error("❌ Failed to load PageFlip engine");
       document.body.appendChild(script);
     });
   }
 
   /* ------------------------------------------------------------
-     Initialize Flipbook
+     Add animation classes
+  ------------------------------------------------------------ */
+  const runFlipAnimation = (direction) => {
+    const container = bookRef.current;
+    if (!container) return;
+
+    container.classList.remove("flip-next", "flip-prev");
+    container.classList.add(direction);
+
+    setTimeout(() => {
+      container.classList.remove("flip-next", "flip-prev");
+    }, 900);
+  };
+
+  /* ------------------------------------------------------------
+     Init Flipbook
   ------------------------------------------------------------ */
   useEffect(() => {
     if (!pages.length || !bookRef.current) return;
@@ -110,7 +122,7 @@ export default function BookFlipViewer({ pdfUrl, onExit }) {
         height: 800,
         showCover: true,
         usePortrait: false,
-        flippingTime: 900,
+        flippingTime: 800,
       });
 
       flip.loadFromImages(pages);
@@ -122,7 +134,11 @@ export default function BookFlipViewer({ pdfUrl, onExit }) {
       } catch {}
 
       flip.on("flip", (e) => {
+        if (e.data > currentPage) runFlipAnimation("flip-next");
+        else runFlipAnimation("flip-prev");
+
         setCurrentPage(e.data);
+
         if (soundRef.current) {
           soundRef.current.currentTime = 0;
           soundRef.current.play().catch(() => {});
@@ -131,7 +147,6 @@ export default function BookFlipViewer({ pdfUrl, onExit }) {
     }
 
     init();
-
     return () => {
       destroyed = true;
       if (flipRef.current) flipRef.current.destroy();
@@ -167,16 +182,13 @@ export default function BookFlipViewer({ pdfUrl, onExit }) {
   };
 
   /* ------------------------------------------------------------
-     Fullscreen
+     Fullscreen + Zoom
   ------------------------------------------------------------ */
   const enterFullscreen = () => {
     const elem = document.documentElement;
     if (elem.requestFullscreen) elem.requestFullscreen();
   };
 
-  /* ------------------------------------------------------------
-     Zoom In / Out
-  ------------------------------------------------------------ */
   const zoomIn = () => setZoom((z) => Math.min(2.2, z + 0.2));
   const zoomOut = () => setZoom((z) => Math.max(1, z - 0.2));
 
@@ -246,7 +258,7 @@ export default function BookFlipViewer({ pdfUrl, onExit }) {
           </div>
         )}
 
-        {/* Flipbook */}
+        {/* FLIPBOOK */}
         <div
           className="flex-1 flex justify-center items-center bg-black"
           style={{ height: "calc(100vh - 60px)" }}
