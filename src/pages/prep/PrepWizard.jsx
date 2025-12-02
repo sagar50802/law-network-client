@@ -34,6 +34,18 @@ function fmtTime(iso) {
   }
 }
 
+/* helper: format time-only from ms or releaseAt value */
+function formatTimeOnly(releaseAt) {
+  const ms = releaseMs(releaseAt);
+  if (!ms) return "";
+  try {
+    const d = new Date(ms);
+    return d.toLocaleTimeString([], { hour: "2-digit", minute: "2-digit" });
+  } catch {
+    return "";
+  }
+}
+
 /* ---------- releaseAt parser that accepts ISO, numbers, and "dd/mm/yyyy, hh:mm am/pm" ---------- */
 function releaseMs(x) {
   if (!x) return 0;
@@ -610,15 +622,8 @@ function ModulePanel({ m, index }) {
       <div className="font-medium mb-1">{label}</div>
       <ul className="list-disc ml-5">
         {later.map((m) => (
-          <li key={m._id}>
-            {m.title || "Untitled"} —{" "}
-            {new Date(m.releaseAt).toLocaleString([], {
-              month: "short",
-              day: "numeric",
-              hour: "2-digit",
-              minute: "2-digit",
-            })}{" "}
-            {m.dayIndex ? `(Day ${m.dayIndex}) ` : ""}
+          <li key={m._id} className="task-locked">
+            {m.title || "Untitled"} — {formatTimeOnly(m.releaseAt)} {m.dayIndex ? `(Day ${m.dayIndex})` : ""}{" "}
             {m.flags?.extractOCR && !m.flags?.showOriginal ? "(text only)" : ""}
           </li>
         ))}
@@ -1071,7 +1076,7 @@ const [userStates, setUserStates] = useState({});
 }, [modules]);
  
   
-// ✅ FINAL FIX — show all released modules from previous + current days
+// ✅ FINAL FIX — show all modules from previous + current days (we'll mark upcoming within today)
  const releasedUpToActive = useMemo(() => {
   const now = nowUtcMs();
 
@@ -1083,14 +1088,8 @@ const [userStates, setUserStates] = useState({});
           ? Number(raw)
           : Number(raw.replace(/day\s*/i, "")) || 0;
 
-      const relTime = releaseMs(m.releaseAt);
-      const released =
-        !m.releaseAt ||
-        relTime <= now ||
-        (m.status && String(m.status).toLowerCase() === "released");
-
-      // ✅ match cohort: show all released ≤ todayDay
-      return released && day > 0 && day <= todayDay;
+      // don't filter by time here — include all modules belonging to cohort <= today
+      return day > 0 && day <= todayDay;
     })
     .sort((a, b) => {
       const ta = releaseMs(a.releaseAt) || 0;
@@ -1210,9 +1209,49 @@ console.log("[PrepWizard] visible modules:", releasedUpToActive.map(m => [m.titl
       ) : gateStatus !== "active" || locked ? null :  !releasedUpToActive.length ? (
   <div className="text-gray-500">No released modules yet.</div>
 ) : (
-  releasedUpToActive.map((m, i) => (
-    <ModulePanel key={m._id || i} m={m} index={i} />
-))
+  // render modules with visual states (completed / current / upcoming / locked)
+  (() => {
+    const now = nowUtcMs();
+
+    // build completed set
+    const completedIds = new Set();
+    try {
+      Object.keys(userStates || {}).forEach((k) => {
+        const v = userStates[k];
+        if (v && (v.done || v.completed || v.isDone)) completedIds.add(k);
+      });
+    } catch (e) {}
+
+    // find current module: first module (sorted by release time) with release <= now and not completed
+    let currentId = null;
+    for (const m of releasedUpToActive) {
+      const rel = releaseMs(m.releaseAt) || 0;
+      if (rel <= now && !completedIds.has(m._id) && !completedIds.has(m.id)) {
+        currentId = m._id || m.id;
+        break;
+      }
+    }
+
+    return releasedUpToActive.map((m, i) => {
+      const rel = releaseMs(m.releaseAt) || 0;
+      const id = m._id || m.id || String(i);
+
+      const isCompleted = completedIds.has(id);
+      const isCurrent = !isCompleted && (id === currentId);
+      const isUpcoming = !isCompleted && rel > now && Number(m.dayIndex) <= todayDay; // same-day future tasks
+      const isLocked = Number(m.dayIndex) > todayDay; // future day
+
+      const wrapperClass =
+        isCurrent ? "task-current" : isUpcoming ? "task-upcoming" : isLocked ? "task-locked" : isCompleted ? "task-completed" : "";
+
+      return (
+        <div key={id} className={`module-row ${wrapperClass}`} style={{ marginBottom: 10 }}>
+          <ModulePanel m={m} index={i} />
+        </div>
+      );
+    });
+  })()
+)}
       )}
 
       <div className="mt-4">
@@ -1238,8 +1277,47 @@ console.log("[PrepWizard] visible modules:", releasedUpToActive.map(m => [m.titl
     </div>
   );
 
+  // Inject CSS used for task states and pulsing (kept local to component)
+  const TASK_STYLES = `
+  .module-row.task-current {
+    opacity: 1;
+    box-shadow: 0 6px 20px rgba(16,185,129,0.18);
+    border-left: 4px solid #10b981;
+    transition: transform 200ms ease;
+    transform-origin: left center;
+  }
+  .module-row.task-current:hover { transform: translateY(-2px); }
+
+  .module-row.task-completed {
+    opacity: 0.25;
+    filter: none;
+    transition: opacity 200ms ease;
+  }
+
+  .module-row.task-locked {
+    opacity: 0.35;
+    color: #6b7280;
+  }
+
+  /* upcoming tasks pulse in red from 85% -> 30% */
+  @keyframes pulse-red {
+    0% { opacity: 0.85; box-shadow: 0 0 0 rgba(220,38,38,0.18); }
+    50% { opacity: 0.30; box-shadow: 0 0 18px rgba(220,38,38,0.08); }
+    100% { opacity: 0.85; box-shadow: 0 0 0 rgba(220,38,38,0.18); }
+  }
+  .module-row.task-upcoming {
+    color: #dc2626;
+    animation: pulse-red 1.5s infinite ease-in-out;
+  }
+
+  /* ensure list items in ComingLater (locked) use muted gray and remove month/day */
+  .task-locked { opacity: 0.35; color: #6b7280; list-style: disc; margin-bottom: 6px; }
+  `;
+
   return (
     <div className="prep-wrap">
+      <style dangerouslySetInnerHTML={{ __html: TASK_STYLES }} />
+
       {showOverlay && (
         <PrepAccessOverlay
           examId={apiExamId || examSlug}
