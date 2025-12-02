@@ -1,3 +1,5 @@
+/* public/pageflip/page-flip.css */
+
 /* Main flipbook container inside React */
 #flipbook {
   width: 100%;
@@ -5,24 +7,121 @@
   position: relative;
   overflow: hidden;
   background: #000;
+  perspective: 2200px;
+  transition: transform 0.2s ease-out; /* nice zoom */
 }
 
 /* Wrapper created by the JS engine */
-.stf__wrapper {
+.pf-wrapper {
   width: 100%;
   height: 100%;
   position: relative;
 }
 
-/* Canvas used to draw each page (single-page view) */
-.stf__wrapper canvas {
+/* Spread (two pages) */
+.pf-spread {
   width: 100%;
   height: 100%;
-  display: block;
-  background: #000;
+  position: relative;
+  transform-style: preserve-3d;
+  background: #05070b;
 }
 
-/* (Optional) nice smooth transition when zoom changes */
-#flipbook {
-  transition: transform 0.2s ease-out;
+/* Individual page (left / right) */
+.pf-page {
+  width: 50%;
+  height: 100%;
+  position: absolute;
+  top: 0;
+  overflow: hidden;
+  background: #000;
+  backface-visibility: hidden;
+  box-shadow: 0 0 18px rgba(0, 0, 0, 0.7);
+}
+
+.pf-page.left {
+  left: 0;
+}
+
+.pf-page.right {
+  right: 0;
+}
+
+.pf-page img {
+  width: 100%;
+  height: 100%;
+  object-fit: contain;
+  display: block;
+}
+
+/* Desktop: show double-page. Mobile: show single page */
+@media (max-width: 768px) {
+  .pf-page {
+    width: 100%;
+  }
+
+  .pf-page.left {
+    left: 0;
+  }
+
+  .pf-page.right {
+    display: none;
+  }
+}
+
+/* 3D flip animations (basic but visible) */
+.pf-spread.pf-flip-next .pf-page.left {
+  transform-origin: left center;
+  animation: pfFlipLeftNext 0.8s forwards ease;
+}
+
+.pf-spread.pf-flip-next .pf-page.right {
+  transform-origin: right center;
+  animation: pfFlipRightNext 0.8s forwards ease;
+}
+
+.pf-spread.pf-flip-prev .pf-page.left {
+  transform-origin: left center;
+  animation: pfFlipLeftPrev 0.8s forwards ease;
+}
+
+.pf-spread.pf-flip-prev .pf-page.right {
+  transform-origin: right center;
+  animation: pfFlipRightPrev 0.8s forwards ease;
+}
+
+@keyframes pfFlipLeftNext {
+  0% {
+    transform: rotateY(0deg);
+  }
+  100% {
+    transform: rotateY(-90deg);
+  }
+}
+
+@keyframes pfFlipRightNext {
+  0% {
+    transform: rotateY(90deg);
+  }
+  100% {
+    transform: rotateY(0deg);
+  }
+}
+
+@keyframes pfFlipLeftPrev {
+  0% {
+    transform: rotateY(-90deg);
+  }
+  100% {
+    transform: rotateY(0deg);
+  }
+}
+
+@keyframes pfFlipRightPrev {
+  0% {
+    transform: rotateY(0deg);
+  }
+  100% {
+    transform: rotateY(90deg);
+  }
 }
