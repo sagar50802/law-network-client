@@ -1,229 +1,45 @@
-/* public/pageflip/page-flip.css
- *
- * Pure CSS for the custom 3D flip viewer
- * Works with BookFlipViewer.jsx (no external JS library required)
- */
+/* public/pageflip/page-flip.css */
 
-/* Root area that React attaches to */
-#flipbook.pf-root {
-  position: relative;
+/* Root container used by React */
+#flipbook {
   width: 100%;
   height: 100%;
-  max-width: 1600px;
-  max-height: 1000px;
-  margin: 0 auto;
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  background: radial-gradient(circle at center, #111 0, #020617 55%, #000 100%);
+  position: relative;
   overflow: hidden;
+  background: #000;
 }
 
-/* Inner wrapper that holds the page spread */
-.pf-inner {
-  position: relative;
+/* StPageFlip wrapper should always fill container */
+#flipbook .stf__wrapper {
   width: 100%;
   height: 100%;
-  max-width: 1400px;
-  max-height: 880px;
-  display: flex;
-  align-items: stretch;
-  justify-content: center;
+  position: relative;
+}
+
+/* Page background */
+#flipbook .stf__item {
   background: #111;
-  box-shadow: 0 0 40px rgba(0, 0, 0, 0.7);
-  border-radius: 0.75rem;
-  overflow: hidden;
-  perspective: 2000px;
-  transform-style: preserve-3d;
 }
 
-/* Each page in the spread */
-.pf-page {
-  flex: 1 1 50%;
-  position: relative;
-  overflow: hidden;
-  background: #020617;
-  transform-style: preserve-3d;
-}
-
-/* Left / right page styling */
-.pf-page-left {
-  border-right: 1px solid rgba(148, 163, 184, 0.4);
-  transform-origin: right center;
-}
-
-.pf-page-right {
-  border-left: 1px solid rgba(148, 163, 184, 0.4);
-  transform-origin: left center;
-}
-
-/* Static subtle 3D tilt when not animating (desktop) */
-@media (min-width: 768px) {
-  .pf-page-left {
-    transform: rotateY(2deg);
-  }
-  .pf-page-right {
-    transform: rotateY(-2deg);
-  }
-}
-
-/* Page image itself */
-.pf-page img {
+/* Canvas / page content */
+#flipbook canvas,
+#flipbook .stf__block,
+#flipbook .stf__page {
   width: 100%;
   height: 100%;
-  object-fit: contain;          /* prevents stretching */
-  display: block;
-  background: #f9fafb;
-  backface-visibility: hidden;
 }
 
-/* 3D Flip Animations
-   We animate only one side depending on direction, then React
-   updates the currentPage after ~420ms (see JS).
-*/
-
-/* Flip to NEXT page: right page turns away */
-.pf-flip-next .pf-page-right {
-  animation: pfFlipRightNext 0.42s ease-out forwards;
-}
-
-/* Flip to PREVIOUS page: left page turns back */
-.pf-flip-prev .pf-page-left {
-  animation: pfFlipLeftPrev 0.42s ease-out forwards;
-}
-
-@keyframes pfFlipRightNext {
-  0% {
-    transform: rotateY(-2deg);
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-  }
-  45% {
-    transform: rotateY(-90deg);
-    box-shadow: 0 0 40px rgba(0, 0, 0, 0.7);
-  }
-  100% {
-    transform: rotateY(-170deg);
-    box-shadow: 0 0 0 rgba(0, 0, 0, 0);
-  }
-}
-
-@keyframes pfFlipLeftPrev {
-  0% {
-    transform: rotateY(2deg);
-    box-shadow: 0 10px 30px rgba(0, 0, 0, 0.5);
-  }
-  45% {
-    transform: rotateY(90deg);
-    box-shadow: 0 0 40px rgba(0, 0, 0, 0.7);
-  }
-  100% {
-    transform: rotateY(170deg);
-    box-shadow: 0 0 0 rgba(0, 0, 0, 0);
-  }
-}
-
-/* Make sure zoom transitions feel smooth */
-.pf-inner {
+/* Let the internal pages scale smoothly */
+#flipbook {
   transition: transform 0.2s ease-out;
 }
 
-/* ----------------------------------------------------------
- * Prev / Next arrows – always visible, mobile-friendly
- * -------------------------------------------------------- */
-.pf-arrow {
-  position: absolute;
-  bottom: 1.25rem;
-  width: 2.5rem;
-  height: 2.5rem;
-  border-radius: 999px;
-  border: 1px solid rgba(148, 163, 184, 0.8);
-  background: rgba(15, 23, 42, 0.92);
-  display: flex;
-  align-items: center;
-  justify-content: center;
-  cursor: pointer;
-  z-index: 40;
-  box-shadow: 0 10px 25px rgba(0, 0, 0, 0.7);
-  transition:
-    background 0.15s ease-out,
-    transform 0.15s ease-out,
-    box-shadow 0.15s ease-out;
+/* Make sure arrows (from React) look good on all screens */
+#flipbook .flip-arrow {
+  box-shadow: 0 0 12px rgba(0, 0, 0, 0.6);
 }
 
-.pf-arrow:hover {
-  background: rgba(30, 64, 175, 0.95);
-  transform: translateY(-2px);
-  box-shadow: 0 14px 30px rgba(0, 0, 0, 0.9);
-}
-
-.pf-arrow:disabled {
-  opacity: 0.4;
-  cursor: default;
-  background: rgba(15, 23, 42, 0.7);
-  box-shadow: none;
-}
-
-.pf-arrow-left {
-  left: 0.75rem;
-}
-
-.pf-arrow-right {
-  right: 0.75rem;
-}
-
-/* Simple arrow glyph – you can replace with SVG if you like */
-.pf-arrow-icon {
-  font-size: 1.4rem;
-  line-height: 1;
-  color: #e5e7eb;
-}
-
-/* ----------------------------------------------------------
- * Small-screen tweaks
- * -------------------------------------------------------- */
-@media (max-width: 767px) {
-  #flipbook.pf-root {
-    max-width: 100%;
-    max-height: 100%;
-    border-radius: 0;
-    box-shadow: none;
-  }
-
-  .pf-inner {
-    max-width: 100%;
-    max-height: 100%;
-    border-radius: 0;
-  }
-
-  .pf-page-left,
-  .pf-page-right {
-    transform: none !important; /* no static tilt on tiny screens */
-    border-right: none;
-    border-left: none;
-  }
-
-  /* Single page view: use full width */
-  .pf-page {
-    flex: 1 1 100%;
-  }
-}
-
-/* Utility – hide scrollbars where header overflows */
-.no-scrollbar::-webkit-scrollbar {
-  display: none;
-}
-.no-scrollbar {
-  -ms-overflow-style: none;
-  scrollbar-width: none;
-}
-
-/* FORCE ARROWS TO ALWAYS BE VISIBLE ON MOBILE */
-@media (max-width: 767px) {
-  #flipbook.pf-root {
-    padding-bottom: 70px !important;  /* guarantee arrow space */
-  }
-
-  .pf-arrow {
-    bottom: 1.5rem !important;
-  }
+/* Optional: make it look a bit like a real book on light backgrounds */
+#flipbook .stf__shadow {
+  pointer-events: none;
 }
