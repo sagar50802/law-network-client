@@ -3,20 +3,21 @@ import { useEffect, useRef, useState } from "react";
 import * as pdfjsLib from "pdfjs-dist";
 
 /**
- * 3D Flip Viewer — Stable Version
- * - Uses local /public/pageflip engine (canvas based)
- * - Works on desktop + mobile (same UI)
+ * 3D Flip Viewer — StPageFlip-based
+ * - Uses local /public/pageflip/page-flip.browser.min.js
+ * - Desktop: double-page 3D book
+ * - Mobile: single page, with big NEXT / PREV arrows
  * - Zoom + fullscreen
- * - Thumbnails + optional auto flip + page sound
+ * - Optional auto-flip + page sound
  */
 
 export default function BookFlipViewer({ pdfUrl, onExit }) {
-  const bookRef = useRef(null);
-  const flipRef = useRef(null);
-  const soundRef = useRef(null);
+  const bookRef = useRef(null);       // container for PageFlip
+  const flipRef = useRef(null);       // PageFlip instance
+  const soundRef = useRef(null);      // optional flip sound
 
   const [loading, setLoading] = useState(true);
-  const [pages, setPages] = useState([]);
+  const [pages, setPages] = useState([]);        // data URLs
   const [currentPage, setCurrentPage] = useState(0);
   const [autoFlip, setAutoFlip] = useState(false);
   const [zoom, setZoom] = useState(1);
@@ -24,17 +25,18 @@ export default function BookFlipViewer({ pdfUrl, onExit }) {
   const autoFlipTimerRef = useRef(null);
 
   /* ------------------------------------------------------------
-   * Load PDF → convert each page to an image
+   * 1) Load PDF → convert each page to an image
    * ------------------------------------------------------------ */
   useEffect(() => {
     let cancelled = false;
 
     async function loadPdf() {
       if (!pdfUrl) return;
+
       try {
         setLoading(true);
 
-        // use pdf.js worker from CDN
+        // Use pdf.js worker from CDN
         pdfjsLib.GlobalWorkerOptions.workerSrc =
           `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.js`;
 
@@ -46,7 +48,8 @@ export default function BookFlipViewer({ pdfUrl, onExit }) {
         const doc = await task.promise;
         if (cancelled) return;
 
-        const arr = [];
+        const images = [];
+
         for (let i = 1; i <= doc.numPages; i++) {
           const page = await doc.getPage(i);
           const viewport = page.getViewport({ scale: 1.4 });
@@ -58,11 +61,12 @@ export default function BookFlipViewer({ pdfUrl, onExit }) {
           canvas.height = viewport.height;
 
           await page.render({ canvasContext: ctx, viewport }).promise;
-          arr.push(canvas.toDataURL("image/jpeg", 0.85));
+
+          images.push(canvas.toDataURL("image/jpeg", 0.85));
         }
 
         if (!cancelled) {
-          setPages(arr);
+          setPages(images);
         }
       } catch (err) {
         console.error("[Flip] PDF Load Error:", err);
@@ -79,7 +83,7 @@ export default function BookFlipViewer({ pdfUrl, onExit }) {
   }, [pdfUrl]);
 
   /* ------------------------------------------------------------
-   * Load local JS + CSS from /public/pageflip
+   * 2) Load local PageFlip JS + CSS from /public/pageflip
    * ------------------------------------------------------------ */
   function loadPageFlipAssets() {
     return new Promise((resolve) => {
@@ -112,7 +116,7 @@ export default function BookFlipViewer({ pdfUrl, onExit }) {
   }
 
   /* ------------------------------------------------------------
-   * Initialize flipbook once pages are ready
+   * 3) Init StPageFlip once images are ready
    * ------------------------------------------------------------ */
   useEffect(() => {
     if (!pages.length || !bookRef.current) return;
@@ -124,8 +128,7 @@ export default function BookFlipViewer({ pdfUrl, onExit }) {
       if (destroyed || !bookRef.current) return;
 
       const globalPF = window.PageFlip;
-      const PageFlipClass =
-        globalPF && (globalPF.PageFlip || globalPF); // handle both exports
+      const PageFlipClass = globalPF && (globalPF.PageFlip || globalPF);
 
       if (typeof PageFlipClass !== "function") {
         console.error("❌ PageFlip class not found on window.PageFlip");
@@ -138,19 +141,25 @@ export default function BookFlipViewer({ pdfUrl, onExit }) {
         flipRef.current = null;
       }
 
+      // Clean old DOM inside container
+      bookRef.current.innerHTML = "";
+
+      // Create new instance
       const flip = new PageFlipClass(bookRef.current, {
         width: 600,
         height: 800,
-        size: "stretch",
-        maxShadowOpacity: 0.5,
+        size: "stretch",           // fill available area
+        maxShadowOpacity: 0.7,
         drawShadow: true,
         flippingTime: 800,
+        usePortrait: true,         // single page on small screens
         showCover: false,
-        usePortrait: false,
+        autoSize: true,
         mobileScrollSupport: true,
         startPage: 0,
       });
 
+      // Load pages as images
       flip.loadFromImages(pages);
       flipRef.current = flip;
 
@@ -162,18 +171,37 @@ export default function BookFlipViewer({ pdfUrl, onExit }) {
         soundRef.current = null;
       }
 
+      // Page change handler
       flip.on("flip", (e) => {
-        setCurrentPage(e.data || 0);
+        const pageIndex = typeof e.data === "number" ? e.data : 0;
+        setCurrentPage(pageIndex);
+
         if (soundRef.current) {
           soundRef.current.currentTime = 0;
           soundRef.current.play().catch(() => {});
         }
       });
 
+      // Resize on window resize so it doesn’t stretch weirdly
+      const handleResize = () => {
+        try {
+          flip.update(); // real StPageFlip method
+        } catch {
+          /* ignore */
+        }
+      };
+
+      window.addEventListener("resize", handleResize);
+
       setCurrentPage(0);
+
+      // Cleanup
+      return () => {
+        window.removeEventListener("resize", handleResize);
+      };
     }
 
-    init();
+    const cleanupPromise = init();
 
     return () => {
       destroyed = true;
@@ -181,11 +209,14 @@ export default function BookFlipViewer({ pdfUrl, onExit }) {
         flipRef.current.destroy();
         flipRef.current = null;
       }
+      if (cleanupPromise && typeof cleanupPromise === "function") {
+        cleanupPromise();
+      }
     };
   }, [pages]);
 
   /* ------------------------------------------------------------
-   * Auto-flip
+   * 4) Auto-flip
    * ------------------------------------------------------------ */
   useEffect(() => {
     if (!autoFlip || !flipRef.current) {
@@ -219,15 +250,27 @@ export default function BookFlipViewer({ pdfUrl, onExit }) {
   }, [autoFlip, pages.length]);
 
   /* ------------------------------------------------------------
-   * Thumbnails → jump to page
+   * 5) Manual navigation helpers (used by arrows + thumbnails)
    * ------------------------------------------------------------ */
   const goToPage = (index) => {
     if (!flipRef.current) return;
+    const last = pages.length - 1;
+    if (index < 0 || index > last) return;
     flipRef.current.turnToPage(index);
   };
 
+  const goNext = () => {
+    if (!flipRef.current) return;
+    flipRef.current.flipNext();
+  };
+
+  const goPrev = () => {
+    if (!flipRef.current) return;
+    flipRef.current.flipPrev();
+  };
+
   /* ------------------------------------------------------------
-   * Fullscreen only for the flipbook area
+   * 6) Fullscreen only for the flipbook area
    * ------------------------------------------------------------ */
   const enterFullscreen = () => {
     const elem = bookRef.current;
@@ -239,17 +282,17 @@ export default function BookFlipViewer({ pdfUrl, onExit }) {
   };
 
   /* ------------------------------------------------------------
-   * Zoom
+   * 7) Zoom
    * ------------------------------------------------------------ */
   const zoomIn = () => setZoom((z) => Math.min(2.2, z + 0.2));
   const zoomOut = () => setZoom((z) => Math.max(1, z - 0.2));
 
   /* ------------------------------------------------------------
-   * UI
+   * 8) UI
    * ------------------------------------------------------------ */
   return (
     <div className="w-full h-full flex flex-col bg-black text-white">
-      {/* HEADER — always visible on mobile & desktop */}
+      {/* HEADER — visible on mobile & desktop */}
       <div className="w-full bg-slate-900 px-3 sm:px-4 py-2 flex items-center gap-2 sm:gap-3 border-b border-slate-800 text-xs sm:text-sm">
         <span className="font-semibold whitespace-nowrap">3D Flip Book</span>
 
@@ -321,7 +364,7 @@ export default function BookFlipViewer({ pdfUrl, onExit }) {
           </div>
         )}
 
-        {/* Flipbook container */}
+        {/* Flipbook container with overlay arrows */}
         <div
           className="flex-1 flex justify-center items-center bg-black"
           style={{ height: "calc(100vh - 60px)" }}
@@ -332,15 +375,36 @@ export default function BookFlipViewer({ pdfUrl, onExit }) {
             <div className="text-red-400 text-sm">Unable to render PDF.</div>
           ) : (
             <div
-              ref={bookRef}
-              id="flipbook"
+              className="relative w-full h-full flex items-center justify-center"
               style={{
-                width: "100%",
-                height: "100%",
                 transform: `scale(${zoom})`,
                 transformOrigin: "center center",
               }}
-            />
+            >
+              {/* actual PageFlip root */}
+              <div
+                ref={bookRef}
+                id="flipbook"
+                className="w-full h-full"
+              />
+
+              {/* Overlay arrows – always visible on mobile & desktop */}
+              <button
+                type="button"
+                onClick={goPrev}
+                className="absolute left-2 sm:left-4 bottom-4 z-10 bg-black/60 hover:bg-black/80 text-white rounded-full w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center text-2xl sm:text-3xl"
+              >
+                ‹
+              </button>
+
+              <button
+                type="button"
+                onClick={goNext}
+                className="absolute right-2 sm:right-4 bottom-4 z-10 bg-black/60 hover:bg-black/80 text-white rounded-full w-10 h-10 sm:w-12 sm:h-12 flex items-center justify-center text-2xl sm:text-3xl"
+              >
+                ›
+              </button>
+            </div>
           )}
         </div>
       </div>
