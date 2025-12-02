@@ -1,42 +1,27 @@
 /* public/pageflip/page-flip.css */
 
-/* Main flipbook container inside React */
+/* Root container (the element with id="flipbook") */
+.pf-root,
 #flipbook {
   width: 100%;
   height: 100%;
   position: relative;
   overflow: hidden;
-  background: #000;
-  perspective: 2200px;
-  transition: transform 0.2s ease-out; /* nice zoom */
+  background: #111;
+  perspective: 2000px;
+  touch-action: pan-y; /* allow vertical scroll, capture horizontal swipe */
 }
 
-/* Wrapper created by the JS engine */
-.pf-wrapper {
-  width: 100%;
-  height: 100%;
-  position: relative;
-}
-
-/* Spread (two pages) */
-.pf-spread {
-  width: 100%;
-  height: 100%;
-  position: relative;
-  transform-style: preserve-3d;
-  background: #05070b;
-}
-
-/* Individual page (left / right) */
+/* Double-page layout */
 .pf-page {
-  width: 50%;
-  height: 100%;
   position: absolute;
   top: 0;
-  overflow: hidden;
+  width: 50%;
+  height: 100%;
   background: #000;
+  overflow: hidden;
   backface-visibility: hidden;
-  box-shadow: 0 0 18px rgba(0, 0, 0, 0.7);
+  transform-style: preserve-3d;
 }
 
 .pf-page.left {
@@ -54,74 +39,153 @@
   display: block;
 }
 
-/* Desktop: show double-page. Mobile: show single page */
-@media (max-width: 768px) {
-  .pf-page {
-    width: 100%;
-  }
-
-  .pf-page.left {
-    left: 0;
-  }
-
-  .pf-page.right {
-    display: none;
-  }
+/* Navigation arrows */
+.pf-arrow {
+  position: absolute;
+  bottom: 12%;
+  width: 42px;
+  height: 42px;
+  border-radius: 999px;
+  border: none;
+  outline: none;
+  cursor: pointer;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+  background: rgba(15, 23, 42, 0.75); /* slate-900 */
+  color: #e5e7eb; /* slate-200 */
+  font-size: 22px;
+  box-shadow: 0 6px 18px rgba(0, 0, 0, 0.5);
+  transition: background 0.2s ease, transform 0.2s ease, opacity 0.2s ease;
+  opacity: 0.85;
+  z-index: 10;
 }
 
-/* 3D flip animations (basic but visible) */
-.pf-spread.pf-flip-next .pf-page.left {
+.pf-arrow-left {
+  left: 18px;
+}
+
+.pf-arrow-right {
+  right: 18px;
+}
+
+.pf-arrow:hover {
+  background: rgba(16, 185, 129, 0.95); /* emerald-ish */
+  transform: translateY(-1px) scale(1.03);
+  opacity: 1;
+}
+
+.pf-arrow:active {
+  transform: translateY(1px) scale(0.97);
+}
+
+/* 3D flip animations (desktop) */
+.pf-root.flip-next .pf-page.left {
   transform-origin: left center;
-  animation: pfFlipLeftNext 0.8s forwards ease;
+  animation: pfFlipLeftNext 0.7s forwards ease;
 }
 
-.pf-spread.pf-flip-next .pf-page.right {
+.pf-root.flip-next .pf-page.right {
   transform-origin: right center;
-  animation: pfFlipRightNext 0.8s forwards ease;
+  animation: pfFlipRightNext 0.7s forwards ease;
 }
 
-.pf-spread.pf-flip-prev .pf-page.left {
+.pf-root.flip-prev .pf-page.left {
   transform-origin: left center;
-  animation: pfFlipLeftPrev 0.8s forwards ease;
+  animation: pfFlipLeftPrev 0.7s forwards ease;
 }
 
-.pf-spread.pf-flip-prev .pf-page.right {
+.pf-root.flip-prev .pf-page.right {
   transform-origin: right center;
-  animation: pfFlipRightPrev 0.8s forwards ease;
+  animation: pfFlipRightPrev 0.7s forwards ease;
 }
 
 @keyframes pfFlipLeftNext {
   0% {
     transform: rotateY(0deg);
+    box-shadow: 8px 0 20px rgba(0, 0, 0, 0.4);
   }
   100% {
-    transform: rotateY(-90deg);
+    transform: rotateY(-100deg);
+    box-shadow: 0 0 0 rgba(0, 0, 0, 0);
   }
 }
 
 @keyframes pfFlipRightNext {
   0% {
-    transform: rotateY(90deg);
+    transform: rotateY(100deg);
+    box-shadow: -8px 0 20px rgba(0, 0, 0, 0.4);
   }
   100% {
     transform: rotateY(0deg);
+    box-shadow: -4px 0 18px rgba(0, 0, 0, 0.35);
   }
 }
 
 @keyframes pfFlipLeftPrev {
   0% {
-    transform: rotateY(-90deg);
+    transform: rotateY(-100deg);
+    box-shadow: 0 0 0 rgba(0, 0, 0, 0);
   }
   100% {
     transform: rotateY(0deg);
+    box-shadow: 8px 0 20px rgba(0, 0, 0, 0.4);
   }
 }
 
 @keyframes pfFlipRightPrev {
   0% {
     transform: rotateY(0deg);
+    box-shadow: -4px 0 18px rgba(0, 0, 0, 0.35);
   }
   100% {
-    transform: rotateY(90deg);
+    transform: rotateY(100deg);
+    box-shadow: 0 0 0 rgba(0, 0, 0, 0);
+  }
+}
+
+/* Smooth zoom when React scales #flipbook */
+#flipbook {
+  transition: transform 0.2s ease-out;
+}
+
+/* -------------------------------
+   Mobile adjustments
+   ----------------------------- */
+@media (max-width: 768px) {
+  /* Show single page – center it */
+  .pf-page.left,
+  .pf-page.right {
+    width: 100%;
+  }
+
+  .pf-page.right {
+    display: none; /* we only see the "left/current" page */
+  }
+
+  .pf-arrow {
+    bottom: 16px;
+    width: 34px;
+    height: 34px;
+    font-size: 18px;
+    box-shadow: 0 4px 12px rgba(0, 0, 0, 0.4);
+  }
+
+  .pf-arrow-left {
+    left: 12px;
+  }
+
+  .pf-arrow-right {
+    right: 12px;
+  }
+}
+
+/* Extra small screens */
+@media (max-width: 480px) {
+  .pf-arrow {
+    bottom: 12px;
+    width: 30px;
+    height: 30px;
+    font-size: 16px;
   }
 }
