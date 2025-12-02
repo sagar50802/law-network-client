@@ -1,3 +1,4 @@
+// Full file contents with safer approach: gateStatusRef + grace window + local cache of approved access
 import { useEffect, useMemo, useState, useRef } from "react";
 import { getJSON, postJSON, absUrl, buildUrl } from "../../utils/api";
 import { ImageScroller } from "../../components/ui/ImageScroller";
@@ -688,6 +689,53 @@ const [userStates, setUserStates] = useState({});
   const [showOverlay, setShowOverlay] = useState(true);
   const pollRef = useRef(null);
 
+  // Keep a ref of gateStatus to avoid stale-closure issues inside setInterval/checks
+  const gateStatusRef = useRef(gateStatus);
+  useEffect(() => {
+    gateStatusRef.current = gateStatus;
+  }, [gateStatus]);
+
+  // activation time ref for short grace window after activation
+  const activationTimeRef = useRef(0);
+  const GRACE_MS = 10_000; // 10 seconds grace window after activation (recommended)
+
+  // --- local cache keys / TTL
+  const ACCESS_CACHE_PREFIX = "prepAccessCache_v1";
+  const DEFAULT_CACHE_TTL = 24 * 60 * 60 * 1000; // 24h fallback if server doesn't return expiresAt
+  function cacheKey(examId, email) {
+    return `${ACCESS_CACHE_PREFIX}:${String(examId || "")}:${String(email || "")}`;
+  }
+  function readAccessCache(examId, email) {
+    try {
+      const raw = localStorage.getItem(cacheKey(examId, email));
+      if (!raw) return null;
+      const obj = JSON.parse(raw);
+      if (obj?.status === "active" && Number(obj.expiresAt) > Date.now()) return obj;
+      // expired or not active -> cleanup
+      localStorage.removeItem(cacheKey(examId, email));
+      return null;
+    } catch {
+      return null;
+    }
+  }
+  function writeAccessCache(examId, email, { status = "active", expiresAt = 0 } = {}) {
+    try {
+      const item = {
+        status,
+        expiresAt: Number(expiresAt) || Date.now() + DEFAULT_CACHE_TTL,
+        updatedAt: Date.now(),
+      };
+      localStorage.setItem(cacheKey(examId, email), JSON.stringify(item));
+    } catch (e) {
+      console.warn("Failed to write access cache:", e?.message);
+    }
+  }
+  function clearAccessCache(examId, email) {
+    try {
+      localStorage.removeItem(cacheKey(examId, email));
+    } catch {}
+  }
+
   const email = localStorage.getItem("userEmail") || "";
 
   // --- SAFE JSON HELPERS (prevents blank screen when API not ready) ---
@@ -840,7 +888,26 @@ const [userStates, setUserStates] = useState({});
     // eslint-disable-next-line react-hooks/exhaustive-deps
   }, []);
 
-  /* ------ FIX: robust guard behavior (approved user → no overlay; deleted user → fresh overlay) ------ */
+  /* ------ FIX: robust guard behavior (approved user → no overlay; deleted user → fresh overlay)
+     + local cache: honour cached active approval when present and not expired (safer for offline/exit).
+  */
+  useEffect(() => {
+    // On mount (when examId/email settle) honor cached approval so user doesn't see overlay when offline / re-opening app
+    const ex = apiExamId || examSlug;
+    if (!ex) return;
+    const cached = readAccessCache(ex, email);
+    if (cached) {
+      // use cache immediately for UX
+      setGateStatus("active");
+      gateStatusRef.current = "active";
+      setShowOverlay(false);
+      activationTimeRef.current = Date.now();
+      // trigger load to populate modules
+      load();
+    }
+    // eslint-disable-next-line react-hooks/exhaustive-deps
+  }, [apiExamId, examSlug, email]);
+
   useEffect(() => {
     let cancelled = false;
 
@@ -853,32 +920,73 @@ const [userStates, setUserStates] = useState({});
 
         const data = await safeGetJSON(`/api/prep/access/status/guard?${qs.toString()}&_=${Date.now()}`);
 
+        // If we're within a short grace window after activation, ignore any non-active / missing responses.
+        if (activationTimeRef.current && Date.now() - activationTimeRef.current < GRACE_MS) {
+          // If we already consider ourselves active, do nothing while grace window is running
+          if (gateStatusRef.current === "active") {
+            // still process only positive active result (to refresh modules), otherwise ignore transient responses
+            if (data && data.access && data.access.status === "active") {
+              if (!cancelled) {
+                setShowOverlay(false);
+                setGateStatus("active");
+                gateStatusRef.current = "active";
+                activationTimeRef.current = Date.now();
+                // update cache with server expiry if provided
+                const serverExpires = data?.access?.expiresAt ? Date.parse(data.access.expiresAt) : 0;
+                writeAccessCache(ex, email, { status: "active", expiresAt: serverExpires || Date.now() + DEFAULT_CACHE_TTL });
+                await load();
+              }
+            }
+            return;
+          }
+        }
+
         if (!data || data.success === false || !data.access) {
           // treat as NEW user (e.g., admin deleted record)
-          if (!cancelled) {
+          // Only set to inactive if we are not already in active state to avoid flicker
+          if (!cancelled && gateStatusRef.current !== "active") {
             setGateStatus("inactive");
+            gateStatusRef.current = "inactive";
             setShowOverlay(true);
             setModules([]);
+            clearAccessCache(ex, email);
           }
           return;
         }
 
         const isActive = data?.access?.status === "active";
-if (isActive && !cancelled) {
-  if (gateStatus !== "active") {
-    setGateStatus("active");
-    setShowOverlay(false);
-    await load(); // run only once when gate becomes active
-  }
+        if (isActive && !cancelled) {
+          if (gateStatusRef.current !== "active") {
+            setGateStatus("active");
+            // update ref immediately so other closures see the new state
+            gateStatusRef.current = "active";
+            setShowOverlay(false);
+            // record activation time so we ignore immediate transient non-active responses
+            activationTimeRef.current = Date.now();
+            // server-provided expiry if any
+            const serverExpires = data?.access?.expiresAt ? Date.parse(data.access.expiresAt) : 0;
+            writeAccessCache(ex, email, { status: "active", expiresAt: serverExpires || Date.now() + DEFAULT_CACHE_TTL });
+            await load(); // run only once when gate becomes active
+          } else {
+            // already active — refresh cache if server sent expiry
+            const serverExpires = data?.access?.expiresAt ? Date.parse(data.access.expiresAt) : 0;
+            if (serverExpires) writeAccessCache(ex, email, { status: "active", expiresAt: serverExpires });
+          }
         } else if (!isActive && !cancelled) {
-          setShowOverlay(true);
-          setGateStatus("inactive");
-          setModules([]);
+          // Only change to inactive if we are not already active (prevents reverting an already-approved user)
+          if (gateStatusRef.current !== "active") {
+            setShowOverlay(true);
+            setGateStatus("inactive");
+            gateStatusRef.current = "inactive";
+            setModules([]);
+            clearAccessCache(ex, email);
+          }
         }
       } catch (err) {
         console.warn("[PrepWizard] guard error:", err);
-        if (!cancelled) {
+        if (!cancelled && gateStatusRef.current !== "active") {
           setGateStatus("inactive");
+          gateStatusRef.current = "inactive";
           setShowOverlay(true);
         }
       }
@@ -888,7 +996,8 @@ if (isActive && !cancelled) {
 
     if (pollRef.current) clearInterval(pollRef.current);
     pollRef.current = setInterval(() => {
-      if (gateStatus === "active") {
+      // read latest via ref to avoid stale closure captures
+      if (gateStatusRef.current === "active") {
         clearInterval(pollRef.current);
         pollRef.current = null;
         return;
@@ -901,7 +1010,7 @@ if (isActive && !cancelled) {
       if (pollRef.current) clearInterval(pollRef.current);
     };
     // eslint-disable-next-line react-hooks/exhaustive-deps
-  }, []);
+  }, [apiExamId, examSlug, email]);
 
   useEffect(() => {
     const u = new URL(location.href);
@@ -1135,10 +1244,26 @@ console.log("[PrepWizard] visible modules:", releasedUpToActive.map(m => [m.titl
         <PrepAccessOverlay
           examId={apiExamId || examSlug}
           email={localStorage.getItem("userEmail") || ""}
-          onApproved={() => {
+          onApproved={async () => {
+            // Hide immediately for UX
             setShowOverlay(false);
             setGateStatus("active");
-            load();
+            gateStatusRef.current = "active";
+            activationTimeRef.current = Date.now();
+
+            // Reconcile with server so we can get an expiresAt to cache
+            try {
+              const qs = new URLSearchParams({ examId: apiExamId || examSlug });
+              if (email) qs.set("email", email);
+              const data = await safeGetJSON(`/api/prep/access/status/guard?${qs.toString()}&_=${Date.now()}`);
+              const serverExpires = data?.access?.expiresAt ? Date.parse(data.access.expiresAt) : 0;
+              writeAccessCache(apiExamId || examSlug, email, { status: "active", expiresAt: serverExpires || Date.now() + DEFAULT_CACHE_TTL });
+            } catch (e) {
+              // fallback short cache so user doesn't see overlay when offline immediately after approval
+              writeAccessCache(apiExamId || examSlug, email, { status: "active", expiresAt: Date.now() + 10_000 });
+            }
+
+            await load();
           }}
         />
       )}
