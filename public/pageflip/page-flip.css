@@ -216,3 +216,14 @@
   -ms-overflow-style: none;
   scrollbar-width: none;
 }
+
+/* FORCE ARROWS TO ALWAYS BE VISIBLE ON MOBILE */
+@media (max-width: 767px) {
+  #flipbook.pf-root {
+    padding-bottom: 70px !important;  /* guarantee arrow space */
+  }
+
+  .pf-arrow {
+    bottom: 1.5rem !important;
+  }
+}
