@@ -3,8 +3,9 @@ import { useEffect, useRef, useState } from "react";
 import * as pdfjsLib from "pdfjs-dist";
 
 /**
- * 3D Flip Viewer — Stable Version
- * - Uses local /public/pageflip engine (canvas based)
+ * 3D Flip Viewer — Custom Engine
+ * - Uses local /public/pageflip/page-flip.browser.min.js
+ *   (simple double-page, CSS 3D-style flip)
  * - Zoom + fullscreen
  * - Thumbnails + optional auto flip + page sound
  */
@@ -91,7 +92,7 @@ export default function BookFlipViewer({ pdfUrl, onExit }) {
       }
 
       // JS already loaded?
-      if (window.PageFlip && (window.PageFlip.PageFlip || typeof window.PageFlip === "function")) {
+      if (window.PageFlip && typeof window.PageFlip === "function") {
         return resolve();
       }
 
@@ -118,10 +119,7 @@ export default function BookFlipViewer({ pdfUrl, onExit }) {
       await loadPageFlipAssets();
       if (destroyed || !bookRef.current) return;
 
-      const globalPF = window.PageFlip;
-      const PageFlipClass =
-        globalPF && (globalPF.PageFlip || globalPF); // handle both exports
-
+      const PageFlipClass = window.PageFlip;
       if (typeof PageFlipClass !== "function") {
         console.error("❌ PageFlip class not found on window.PageFlip");
         return;
@@ -137,14 +135,7 @@ export default function BookFlipViewer({ pdfUrl, onExit }) {
       const flip = new PageFlipClass(bookRef.current, {
         width: 600,
         height: 800,
-        size: "stretch",
-        maxShadowOpacity: 0.5,
-        drawShadow: true,
         flippingTime: 800,
-        showCover: false,
-        usePortrait: false,
-        mobileScrollSupport: true,
-        startPage: 0,
       });
 
       flip.loadFromImages(pages);
@@ -159,7 +150,8 @@ export default function BookFlipViewer({ pdfUrl, onExit }) {
       }
 
       flip.on("flip", (e) => {
-        setCurrentPage(e.data || 0);
+        // e.data is the left-page index in the spread
+        setCurrentPage(typeof e.data === "number" ? e.data : 0);
         if (soundRef.current) {
           soundRef.current.currentTime = 0;
           soundRef.current.play().catch(() => {});
@@ -197,9 +189,10 @@ export default function BookFlipViewer({ pdfUrl, onExit }) {
       if (!flip) return;
 
       const state = flip.getState();
-      const last = pages.length - 1;
+      const lastSpreadLeftIndex =
+        pages.length % 2 === 0 ? pages.length - 2 : pages.length - 1;
 
-      if (state.currentPage >= last) {
+      if (state.currentPage >= lastSpreadLeftIndex) {
         flip.turnToPage(0);
       } else {
         flip.flipNext();
@@ -215,11 +208,23 @@ export default function BookFlipViewer({ pdfUrl, onExit }) {
   }, [autoFlip, pages.length]);
 
   /* ------------------------------------------------------------
-   * Thumbnails → jump to page
+   * Thumbnails → jump to page (align to left page of spread)
    * ------------------------------------------------------------ */
   const goToPage = (index) => {
     if (!flipRef.current) return;
-    flipRef.current.turnToPage(index);
+    const evenIndex = index % 2 === 0 ? index : index - 1;
+    flipRef.current.turnToPage(evenIndex);
+  };
+
+  /* ------------------------------------------------------------
+   * Manual prev/next controls
+   * ------------------------------------------------------------ */
+  const goNext = () => {
+    if (flipRef.current) flipRef.current.flipNext();
+  };
+
+  const goPrev = () => {
+    if (flipRef.current) flipRef.current.flipPrev();
   };
 
   /* ------------------------------------------------------------
@@ -245,50 +250,70 @@ export default function BookFlipViewer({ pdfUrl, onExit }) {
    * ------------------------------------------------------------ */
   return (
     <div className="w-full h-full flex flex-col bg-black text-white">
-      {/* HEADER */}
-      <div className="w-full bg-slate-900 px-4 py-2 flex items-center gap-3 border-b border-slate-800">
-        <span className="font-semibold text-sm sm:text-base">3D Flip Book</span>
+      {/* HEADER (sticky on mobile so buttons stay visible) */}
+      <div className="w-full bg-slate-900 px-2 sm:px-4 py-2 flex items-center gap-2 sm:gap-3 border-b border-slate-800 sticky top-0 z-20">
+        <span className="font-semibold text-xs sm:text-sm md:text-base">
+          3D Flip Book
+        </span>
 
         {pages.length > 0 && (
-          <span className="text-xs sm:text-slate-300">
+          <span className="text-[11px] sm:text-xs text-slate-300">
             Page {currentPage + 1} / {pages.length}
           </span>
         )}
 
+        {/* Prev / Next */}
+        <button
+          onClick={goPrev}
+          className="px-2 py-1 rounded bg-slate-700 text-[11px] sm:text-xs"
+        >
+          Prev
+        </button>
+        <button
+          onClick={goNext}
+          className="px-2 py-1 rounded bg-slate-700 text-[11px] sm:text-xs"
+        >
+          Next
+        </button>
+
+        {/* Auto flip */}
         <button
           onClick={() => setAutoFlip((v) => !v)}
-          className={`px-3 py-1 rounded text-xs sm:text-sm ${
+          className={`px-2 sm:px-3 py-1 rounded text-[11px] sm:text-xs ${
             autoFlip ? "bg-emerald-600" : "bg-slate-700"
           }`}
         >
           {autoFlip ? "Stop Auto-Flip" : "Start Auto-Flip"}
         </button>
 
-        <button
-          onClick={zoomIn}
-          className="px-3 py-1 rounded bg-slate-700 text-xs sm:text-sm"
-        >
-          Zoom +
-        </button>
+        {/* Zoom */}
         <button
           onClick={zoomOut}
-          className="px-3 py-1 rounded bg-slate-700 text-xs sm:text-sm"
+          className="px-2 sm:px-3 py-1 rounded bg-slate-700 text-[11px] sm:text-xs"
         >
           Zoom -
         </button>
+        <button
+          onClick={zoomIn}
+          className="px-2 sm:px-3 py-1 rounded bg-slate-700 text-[11px] sm:text-xs"
+        >
+          Zoom +
+        </button>
 
+        {/* Fullscreen */}
         <button
           onClick={enterFullscreen}
-          className="px-3 py-1 rounded bg-blue-700 hover:bg-blue-800 text-xs sm:text-sm"
+          className="px-2 sm:px-3 py-1 rounded bg-blue-700 hover:bg-blue-800 text-[11px] sm:text-xs"
         >
           Fullscreen
         </button>
 
         <div className="flex-1" />
 
+        {/* Exit */}
         <button
           onClick={onExit}
-          className="px-3 py-1 rounded bg-red-600 hover:bg-red-700 text-xs sm:text-sm"
+          className="px-2 sm:px-3 py-1 rounded bg-red-600 hover:bg-red-700 text-[11px] sm:text-xs"
         >
           Exit
         </button>
@@ -296,7 +321,7 @@ export default function BookFlipViewer({ pdfUrl, onExit }) {
 
       {/* MAIN AREA */}
       <div className="flex-1 flex bg-black overflow-hidden">
-        {/* Thumbnails */}
+        {/* Thumbnails (hide on very small screens) */}
         {pages.length > 0 && (
           <div className="hidden sm:block w-24 md:w-32 border-r border-slate-800 overflow-y-auto p-2 bg-slate-950">
             {pages.map((src, idx) => (
@@ -304,10 +329,16 @@ export default function BookFlipViewer({ pdfUrl, onExit }) {
                 key={idx}
                 onClick={() => goToPage(idx)}
                 className={`mb-2 w-full border ${
-                  idx === currentPage ? "border-emerald-400" : "border-slate-700"
+                  idx === currentPage || idx === currentPage + 1
+                    ? "border-emerald-400"
+                    : "border-slate-700"
                 } rounded overflow-hidden`}
               >
-                <img src={src} className="w-full h-auto" alt={`Page ${idx + 1}`} />
+                <img
+                  src={src}
+                  className="w-full h-auto"
+                  alt={`Page ${idx + 1}`}
+                />
               </button>
             ))}
           </div>
