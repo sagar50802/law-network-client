@@ -3,13 +3,11 @@ import { useEffect, useRef, useState } from "react";
 import * as pdfjsLib from "pdfjs-dist";
 
 /**
- * 3D Flip Viewer — Custom Version
- * - Renders PDF pages to images (client-side pdf.js)
- * - Uses local /public/pageflip/page-flip.browser.min.js
- *   which exposes window.PageFlip (HTML + 3D CSS)
- * - Double-page on desktop, single-page on small screens
- * - Swipe / arrows / click to turn, optional auto-flip
- * - Zoom + fullscreen, thumbnail sidebar
+ * 3D Flip Viewer — Stable Version
+ * - Uses local /public/pageflip engine (canvas based)
+ * - Works on desktop + mobile (same UI)
+ * - Zoom + fullscreen
+ * - Thumbnails + optional auto flip + page sound
  */
 
 export default function BookFlipViewer({ pdfUrl, onExit }) {
@@ -26,8 +24,8 @@ export default function BookFlipViewer({ pdfUrl, onExit }) {
   const autoFlipTimerRef = useRef(null);
 
   /* ------------------------------------------------------------
-   * 1) Load PDF → convert each page to an image
-   * ---------------------------------------------------------- */
+   * Load PDF → convert each page to an image
+   * ------------------------------------------------------------ */
   useEffect(() => {
     let cancelled = false;
 
@@ -36,7 +34,7 @@ export default function BookFlipViewer({ pdfUrl, onExit }) {
       try {
         setLoading(true);
 
-        // Use pdf.js worker from CDN
+        // use pdf.js worker from CDN
         pdfjsLib.GlobalWorkerOptions.workerSrc =
           `//cdnjs.cloudflare.com/ajax/libs/pdf.js/${pdfjsLib.version}/pdf.worker.js`;
 
@@ -48,13 +46,11 @@ export default function BookFlipViewer({ pdfUrl, onExit }) {
         const doc = await task.promise;
         if (cancelled) return;
 
-        const images = [];
-
+        const arr = [];
         for (let i = 1; i <= doc.numPages; i++) {
           const page = await doc.getPage(i);
-
-          // Reasonable default quality
           const viewport = page.getViewport({ scale: 1.4 });
+
           const canvas = document.createElement("canvas");
           const ctx = canvas.getContext("2d");
 
@@ -62,15 +58,14 @@ export default function BookFlipViewer({ pdfUrl, onExit }) {
           canvas.height = viewport.height;
 
           await page.render({ canvasContext: ctx, viewport }).promise;
-
-          images.push(canvas.toDataURL("image/jpeg", 0.85));
+          arr.push(canvas.toDataURL("image/jpeg", 0.85));
         }
 
         if (!cancelled) {
-          setPages(images);
+          setPages(arr);
         }
       } catch (err) {
-        console.error("[Flip] PDF load error:", err);
+        console.error("[Flip] PDF Load Error:", err);
       } finally {
         if (!cancelled) setLoading(false);
       }
@@ -84,11 +79,11 @@ export default function BookFlipViewer({ pdfUrl, onExit }) {
   }, [pdfUrl]);
 
   /* ------------------------------------------------------------
-   * 2) Load local JS + CSS from /public/pageflip
-   * ---------------------------------------------------------- */
+   * Load local JS + CSS from /public/pageflip
+   * ------------------------------------------------------------ */
   function loadPageFlipAssets() {
     return new Promise((resolve) => {
-      // CSS (only once)
+      // CSS once
       if (!document.querySelector("link[data-pageflip-css]")) {
         const link = document.createElement("link");
         link.rel = "stylesheet";
@@ -98,16 +93,18 @@ export default function BookFlipViewer({ pdfUrl, onExit }) {
       }
 
       // JS already loaded?
-      if (window.PageFlip && typeof window.PageFlip === "function") {
+      if (
+        window.PageFlip &&
+        (window.PageFlip.PageFlip || typeof window.PageFlip === "function")
+      ) {
         return resolve();
       }
 
-      // Load local JS
       const script = document.createElement("script");
       script.src = "/pageflip/page-flip.browser.min.js";
       script.onload = () => resolve();
       script.onerror = () => {
-        console.error("❌ Failed to load local PageFlip engine");
+        console.error("❌ Failed to load PageFlip engine");
         resolve();
       };
       document.body.appendChild(script);
@@ -115,8 +112,8 @@ export default function BookFlipViewer({ pdfUrl, onExit }) {
   }
 
   /* ------------------------------------------------------------
-   * 3) Initialise flipbook once images are ready
-   * ---------------------------------------------------------- */
+   * Initialize flipbook once pages are ready
+   * ------------------------------------------------------------ */
   useEffect(() => {
     if (!pages.length || !bookRef.current) return;
 
@@ -126,29 +123,38 @@ export default function BookFlipViewer({ pdfUrl, onExit }) {
       await loadPageFlipAssets();
       if (destroyed || !bookRef.current) return;
 
-      const PageFlipClass = window.PageFlip;
+      const globalPF = window.PageFlip;
+      const PageFlipClass =
+        globalPF && (globalPF.PageFlip || globalPF); // handle both exports
+
       if (typeof PageFlipClass !== "function") {
-        console.error("❌ Custom PageFlip class not found on window.PageFlip");
+        console.error("❌ PageFlip class not found on window.PageFlip");
         return;
       }
 
-      // Destroy previous instance
+      // Destroy old instance
       if (flipRef.current) {
         flipRef.current.destroy();
         flipRef.current = null;
       }
 
       const flip = new PageFlipClass(bookRef.current, {
-        width: 800,
-        height: 600,
-        flippingTime: 700,
+        width: 600,
+        height: 800,
+        size: "stretch",
+        maxShadowOpacity: 0.5,
+        drawShadow: true,
+        flippingTime: 800,
         showCover: false,
+        usePortrait: false,
+        mobileScrollSupport: true,
+        startPage: 0,
       });
 
       flip.loadFromImages(pages);
       flipRef.current = flip;
 
-      // Optional page-turn sound
+      // Optional flip sound
       try {
         soundRef.current = new Audio("/page-flip.mp3");
         soundRef.current.volume = 0.4;
@@ -157,8 +163,7 @@ export default function BookFlipViewer({ pdfUrl, onExit }) {
       }
 
       flip.on("flip", (e) => {
-        const idx = typeof e?.data === "number" ? e.data : 0;
-        setCurrentPage(idx);
+        setCurrentPage(e.data || 0);
         if (soundRef.current) {
           soundRef.current.currentTime = 0;
           soundRef.current.play().catch(() => {});
@@ -180,8 +185,8 @@ export default function BookFlipViewer({ pdfUrl, onExit }) {
   }, [pages]);
 
   /* ------------------------------------------------------------
-   * 4) Auto-flip (optional)
-   * ---------------------------------------------------------- */
+   * Auto-flip
+   * ------------------------------------------------------------ */
   useEffect(() => {
     if (!autoFlip || !flipRef.current) {
       if (autoFlipTimerRef.current) {
@@ -214,13 +219,16 @@ export default function BookFlipViewer({ pdfUrl, onExit }) {
   }, [autoFlip, pages.length]);
 
   /* ------------------------------------------------------------
-   * 5) Helpers – thumbnails / fullscreen / zoom
-   * ---------------------------------------------------------- */
+   * Thumbnails → jump to page
+   * ------------------------------------------------------------ */
   const goToPage = (index) => {
     if (!flipRef.current) return;
     flipRef.current.turnToPage(index);
   };
 
+  /* ------------------------------------------------------------
+   * Fullscreen only for the flipbook area
+   * ------------------------------------------------------------ */
   const enterFullscreen = () => {
     const elem = bookRef.current;
     if (!elem) return;
@@ -230,29 +238,30 @@ export default function BookFlipViewer({ pdfUrl, onExit }) {
     else if (elem.msRequestFullscreen) elem.msRequestFullscreen();
   };
 
+  /* ------------------------------------------------------------
+   * Zoom
+   * ------------------------------------------------------------ */
   const zoomIn = () => setZoom((z) => Math.min(2.2, z + 0.2));
   const zoomOut = () => setZoom((z) => Math.max(1, z - 0.2));
 
   /* ------------------------------------------------------------
-   * 6) UI
-   * ---------------------------------------------------------- */
+   * UI
+   * ------------------------------------------------------------ */
   return (
     <div className="w-full h-full flex flex-col bg-black text-white">
-      {/* HEADER (mobile friendly, wraps on small screens) */}
-      <div className="w-full bg-slate-900 px-2 sm:px-4 py-2 flex flex-wrap items-center gap-2 sm:gap-3 border-b border-slate-800 sticky top-0 z-20">
-        <span className="font-semibold text-xs sm:text-sm md:text-base">
-          3D Flip Book
-        </span>
+      {/* HEADER — always visible on mobile & desktop */}
+      <div className="w-full bg-slate-900 px-3 sm:px-4 py-2 flex items-center gap-2 sm:gap-3 border-b border-slate-800 text-xs sm:text-sm">
+        <span className="font-semibold whitespace-nowrap">3D Flip Book</span>
 
         {pages.length > 0 && (
-          <span className="text-[11px] sm:text-xs text-slate-300">
+          <span className="text-[11px] sm:text-xs text-slate-300 whitespace-nowrap">
             Page {currentPage + 1} / {pages.length}
           </span>
         )}
 
         <button
           onClick={() => setAutoFlip((v) => !v)}
-          className={`px-3 py-1 rounded text-[11px] sm:text-xs ${
+          className={`px-2 sm:px-3 py-1 rounded whitespace-nowrap ${
             autoFlip ? "bg-emerald-600" : "bg-slate-700"
           }`}
         >
@@ -261,20 +270,20 @@ export default function BookFlipViewer({ pdfUrl, onExit }) {
 
         <button
           onClick={zoomOut}
-          className="px-3 py-1 rounded bg-slate-700 text-[11px] sm:text-xs"
+          className="px-2 sm:px-3 py-1 rounded bg-slate-700"
         >
           Zoom -
         </button>
         <button
           onClick={zoomIn}
-          className="px-3 py-1 rounded bg-slate-700 text-[11px] sm:text-xs"
+          className="px-2 sm:px-3 py-1 rounded bg-slate-700"
         >
           Zoom +
         </button>
 
         <button
           onClick={enterFullscreen}
-          className="px-3 py-1 rounded bg-blue-700 hover:bg-blue-800 text-[11px] sm:text-xs"
+          className="px-2 sm:px-3 py-1 rounded bg-blue-700 hover:bg-blue-800"
         >
           Fullscreen
         </button>
@@ -283,7 +292,7 @@ export default function BookFlipViewer({ pdfUrl, onExit }) {
 
         <button
           onClick={onExit}
-          className="px-3 py-1 rounded bg-red-600 hover:bg-red-700 text-[11px] sm:text-xs"
+          className="px-2 sm:px-3 py-1 rounded bg-red-600 hover:bg-red-700"
         >
           Exit
         </button>
@@ -291,7 +300,7 @@ export default function BookFlipViewer({ pdfUrl, onExit }) {
 
       {/* MAIN AREA */}
       <div className="flex-1 flex bg-black overflow-hidden">
-        {/* Thumbnails (hide on very small screens) */}
+        {/* Thumbnails (hidden only on very narrow screens) */}
         {pages.length > 0 && (
           <div className="hidden sm:block w-24 md:w-32 border-r border-slate-800 overflow-y-auto p-2 bg-slate-950">
             {pages.map((src, idx) => (
@@ -318,13 +327,9 @@ export default function BookFlipViewer({ pdfUrl, onExit }) {
           style={{ height: "calc(100vh - 60px)" }}
         >
           {loading ? (
-            <div className="text-slate-200 text-sm sm:text-base">
-              Loading PDF…
-            </div>
+            <div className="text-slate-200 text-sm">Loading PDF…</div>
           ) : !pages.length ? (
-            <div className="text-red-400 text-sm sm:text-base">
-              Unable to render PDF.
-            </div>
+            <div className="text-red-400 text-sm">Unable to render PDF.</div>
           ) : (
             <div
               ref={bookRef}
