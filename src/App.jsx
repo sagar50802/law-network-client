@@ -32,11 +32,11 @@ import PodcastsPage from "./pages/PodcastsPage.jsx";
 import NotebookPage from "./pages/NotebookPage.jsx";
 import PdfDemo from "./pages/PdfDemo.jsx";
 import Plagiarism from "./pages/Plagiarism.jsx";
-import LibraryPage from "./pages/LibraryPage.jsx"; 
+import LibraryPage from "./pages/LibraryPage.jsx";
 
 /* ---------- BOOK READERS ---------- */
 import BookReaderPage from "./pages/library/reader/BookReaderPage.jsx";
-import BookFlipViewerPage from "./pages/library/reader/BookFlipViewerPage.jsx"; // ★ NEW
+import BookFlipViewerPage from "./pages/library/reader/BookFlipViewerPage.jsx";
 
 /* ---------- Admin Pages ---------- */
 import AdminDashboard from "./pages/AdminDashboard.jsx";
@@ -88,6 +88,14 @@ import ClassroomLinkCreator from "./pages/ClassroomLinkCreator.jsx";
 
 /* ---------- Theme Page ---------- */
 import ThemeFocusPage from "./pages/classroom/ThemeFocusPage.jsx";
+
+/* ========================================================= */
+/*           ✨ NEW — ANSWER WRITING MODULE ROUTES ✨          */
+/* ========================================================= */
+import AnswerDashboard from "./answerWriting/AnswerDashboard";
+import LiveQuestionPage from "./answerWriting/LiveQuestionPage";
+import AdminExamList from "./answerWriting/AdminExamList";
+import AdminExamBuilder from "./answerWriting/AdminExamBuilder";
 
 /* ========================================== */
 /*                 NOT FOUND                  */
@@ -185,12 +193,9 @@ function AppContent() {
           <Route path="/pdfdemo" element={<PdfDemo />} />
           <Route path="/library" element={<LibraryPage />} />
 
-          {/* ---- BOOK READERS ---- */}
+          {/* BOOK READERS */}
           <Route path="/library/reader/:bookId" element={<BookReaderPage />} />
-
-          {/* ★ NEW FLIP VIEWER ROUTE */}
           <Route path="/library/flip/:bookId" element={<BookFlipViewerPage />} />
-
 
           {/* LIVE */}
           <Route path="/live" element={<LiveChannelPage />} />
@@ -217,7 +222,7 @@ function AppContent() {
           <Route path="/classroom/ambience" element={<AmbiencePage />} />
           <Route path="/classroom/theme" element={<ThemeFocusPage />} />
 
-          {/* GROUP KEY */}
+          {/* BRIDGE */}
           <Route path="/bridge/gk/:key/t/:token" element={<GroupKeyBridge />} />
 
           {/* ADMIN CLASSROOM */}
@@ -329,7 +334,7 @@ function AppContent() {
             }
           />
 
-          {/* ADMIN */}
+          {/* ADMIN GENERAL */}
           <Route path="/admin/login" element={<AdminLogin />} />
 
           <Route
@@ -422,6 +427,29 @@ function AppContent() {
                 <ChangePassword />
               </AdminRoute>
             }
+          />
+
+          {/* ========================================================= */}
+          {/*        ✨ NEW ANSWER-WRITING ROUTES ADDED HERE ✨          */}
+          {/* ========================================================= */}
+
+          <Route path="/answer-writing/:examId" element={<AnswerDashboard />} />
+          <Route path="/answer-writing/:examId/live" element={<LiveQuestionPage />} />
+
+          <Route
+            path="/admin/answer-writing"
+            element={
+              <AdminExamList
+                onOpenExam={(exam) =>
+                  navigate(`/admin/answer-writing/${exam.id}`)
+                }
+              />
+            }
+          />
+
+          <Route
+            path="/admin/answer-writing/:examId"
+            element={<AdminExamBuilder />}
           />
 
           {/* 404 */}
