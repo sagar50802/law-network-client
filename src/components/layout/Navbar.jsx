@@ -111,6 +111,11 @@ export default function Navbar() {
             Library
           </a>
 
+          {/* ⭐⭐ NEW: Answer Writing (Student) */}
+          <a href="/answer-writing" className="text-purple-600 font-semibold hover:underline">
+            Answer Writing
+          </a>
+
           {/* LIVE */}
           <a
             href="/live"
@@ -156,35 +161,31 @@ export default function Navbar() {
               </a>
 
               {/* ⭐⭐ NEW: LIBRARY ADMIN LINKS (DESKTOP) */}
-              <a
-                href="/admin/library"
-                className="text-blue-600 underline"
-              >
+              <a href="/admin/library" className="text-blue-600 underline">
                 Library Admin
               </a>
-              <a
-                href="/admin/library/payments"
-                className="text-blue-600 underline"
-              >
+              <a href="/admin/library/payments" className="text-blue-600 underline">
                 Library Payments
               </a>
-              <a
-                href="/admin/library/seats"
-                className="text-blue-600 underline"
-              >
+              <a href="/admin/library/seats" className="text-blue-600 underline">
                 Library Seats
               </a>
-              <a
-                href="/admin/library/book-purchases"
-                className="text-blue-600 underline"
-              >
+              <a href="/admin/library/book-purchases" className="text-blue-600 underline">
                 Book Purchases
               </a>
-              <a
-                href="/admin/library/settings"
-                className="text-blue-600 underline"
-              >
+              <a href="/admin/library/settings" className="text-blue-600 underline">
                 Library Settings
+              </a>
+
+              {/* ⭐⭐⭐ NEW: Answer Writing Admin */}
+              <a href="/admin/answer-writing" className="text-purple-600 underline">
+                AW Admin
+              </a>
+              <a href="/admin/answer-writing/exams" className="text-purple-600 underline">
+                Manage Exams
+              </a>
+              <a href="/admin/answer-writing/manage" className="text-purple-600 underline">
+                Questions Manager
               </a>
 
               {/* Classroom Admin */}
@@ -264,9 +265,14 @@ export default function Navbar() {
             Classroom
           </a>
 
-          {/* ⭐ Library (mobile user) */}
+          {/* ⭐ Library (mobile) */}
           <a href="/library" className="text-blue-600 font-semibold">
             Library
+          </a>
+
+          {/* ⭐⭐ NEW: Answer Writing (Mobile) */}
+          <a href="/answer-writing" className="text-purple-600 font-semibold">
+            Answer Writing
           </a>
 
           <a href="/live" className="text-red-600 font-semibold">
@@ -297,7 +303,7 @@ export default function Navbar() {
                 Research Drafting Admin
               </a>
 
-              {/* ⭐⭐ NEW: LIBRARY ADMIN LINKS (MOBILE) */}
+              {/* ⭐⭐ NEW: LIBRARY ADMIN LINKS */}
               <a href="/admin/library" className="underline">
                 Library Admin
               </a>
@@ -307,14 +313,22 @@ export default function Navbar() {
               <a href="/admin/library/seats" className="underline">
                 Library Seats
               </a>
-              <a
-                href="/admin/library/book-purchases"
-                className="underline"
-              >
+              <a href="/admin/library/book-purchases" className="underline">
                 Book Purchases
               </a>
               <a href="/admin/library/settings" className="underline">
                 Library Settings
+              </a>
+
+              {/* ⭐⭐⭐ NEW: Answer Writing Admin (Mobile) */}
+              <a href="/admin/answer-writing" className="underline">
+                AW Admin
+              </a>
+              <a href="/admin/answer-writing/exams" className="underline">
+                Manage Exams
+              </a>
+              <a href="/admin/answer-writing/manage" className="underline">
+                Questions Manager
               </a>
 
               <a
@@ -331,7 +345,6 @@ export default function Navbar() {
                 📝 Edit Footer
               </a>
 
-              {/* 🔐 Change password (mobile) */}
               <a
                 href="/admin/change-password"
                 className="px-2 py-1 rounded-md bg-red-200 text-red-900 font-semibold text-center hover:bg-red-300 transition"
