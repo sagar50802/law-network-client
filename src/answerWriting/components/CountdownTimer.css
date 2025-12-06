@@ -1,0 +1,28 @@
+.aw-countdown-card {
+  text-align: center;
+  padding: 16px;
+}
+
+.aw-countdown-display {
+  display: flex;
+  justify-content: center;
+  align-items: center;
+  margin: 12px 0;
+}
+
+.time-box {
+  background: #111;
+  color: white;
+  padding: 8px 12px;
+  border-radius: 8px;
+  font-size: 22px;
+  font-weight: bold;
+  min-width: 48px;
+  text-align: center;
+}
+
+.sep {
+  margin: 0 6px;
+  font-size: 22px;
+  font-weight: bold;
+}
