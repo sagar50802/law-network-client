@@ -1,0 +1,659 @@
+/* Root page layout */
+.aw-page {
+  max-width: 1200px;
+  margin: 0 auto;
+  padding: 24px 20px 40px;
+  font-family: system-ui, -apple-system, BlinkMacSystemFont, "Segoe UI",
+    sans-serif;
+  color: #111827;
+}
+
+.aw-page-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 24px;
+  gap: 16px;
+}
+
+.aw-page-header h1 {
+  font-size: 24px;
+  margin: 6px 0;
+}
+
+.aw-page-header-split {
+  align-items: center;
+}
+
+.aw-page-header-right {
+  text-align: right;
+}
+
+.aw-chip {
+  padding: 6px 12px;
+  border-radius: 999px;
+  border: 1px solid #e5e7eb;
+  background: #f9fafb;
+}
+
+.aw-chip-value {
+  font-weight: 600;
+}
+
+/* Cards & grid */
+
+.aw-card {
+  background: #ffffff;
+  border-radius: 18px;
+  padding: 18px 18px 16px;
+  box-shadow: 0 10px 30px rgba(15, 23, 42, 0.08);
+  border: 1px solid #e5e7eb;
+}
+
+.aw-card-title {
+  font-size: 14px;
+  font-weight: 600;
+  margin-bottom: 12px;
+}
+
+.aw-grid {
+  display: grid;
+  gap: 16px;
+}
+
+.aw-grid-main {
+  grid-template-columns: minmax(0, 1fr);
+  gap: 18px;
+}
+
+.aw-grid-2col {
+  grid-template-columns: repeat(auto-fit, minmax(260px, 1fr));
+}
+
+.aw-grid-3col {
+  grid-template-columns: 0.9fr 1fr 1.1fr;
+}
+
+@media (max-width: 900px) {
+  .aw-grid-3col {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.aw-column,
+.aw-column-right {
+  display: flex;
+  flex-direction: column;
+  gap: 16px;
+}
+
+/* Pills & text */
+
+.aw-pill {
+  display: inline-flex;
+  align-items: center;
+  padding: 2px 10px;
+  border-radius: 999px;
+  font-size: 11px;
+  background: #ecfdf3;
+  color: #166534;
+  border: 1px solid #bbf7d0;
+}
+
+.aw-muted {
+  font-size: 13px;
+  color: #6b7280;
+}
+
+.aw-link {
+  color: #0f766e;
+  font-size: 13px;
+}
+
+.aw-text-strong {
+  font-size: 14px;
+  font-weight: 600;
+}
+
+/* Progress summary */
+
+.aw-progress-summary-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+}
+
+.aw-progress-summary-counts {
+  display: flex;
+  gap: 10px;
+  align-items: baseline;
+}
+
+.aw-progress-summary-percent {
+  text-align: right;
+}
+
+.aw-percent-main {
+  font-size: 26px;
+  font-weight: 700;
+}
+
+.aw-progress-summary-bar {
+  margin-top: 12px;
+}
+
+.aw-progress-summary-extra {
+  margin-top: 6px;
+  font-size: 12px;
+}
+
+/* Progress bar */
+
+.aw-progress-row {
+  margin-bottom: 8px;
+}
+
+.aw-progress-label {
+  font-size: 13px;
+  margin-bottom: 4px;
+}
+
+.aw-progress-wrapper {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+}
+
+.aw-progress-bg {
+  flex: 1;
+  height: 8px;
+  border-radius: 999px;
+  background: #e5e7eb;
+}
+
+.aw-progress-bg.large {
+  height: 10px;
+}
+
+.aw-progress-fill {
+  height: 100%;
+  border-radius: inherit;
+  background: linear-gradient(90deg, #22c55e, #16a34a);
+}
+
+.aw-progress-fill.large {
+  box-shadow: 0 6px 12px rgba(34, 197, 94, 0.4);
+}
+
+.aw-progress-value {
+  font-size: 12px;
+  color: #4b5563;
+}
+
+/* Countdown */
+
+.aw-countdown {
+  display: flex;
+  flex-direction: column;
+  gap: 12px;
+}
+
+.aw-countdown-values {
+  display: flex;
+  flex-wrap: wrap;
+  gap: 8px;
+}
+
+.aw-countdown-pill {
+  flex: 1;
+  min-width: 70px;
+  padding: 8px 6px;
+  border-radius: 12px;
+  background: #f9fafb;
+  border: 1px solid #e5e7eb;
+  text-align: center;
+}
+
+.aw-countdown-number {
+  font-size: 18px;
+  font-weight: 700;
+  display: block;
+}
+
+.aw-countdown-label {
+  font-size: 11px;
+  color: #6b7280;
+}
+
+/* Daily task watch */
+
+.aw-daily-watch-body {
+  display: flex;
+  align-items: center;
+  gap: 16px;
+}
+
+.aw-clock {
+  width: 72px;
+  height: 72px;
+  padding: 10px;
+  border-radius: 999px;
+  border: 1px dashed #d1d5db;
+  display: flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.aw-clock-face {
+  width: 48px;
+  height: 48px;
+  border-radius: 999px;
+  border: 3px solid #22c55e;
+  position: relative;
+}
+
+.aw-clock-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #22c55e;
+  position: absolute;
+  top: 50%;
+  left: 50%;
+  transform: translate(-50%, -50%);
+}
+
+.aw-daily-watch-number {
+  font-size: 28px;
+  font-weight: 700;
+}
+
+/* Tree */
+
+.aw-tree-card {
+  max-height: 320px;
+  overflow: hidden;
+  display: flex;
+  flex-direction: column;
+}
+
+.aw-tree {
+  overflow-y: auto;
+  padding-right: 4px;
+  margin-top: 4px;
+}
+
+.aw-tree-unit {
+  margin-bottom: 12px;
+}
+
+.aw-tree-unit-header {
+  display: flex;
+  align-items: center;
+  gap: 8px;
+  font-size: 13px;
+  font-weight: 600;
+}
+
+.aw-tree-unit-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #22c55e;
+}
+
+.aw-tree-topic-row {
+  margin-left: 18px;
+  margin-top: 4px;
+}
+
+.aw-tree-topic-main {
+  display: flex;
+  align-items: center;
+  width: 100%;
+  gap: 6px;
+  padding: 4px 4px 4px 0;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  cursor: pointer;
+  font-size: 12px;
+}
+
+.aw-tree-topic-main:hover {
+  background: #f3f4f6;
+}
+
+.aw-tree-topic-bullet {
+  width: 6px;
+  height: 6px;
+  border-radius: 999px;
+  border: 1px solid #9ca3af;
+}
+
+.aw-tree-subtopic {
+  display: block;
+  margin-left: 26px;
+  padding: 2px 4px;
+  border-radius: 999px;
+  border: none;
+  background: transparent;
+  font-size: 11px;
+  color: #4b5563;
+  text-align: left;
+  cursor: pointer;
+}
+
+.aw-tree-subtopic:hover {
+  background: #f9fafb;
+}
+
+.aw-badge {
+  font-size: 10px;
+  padding: 2px 6px;
+  border-radius: 999px;
+  border: 1px solid transparent;
+}
+
+.aw-badge-scheduled {
+  background: #ecfdf3;
+  color: #15803d;
+  border-color: #bbf7d0;
+}
+
+.aw-badge-lock,
+.aw-badge-lock-icon {
+  background: #fee2e2;
+  color: #b91c1c;
+  border-color: #fecaca;
+}
+
+.aw-tree-topic-row.aw-scheduled .aw-tree-topic-main {
+  background: #ecfdf3;
+}
+
+.aw-tree-topic-row.aw-locked .aw-tree-topic-main {
+  opacity: 0.6;
+}
+
+/* Question card */
+
+.aw-question-card {
+  max-height: none;
+}
+
+.aw-card-header {
+  display: flex;
+  justify-content: space-between;
+  align-items: flex-start;
+  margin-bottom: 10px;
+}
+
+.aw-question-code {
+  font-size: 12px;
+  font-weight: 600;
+  color: #4b5563;
+}
+
+.aw-question-topic {
+  font-size: 11px;
+  color: #9ca3af;
+}
+
+.aw-question-status {
+  display: flex;
+  align-items: center;
+  gap: 6px;
+  font-size: 11px;
+  color: #6b7280;
+}
+
+.aw-status-dot {
+  width: 8px;
+  height: 8px;
+  border-radius: 999px;
+  background: #e5e7eb;
+}
+
+.aw-status-dot.aw-status-live {
+  background: #22c55e;
+  box-shadow: 0 0 0 4px rgba(34, 197, 94, 0.3);
+}
+
+.aw-question-title {
+  font-weight: 600;
+  font-size: 14px;
+  margin-bottom: 8px;
+}
+
+.aw-question-body {
+  display: grid;
+  grid-template-columns: 1fr 1fr;
+  gap: 10px;
+  margin-bottom: 10px;
+}
+
+@media (max-width: 700px) {
+  .aw-question-body {
+    grid-template-columns: minmax(0, 1fr);
+  }
+}
+
+.aw-question-block {
+  padding: 8px 10px;
+  border-radius: 12px;
+  background: #f9fafb;
+  font-size: 13px;
+}
+
+.aw-question-lang {
+  font-size: 11px;
+  color: #6b7280;
+  margin-bottom: 4px;
+}
+
+.aw-question-footer {
+  display: flex;
+  justify-content: space-between;
+  align-items: center;
+  gap: 6px;
+  margin-top: 4px;
+}
+
+.aw-question-actions {
+  display: flex;
+  gap: 6px;
+}
+
+/* Upcoming list */
+
+.aw-upcoming-list {
+  list-style: none;
+  margin: 0;
+  padding: 0;
+}
+
+.aw-upcoming-item {
+  display: flex;
+  gap: 10px;
+  padding: 8px 4px;
+  border-bottom: 1px dashed #e5e7eb;
+}
+
+.aw-upcoming-code {
+  font-size: 12px;
+  font-weight: 600;
+  color: #4b5563;
+}
+
+.aw-upcoming-title {
+  font-size: 13px;
+  margin-bottom: 2px;
+}
+
+/* Forms & buttons */
+
+.aw-form {
+  display: flex;
+  flex-direction: column;
+  gap: 10px;
+  margin-top: 6px;
+}
+
+.aw-field {
+  display: flex;
+  flex-direction: column;
+  gap: 4px;
+  font-size: 12px;
+}
+
+.aw-field input,
+.aw-field textarea,
+.aw-field select {
+  border-radius: 10px;
+  border: 1px solid #d1d5db;
+  padding: 6px 8px;
+  font-size: 13px;
+  outline: none;
+}
+
+.aw-field textarea {
+  resize: vertical;
+}
+
+.aw-field input:focus,
+.aw-field textarea:focus {
+  border-color: #22c55e;
+  box-shadow: 0 0 0 1px rgba(34, 197, 94, 0.15);
+}
+
+.aw-form-row {
+  display: flex;
+  gap: 10px;
+}
+
+@media (max-width: 700px) {
+  .aw-form-row {
+    flex-direction: column;
+  }
+}
+
+.aw-btn {
+  border-radius: 999px;
+  padding: 6px 12px;
+  border: none;
+  font-size: 13px;
+  cursor: pointer;
+  transition: background 0.12s ease, box-shadow 0.12s ease, transform 0.05s ease;
+  display: inline-flex;
+  align-items: center;
+  justify-content: center;
+}
+
+.aw-btn-primary {
+  background: linear-gradient(90deg, #22c55e, #16a34a);
+  color: white;
+  box-shadow: 0 8px 16px rgba(22, 163, 74, 0.35);
+}
+
+.aw-btn-primary:hover {
+  transform: translateY(-1px);
+  box-shadow: 0 10px 20px rgba(22, 163, 74, 0.45);
+}
+
+.aw-btn-ghost {
+  background: #f3f4f6;
+  color: #111827;
+}
+
+.aw-btn-ghost:hover {
+  background: #e5e7eb;
+}
+
+.aw-btn-outline {
+  border: 1px solid #d1d5db;
+  background: #ffffff;
+}
+
+.aw-btn-outline:hover {
+  background: #f9fafb;
+}
+
+.aw-btn-danger {
+  background: #fee2e2;
+  color: #b91c1c;
+}
+
+.aw-btn-danger:hover {
+  background: #fecaca;
+}
+
+/* Exams list */
+
+.aw-exam-list {
+  list-style: none;
+  padding: 0;
+  margin: 0;
+}
+
+.aw-exam-item + .aw-exam-item {
+  margin-top: 4px;
+}
+
+.aw-exam-main {
+  width: 100%;
+  border-radius: 12px;
+  border: none;
+  background: #f9fafb;
+  padding: 8px 10px;
+  display: flex;
+  justify-content: space-between;
+  font-size: 13px;
+  cursor: pointer;
+}
+
+.aw-exam-main:hover {
+  background: #ecfdf3;
+}
+
+.aw-exam-name {
+  font-weight: 500;
+}
+
+/* Misc */
+
+.aw-hint {
+  font-size: 11px;
+  margin-top: 4px;
+}
+
+.aw-spinner {
+  width: 26px;
+  height: 26px;
+  border-radius: 999px;
+  border: 3px solid #e5e7eb;
+  border-top-color: #22c55e;
+  animation: aw-spin 0.8s linear infinite;
+  margin-bottom: 8px;
+}
+
+.aw-spinner.small {
+  width: 18px;
+  height: 18px;
+  border-width: 2px;
+}
+
+.aw-loading-page {
+  display: flex;
+  flex-direction: column;
+  align-items: center;
+  padding-top: 80px;
+  gap: 10px;
+  color: #4b5563;
+}
+
+@keyframes aw-spin {
+  to {
+    transform: rotate(360deg);
+  }
+}
