@@ -1,10 +1,12 @@
 import React, { useEffect, useState } from "react";
+import { useParams } from "react-router-dom";   // ✅ NEW
 import CountdownTimer from "./components/CountdownTimer";
 import QuestionCard from "./components/QuestionCard";
 import { fetchLiveQuestion } from "./api/answerWritingApi";
 import "./answerWriting.css";
 
-export default function LiveQuestionPage({ examId }) {
+export default function LiveQuestionPage() {
+  const { examId } = useParams();   // ✅ Real parameter from URL
   const [data, setData] = useState(null);
   const [loading, setLoading] = useState(true);
 
@@ -13,48 +15,10 @@ export default function LiveQuestionPage({ examId }) {
 
     async function load() {
       try {
-        // const { data } = await fetchLiveQuestion(examId);
-        // if (!cancelled) setData(data);
-
-        const mock = {
-          examName: "Bihar APO",
-          unitName: "Unit 1 – Preamble",
-          completionPercent: 65,
-          currentQuestion: {
-            id: "q1",
-            code: "Q1",
-            title: "Preamble as part of the Constitution",
-            hindiText:
-              "केसवानंद भारती बनाम केरल राज्य मामले में सर्वोच्च न्यायालय ने निर्णय दिया कि प्रीएंबल संविधान का हिस्सा है।",
-            englishText:
-              "In Kesavananda Bharati v. State of Kerala, the Supreme Court held that the Preamble is part of the Constitution.",
-            releaseAt: new Date().toISOString(),
-            isReleased: true,
-            topicName: "Preamble",
-          },
-          nextReleaseAt: new Date(
-            Date.now() + 7 * 60 * 60 * 1000
-          ).toISOString(),
-          upcoming: [
-            {
-              code: "Q2",
-              title: "Preamble not part – Beru Bari case",
-              releaseAt: new Date(
-                Date.now() + 7 * 60 * 60 * 1000
-              ).toISOString(),
-            },
-            {
-              code: "Q3",
-              title: "Objectives of Preamble",
-              releaseAt: new Date(
-                Date.now() + 20 * 60 * 60 * 1000
-              ).toISOString(),
-            },
-          ],
-        };
-
+        // 🔥 REAL API call
+        const { data } = await fetchLiveQuestion(examId);
         if (!cancelled) {
-          setData(mock);
+          setData(data);
           setLoading(false);
         }
       } catch (e) {
@@ -64,7 +28,10 @@ export default function LiveQuestionPage({ examId }) {
     }
 
     load();
+
+    // 🔄 auto-refresh every 30 seconds
     const interval = setInterval(load, 30000);
+
     return () => {
       cancelled = true;
       clearInterval(interval);
@@ -80,7 +47,7 @@ export default function LiveQuestionPage({ examId }) {
     );
   }
 
-  if (!data) {
+  if (!data || !data.currentQuestion) {
     return (
       <div className="aw-page">
         <p>No live question right now.</p>
@@ -88,8 +55,14 @@ export default function LiveQuestionPage({ examId }) {
     );
   }
 
-  const { examName, unitName, completionPercent, currentQuestion, nextReleaseAt, upcoming } =
-    data;
+  const {
+    examName,
+    unitName,
+    completionPercent,
+    currentQuestion,
+    nextReleaseAt,
+    upcoming,
+  } = data;
 
   return (
     <div className="aw-page">
