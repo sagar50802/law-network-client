@@ -1,11 +1,14 @@
 import React, { useEffect, useState } from "react";
+import { useParams } from "react-router-dom";   // ✅ NEW
 import CountdownTimer from "./components/CountdownTimer";
 import ProgressBar from "./components/ProgressBar";
 import UnitTopicTree from "./components/UnitTopicTree";
 import { fetchStudentDashboard } from "./api/answerWritingApi";
 import "./answerWriting.css";
 
-export default function AnswerDashboard({ examId }) {
+export default function AnswerDashboard() {
+  const { examId } = useParams();   // ✅ REAL param from route
+
   const [loading, setLoading] = useState(true);
   const [dashboard, setDashboard] = useState(null);
 
@@ -14,65 +17,9 @@ export default function AnswerDashboard({ examId }) {
 
     async function load() {
       try {
-        // when backend is ready, uncomment:
-        // const { data } = await fetchStudentDashboard(examId);
-        // if (!cancelled) setDashboard(data);
-
-        // mock data for now
-        const mock = {
-          examName: "Bihar APO",
-          overallPercent: 65,
-          coveredCount: 15,
-          scheduledCount: 8,
-          totalCount: 35,
-          nextTask: {
-            topicName: "Criminal Law – Unit 1",
-            releaseAt: new Date(Date.now() + 2 * 60 * 60 * 1000).toISOString(),
-          },
-          dailyTaskWatch: 24,
-          subjectProgress: [
-            { name: "Criminal Law", value: 45 },
-            { name: "Indian Penal Code", value: 20 },
-            { name: "Code of Criminal Procedure", value: 75 },
-            { name: "Indian Evidence Act", value: 30 },
-          ],
-          units: [
-            {
-              id: "u1",
-              name: "Unit 1",
-              locked: false,
-              topics: [
-                {
-                  id: "t1",
-                  name: "Preamble",
-                  hasScheduledQuestions: true,
-                  locked: false,
-                  subtopics: [
-                    { id: "s1", name: "Meaning" },
-                    { id: "s2", name: "Key Cases" },
-                  ],
-                },
-              ],
-            },
-            {
-              id: "u2",
-              name: "Unit 2",
-              locked: false,
-              topics: [
-                {
-                  id: "t2",
-                  name: "Directive Principles",
-                  hasScheduledQuestions: true,
-                  locked: false,
-                  subtopics: [{ id: "s3", name: "Article 39A" }],
-                },
-              ],
-            },
-          ],
-        };
-
+        const { data } = await fetchStudentDashboard(examId);  // ✅ REAL API call
         if (!cancelled) {
-          setDashboard(mock);
+          setDashboard(data);
           setLoading(false);
         }
       } catch (e) {
@@ -83,7 +30,7 @@ export default function AnswerDashboard({ examId }) {
 
     load();
 
-    // auto-refresh every 30s for “live” feel
+    // auto refresh every 30s
     const interval = setInterval(load, 30000);
 
     return () => {
@@ -172,6 +119,7 @@ export default function AnswerDashboard({ examId }) {
         </div>
 
         <div className="aw-grid aw-grid-2col">
+          {/* Daily Watch */}
           <div className="aw-card aw-daily-watch">
             <div className="aw-card-title">Daily Task Watch</div>
             <div className="aw-daily-watch-body">
@@ -189,11 +137,11 @@ export default function AnswerDashboard({ examId }) {
             </div>
           </div>
 
+          {/* Unit / Topic Tree */}
           <UnitTopicTree
             data={units}
             onSelectItem={(item) => {
-              // later: navigate to specific topic / question list
-              console.log("selected", item);
+              console.log("selected", item); // Future: navigate to topic/questions
             }}
           />
         </div>
