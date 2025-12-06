@@ -5,7 +5,7 @@ import {
   Route,
   useLocation,
   useParams,
-  useNavigate,   // ✅ Added
+  useNavigate,
 } from "react-router-dom";
 import { useEffect } from "react";
 
@@ -91,16 +91,15 @@ import ClassroomLinkCreator from "./pages/ClassroomLinkCreator.jsx";
 import ThemeFocusPage from "./pages/classroom/ThemeFocusPage.jsx";
 
 /* ========================================================= */
-/*           ✨ NEW — ANSWER WRITING MODULE ROUTES ✨          */
+/*           ✨ ANSWER WRITING MODULE IMPORTS ✨              */
 /* ========================================================= */
+import AnswerExamList from "./answerWriting/AnswerExamList";
 import AnswerDashboard from "./answerWriting/AnswerDashboard";
 import LiveQuestionPage from "./answerWriting/LiveQuestionPage";
 import AdminExamList from "./answerWriting/AdminExamList";
 import AdminExamBuilder from "./answerWriting/AdminExamBuilder";
 
-/* ========================================== */
-/*                 NOT FOUND                  */
-/* ========================================== */
+/* ---------- Not Found ---------- */
 function NotFound() {
   return (
     <div className="flex flex-col items-center justify-center py-24 text-center">
@@ -118,6 +117,7 @@ function NotFound() {
   );
 }
 
+/* ---------- Scroll Handler ---------- */
 function ScrollToHash() {
   const { hash, pathname } = useLocation();
   useEffect(() => {
@@ -127,14 +127,8 @@ function ScrollToHash() {
       const el = document.getElementById(id);
       if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
     };
-    const t0 = setTimeout(tryScroll, 0);
-    const t1 = setTimeout(tryScroll, 120);
-    const t2 = setTimeout(tryScroll, 350);
-    return () => {
-      clearTimeout(t0);
-      clearTimeout(t1);
-      clearTimeout(t2);
-    };
+    setTimeout(tryScroll, 0);
+    setTimeout(tryScroll, 150);
   }, [hash, pathname]);
   return null;
 }
@@ -160,13 +154,12 @@ function ClassroomWrapper({ children }) {
   );
 }
 
-/* ========================================== */
-/*                 MAIN ROUTES                */
-/* ========================================== */
+/* ========================================================= */
+/*                     MAIN APP ROUTES                       */
+/* ========================================================= */
 function AppContent() {
   const location = useLocation();
-  const navigate = useNavigate();   // ✅ Added
-
+  const navigate = useNavigate();
   const isPrepHome = location.pathname === "/prep";
 
   return (
@@ -220,7 +213,6 @@ function AppContent() {
               </ClassroomWrapper>
             }
           />
-
           <Route path="/classroom/share" element={<ClassroomSharePage />} />
           <Route path="/classroom/ambience" element={<AmbiencePage />} />
           <Route path="/classroom/theme" element={<ThemeFocusPage />} />
@@ -237,7 +229,6 @@ function AppContent() {
               </AdminRoute>
             }
           />
-
           <Route
             path="/admin/classroom"
             element={
@@ -253,7 +244,6 @@ function AppContent() {
             path="/research-drafting/lab/:id"
             element={<ResearchDraftingLab />}
           />
-
           <Route
             path="/admin/research-drafting"
             element={
@@ -266,7 +256,6 @@ function AppContent() {
           {/* PREP */}
           <Route path="/prep" element={<PrepList />} />
           <Route path="/prep/:examId" element={<PrepWizard />} />
-
           <Route
             path="/admin/prep"
             element={
@@ -275,7 +264,6 @@ function AppContent() {
               </AdminRoute>
             }
           />
-
           <Route
             path="/admin/prep-overlay"
             element={
@@ -284,7 +272,6 @@ function AppContent() {
               </AdminRoute>
             }
           />
-
           <Route
             path="/admin/prep-access"
             element={
@@ -318,7 +305,6 @@ function AppContent() {
               </IfOwnerOnly>
             }
           />
-
           <Route
             path="/owner/tests/results"
             element={
@@ -327,7 +313,6 @@ function AppContent() {
               </IfOwnerOnly>
             }
           />
-
           <Route
             path="/owner/tests"
             element={
@@ -339,7 +324,6 @@ function AppContent() {
 
           {/* ADMIN GENERAL */}
           <Route path="/admin/login" element={<AdminLogin />} />
-
           <Route
             path="/admin/dashboard"
             element={
@@ -348,7 +332,6 @@ function AppContent() {
               </AdminRoute>
             }
           />
-
           <Route
             path="/admin/consultancy"
             element={
@@ -357,7 +340,6 @@ function AppContent() {
               </AdminRoute>
             }
           />
-
           <Route
             path="/admin/footer"
             element={
@@ -376,7 +358,6 @@ function AppContent() {
               </AdminRoute>
             }
           />
-
           <Route
             path="/admin/library/payments"
             element={
@@ -385,7 +366,6 @@ function AppContent() {
               </AdminRoute>
             }
           />
-
           <Route
             path="/admin/library/seats"
             element={
@@ -394,7 +374,6 @@ function AppContent() {
               </AdminRoute>
             }
           />
-
           <Route
             path="/admin/library/book-purchases"
             element={
@@ -403,7 +382,6 @@ function AppContent() {
               </AdminRoute>
             }
           />
-
           <Route
             path="/admin/library/books"
             element={
@@ -412,7 +390,6 @@ function AppContent() {
               </AdminRoute>
             }
           />
-
           <Route
             path="/admin/library/settings"
             element={
@@ -433,15 +410,22 @@ function AppContent() {
           />
 
           {/* ========================================================= */}
-          {/*        ✨ NEW ANSWER-WRITING ROUTES ADDED HERE ✨          */}
+          {/*                ✨ ANSWER WRITING ROUTES ✨                */}
           {/* ========================================================= */}
+
+          {/* PUBLIC — Exam chooser */}
+          <Route path="/answer-writing" element={<AnswerExamList />} />
+
+          {/* Student dashboard */}
           <Route path="/answer-writing/:examId" element={<AnswerDashboard />} />
 
+          {/* Live question screen */}
           <Route
             path="/answer-writing/:examId/live"
             element={<LiveQuestionPage />}
           />
 
+          {/* Admin: list of exams */}
           <Route
             path="/admin/answer-writing"
             element={
@@ -453,12 +437,13 @@ function AppContent() {
             }
           />
 
+          {/* Admin: builder */}
           <Route
             path="/admin/answer-writing/:examId"
             element={<AdminExamBuilder />}
           />
 
-          {/* 404 */}
+          {/* NOT FOUND */}
           <Route path="*" element={<NotFound />} />
         </Routes>
       </div>
