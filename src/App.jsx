@@ -5,6 +5,7 @@ import {
   Route,
   useLocation,
   useParams,
+  useNavigate,   // ✅ Added
 } from "react-router-dom";
 import { useEffect } from "react";
 
@@ -164,6 +165,8 @@ function ClassroomWrapper({ children }) {
 /* ========================================== */
 function AppContent() {
   const location = useLocation();
+  const navigate = useNavigate();   // ✅ Added
+
   const isPrepHome = location.pathname === "/prep";
 
   return (
@@ -432,9 +435,12 @@ function AppContent() {
           {/* ========================================================= */}
           {/*        ✨ NEW ANSWER-WRITING ROUTES ADDED HERE ✨          */}
           {/* ========================================================= */}
-
           <Route path="/answer-writing/:examId" element={<AnswerDashboard />} />
-          <Route path="/answer-writing/:examId/live" element={<LiveQuestionPage />} />
+
+          <Route
+            path="/answer-writing/:examId/live"
+            element={<LiveQuestionPage />}
+          />
 
           <Route
             path="/admin/answer-writing"
