@@ -6,25 +6,22 @@ import "./answerWriting.css";
 
 export default function AnswerDashboard() {
   const { examId } = useParams();
-  const [progress, setProgress] = useState({ totalReleased: 0, totalQuestions: 0 });
+  const [progress, setProgress] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function load() {
       try {
         const { data } = await fetchStudentDashboard(examId);
-        setProgress(data.progress || { totalReleased: 0, totalQuestions: 0 });
+        setProgress(data.progress);
       } catch (err) {
         console.error("fetchStudentDashboard error", err);
       } finally {
         setLoading(false);
       }
     }
-    if (examId) load();
+    load();
   }, [examId]);
-
-  const released = progress.totalReleased || 0;
-  const total = progress.totalQuestions || 0;
 
   return (
     <div className="aw-page">
@@ -36,20 +33,20 @@ export default function AnswerDashboard() {
             Track questions released so far and attempt them in live mode.
           </p>
         </div>
-        <div className="aw-stat-chip">
-          Questions Released&nbsp;
-          <strong>
-            {released} / {total}
-          </strong>
-        </div>
+        {progress && (
+          <div className="aw-counter-pill">
+            Questions Released {progress.totalReleased} /{" "}
+            {progress.totalQuestions}
+          </div>
+        )}
       </div>
 
       <div className="aw-card">
         {loading ? (
           <p>Loading…</p>
         ) : (
-          <>
-            <p className="aw-muted">
+          <div className="aw-dashboard-callout">
+            <p>
               Live questions are released automatically. When a new question is
               live, you can open the live screen to see it with the exam timer.
             </p>
@@ -59,7 +56,7 @@ export default function AnswerDashboard() {
             >
               Go to Live Question Screen
             </Link>
-          </>
+          </div>
         )}
       </div>
     </div>
