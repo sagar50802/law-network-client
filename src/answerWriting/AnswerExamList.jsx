@@ -10,7 +10,9 @@ export default function AnswerExamList() {
     async function load() {
       try {
         const res = await fetchExams();
-        setExams(res.data.exams || []);  // ✅ ALWAYS an array
+
+        // Always set array → prevents .map crash
+        setExams(res.data?.exams || []);
       } catch (err) {
         console.error(err);
       } finally {
@@ -26,7 +28,7 @@ export default function AnswerExamList() {
         <div>
           <div className="aw-pill">Answer Writing</div>
           <h1>Select Your Exam</h1>
-          <p className="aw-muted">Choose your exam to begin writing practice.</p>
+          <p className="aw-muted">Choose your exam to begin answer writing practice.</p>
         </div>
       </div>
 
@@ -36,20 +38,20 @@ export default function AnswerExamList() {
         ) : exams.length === 0 ? (
           <p>No exams available yet.</p>
         ) : (
-          exams.map((e) => (
+          exams.map((exam) => (
             <a
-              key={e._id}
-              href={`/answer-writing/${e._id}`}
-              className="aw-btn aw-btn-primary"
-              style={{
-                display: "block",
-                margin: "12px 0",
-                textAlign: "center",
-                fontSize: "18px",
-                padding: "12px",
-              }}
+              key={exam._id}
+              href={`/answer-writing/${exam._id}`}
+              className="aw-exam-card"
             >
-              {e.name}
+              {/* cover image */}
+              {exam.coverUrl && (
+                <img src={exam.coverUrl} alt="" className="aw-exam-cover" />
+              )}
+
+              <div className="aw-exam-info">
+                <h3>{exam.name}</h3>
+              </div>
             </a>
           ))
         )}
