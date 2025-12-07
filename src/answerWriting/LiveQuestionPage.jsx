@@ -57,7 +57,7 @@ export default function LiveQuestionPage() {
     <div className="aw-page">
       <div className="aw-page-header">
         <div>
-          <div className="aw-pill">Answer Writing · Live</div>
+          <div className="aw-pill">Answer Writing · LIVE</div>
           <h1>Current Question</h1>
           <p className="aw-muted">
             Attempt the question in exam-like conditions. Tap ‘Show Answer’ to
