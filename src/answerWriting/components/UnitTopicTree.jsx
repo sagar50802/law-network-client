@@ -1,71 +1,70 @@
+// src/answerWriting/components/UnitTopicTree.jsx
 import React from "react";
+import "../answerWriting.css";
 
-export default function UnitTopicTree({
-  data,
-  onSelectItem,
-  highlightScheduled = true,
-  showLocks = true,
-}) {
-  return (
-    <div className="aw-card aw-tree-card">
-      <div className="aw-card-title">Syllabus Overview</div>
-      <div className="aw-tree">
-        {data?.map((unit) => (
-          <div key={unit.id} className="aw-tree-unit">
-            <div className="aw-tree-unit-header">
-              <span className="aw-tree-unit-dot" />
-              <span>{unit.name}</span>
-              {unit.locked && showLocks && (
-                <span className="aw-badge aw-badge-lock">Locked</span>
-              )}
-            </div>
-
-            {unit.topics?.map((topic) => {
-              const scheduled = topic.hasScheduledQuestions;
-              const topicClasses = [
-                "aw-tree-topic-row",
-                topic.locked && showLocks ? "aw-locked" : "",
-                scheduled && highlightScheduled ? "aw-scheduled" : "",
-              ]
-                .filter(Boolean)
-                .join(" ");
-
-              return (
-                <div key={topic.id} className={topicClasses}>
-                  <button
-                    type="button"
-                    onClick={() => onSelectItem?.(topic)}
-                    className="aw-tree-topic-main"
-                  >
-                    <span className="aw-tree-topic-bullet" />
-                    <span>{topic.name}</span>
-                    {scheduled && (
-                      <span className="aw-badge aw-badge-scheduled">
-                        Scheduled
-                      </span>
-                    )}
-                    {topic.locked && showLocks && (
-                      <span className="aw-badge aw-badge-lock-icon">🔒</span>
-                    )}
-                  </button>
-
-                  {topic.subtopics?.map((sub) => (
-                    <button
-                      key={sub.id}
-                      type="button"
-                      onClick={() => onSelectItem?.(sub)}
-                      className="aw-tree-subtopic"
-                    >
-                      <span className="aw-tree-subtopic-bullet" />
-                      <span>{sub.name}</span>
-                    </button>
-                  ))}
-                </div>
-              );
-            })}
-          </div>
-        ))}
+export default function UnitTopicTree({ data, onSelectItem }) {
+  if (!Array.isArray(data) || data.length === 0) {
+    return (
+      <div className="aw-card">
+        <p className="aw-muted">No units yet. Create a unit to get started.</p>
       </div>
+    );
+  }
+
+  return (
+    <div className="aw-card">
+      <div className="aw-card-title">Syllabus Tree</div>
+      <ul className="aw-tree">
+        {data.map((unit) => (
+          <li key={unit._id || unit.id}>
+            <button
+              type="button"
+              className="aw-tree-unit"
+              onClick={() => onSelectItem?.({ unit })}
+            >
+              {unit.name}
+            </button>
+
+            <ul>
+              {(unit.topics || []).map((topic) => {
+                const hasQuestions = (topic.subtopics || []).some(
+                  (s) => (s.questions || []).length > 0
+                );
+
+                return (
+                  <li key={topic._id || topic.id}>
+                    <button
+                      type="button"
+                      className={`aw-tree-topic ${
+                        topic.locked ? "aw-topic-locked" : ""
+                      } ${hasQuestions ? "aw-topic-has-q" : ""}`}
+                      onClick={() => onSelectItem?.({ unit, topic })}
+                    >
+                      {topic.name}
+                    </button>
+
+                    <ul>
+                      {(topic.subtopics || []).map((sub) => (
+                        <li key={sub._id || sub.id}>
+                          <button
+                            type="button"
+                            className="aw-tree-subtopic"
+                            onClick={() =>
+                              onSelectItem?.({ unit, topic, subtopic: sub })
+                            }
+                          >
+                            {sub.name}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </li>
+                );
+              })}
+            </ul>
+          </li>
+        ))}
+      </ul>
     </div>
   );
 }
