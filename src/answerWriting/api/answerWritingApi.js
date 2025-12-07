@@ -7,17 +7,26 @@ const api = axios.create({
   withCredentials: true,
 });
 
-// NOTE: these are just shapes; backend will be added later
+// Exams
 export const fetchExams = () => api.get("/exams");
 export const createExam = (payload) => api.post("/exams", payload);
 
+// Exam Detail
 export const fetchExamDetail = (examId) => api.get(`/exams/${examId}`);
+
+// Units
 export const createUnit = (examId, payload) =>
   api.post(`/exams/${examId}/units`, payload);
+
+// Topics
 export const createTopic = (unitId, payload) =>
   api.post(`/units/${unitId}/topics`, payload);
+
+// Subtopics
 export const createSubtopic = (topicId, payload) =>
   api.post(`/topics/${topicId}/subtopics`, payload);
+
+// Questions
 export const createQuestion = (subtopicId, payload) =>
   api.post(`/subtopics/${subtopicId}/questions`, payload);
 
@@ -27,6 +36,7 @@ export const toggleLockTopic = (topicId, locked) =>
 export const deleteQuestion = (questionId) =>
   api.delete(`/questions/${questionId}`);
 
+// Student
 export const fetchStudentDashboard = (examId) =>
   api.get(`/student/${examId}/dashboard`);
 
