@@ -1,13 +1,13 @@
-// src/answerWriting/api/answerWritingApi.js
 import axios from "axios";
 
 const API_BASE = import.meta.env.VITE_API_URL || "/api";
 
+// ✅ FIXED AXIOS INSTANCE
 const api = axios.create({
   baseURL: `${API_BASE}/answer-writing`,
   withCredentials: true,
   headers: {
-    "Content-Type": "application/json",   // <-- REQUIRED FIX (without this your backend gets empty body)
+    "Content-Type": "application/json",   // <-- REQUIRED
   },
 });
 
