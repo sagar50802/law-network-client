@@ -1,3 +1,4 @@
+// src/answerWriting/components/UnitTopicTree.jsx
 import React from "react";
 import "../answerWriting.css";
 
@@ -28,35 +29,42 @@ export default function UnitTopicTree({ data = [], onSelectItem }) {
 
             {/* TOPICS UNDER UNIT */}
             <ul>
-              {(unit.topics || []).map((topic) => (
-                <li key={topic._id}>
-                  {/* TOPIC */}
-                  <button
-                    type="button"
-                    className={`aw-tree-topic ${topic.locked ? "aw-topic-locked" : ""}`}
-                    onClick={() => onSelectItem?.({ unit, topic })}
-                  >
-                    {topic.name}
-                  </button>
+              {(unit.topics || []).map((topic) => {
+                const hasQuestions = (topic.subtopics || []).some(
+                  (s) => (s.questions || []).length > 0
+                );
+                return (
+                  <li key={topic._id}>
+                    {/* TOPIC */}
+                    <button
+                      type="button"
+                      className={`aw-tree-topic ${
+                        topic.locked ? "aw-topic-locked" : ""
+                      } ${hasQuestions ? "aw-topic-has-q" : ""}`}
+                      onClick={() => onSelectItem?.({ unit, topic })}
+                    >
+                      {topic.name}
+                    </button>
 
-                  {/* SUBTOPICS UNDER TOPIC */}
-                  <ul>
-                    {(topic.subtopics || []).map((sub) => (
-                      <li key={sub._id}>
-                        <button
-                          type="button"
-                          className="aw-tree-subtopic"
-                          onClick={() =>
-                            onSelectItem?.({ unit, topic, subtopic: sub })
-                          }
-                        >
-                          {sub.name}
-                        </button>
-                      </li>
-                    ))}
-                  </ul>
-                </li>
-              ))}
+                    {/* SUBTOPICS UNDER TOPIC */}
+                    <ul>
+                      {(topic.subtopics || []).map((sub) => (
+                        <li key={sub._id}>
+                          <button
+                            type="button"
+                            className="aw-tree-subtopic"
+                            onClick={() =>
+                              onSelectItem?.({ unit, topic, subtopic: sub })
+                            }
+                          >
+                            {sub.name}
+                          </button>
+                        </li>
+                      ))}
+                    </ul>
+                  </li>
+                );
+              })}
             </ul>
           </li>
         ))}
