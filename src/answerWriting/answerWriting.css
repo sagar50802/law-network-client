@@ -166,3 +166,24 @@
   padding-top: 8px;
   border-top: 1px dashed #e5e7eb;
 }
+.aw-question-box {
+  margin-left: 20px;
+  padding: 10px;
+}
+
+.aw-question-card {
+  background: #fff;
+  margin: 8px 0;
+  padding: 12px;
+  border-radius: 8px;
+  border: 1px solid #ddd;
+}
+
+.aw-answer summary {
+  cursor: pointer;
+  color: #4caf50;
+}
+
+.aw-qen {
+  color: #555;
+}
