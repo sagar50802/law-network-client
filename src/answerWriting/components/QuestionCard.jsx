@@ -1,74 +1,77 @@
-// src/answerWriting/components/QuestionCard.jsx
-import React from "react";
+import React, { useState } from "react";
 import "../answerWriting.css";
 
-export default function QuestionCard({
-  question,
-  onDelete,
-  onEdit,
-  showStatus = true,
-}) {
+export default function QuestionCard({ question, onDelete, showAnswerToggle }) {
+  const [showAns, setShowAns] = useState(false);
+
   if (!question) return null;
 
-  const {
-    code,
-    hindiText,
-    englishText,
-    releaseAt,
-    isReleased,
-    topicName,
-  } = question;
-
-  const releaseLabel = releaseAt
-    ? new Date(releaseAt).toLocaleString()
-    : "Not scheduled";
-
   return (
-    <div className="aw-question-card">
-      <div className="aw-question-header">
-        {code && <span className="aw-question-code">{code}</span>}
-        {topicName && <span className="aw-question-topic">{topicName}</span>}
-
-        {showStatus && (
-          <span
-            className={`aw-status-pill ${
-              isReleased ? "aw-status-live" : "aw-status-pending"
-            }`}
-          >
-            {isReleased ? "Released" : "Scheduled"}
-          </span>
+    <div className="aw-qcard">
+      <div className="aw-qcard-header">
+        <div className="aw-qcard-meta">
+          {question.releaseAt && (
+            <span className="aw-muted">
+              Release:{" "}
+              {new Date(question.releaseAt).toLocaleString(undefined, {
+                dateStyle: "medium",
+                timeStyle: "short",
+              })}
+            </span>
+          )}
+          {question.topicName && (
+            <span className="aw-chip">Topic: {question.topicName}</span>
+          )}
+        </div>
+        {onDelete && (
+          <button className="aw-btn aw-btn-xs aw-btn-danger" onClick={onDelete}>
+            Delete
+          </button>
         )}
       </div>
 
-      {hindiText && (
-        <p className="aw-question-text aw-question-text-hi">{hindiText}</p>
-      )}
-      {englishText && (
-        <p className="aw-question-text aw-question-text-en">{englishText}</p>
-      )}
+      <div className="aw-qcard-body">
+        {question.hindiText && (
+          <>
+            <div className="aw-label">प्रश्न (Hindi)</div>
+            <p>{question.hindiText}</p>
+          </>
+        )}
+        {question.englishText && (
+          <>
+            <div className="aw-label">Question (English)</div>
+            <p>{question.englishText}</p>
+          </>
+        )}
 
-      <div className="aw-question-footer">
-        <span className="aw-muted small">Release at: {releaseLabel}</span>
-        <div className="aw-question-actions">
-          {onEdit && (
+        {showAnswerToggle && (question.hindiAnswer || question.englishAnswer) && (
+          <div className="aw-answer-toggle">
             <button
               type="button"
-              className="aw-btn aw-btn-ghost aw-btn-sm"
-              onClick={onEdit}
+              className="aw-btn aw-btn-outline aw-btn-sm"
+              onClick={() => setShowAns((v) => !v)}
             >
-              Edit
+              {showAns ? "Hide Answer" : "Show Answer"}
             </button>
-          )}
-          {onDelete && (
-            <button
-              type="button"
-              className="aw-btn aw-btn-danger aw-btn-sm"
-              onClick={onDelete}
-            >
-              Delete
-            </button>
-          )}
-        </div>
+
+            {showAns && (
+              <div className="aw-answer-block">
+                {question.hindiAnswer && (
+                  <>
+                    <div className="aw-label">उत्तर (Hindi)</div>
+                    <p>{question.hindiAnswer}</p>
+                  </>
+                )}
+                {question.englishAnswer && (
+                  <>
+                    <div className="aw-label">Answer (English)</div>
+                    <p>{question.englishAnswer}</p>
+                  </>
+                )}
+              </div>
+            )}
+          </div>
+        )}
       </div>
     </div>
   );
