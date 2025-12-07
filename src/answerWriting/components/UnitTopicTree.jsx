@@ -1,8 +1,7 @@
-// src/answerWriting/components/UnitTopicTree.jsx
 import React from "react";
 import "../answerWriting.css";
 
-export default function UnitTopicTree({ data, onSelectItem }) {
+export default function UnitTopicTree({ data = [], onSelectItem }) {
   if (!Array.isArray(data) || data.length === 0) {
     return (
       <div className="aw-card">
@@ -16,7 +15,7 @@ export default function UnitTopicTree({ data, onSelectItem }) {
       <div className="aw-card-title">Syllabus Tree</div>
       <ul className="aw-tree">
         {data.map((unit) => (
-          <li key={unit._id || unit.id}>
+          <li key={unit._id}>
             <button
               type="button"
               className="aw-tree-unit"
@@ -30,9 +29,8 @@ export default function UnitTopicTree({ data, onSelectItem }) {
                 const hasQuestions = (topic.subtopics || []).some(
                   (s) => (s.questions || []).length > 0
                 );
-
                 return (
-                  <li key={topic._id || topic.id}>
+                  <li key={topic._id}>
                     <button
                       type="button"
                       className={`aw-tree-topic ${
@@ -45,7 +43,7 @@ export default function UnitTopicTree({ data, onSelectItem }) {
 
                     <ul>
                       {(topic.subtopics || []).map((sub) => (
-                        <li key={sub._id || sub.id}>
+                        <li key={sub._id}>
                           <button
                             type="button"
                             className="aw-tree-subtopic"
