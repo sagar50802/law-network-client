@@ -2,11 +2,7 @@
 import React, { useState } from "react";
 import "../answerWriting.css";
 
-export default function QuestionCard({
-  question,
-  onDelete,
-  showAnswerToggle = false,
-}) {
+export default function QuestionCard({ question, onDelete, showAnswerToggle }) {
   const [showAns, setShowAns] = useState(false);
 
   if (!question) return null;
@@ -32,6 +28,7 @@ export default function QuestionCard({
           <button
             className="aw-btn aw-btn-xs aw-btn-danger"
             onClick={onDelete}
+            type="button"
           >
             Delete
           </button>
