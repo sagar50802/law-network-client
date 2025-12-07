@@ -1,12 +1,19 @@
-import React from "react";
+import React, { useEffect, useState } from "react";
+import { fetchExams } from "./api/answerWritingApi";
 import "./answerWriting.css";
 
 export default function AnswerExamList() {
   const [exams, setExams] = useState([]);
+  const [loading, setLoading] = useState(true);
 
-useEffect(() => {
-  fetchExams().then(({ data }) => setExams(data.exams));
-}, []);
+  useEffect(() => {
+    fetchExams()
+      .then(({ data }) => {
+        setExams(data.exams || []);
+        setLoading(false);
+      })
+      .catch(() => setLoading(false));
+  }, []);
 
   return (
     <div className="aw-page">
@@ -19,10 +26,16 @@ useEffect(() => {
       </div>
 
       <div className="aw-card" style={{ padding: "20px" }}>
-        {exams.map(e => (
+        {loading && <p>Loading exams…</p>}
+
+        {!loading && exams.length === 0 && (
+          <p className="aw-muted">No exams available yet.</p>
+        )}
+
+        {exams.map((e) => (
           <a
-            key={e.id}
-            href={`/answer-writing/${e.id}`}
+            key={e._id}
+            href={`/answer-writing/${e._id}`}
             className="aw-btn aw-btn-primary"
             style={{
               display: "block",
