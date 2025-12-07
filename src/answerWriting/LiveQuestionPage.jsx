@@ -1,4 +1,3 @@
-// src/answerWriting/LiveQuestionPage.jsx
 import React, { useEffect, useState } from "react";
 import { useParams } from "react-router-dom";
 import QuestionCard from "./components/QuestionCard";
@@ -7,7 +6,7 @@ import "./answerWriting.css";
 
 export default function LiveQuestionPage() {
   const { examId } = useParams();
-  const [payload, setPayload] = useState(null);
+  const [question, setQuestion] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -17,34 +16,33 @@ export default function LiveQuestionPage() {
       try {
         const { data } = await fetchLiveQuestion(examId);
         if (!cancelled) {
-          setPayload(data);
+          setQuestion(data.question || null);
           setLoading(false);
         }
-      } catch (err) {
-        console.error("Failed to load live question", err);
+      } catch (e) {
+        console.error("fetchLiveQuestion error", e);
         if (!cancelled) setLoading(false);
       }
     }
 
-    if (examId) load();
-    const id = setInterval(load, 30000);
+    load();
+    const interval = setInterval(load, 30000); // refresh every 30s
 
     return () => {
       cancelled = true;
-      clearInterval(id);
+      clearInterval(interval);
     };
   }, [examId]);
 
   if (loading) {
     return (
-      <div className="aw-page aw-loading-page">
-        <div className="aw-spinner" />
+      <div className="aw-page">
         <p>Loading live question…</p>
       </div>
     );
   }
 
-  if (!payload?.question) {
+  if (!question) {
     return (
       <div className="aw-page">
         <div className="aw-card">
@@ -61,15 +59,13 @@ export default function LiveQuestionPage() {
           <div className="aw-pill">Answer Writing · Live</div>
           <h1>Current Question</h1>
           <p className="aw-muted">
-            Attempt this question in exam-like conditions. Questions are
-            released automatically by the admin.
+            Attempt the question in exam-like conditions. Tap ‘Show Answer’ to
+            view the model answer in Hindi and English.
           </p>
         </div>
       </div>
 
-      <div className="aw-card">
-        <QuestionCard question={payload.question} showStatus={false} />
-      </div>
+      <QuestionCard question={question} showAnswerToggle />
     </div>
   );
 }
