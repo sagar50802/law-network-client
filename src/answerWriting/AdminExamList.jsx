@@ -1,3 +1,4 @@
+// src/answerWriting/AdminExamList.jsx
 import React, { useEffect, useState } from "react";
 import { fetchExams, createExam } from "./api/answerWritingApi";
 import "./answerWriting.css";
@@ -24,11 +25,13 @@ export default function AdminExamList({ onOpenExam }) {
   const handleCreateExam = async (e) => {
     e.preventDefault();
     if (!newExamName.trim()) return;
-
     try {
-      const res = await createExam({ name: newExamName });
-      setExams((prev) => [...prev, res.data.exam]);
-      setNewExamName("");
+      const res = await createExam({ name: newExamName.trim() });
+      const created = res.data?.exam;
+      if (created) {
+        setExams((prev) => [...prev, created]);
+        setNewExamName("");
+      }
     } catch (err) {
       console.error("createExam error", err);
     }
@@ -44,11 +47,14 @@ export default function AdminExamList({ onOpenExam }) {
       </div>
 
       <div className="aw-grid aw-grid-2col">
+        {/* Exams list */}
         <div className="aw-card">
           <div className="aw-card-title">All Exams</div>
 
           {loading ? (
             <p>Loading…</p>
+          ) : exams.length === 0 ? (
+            <p className="aw-muted">No exams created yet.</p>
           ) : (
             <ul className="aw-exam-list">
               {exams.map((exam) => (
@@ -56,7 +62,7 @@ export default function AdminExamList({ onOpenExam }) {
                   <button
                     type="button"
                     className="aw-exam-item-btn"
-                    onClick={() => onOpenExam?.(exam._id)}  
+                    onClick={() => onOpenExam?.(exam._id)} // ✅ pass only id
                   >
                     {exam.name}
                   </button>
@@ -66,6 +72,7 @@ export default function AdminExamList({ onOpenExam }) {
           )}
         </div>
 
+        {/* Create exam */}
         <div className="aw-card">
           <div className="aw-card-title">Create New Exam</div>
           <form className="aw-form" onSubmit={handleCreateExam}>
@@ -77,7 +84,9 @@ export default function AdminExamList({ onOpenExam }) {
                 placeholder="e.g. Bihar APO"
               />
             </label>
-            <button className="aw-btn aw-btn-primary">+ Create Exam</button>
+            <button className="aw-btn aw-btn-primary" type="submit">
+              + Create Exam
+            </button>
           </form>
         </div>
       </div>
