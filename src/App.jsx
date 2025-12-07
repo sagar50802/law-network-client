@@ -95,7 +95,9 @@ import ThemeFocusPage from "./pages/classroom/ThemeFocusPage.jsx";
 /*           ✨ ANSWER WRITING MODULE IMPORTS ✨              */
 /* ========================================================= */
 import AnswerExamList from "./answerWriting/AnswerExamList";
-import AnswerDashboard from "./answerWriting/AnswerDashboard";
+// ❌ REMOVE OLD DASHBOARD
+// import AnswerDashboard from "./answerWriting/AnswerDashboard";  
+import StudentSyllabusPage from "./answerWriting/StudentSyllabusPage";   // ✅ NEW
 import LiveQuestionPage from "./answerWriting/LiveQuestionPage";
 import AdminExamList from "./answerWriting/AdminExamList";
 import AdminExamBuilder from "./answerWriting/AdminExamBuilder";
@@ -156,12 +158,16 @@ function ClassroomWrapper({ children }) {
   );
 }
 
-/* ---------- Answer Writing helpers ---------- */
-
-// Wrap AdminExamBuilder so it always gets the real :examId param
+/* ---------- Answer Writing Helpers ---------- */
 function AdminExamBuilderRoute() {
   const { examId } = useParams();
   return <AdminExamBuilder examId={examId} />;
+}
+
+/* ⭐ NEW — Wrapper for StudentSyllabusPage */
+function StudentSyllabusPageWrapper() {
+  const { examId } = useParams();
+  return <StudentSyllabusPage examId={examId} />;
 }
 
 /* ========================================================= */
@@ -423,11 +429,14 @@ function AppContent() {
           {/*                ✨ ANSWER WRITING ROUTES ✨                */}
           {/* ========================================================= */}
 
-          {/* PUBLIC — Exam chooser */}
+          {/* Public — exam chooser */}
           <Route path="/answer-writing" element={<AnswerExamList />} />
 
-          {/* Student dashboard (AnswerDashboard reads examId via useParams) */}
-          <Route path="/answer-writing/:examId" element={<AnswerDashboard />} />
+          {/* Student syllabus page (wrapper) */}
+          <Route
+            path="/answer-writing/:examId"
+            element={<StudentSyllabusPageWrapper />}
+          />
 
           {/* Live question screen */}
           <Route
@@ -449,7 +458,7 @@ function AppContent() {
             }
           />
 
-          {/* Redirect any old admin AW URLs to the new list page */}
+          {/* Old admin paths → redirect */}
           <Route
             path="/admin/answer-writing/exams"
             element={<Navigate to="/admin/answer-writing" replace />}
@@ -463,7 +472,7 @@ function AppContent() {
             element={<Navigate to="/admin/answer-writing" replace />}
           />
 
-          {/* Admin: builder for a specific exam */}
+          {/* Admin exam builder */}
           <Route
             path="/admin/answer-writing/:examId"
             element={
