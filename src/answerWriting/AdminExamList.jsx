@@ -4,16 +4,16 @@ import "./answerWriting.css";
 
 export default function AdminExamList({ onOpenExam }) {
   const [exams, setExams] = useState([]);
-  const [loading, setLoading] = useState(true);
   const [newExamName, setNewExamName] = useState("");
+  const [loading, setLoading] = useState(true);
 
   useEffect(() => {
     async function load() {
       try {
-        const { data } = await fetchExams();
-        setExams(data);
-      } catch (e) {
-        console.error(e);
+        const res = await fetchExams();
+        setExams(res.data?.exams || []);
+      } catch (err) {
+        console.error(err);
       } finally {
         setLoading(false);
       }
@@ -26,9 +26,8 @@ export default function AdminExamList({ onOpenExam }) {
     if (!newExamName.trim()) return;
 
     try {
-      const { data } = await createExam({ name: newExamName });
-
-      setExams((prev) => [...prev, data]);
+      const res = await createExam({ name: newExamName });
+      setExams((prev) => [...prev, res.data.exam]);
       setNewExamName("");
     } catch (err) {
       console.error(err);
@@ -49,9 +48,7 @@ export default function AdminExamList({ onOpenExam }) {
           <div className="aw-card-title">All Exams</div>
 
           {loading ? (
-            <div className="aw-spinner small" />
-          ) : exams.length === 0 ? (
-            <p className="aw-muted">No exams yet.</p>
+            <p>Loading…</p>
           ) : (
             <ul className="aw-exam-list">
               {exams.map((exam) => (
@@ -59,10 +56,9 @@ export default function AdminExamList({ onOpenExam }) {
                   <button
                     type="button"
                     className="aw-exam-main"
-                    onClick={() => onOpenExam(exam)}
+                    onClick={() => onOpenExam?.(exam)}
                   >
                     <span className="aw-exam-name">{exam.name}</span>
-                    <span className="aw-muted">{exam.unitCount ?? 0} units</span>
                   </button>
                 </li>
               ))}
@@ -84,7 +80,7 @@ export default function AdminExamList({ onOpenExam }) {
               />
             </label>
 
-            <button type="submit" className="aw-btn aw-btn-primary">
+            <button className="aw-btn aw-btn-primary">
               + Create Exam
             </button>
           </form>
