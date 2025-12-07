@@ -10,17 +10,11 @@ export default function AdminExamList({ onOpenExam }) {
   useEffect(() => {
     async function load() {
       try {
-        // const { data } = await fetchExams();
-        // setExams(data);
-
-        setExams([
-          { id: "bihar-apo", name: "Bihar APO", unitCount: 3 },
-          { id: "up-apo", name: "UP APO", unitCount: 2 },
-          { id: "cg-apo", name: "CG APO", unitCount: 1 },
-        ]);
-        setLoading(false);
+        const { data } = await fetchExams();
+        setExams(data);
       } catch (e) {
         console.error(e);
+      } finally {
         setLoading(false);
       }
     }
@@ -31,12 +25,11 @@ export default function AdminExamList({ onOpenExam }) {
     e.preventDefault();
     if (!newExamName.trim()) return;
 
-    const temp = { id: newExamName.toLowerCase().replace(/\s+/g, "-"), name: newExamName };
-    setExams((prev) => [...prev, temp]);
-    setNewExamName("");
-
     try {
-      // await createExam({ name: newExamName });
+      const { data } = await createExam({ name: newExamName });
+
+      setExams((prev) => [...prev, data]);
+      setNewExamName("");
     } catch (err) {
       console.error(err);
     }
@@ -48,31 +41,28 @@ export default function AdminExamList({ onOpenExam }) {
         <div>
           <div className="aw-pill">Admin · Answer Writing</div>
           <h1>Exam Management</h1>
-          <p className="aw-muted">
-            Create exams (Bihar APO, UP APO, CG APO…) and manage their syllabus
-            and scheduled questions.
-          </p>
         </div>
       </div>
 
       <div className="aw-grid aw-grid-2col">
         <div className="aw-card">
           <div className="aw-card-title">All Exams</div>
+
           {loading ? (
             <div className="aw-spinner small" />
+          ) : exams.length === 0 ? (
+            <p className="aw-muted">No exams yet.</p>
           ) : (
             <ul className="aw-exam-list">
               {exams.map((exam) => (
-                <li key={exam.id} className="aw-exam-item">
+                <li key={exam._id} className="aw-exam-item">
                   <button
                     type="button"
                     className="aw-exam-main"
-                    onClick={() => onOpenExam?.(exam)}
+                    onClick={() => onOpenExam(exam)}
                   >
                     <span className="aw-exam-name">{exam.name}</span>
-                    <span className="aw-muted">
-                      {exam.unitCount ?? 0} units
-                    </span>
+                    <span className="aw-muted">{exam.unitCount ?? 0} units</span>
                   </button>
                 </li>
               ))}
@@ -82,6 +72,7 @@ export default function AdminExamList({ onOpenExam }) {
 
         <div className="aw-card">
           <div className="aw-card-title">Create New Exam</div>
+
           <form className="aw-form" onSubmit={handleCreateExam}>
             <label className="aw-field">
               <span>Name</span>
@@ -92,14 +83,11 @@ export default function AdminExamList({ onOpenExam }) {
                 placeholder="e.g. Bihar APO"
               />
             </label>
+
             <button type="submit" className="aw-btn aw-btn-primary">
               + Create Exam
             </button>
           </form>
-          <p className="aw-muted aw-hint">
-            Once created, you can add Units → Topics → Subtopics → Questions
-            with full scheduling controls.
-          </p>
         </div>
       </div>
     </div>
