@@ -78,3 +78,7 @@ export const fetchStudentDashboard = (examId) =>
 
 export const fetchLiveQuestion = (examId) =>
   api.get(`/student/${examId}/live-question`);
+
+/* ⭐ NEW API: released questions by syllabus */
+export const fetchReleasedQuestions = (examId) =>
+  api.get(`/student/${examId}/released-questions`);
