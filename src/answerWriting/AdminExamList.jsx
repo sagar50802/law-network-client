@@ -1,4 +1,3 @@
-// src/answerWriting/AdminExamList.jsx
 import React, { useEffect, useState } from "react";
 import { fetchExams, createExam } from "./api/answerWritingApi";
 import "./answerWriting.css";
@@ -14,7 +13,7 @@ export default function AdminExamList({ onOpenExam }) {
         const res = await fetchExams();
         setExams(res.data?.exams || []);
       } catch (err) {
-        console.error("Failed to fetch exams", err);
+        console.error("fetchExams error", err);
       } finally {
         setLoading(false);
       }
@@ -27,14 +26,11 @@ export default function AdminExamList({ onOpenExam }) {
     if (!newExamName.trim()) return;
 
     try {
-      const res = await createExam({ name: newExamName.trim() });
-      const created = res.data?.exam;
-      if (created) {
-        setExams((prev) => [...prev, created]);
-        setNewExamName("");
-      }
+      const res = await createExam({ name: newExamName });
+      setExams((prev) => [...prev, res.data.exam]);
+      setNewExamName("");
     } catch (err) {
-      console.error("Failed to create exam", err);
+      console.error("createExam error", err);
     }
   };
 
@@ -48,52 +44,40 @@ export default function AdminExamList({ onOpenExam }) {
       </div>
 
       <div className="aw-grid aw-grid-2col">
-        {/* Exams list */}
         <div className="aw-card">
           <div className="aw-card-title">All Exams</div>
 
           {loading ? (
             <p>Loading…</p>
-          ) : exams.length === 0 ? (
-            <p className="aw-muted">No exams created yet.</p>
           ) : (
             <ul className="aw-exam-list">
-              {exams.map((exam) => {
-                const examId = exam._id || exam.id; // support both
-                return (
-                  <li key={examId} className="aw-exam-item">
-                    <button
-                      type="button"
-                      className="aw-exam-main"
-                      onClick={() => onOpenExam?.(examId)}
-                    >
-                      <span className="aw-exam-name">{exam.name}</span>
-                    </button>
-                  </li>
-                );
-              })}
+              {exams.map((exam) => (
+                <li key={exam._id}>
+                  <button
+                    type="button"
+                    className="aw-exam-item-btn"
+                    onClick={() => onOpenExam?.(exam)}
+                  >
+                    {exam.name}
+                  </button>
+                </li>
+              ))}
             </ul>
           )}
         </div>
 
-        {/* Create exam */}
         <div className="aw-card">
           <div className="aw-card-title">Create New Exam</div>
-
           <form className="aw-form" onSubmit={handleCreateExam}>
             <label className="aw-field">
               <span>Name</span>
               <input
-                type="text"
                 value={newExamName}
                 onChange={(e) => setNewExamName(e.target.value)}
                 placeholder="e.g. Bihar APO"
               />
             </label>
-
-            <button className="aw-btn aw-btn-primary" type="submit">
-              + Create Exam
-            </button>
+            <button className="aw-btn aw-btn-primary">+ Create Exam</button>
           </form>
         </div>
       </div>
