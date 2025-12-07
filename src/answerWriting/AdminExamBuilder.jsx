@@ -1,4 +1,4 @@
-// src/answerWriting/AdminExamBuilder.jsx
+// client/src/answerWriting/AdminExamBuilder.jsx
 import React, { useEffect, useState } from "react";
 import UnitTopicTree from "./components/UnitTopicTree";
 import QuestionCard from "./components/QuestionCard";
@@ -10,13 +10,17 @@ import {
   createQuestion,
   toggleLockTopic,
   deleteQuestion,
+  updateUnit,
+  deleteUnitApi,
+  updateTopic,
+  deleteTopicApi,
+  updateSubtopic,
+  deleteSubtopicApi,
 } from "./api/answerWritingApi";
 import "./answerWriting.css";
 
 export default function AdminExamBuilder({ examId }) {
   const [exam, setExam] = useState(null);
-  const [loading, setLoading] = useState(true);
-
   const [selectedNode, setSelectedNode] = useState(null);
 
   const [newUnitName, setNewUnitName] = useState("");
@@ -32,78 +36,268 @@ export default function AdminExamBuilder({ examId }) {
     releaseTime: "",
   });
 
-  // ---------------- LOAD EXAM ----------------
-  const loadExam = async () => {
-    if (!examId) return;
-    try {
-      setLoading(true);
-      const { data } = await fetchExamDetail(examId);
-      setExam(data.exam);
-    } catch (err) {
-      console.error("Failed to load exam:", err);
-    } finally {
-      setLoading(false);
-    }
-  };
-
   useEffect(() => {
-    loadExam();
-    // eslint-disable-next-line react-hooks/exhaustive-deps
+    async function load() {
+      try {
+        const { data } = await fetchExamDetail(examId);
+        setExam(data.exam);
+      } catch (err) {
+        console.error("Failed to load exam:", err);
+      }
+    }
+    if (examId) load();
   }, [examId]);
 
-  // Small helper so we always refresh after any change
-  const refreshAfterChange = async () => {
-    await loadExam();
-  };
+  /* ------------------------------------------------------------------------ */
+  /*                             CREATE: UNIT/TOPIC/SUBTOPIC                  */
+  /* ------------------------------------------------------------------------ */
 
-  // --------------- CREATE UNIT ---------------
   const handleCreateUnit = async (e) => {
     e.preventDefault();
     if (!newUnitName.trim()) return;
 
     try {
-      await createUnit(examId, { name: newUnitName.trim() });
+      const { data } = await createUnit(examId, { name: newUnitName });
+      setExam((prev) => ({
+        ...prev,
+        units: [...(prev?.units || []), { ...data.unit, topics: [] }],
+      }));
       setNewUnitName("");
-      setSelectedNode(null);
-      await refreshAfterChange();
     } catch (err) {
       console.error("createUnit error", err);
     }
   };
 
-  // --------------- CREATE TOPIC --------------
   const handleCreateTopic = async (e) => {
     e.preventDefault();
-    const unit = selectedNode?.unit;
-    if (!unit) return;
+    if (!selectedNode?.unit) return;
     if (!newTopicName.trim()) return;
 
     try {
-      await createTopic(unit._id, { name: newTopicName.trim() });
+      const { data } = await createTopic(selectedNode.unit._id, {
+        name: newTopicName,
+      });
+
+      setExam((prev) => ({
+        ...prev,
+        units: prev.units.map((u) =>
+          u._id === selectedNode.unit._id
+            ? { ...u, topics: [...(u.topics || []), { ...data.topic, subtopics: [] }] }
+            : u
+        ),
+      }));
+
       setNewTopicName("");
-      await refreshAfterChange();
     } catch (err) {
       console.error("createTopic error", err);
     }
   };
 
-  // ------------- CREATE SUBTOPIC -------------
   const handleCreateSubtopic = async (e) => {
     e.preventDefault();
-    const topic = selectedNode?.topic;
-    if (!topic) return;
+    if (!selectedNode?.topic) return;
     if (!newSubtopicName.trim()) return;
 
     try {
-      await createSubtopic(topic._id, { name: newSubtopicName.trim() });
+      const { data } = await createSubtopic(selectedNode.topic._id, {
+        name: newSubtopicName,
+      });
+
+      setExam((prev) => ({
+        ...prev,
+        units: prev.units.map((u) => ({
+          ...u,
+          topics: (u.topics || []).map((t) =>
+            t._id === selectedNode.topic._id
+              ? {
+                  ...t,
+                  subtopics: [
+                    ...(t.subtopics || []),
+                    { ...data.subtopic, questions: [] },
+                  ],
+                }
+              : t
+          ),
+        })),
+      }));
+
       setNewSubtopicName("");
-      await refreshAfterChange();
     } catch (err) {
       console.error("createSubtopic error", err);
     }
   };
 
-  // ------------- CREATE QUESTION -------------
+  /* ------------------------------------------------------------------------ */
+  /*                           EDIT / DELETE HANDLERS                         */
+  /* ------------------------------------------------------------------------ */
+
+  const handleEditUnit = async (unit) => {
+    const name = window.prompt("Edit unit name:", unit.name);
+    if (!name || !name.trim() || name === unit.name) return;
+
+    try {
+      const { data } = await updateUnit(unit._id, { name: name.trim() });
+      const updated = data.unit || data;
+
+      setExam((prev) => ({
+        ...prev,
+        units: prev.units.map((u) =>
+          u._id === unit._id ? { ...u, name: updated.name } : u
+        ),
+      }));
+
+      setSelectedNode((sel) =>
+        sel?.unit && sel.unit._id === unit._id
+          ? { ...sel, unit: { ...sel.unit, name: updated.name } }
+          : sel
+      );
+    } catch (err) {
+      console.error("updateUnit error", err);
+    }
+  };
+
+  const handleDeleteUnit = async (unit) => {
+    if (!window.confirm(`Delete unit "${unit.name}" and everything inside it?`))
+      return;
+
+    try {
+      await deleteUnitApi(unit._id);
+
+      setExam((prev) => ({
+        ...prev,
+        units: prev.units.filter((u) => u._id !== unit._id),
+      }));
+
+      setSelectedNode((sel) =>
+        sel?.unit && sel.unit._id === unit._id ? null : sel
+      );
+    } catch (err) {
+      console.error("deleteUnit error", err);
+    }
+  };
+
+  const handleEditTopic = async (_unit, topic) => {
+    const name = window.prompt("Edit topic name:", topic.name);
+    if (!name || !name.trim() || name === topic.name) return;
+
+    try {
+      const { data } = await updateTopic(topic._id, { name: name.trim() });
+      const updated = data.topic || data;
+
+      setExam((prev) => ({
+        ...prev,
+        units: prev.units.map((u) => ({
+          ...u,
+          topics: (u.topics || []).map((t) =>
+            t._id === topic._id ? { ...t, name: updated.name } : t
+          ),
+        })),
+      }));
+
+      setSelectedNode((sel) =>
+        sel?.topic && sel.topic._id === topic._id
+          ? { ...sel, topic: { ...sel.topic, name: updated.name } }
+          : sel
+      );
+    } catch (err) {
+      console.error("updateTopic error", err);
+    }
+  };
+
+  const handleDeleteTopic = async (_unit, topic) => {
+    if (
+      !window.confirm(
+        `Delete topic "${topic.name}" with all its subtopics and questions?`
+      )
+    )
+      return;
+
+    try {
+      await deleteTopicApi(topic._id);
+
+      setExam((prev) => ({
+        ...prev,
+        units: prev.units.map((u) => ({
+          ...u,
+          topics: (u.topics || []).filter((t) => t._id !== topic._id),
+        })),
+      }));
+
+      setSelectedNode((sel) =>
+        sel?.topic && sel.topic._id === topic._id ? null : sel
+      );
+    } catch (err) {
+      console.error("deleteTopic error", err);
+    }
+  };
+
+  const handleEditSubtopic = async (_unit, _topic, subtopic) => {
+    const name = window.prompt("Edit subtopic name:", subtopic.name);
+    if (!name || !name.trim() || name === subtopic.name) return;
+
+    try {
+      const { data } = await updateSubtopic(subtopic._id, { name: name.trim() });
+      const updated = data.subtopic || data;
+
+      setExam((prev) => ({
+        ...prev,
+        units: prev.units.map((u) => ({
+          ...u,
+          topics: (u.topics || []).map((t) => ({
+            ...t,
+            subtopics: (t.subtopics || []).map((s) =>
+              s._id === subtopic._id ? { ...s, name: updated.name } : s
+            ),
+          })),
+        })),
+      }));
+
+      setSelectedNode((sel) =>
+        sel?.subtopic && sel.subtopic._id === subtopic._id
+          ? { ...sel, subtopic: { ...sel.subtopic, name: updated.name } }
+          : sel
+      );
+    } catch (err) {
+      console.error("updateSubtopic error", err);
+    }
+  };
+
+  const handleDeleteSubtopic = async (_unit, _topic, subtopic) => {
+    if (
+      !window.confirm(
+        `Delete subtopic "${subtopic.name}" and all its questions?`
+      )
+    )
+      return;
+
+    try {
+      await deleteSubtopicApi(subtopic._id);
+
+      setExam((prev) => ({
+        ...prev,
+        units: prev.units.map((u) => ({
+          ...u,
+          topics: (u.topics || []).map((t) => ({
+            ...t,
+            subtopics: (t.subtopics || []).filter(
+              (s) => s._id !== subtopic._id
+            ),
+          })),
+        })),
+      }));
+
+      setSelectedNode((sel) =>
+        sel?.subtopic && sel.subtopic._id === subtopic._id ? null : sel
+      );
+    } catch (err) {
+      console.error("deleteSubtopic error", err);
+    }
+  };
+
+  /* ------------------------------------------------------------------------ */
+  /*                             CREATE QUESTION                              */
+  /* ------------------------------------------------------------------------ */
+
   const handleCreateQuestion = async (e) => {
     e.preventDefault();
     const subtopic = selectedNode?.subtopic;
@@ -118,7 +312,7 @@ export default function AdminExamBuilder({ examId }) {
       releaseTime,
     } = questionForm;
 
-    if (!hindiText.trim() && !englishText.trim()) return;
+    if (!hindiText && !englishText) return;
 
     const releaseAt =
       releaseDate && releaseTime
@@ -126,13 +320,31 @@ export default function AdminExamBuilder({ examId }) {
         : new Date().toISOString();
 
     try {
-      await createQuestion(subtopic._id, {
-        hindiText: hindiText.trim(),
-        englishText: englishText.trim(),
-        hindiAnswer: hindiAnswer.trim(),
-        englishAnswer: englishAnswer.trim(),
+      const { data } = await createQuestion(subtopic._id, {
+        hindiText,
+        englishText,
+        hindiAnswer,
+        englishAnswer,
         releaseAt,
       });
+
+      setExam((prev) => ({
+        ...prev,
+        units: prev.units.map((u) => ({
+          ...u,
+          topics: (u.topics || []).map((t) => ({
+            ...t,
+            subtopics: (t.subtopics || []).map((s) =>
+              s._id === subtopic._id
+                ? {
+                    ...s,
+                    questions: [...(s.questions || []), data.question],
+                  }
+                : s
+            ),
+          })),
+        })),
+      }));
 
       setQuestionForm({
         hindiText: "",
@@ -142,38 +354,48 @@ export default function AdminExamBuilder({ examId }) {
         releaseDate: "",
         releaseTime: "",
       });
-
-      await refreshAfterChange();
     } catch (err) {
       console.error("createQuestion error", err);
     }
   };
 
-  // --------------- TOGGLE LOCK ---------------
+  /* ------------------------------------------------------------------------ */
+  /*                                  LOCK TOPIC                              */
+  /* ------------------------------------------------------------------------ */
+
   const handleToggleLock = async () => {
     if (!selectedNode?.topic) return;
+
     const topic = selectedNode.topic;
     const newLocked = !topic.locked;
 
     try {
       await toggleLockTopic(topic._id, newLocked);
-      await refreshAfterChange();
+
+      setExam((prev) => ({
+        ...prev,
+        units: prev.units.map((u) => ({
+          ...u,
+          topics: (u.topics || []).map((t) =>
+            t._id === topic._id ? { ...t, locked: newLocked } : t
+          ),
+        })),
+      }));
+
+      setSelectedNode((sel) =>
+        sel?.topic && sel.topic._id === topic._id
+          ? { ...sel, topic: { ...sel.topic, locked: newLocked } }
+          : sel
+      );
     } catch (err) {
       console.error("toggleLock error", err);
     }
   };
 
-  // ------------ DELETE QUESTION --------------
-  const handleDeleteQuestion = async (qId) => {
-    try {
-      await deleteQuestion(qId);
-      await refreshAfterChange();
-    } catch (err) {
-      console.error("deleteQuestion error", err);
-    }
-  };
+  /* ------------------------------------------------------------------------ */
+  /*                                FLAT QUESTIONS                            */
+  /* ------------------------------------------------------------------------ */
 
-  // ------------- FLATTEN QUESTIONS -----------
   const flatQuestions =
     exam?.units?.flatMap((u) =>
       (u.topics || []).flatMap((t) =>
@@ -186,13 +408,11 @@ export default function AdminExamBuilder({ examId }) {
       )
     ) || [];
 
+  if (!exam) return <p>Loading exam…</p>;
+
   const selectedUnitName = selectedNode?.unit?.name || "None";
   const selectedTopicName = selectedNode?.topic?.name || "None";
   const selectedSubtopicName = selectedNode?.subtopic?.name || "None";
-
-  if (loading || !exam) {
-    return <p>Loading exam…</p>;
-  }
 
   return (
     <div className="aw-page aw-admin-builder">
@@ -211,16 +431,28 @@ export default function AdminExamBuilder({ examId }) {
         <div className="aw-column">
           <UnitTopicTree
             data={exam.units || []}
-            selectedNode={selectedNode}
-            onSelectItem={setSelectedNode}
+            onSelectItem={(item) => setSelectedNode(item)}
+            onEditUnit={handleEditUnit}
+            onDeleteUnit={handleDeleteUnit}
+            onEditTopic={handleEditTopic}
+            onDeleteTopic={handleDeleteTopic}
+            onEditSubtopic={handleEditSubtopic}
+            onDeleteSubtopic={handleDeleteSubtopic}
           />
 
           <div className="aw-card aw-form-card">
             <div className="aw-card-title">Syllabus Structure</div>
-            <div className="aw-selected-summary">
-              <div>Selected Unit: {selectedUnitName}</div>
-              <div>Selected Topic: {selectedTopicName}</div>
-              <div>Selected Subtopic: {selectedSubtopicName}</div>
+
+            <div className="aw-selected-info">
+              <div>
+                <strong>Selected Unit:</strong> {selectedUnitName}
+              </div>
+              <div>
+                <strong>Selected Topic:</strong> {selectedTopicName}
+              </div>
+              <div>
+                <strong>Selected Subtopic:</strong> {selectedSubtopicName}
+              </div>
             </div>
 
             {/* UNIT */}
@@ -398,7 +630,28 @@ export default function AdminExamBuilder({ examId }) {
                 <QuestionCard
                   key={q._id}
                   question={q}
-                  onDelete={() => handleDeleteQuestion(q._id)}
+                  onDelete={async () => {
+                    try {
+                      await deleteQuestion(q._id);
+                      setExam((prev) => ({
+                        ...prev,
+                        units: prev.units.map((u) => ({
+                          ...u,
+                          topics: (u.topics || []).map((t) => ({
+                            ...t,
+                            subtopics: (t.subtopics || []).map((s) => ({
+                              ...s,
+                              questions: (s.questions || []).filter(
+                                (qq) => qq._id !== q._id
+                              ),
+                            })),
+                          })),
+                        })),
+                      }));
+                    } catch (err) {
+                      console.error("deleteQuestion error", err);
+                    }
+                  }}
                 />
               ))}
 
