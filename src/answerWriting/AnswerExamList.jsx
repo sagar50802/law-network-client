@@ -2,11 +2,11 @@ import React from "react";
 import "./answerWriting.css";
 
 export default function AnswerExamList() {
-  const exams = [
-    { id: "bihar-apo", name: "Bihar APO" },
-    { id: "up-apo", name: "UP APO" },
-    { id: "cg-apo", name: "CG APO" }
-  ];
+  const [exams, setExams] = useState([]);
+
+useEffect(() => {
+  fetchExams().then(({ data }) => setExams(data.exams));
+}, []);
 
   return (
     <div className="aw-page">
