@@ -1,4 +1,3 @@
-// src/answerWriting/AnswerExamList.jsx
 import React, { useEffect, useState } from "react";
 import { fetchExams } from "./api/answerWritingApi";
 import "./answerWriting.css";
@@ -13,7 +12,7 @@ export default function AnswerExamList() {
         const res = await fetchExams();
         setExams(res.data?.exams || []);
       } catch (err) {
-        console.error("Failed to load exams", err);
+        console.error("fetchExams error", err);
       } finally {
         setLoading(false);
       }
@@ -33,29 +32,21 @@ export default function AnswerExamList() {
         </div>
       </div>
 
-      <div className="aw-card" style={{ padding: 20 }}>
+      <div className="aw-card">
         {loading ? (
           <p>Loading…</p>
         ) : exams.length === 0 ? (
           <p>No exams available yet.</p>
         ) : (
-          exams.map((exam) => {
-            const examId = exam._id || exam.id;
-            return (
-              <a
-                key={examId}
-                href={`/answer-writing/${examId}`}
-                className="aw-exam-card"
-              >
-                {exam.coverUrl && (
-                  <img src={exam.coverUrl} alt="" className="aw-exam-cover" />
-                )}
-                <div className="aw-exam-info">
-                  <h3>{exam.name}</h3>
-                </div>
-              </a>
-            );
-          })
+          <ul className="aw-exam-list">
+            {exams.map((exam) => (
+              <li key={exam._id}>
+                <a href={`/answer-writing/${exam._id}`} className="aw-exam-item-btn">
+                  {exam.name}
+                </a>
+              </li>
+            ))}
+          </ul>
         )}
       </div>
     </div>
