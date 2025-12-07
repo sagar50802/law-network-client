@@ -1,16 +1,17 @@
+// src/answerWriting/components/QuestionCard.jsx
 import React from "react";
+import "../answerWriting.css";
 
 export default function QuestionCard({
   question,
-  showStatus = true,
-  onEdit,
   onDelete,
+  onEdit,
+  showStatus = true,
 }) {
   if (!question) return null;
 
   const {
     code,
-    title,
     hindiText,
     englishText,
     releaseAt,
@@ -23,57 +24,51 @@ export default function QuestionCard({
     : "Not scheduled";
 
   return (
-    <div className="aw-card aw-question-card">
-      <div className="aw-card-header">
-        <div>
-          <div className="aw-question-code">{code || "Q1"}</div>
-          <div className="aw-question-topic">{topicName}</div>
-        </div>
+    <div className="aw-question-card">
+      <div className="aw-question-header">
+        {code && <span className="aw-question-code">{code}</span>}
+        {topicName && <span className="aw-question-topic">{topicName}</span>}
+
         {showStatus && (
-          <div className="aw-question-status">
-            <span
-              className={
-                "aw-status-dot " + (isReleased ? "aw-status-live" : "")
-              }
-            />
-            <span>{isReleased ? "Live" : "Scheduled"}</span>
-          </div>
+          <span
+            className={`aw-status-pill ${
+              isReleased ? "aw-status-live" : "aw-status-pending"
+            }`}
+          >
+            {isReleased ? "Released" : "Scheduled"}
+          </span>
         )}
       </div>
 
-      {title && <div className="aw-question-title">{title}</div>}
-
-      <div className="aw-question-body">
-        {hindiText && (
-          <div className="aw-question-block aw-question-hindi">
-            <div className="aw-question-lang">Q (हिन्दी)</div>
-            <p>{hindiText}</p>
-          </div>
-        )}
-        {englishText && (
-          <div className="aw-question-block aw-question-english">
-            <div className="aw-question-lang">Q (English)</div>
-            <p>{englishText}</p>
-          </div>
-        )}
-      </div>
+      {hindiText && (
+        <p className="aw-question-text aw-question-text-hi">{hindiText}</p>
+      )}
+      {englishText && (
+        <p className="aw-question-text aw-question-text-en">{englishText}</p>
+      )}
 
       <div className="aw-question-footer">
-        <span className="aw-muted">Releases at: {releaseLabel}</span>
-        {(onEdit || onDelete) && (
-          <div className="aw-question-actions">
-            {onEdit && (
-              <button className="aw-btn aw-btn-ghost" onClick={onEdit}>
-                Edit
-              </button>
-            )}
-            {onDelete && (
-              <button className="aw-btn aw-btn-danger" onClick={onDelete}>
-                Delete
-              </button>
-            )}
-          </div>
-        )}
+        <span className="aw-muted small">Release at: {releaseLabel}</span>
+        <div className="aw-question-actions">
+          {onEdit && (
+            <button
+              type="button"
+              className="aw-btn aw-btn-ghost aw-btn-sm"
+              onClick={onEdit}
+            >
+              Edit
+            </button>
+          )}
+          {onDelete && (
+            <button
+              type="button"
+              className="aw-btn aw-btn-danger aw-btn-sm"
+              onClick={onDelete}
+            >
+              Delete
+            </button>
+          )}
+        </div>
       </div>
     </div>
   );
