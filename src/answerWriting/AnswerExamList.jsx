@@ -1,3 +1,4 @@
+// src/answerWriting/AnswerExamList.jsx
 import React, { useEffect, useState } from "react";
 import { fetchExams } from "./api/answerWritingApi";
 import "./answerWriting.css";
@@ -41,7 +42,10 @@ export default function AnswerExamList() {
           <ul className="aw-exam-list">
             {exams.map((exam) => (
               <li key={exam._id}>
-                <a href={`/answer-writing/${exam._id}`} className="aw-exam-item-btn">
+                <a
+                  href={`/answer-writing/${exam._id}`}
+                  className="aw-exam-item-btn"
+                >
                   {exam.name}
                 </a>
               </li>
