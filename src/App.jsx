@@ -134,6 +134,7 @@ function ScrollToHash() {
   return null;
 }
 
+/* ---------- Small helpers ---------- */
 function RouteWithCode({ Comp }) {
   const { code } = useParams();
   return <Comp code={code} />;
@@ -153,6 +154,14 @@ function ClassroomWrapper({ children }) {
       {children}
     </>
   );
+}
+
+/* ---------- Answer Writing helpers ---------- */
+
+// Wrap AdminExamBuilder so it always gets the real :examId param
+function AdminExamBuilderRoute() {
+  const { examId } = useParams();
+  return <AdminExamBuilder examId={examId} />;
 }
 
 /* ========================================================= */
@@ -417,7 +426,7 @@ function AppContent() {
           {/* PUBLIC — Exam chooser */}
           <Route path="/answer-writing" element={<AnswerExamList />} />
 
-          {/* Student dashboard */}
+          {/* Student dashboard (AnswerDashboard reads examId via useParams) */}
           <Route path="/answer-writing/:examId" element={<AnswerDashboard />} />
 
           {/* Live question screen */}
@@ -426,21 +435,21 @@ function AppContent() {
             element={<LiveQuestionPage />}
           />
 
-          {/* Admin: list of exams (Option A) */}
+          {/* Admin: list of exams */}
           <Route
             path="/admin/answer-writing"
             element={
               <AdminRoute>
                 <AdminExamList
-                  onOpenExam={(exam) =>
-                    navigate(`/admin/answer-writing/${exam.id}`)
+                  onOpenExam={(examId) =>
+                    navigate(`/admin/answer-writing/${examId}`)
                   }
                 />
               </AdminRoute>
             }
           />
 
-          {/* Redirect old admin links (optional, to avoid blanks) */}
+          {/* Redirect any old admin AW URLs to the new list page */}
           <Route
             path="/admin/answer-writing/exams"
             element={<Navigate to="/admin/answer-writing" replace />}
@@ -459,7 +468,7 @@ function AppContent() {
             path="/admin/answer-writing/:examId"
             element={
               <AdminRoute>
-                <AdminExamBuilder />
+                <AdminExamBuilderRoute />
               </AdminRoute>
             }
           />
