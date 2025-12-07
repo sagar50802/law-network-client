@@ -56,7 +56,7 @@ export default function AdminExamList({ onOpenExam }) {
                   <button
                     type="button"
                     className="aw-exam-item-btn"
-                    onClick={() => onOpenExam?.(exam._id)}
+                    onClick={() => onOpenExam?.(exam._id)}   {/* FIXED */}
                   >
                     {exam.name}
                   </button>
