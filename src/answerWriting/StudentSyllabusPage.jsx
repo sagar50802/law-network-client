@@ -1,16 +1,14 @@
-// ---------------------------------------------
-// StudentSyllabusPage.jsx
-// ---------------------------------------------
+// client/src/answerWriting/StudentSyllabusPage.jsx
 import React, { useEffect, useState } from "react";
 import {
   fetchExamDetail,
   fetchReleasedQuestions,
-} from "../api/answerWritingApi";
-import "../answerWriting/answerWriting.css";
+} from "./api/answerWritingApi";   // ✅ FIXED PATH
+import "./answerWriting.css";
 
 export default function StudentSyllabusPage({ examId }) {
   const [exam, setExam] = useState(null);
-  const [released, setReleased] = useState([]); // only released questions
+  const [released, setReleased] = useState([]);
   const [error, setError] = useState("");
 
   useEffect(() => {
@@ -37,11 +35,11 @@ export default function StudentSyllabusPage({ examId }) {
   }
 
   function getQuestionsForTopic(topicId) {
-    return released.filter((q) => q.topic === topicId); // released only
+    return released.filter((q) => q.topicId === topicId);
   }
 
   function getQuestionsForSubtopic(subId) {
-    return released.filter((q) => q.subtopic === subId);
+    return released.filter((q) => q.subtopicId === subId);
   }
 
   if (!exam) return <div className="aw-card">Loading exam...</div>;
@@ -67,7 +65,7 @@ export default function StudentSyllabusPage({ examId }) {
                     <li key={topic._id}>
                       <span className="aw-tree-topic">{topic.name}</span>
 
-                      {/* ---- If NO subtopics → show topic questions directly ---- */}
+                      {/* No Subtopics → show topic-level questions */}
                       {!topic.subtopics.length && (
                         <div className="aw-question-box">
                           {topicQuestions.length === 0 ? (
@@ -75,13 +73,13 @@ export default function StudentSyllabusPage({ examId }) {
                           ) : (
                             topicQuestions.map((q) => (
                               <div key={q._id} className="aw-question-card">
-                                <h3>{q.questionHindi}</h3>
-                                <p className="aw-qen">{q.questionEnglish}</p>
+                                <h3>{q.hindiText}</h3>
+                                <p className="aw-qen">{q.englishText}</p>
 
                                 <details className="aw-answer">
                                   <summary>Show Answer</summary>
-                                  <p>{q.answerHindi}</p>
-                                  <p className="aw-qen">{q.answerEnglish}</p>
+                                  <p>{q.hindiAnswer}</p>
+                                  <p className="aw-qen">{q.englishAnswer}</p>
                                 </details>
                               </div>
                             ))
@@ -89,13 +87,12 @@ export default function StudentSyllabusPage({ examId }) {
                         </div>
                       )}
 
-                      {/* ---- If subtopics exist ---- */}
+                      {/* Subtopics exist */}
                       {topic.subtopics.length > 0 && (
                         <ul>
                           {topic.subtopics.map((sub) => {
-                            const subQuestions = getQuestionsForSubtopic(
-                              sub._id
-                            );
+                            const subQuestions = getQuestionsForSubtopic(sub._id);
+
                             return (
                               <li key={sub._id}>
                                 <span className="aw-tree-subtopic">
@@ -109,21 +106,14 @@ export default function StudentSyllabusPage({ examId }) {
                                     </p>
                                   ) : (
                                     subQuestions.map((q) => (
-                                      <div
-                                        key={q._id}
-                                        className="aw-question-card"
-                                      >
-                                        <h3>{q.questionHindi}</h3>
-                                        <p className="aw-qen">
-                                          {q.questionEnglish}
-                                        </p>
+                                      <div key={q._id} className="aw-question-card">
+                                        <h3>{q.hindiText}</h3>
+                                        <p className="aw-qen">{q.englishText}</p>
 
                                         <details className="aw-answer">
                                           <summary>Show Answer</summary>
-                                          <p>{q.answerHindi}</p>
-                                          <p className="aw-qen">
-                                            {q.answerEnglish}
-                                          </p>
+                                          <p>{q.hindiAnswer}</p>
+                                          <p className="aw-qen">{q.englishAnswer}</p>
                                         </details>
                                       </div>
                                     ))
