@@ -1,13 +1,13 @@
+// src/answerWriting/LiveQuestionPage.jsx
 import React, { useEffect, useState } from "react";
-import { useParams } from "react-router-dom";   // ✅ NEW
-import CountdownTimer from "./components/CountdownTimer";
+import { useParams } from "react-router-dom";
 import QuestionCard from "./components/QuestionCard";
 import { fetchLiveQuestion } from "./api/answerWritingApi";
 import "./answerWriting.css";
 
 export default function LiveQuestionPage() {
-  const { examId } = useParams();   // ✅ Real parameter from URL
-  const [data, setData] = useState(null);
+  const { examId } = useParams();
+  const [payload, setPayload] = useState(null);
   const [loading, setLoading] = useState(true);
 
   useEffect(() => {
@@ -15,26 +15,23 @@ export default function LiveQuestionPage() {
 
     async function load() {
       try {
-        // 🔥 REAL API call
         const { data } = await fetchLiveQuestion(examId);
         if (!cancelled) {
-          setData(data);
+          setPayload(data);
           setLoading(false);
         }
-      } catch (e) {
-        console.error(e);
+      } catch (err) {
+        console.error("Failed to load live question", err);
         if (!cancelled) setLoading(false);
       }
     }
 
-    load();
-
-    // 🔄 auto-refresh every 30 seconds
-    const interval = setInterval(load, 30000);
+    if (examId) load();
+    const id = setInterval(load, 30000);
 
     return () => {
       cancelled = true;
-      clearInterval(interval);
+      clearInterval(id);
     };
   }, [examId]);
 
@@ -47,72 +44,31 @@ export default function LiveQuestionPage() {
     );
   }
 
-  if (!data || !data.currentQuestion) {
+  if (!payload?.question) {
     return (
       <div className="aw-page">
-        <p>No live question right now.</p>
+        <div className="aw-card">
+          <p>No live question right now. Please check again later.</p>
+        </div>
       </div>
     );
   }
 
-  const {
-    examName,
-    unitName,
-    completionPercent,
-    currentQuestion,
-    nextReleaseAt,
-    upcoming,
-  } = data;
-
   return (
     <div className="aw-page">
-      <div className="aw-page-header aw-page-header-split">
+      <div className="aw-page-header">
         <div>
-          <div className="aw-pill">{examName} – Subject Q&A</div>
-          <h1>{unitName}</h1>
+          <div className="aw-pill">Answer Writing · Live</div>
+          <h1>Current Question</h1>
           <p className="aw-muted">
-            Questions are released automatically. Answer in exam-like format and
-            track your completion in real time.
+            Attempt this question in exam-like conditions. Questions are
+            released automatically by the admin.
           </p>
-        </div>
-        <div className="aw-page-header-right">
-          <span className="aw-muted">Unit Completion</span>
-          <div className="aw-chip">
-            <span className="aw-chip-value">{completionPercent}%</span>
-          </div>
         </div>
       </div>
 
-      <div className="aw-grid aw-grid-2col">
-        <QuestionCard question={currentQuestion} showStatus={false} />
-
-        <div className="aw-column-right">
-          <CountdownTimer
-            label="Next Question Countdown"
-            targetTime={nextReleaseAt}
-          />
-
-          <div className="aw-card aw-upcoming-card">
-            <div className="aw-card-title">Upcoming Q&A</div>
-            <ul className="aw-upcoming-list">
-              {upcoming?.map((q) => (
-                <li key={q.code} className="aw-upcoming-item">
-                  <div className="aw-upcoming-code">{q.code}</div>
-                  <div className="aw-upcoming-main">
-                    <div className="aw-upcoming-title">{q.title}</div>
-                    <div className="aw-muted">
-                      Release at{" "}
-                      {new Date(q.releaseAt).toLocaleTimeString([], {
-                        hour: "2-digit",
-                        minute: "2-digit",
-                      })}
-                    </div>
-                  </div>
-                </li>
-              ))}
-            </ul>
-          </div>
-        </div>
+      <div className="aw-card">
+        <QuestionCard question={payload.question} showStatus={false} />
       </div>
     </div>
   );
