@@ -6,6 +6,7 @@ import {
   useLocation,
   useParams,
   useNavigate,
+  Navigate,
 } from "react-router-dom";
 import { useEffect } from "react";
 
@@ -425,22 +426,42 @@ function AppContent() {
             element={<LiveQuestionPage />}
           />
 
-          {/* Admin: list of exams */}
+          {/* Admin: list of exams (Option A) */}
           <Route
             path="/admin/answer-writing"
             element={
-              <AdminExamList
-                onOpenExam={(exam) =>
-                  navigate(`/admin/answer-writing/${exam.id}`)
-                }
-              />
+              <AdminRoute>
+                <AdminExamList
+                  onOpenExam={(exam) =>
+                    navigate(`/admin/answer-writing/${exam.id}`)
+                  }
+                />
+              </AdminRoute>
             }
           />
 
-          {/* Admin: builder */}
+          {/* Redirect old admin links (optional, to avoid blanks) */}
+          <Route
+            path="/admin/answer-writing/exams"
+            element={<Navigate to="/admin/answer-writing" replace />}
+          />
+          <Route
+            path="/admin/answer-writing/manage"
+            element={<Navigate to="/admin/answer-writing" replace />}
+          />
+          <Route
+            path="/admin/answer-writing/questions"
+            element={<Navigate to="/admin/answer-writing" replace />}
+          />
+
+          {/* Admin: builder for a specific exam */}
           <Route
             path="/admin/answer-writing/:examId"
-            element={<AdminExamBuilder />}
+            element={
+              <AdminRoute>
+                <AdminExamBuilder />
+              </AdminRoute>
+            }
           />
 
           {/* NOT FOUND */}
