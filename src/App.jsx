@@ -40,6 +40,16 @@ import LibraryPage from "./pages/LibraryPage.jsx";
 import BookReaderPage from "./pages/library/reader/BookReaderPage.jsx";
 import BookFlipViewerPage from "./pages/library/reader/BookFlipViewerPage.jsx";
 
+/* ---------- ⭐ NEW — ANSWER WRITING PAGES ---------- */
+import AnswerWritingHome from "./pages/answerWriting/AnswerWritingHome.jsx";
+import AnswerWritingExamList from "./pages/answerWriting/AnswerWritingExamList.jsx";
+import AnswerWritingSyllabusTree from "./pages/answerWriting/AnswerWritingSyllabusTree.jsx";
+import AnswerWritingQuestion from "./pages/answerWriting/AnswerWritingQuestion.jsx";
+import AnswerWritingDashboard from "./pages/answerWriting/AnswerWritingDashboard.jsx";
+import AnswerWritingAdmin from "./pages/answerWriting/AnswerWritingAdmin.jsx";
+import AnswerWritingQuestionManager from "./pages/answerWriting/AnswerWritingQuestionManager.jsx";
+import AnswerWritingExamManager from "./pages/answerWriting/AnswerWritingExamManager.jsx";
+
 /* ---------- Admin Pages ---------- */
 import AdminDashboard from "./pages/AdminDashboard.jsx";
 import AdminLogin from "./pages/AdminLogin.jsx";
@@ -97,7 +107,7 @@ function NotFound() {
     <div className="flex flex-col items-center justify-center py-24 text-center">
       <h1 className="text-6xl font-extrabold text-[#1e293b] mb-4">404</h1>
       <p className="text-lg text-gray-600 mb-6">
-        Oops! The page you’re looking for doesn’t exist.
+        Oops! The page you're looking for doesn't exist.
       </p>
       <a
         href="/"
@@ -185,6 +195,39 @@ function AppContent() {
           {/* BOOK READERS */}
           <Route path="/library/reader/:bookId" element={<BookReaderPage />} />
           <Route path="/library/flip/:bookId" element={<BookFlipViewerPage />} />
+
+          {/* ⭐⭐⭐ NEW — ANSWER WRITING PAGES */}
+          <Route path="/answer-writing" element={<AnswerWritingHome />} />
+          <Route path="/answer-writing/exams" element={<AnswerWritingExamList />} />
+          <Route path="/answer-writing/syllabus/:examId" element={<AnswerWritingSyllabusTree />} />
+          <Route path="/answer-writing/question/:questionId" element={<AnswerWritingQuestion />} />
+          <Route path="/answer-writing/dashboard" element={<AnswerWritingDashboard />} />
+          
+          {/* Answer Writing Admin */}
+          <Route
+            path="/admin/answer-writing"
+            element={
+              <AdminRoute>
+                <AnswerWritingAdmin />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/answer-writing/exams"
+            element={
+              <AdminRoute>
+                <AnswerWritingExamManager />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/answer-writing/manage"
+            element={
+              <AdminRoute>
+                <AnswerWritingQuestionManager />
+              </AdminRoute>
+            }
+          />
 
           {/* LIVE */}
           <Route path="/live" element={<LiveChannelPage />} />
