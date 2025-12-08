@@ -91,6 +91,12 @@ import ClassroomLinkCreator from "./pages/ClassroomLinkCreator.jsx";
 /* ---------- Theme Page ---------- */
 import ThemeFocusPage from "./pages/classroom/ThemeFocusPage.jsx";
 
+/* ---------- QnA SYSTEM (NEW) ---------- */
+import QnAExamList from "./questionanswer/pages/QnAExamList.jsx";
+import QnASyllabusTree from "./questionanswer/pages/QnASyllabusTree.jsx";
+import QnALiveQuestion from "./questionanswer/pages/QnALiveQuestion.jsx";
+import QnADashboard from "./questionanswer/pages/QnADashboard.jsx";
+
 /* ---------- Not Found ---------- */
 function NotFound() {
   return (
@@ -115,12 +121,10 @@ function ScrollToHash() {
   useEffect(() => {
     if (!hash) return;
     const id = hash.replace(/^#/, "");
-    const tryScroll = () => {
+    setTimeout(() => {
       const el = document.getElementById(id);
-      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-    };
-    setTimeout(tryScroll, 0);
-    setTimeout(tryScroll, 150);
+      if (el) el.scrollIntoView({ behavior: "smooth" });
+    }, 0);
   }, [hash, pathname]);
   return null;
 }
@@ -152,7 +156,6 @@ function ClassroomWrapper({ children }) {
 /* ========================================================= */
 function AppContent() {
   const location = useLocation();
-  const navigate = useNavigate();
   const isPrepHome = location.pathname === "/prep";
 
   return (
@@ -171,7 +174,9 @@ function AppContent() {
 
       <div className="animate-fadeIn flex-1">
         <Routes>
+          {/* -------------------------------------- */}
           {/* PUBLIC PAGES */}
+          {/* -------------------------------------- */}
           <Route path="/" element={<HomePage />} />
           <Route path="/articles" element={<ArticlesPage />} />
           <Route path="/news" element={<NewsPage />} />
@@ -186,9 +191,7 @@ function AppContent() {
           <Route path="/library/reader/:bookId" element={<BookReaderPage />} />
           <Route path="/library/flip/:bookId" element={<BookFlipViewerPage />} />
 
-          
-
-          {/* LIVE */}
+          {/* LIVE SYSTEM */}
           <Route path="/live" element={<LiveChannelPage />} />
           <Route
             path="/admin/live"
@@ -215,7 +218,7 @@ function AppContent() {
           {/* BRIDGE */}
           <Route path="/bridge/gk/:key/t/:token" element={<GroupKeyBridge />} />
 
-          {/* ADMIN CLASSROOM */}
+          {/* CLASSROOM ADMIN */}
           <Route
             path="/admin/classroom-link"
             element={
@@ -235,10 +238,7 @@ function AppContent() {
 
           {/* RESEARCH */}
           <Route path="/research-drafting" element={<ResearchDrafting />} />
-          <Route
-            path="/research-drafting/lab/:id"
-            element={<ResearchDraftingLab />}
-          />
+          <Route path="/research-drafting/lab/:id" element={<ResearchDraftingLab />} />
           <Route
             path="/admin/research-drafting"
             element={
@@ -251,6 +251,7 @@ function AppContent() {
           {/* PREP */}
           <Route path="/prep" element={<PrepList />} />
           <Route path="/prep/:examId" element={<PrepWizard />} />
+
           <Route
             path="/admin/prep"
             element={
@@ -279,10 +280,7 @@ function AppContent() {
           {/* TEST SERIES */}
           <Route path="/tests" element={<TestDashboard />} />
           <Route path="/tests/:code" element={<RouteWithCode Comp={TestIntro} />} />
-          <Route
-            path="/tests/:code/play"
-            element={<RouteWithCode Comp={TestPlayer} />}
-          />
+          <Route path="/tests/:code/play" element={<RouteWithCode Comp={TestPlayer} />} />
           <Route
             path="/tests/result/:id"
             element={<RouteWithResultId Comp={ResultScreen} />}
@@ -375,18 +373,18 @@ function AppContent() {
             }
           />
           <Route
-            path="/admin/library/books"
-            element={
-              <AdminRoute>
-                <BooksPage />
-              </AdminRoute>
-            }
-          />
-          <Route
             path="/admin/library/settings"
             element={
               <AdminRoute>
                 <SettingsPage />
+              </AdminRoute>
+            }
+          />
+          <Route
+            path="/admin/library/books"
+            element={
+              <AdminRoute>
+                <BooksPage />
               </AdminRoute>
             }
           />
@@ -401,7 +399,15 @@ function AppContent() {
             }
           />
 
-          {/* NOT FOUND */}
+          {/* --------------------------- */}
+          {/* QnA SYSTEM ROUTES          */}
+          {/* --------------------------- */}
+          <Route path="/qna/exams" element={<QnAExamList />} />
+          <Route path="/qna/syllabus/:examId" element={<QnASyllabusTree />} />
+          <Route path="/qna/question/:questionId" element={<QnALiveQuestion />} />
+          <Route path="/qna/dashboard" element={<QnADashboard />} />
+
+          {/* 404 */}
           <Route path="*" element={<NotFound />} />
         </Routes>
       </div>
