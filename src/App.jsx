@@ -1,14 +1,12 @@
-// src/App.jsx
+import { useEffect } from "react";
 import {
   BrowserRouter as Router,
   Routes,
   Route,
   useLocation,
   useParams,
-  useNavigate,
   Navigate,
 } from "react-router-dom";
-import { useEffect } from "react";
 
 import Navbar from "./components/layout/Navbar";
 import Footer from "./components/layout/Footer.jsx";
@@ -19,13 +17,14 @@ import "./styles/ui.css";
 /* ---------- Classroom Drawer Menu ---------- */
 import ClassroomDrawerMenu from "./components/ClassroomDrawerMenu.jsx";
 
-/* ---------- Ambience Page ---------- */
+/* ---------- Ambience / Theme Pages ---------- */
 import AmbiencePage from "./pages/classroom/AmbiencePage.jsx";
+import ThemeFocusPage from "./pages/classroom/ThemeFocusPage.jsx";
 
 /* ---------- Group Key Bridge ---------- */
 import GroupKeyBridge from "./pages/GroupKeyBridge.jsx";
 
-/* ---------- Main Pages ---------- */
+/* ---------- Main Public Pages ---------- */
 import HomePage from "./pages/HomePage.jsx";
 import ArticlesPage from "./pages/ArticlesPage.jsx";
 import NewsPage from "./pages/NewsPage.jsx";
@@ -36,11 +35,11 @@ import PdfDemo from "./pages/PdfDemo.jsx";
 import Plagiarism from "./pages/Plagiarism.jsx";
 import LibraryPage from "./pages/LibraryPage.jsx";
 
-/* ---------- BOOK READERS ---------- */
+/* ---------- Book Readers ---------- */
 import BookReaderPage from "./pages/library/reader/BookReaderPage.jsx";
 import BookFlipViewerPage from "./pages/library/reader/BookFlipViewerPage.jsx";
 
-/* ---------- Admin Pages ---------- */
+/* ---------- Admin General Pages ---------- */
 import AdminDashboard from "./pages/AdminDashboard.jsx";
 import AdminLogin from "./pages/AdminLogin.jsx";
 import AdminConsultancyEditor from "./components/Admin/AdminConsultancyEditor.jsx";
@@ -54,7 +53,7 @@ import BookPurchasesPage from "./pages/admin/library/BookPurchasesPage.jsx";
 import SettingsPage from "./pages/admin/library/SettingsPage.jsx";
 import BooksPage from "./pages/admin/library/BooksPage.jsx";
 
-/* ---------- NEW — Change Password ---------- */
+/* ---------- Change Password ---------- */
 import ChangePassword from "./pages/ChangePassword.jsx";
 
 /* ---------- Exam Prep ---------- */
@@ -88,10 +87,7 @@ import AdminLectureManager from "./pages/AdminLectureManager.jsx";
 import ClassroomSharePage from "./pages/ClassroomSharePage.jsx";
 import ClassroomLinkCreator from "./pages/ClassroomLinkCreator.jsx";
 
-/* ---------- Theme Page ---------- */
-import ThemeFocusPage from "./pages/classroom/ThemeFocusPage.jsx";
-
-/* ---------- QnA SYSTEM (NEW) ---------- */
+/* ---------- QnA SYSTEM ---------- */
 import QnAExamList from "./questionanswer/pages/QnAExamList.jsx";
 import QnASyllabusTree from "./questionanswer/pages/QnASyllabusTree.jsx";
 import QnALiveQuestion from "./questionanswer/pages/QnALiveQuestion.jsx";
@@ -118,14 +114,14 @@ function NotFound() {
 /* ---------- Scroll Handler ---------- */
 function ScrollToHash() {
   const { hash, pathname } = useLocation();
+
   useEffect(() => {
     if (!hash) return;
     const id = hash.replace(/^#/, "");
-    setTimeout(() => {
-      const el = document.getElementById(id);
-      if (el) el.scrollIntoView({ behavior: "smooth" });
-    }, 0);
+    const el = document.getElementById(id);
+    if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
   }, [hash, pathname]);
+
   return null;
 }
 
@@ -174,9 +170,7 @@ function AppContent() {
 
       <div className="animate-fadeIn flex-1">
         <Routes>
-          {/* -------------------------------------- */}
           {/* PUBLIC PAGES */}
-          {/* -------------------------------------- */}
           <Route path="/" element={<HomePage />} />
           <Route path="/articles" element={<ArticlesPage />} />
           <Route path="/news" element={<NewsPage />} />
@@ -202,7 +196,7 @@ function AppContent() {
             }
           />
 
-          {/* CLASSROOM */}
+          {/* CLASSROOM (student) */}
           <Route
             path="/classroom"
             element={
@@ -216,7 +210,10 @@ function AppContent() {
           <Route path="/classroom/theme" element={<ThemeFocusPage />} />
 
           {/* BRIDGE */}
-          <Route path="/bridge/gk/:key/t/:token" element={<GroupKeyBridge />} />
+          <Route
+            path="/bridge/gk/:key/t/:token"
+            element={<GroupKeyBridge />}
+          />
 
           {/* CLASSROOM ADMIN */}
           <Route
@@ -236,9 +233,12 @@ function AppContent() {
             }
           />
 
-          {/* RESEARCH */}
+          {/* RESEARCH DRAFTING */}
           <Route path="/research-drafting" element={<ResearchDrafting />} />
-          <Route path="/research-drafting/lab/:id" element={<ResearchDraftingLab />} />
+          <Route
+            path="/research-drafting/lab/:id"
+            element={<ResearchDraftingLab />}
+          />
           <Route
             path="/admin/research-drafting"
             element={
@@ -248,7 +248,7 @@ function AppContent() {
             }
           />
 
-          {/* PREP */}
+          {/* PREP SYSTEM */}
           <Route path="/prep" element={<PrepList />} />
           <Route path="/prep/:examId" element={<PrepWizard />} />
 
@@ -279,8 +279,14 @@ function AppContent() {
 
           {/* TEST SERIES */}
           <Route path="/tests" element={<TestDashboard />} />
-          <Route path="/tests/:code" element={<RouteWithCode Comp={TestIntro} />} />
-          <Route path="/tests/:code/play" element={<RouteWithCode Comp={TestPlayer} />} />
+          <Route
+            path="/tests/:code"
+            element={<RouteWithCode Comp={TestIntro} />}
+          />
+          <Route
+            path="/tests/:code/play"
+            element={<RouteWithCode Comp={TestPlayer} />}
+          />
           <Route
             path="/tests/result/:id"
             element={<RouteWithResultId Comp={ResultScreen} />}
@@ -399,15 +405,16 @@ function AppContent() {
             }
           />
 
-          {/* --------------------------- */}
-          {/* QnA SYSTEM ROUTES          */}
-          {/* --------------------------- */}
+          {/* QnA SYSTEM ROUTES */}
           <Route path="/qna/exams" element={<QnAExamList />} />
           <Route path="/qna/syllabus/:examId" element={<QnASyllabusTree />} />
-          <Route path="/qna/question/:questionId" element={<QnALiveQuestion />} />
+          <Route
+            path="/qna/question/:questionId"
+            element={<QnALiveQuestion />}
+          />
           <Route path="/qna/dashboard" element={<QnADashboard />} />
 
-          {/* 404 */}
+          {/* Catch-all 404 */}
           <Route path="*" element={<NotFound />} />
         </Routes>
       </div>
