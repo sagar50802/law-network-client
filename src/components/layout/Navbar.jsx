@@ -74,14 +74,6 @@ export default function Navbar() {
             Preparation
           </a>
 
-          {/* ⭐⭐⭐ NEW — ANSWER WRITING LINK */}
-          <a 
-            href="/answer-writing" 
-            className="text-purple-600 font-semibold hover:text-purple-800 hover:underline"
-          >
-            Answer Writing
-          </a>
-
           <a href="/tests" className="hover:text-blue-600">
             Test Series {testCount ? `(${testCount})` : ""}
           </a>
@@ -134,17 +126,6 @@ export default function Navbar() {
 
               <a href="/admin/dashboard" className="text-blue-600 underline">
                 Admin
-              </a>
-
-              {/* ⭐⭐⭐ NEW — ANSWER WRITING ADMIN LINKS */}
-              <a href="/admin/answer-writing" className="text-purple-600 underline">
-                AW Admin
-              </a>
-              <a href="/admin/answer-writing/exams" className="text-purple-600 underline">
-                AW Exams
-              </a>
-              <a href="/admin/answer-writing/manage" className="text-purple-600 underline">
-                AW Questions
               </a>
 
               <a href="/admin/prep" className="text-blue-600 underline">
