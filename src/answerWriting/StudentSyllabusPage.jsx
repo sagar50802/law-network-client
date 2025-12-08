@@ -1,9 +1,9 @@
 // client/src/answerWriting/StudentSyllabusPage.jsx
 import React, { useEffect, useState } from "react";
-import {
+ import {
   fetchExamDetail,
   fetchReleasedQuestions,
-} from "./api/answerWritingApi";   // ✅ FIXED PATH
+} from "./api/answerWritingApi";
 import "./answerWriting.css";
 
 export default function StudentSyllabusPage({ examId }) {
