@@ -111,11 +111,6 @@ export default function Navbar() {
             Library
           </a>
 
-          {/* ⭐⭐ NEW: Answer Writing (Student) */}
-          <a href="/answer-writing" className="text-purple-600 font-semibold hover:underline">
-            Answer Writing
-          </a>
-
           {/* LIVE */}
           <a
             href="/live"
@@ -175,17 +170,6 @@ export default function Navbar() {
               </a>
               <a href="/admin/library/settings" className="text-blue-600 underline">
                 Library Settings
-              </a>
-
-              {/* ⭐⭐⭐ NEW: Answer Writing Admin */}
-              <a href="/admin/answer-writing" className="text-purple-600 underline">
-                AW Admin
-              </a>
-              <a href="/admin/answer-writing/exams" className="text-purple-600 underline">
-                Manage Exams
-              </a>
-              <a href="/admin/answer-writing/manage" className="text-purple-600 underline">
-                Questions Manager
               </a>
 
               {/* Classroom Admin */}
