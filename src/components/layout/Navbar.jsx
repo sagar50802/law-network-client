@@ -10,21 +10,27 @@ export default function Navbar() {
     localStorage.getItem("ADMIN_KEY") || ""
   );
 
-  // 🔄 Auto-refresh ADMIN_KEY every second
+  const isAdmin = isOwner() || adminKey === "LAWNOWNER2025";
+  const showLiveAdmin = isAdmin;
+
+  /* Keep ADMIN_KEY in sync with localStorage */
   useEffect(() => {
     const interval = setInterval(() => {
       const current = localStorage.getItem("ADMIN_KEY") || "";
       setAdminKey(current);
     }, 1000);
+
     return () => clearInterval(interval);
   }, []);
 
+  /* Fetch article count */
   useEffect(() => {
     getJSON("/api/articles")
       .then((r) => setArticleCount((r.articles || r.data || []).length))
       .catch(() => {});
   }, []);
 
+  /* Fetch test series count */
   useEffect(() => {
     getJSON("/api/testseries/tests")
       .then((r) => setTestCount(r?.tests?.length || 0))
@@ -47,16 +53,22 @@ export default function Navbar() {
     }
   }
 
-  const showLiveAdmin = isOwner() || adminKey === "LAWNOWNER2025";
+  function handleLogout() {
+    localStorage.removeItem("ownerKey");
+    localStorage.removeItem("ADMIN_KEY");
+    localStorage.removeItem("adminToken");
+    location.reload();
+  }
 
   return (
     <nav className="sticky top-0 z-40 bg-white/80 backdrop-blur border-b">
       <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+        {/* Brand */}
         <a href="/" className="font-black text-xl">
           Law Network
         </a>
 
-        {/* Desktop */}
+        {/* DESKTOP NAV */}
         <div className="hidden md:flex gap-6 items-center">
           <a href="/articles" className="hover:text-blue-600">
             Articles ({articleCount})
@@ -106,7 +118,7 @@ export default function Navbar() {
             Classroom
           </a>
 
-          {/* ⭐ Library */}
+          {/* Library (user) */}
           <a href="/library" className="hover:text-blue-600">
             Library
           </a>
@@ -119,13 +131,16 @@ export default function Navbar() {
             LIVE
           </a>
 
-          {/* ⭐⭐⭐ NEW — QnA SYSTEM (STUDENT) */}
-          <a href="/qna/exams" className="text-purple-600 font-semibold hover:underline">
+          {/* QnA PRACTICE (student) */}
+          <a
+            href="/qna/exams"
+            className="text-purple-600 font-semibold hover:underline"
+          >
             QnA Practice
           </a>
 
           {/* ADMIN SECTION */}
-          {(isOwner() || adminKey === "LAWNOWNER2025") && (
+          {isAdmin && (
             <>
               <span className="text-gray-300">|</span>
 
@@ -145,7 +160,10 @@ export default function Navbar() {
                 Manage Tests
               </a>
 
-              <a href="/owner/tests/import" className="text-blue-600 underline">
+              <a
+                href="/owner/tests/import"
+                className="text-blue-600 underline"
+              >
                 Import Tests
               </a>
 
@@ -160,25 +178,40 @@ export default function Navbar() {
                 Research Drafting Admin
               </a>
 
-              {/* ⭐⭐ Library Admin */}
+              {/* Library Admin */}
               <a href="/admin/library" className="text-blue-600 underline">
                 Library Admin
               </a>
-              <a href="/admin/library/payments" className="text-blue-600 underline">
+              <a
+                href="/admin/library/payments"
+                className="text-blue-600 underline"
+              >
                 Library Payments
               </a>
-              <a href="/admin/library/seats" className="text-blue-600 underline">
+              <a
+                href="/admin/library/seats"
+                className="text-blue-600 underline"
+              >
                 Library Seats
               </a>
-              <a href="/admin/library/book-purchases" className="text-blue-600 underline">
+              <a
+                href="/admin/library/book-purchases"
+                className="text-blue-600 underline"
+              >
                 Book Purchases
               </a>
-              <a href="/admin/library/settings" className="text-blue-600 underline">
+              <a
+                href="/admin/library/settings"
+                className="text-blue-600 underline"
+              >
                 Library Settings
               </a>
 
-              {/* ⭐⭐⭐ NEW — QnA Admin */}
-              <a href="/admin/qna" className="text-purple-700 underline">
+              {/* QnA Admin – points to dashboard (hash can be used in UI to show QnA panel) */}
+              <a
+                href="/admin/dashboard#qna"
+                className="text-purple-700 underline"
+              >
                 QnA Admin
               </a>
 
@@ -200,6 +233,7 @@ export default function Navbar() {
                 </a>
               )}
 
+              {/* Footer editor */}
               <a
                 href="/admin/footer"
                 className="px-2 py-1 rounded-md bg-blue-200 text-blue-900 font-semibold hover:bg-blue-300 transition"
@@ -207,6 +241,7 @@ export default function Navbar() {
                 📝 Edit Footer
               </a>
 
+              {/* Change password */}
               <a
                 href="/admin/change-password"
                 className="px-2 py-1 rounded-md bg-red-200 text-red-900 font-semibold hover:bg-red-300 transition"
@@ -216,12 +251,7 @@ export default function Navbar() {
 
               <button
                 className="ml-2 text-xs border px-2 py-1 rounded"
-                onClick={() => {
-                  localStorage.removeItem("ownerKey");
-                  localStorage.removeItem("ADMIN_KEY");
-                  localStorage.removeItem("adminToken");
-                  location.reload();
-                }}
+                onClick={handleLogout}
               >
                 Logout
               </button>
@@ -229,7 +259,7 @@ export default function Navbar() {
           )}
         </div>
 
-        {/* Mobile Burger */}
+        {/* MOBILE BURGER */}
         <div className="md:hidden">
           <button onClick={() => setOpen((v) => !v)} aria-label="Menu">
             ☰
@@ -237,7 +267,7 @@ export default function Navbar() {
         </div>
       </div>
 
-      {/* Mobile Drawer */}
+      {/* MOBILE DRAWER */}
       {open && (
         <div className="md:hidden px-4 pb-3 flex flex-col gap-2">
           <a href="/articles">Articles</a>
@@ -248,7 +278,7 @@ export default function Navbar() {
 
           <a href="/prep">Preparation</a>
 
-          {/* ⭐⭐⭐ NEW — QnA (mobile user) */}
+          {/* QnA mobile user */}
           <a href="/qna/exams" className="text-purple-600 font-semibold">
             QnA Practice
           </a>
@@ -272,14 +302,17 @@ export default function Navbar() {
             LIVE
           </a>
 
-          {(isOwner() || adminKey === "LAWNOWNER2025") && (
+          {isAdmin && (
             <>
               <a href="/admin/dashboard" className="underline">
                 Admin
               </a>
 
-              {/* ⭐⭐⭐ NEW — QnA Admin (mobile) */}
-              <a href="/admin/qna" className="text-purple-600 underline">
+              {/* QnA Admin mobile – same target as desktop */}
+              <a
+                href="/admin/dashboard#qna"
+                className="text-purple-600 underline"
+              >
                 QnA Admin
               </a>
 
@@ -307,7 +340,7 @@ export default function Navbar() {
                 Research Drafting Admin
               </a>
 
-              {/* Library Admin */}
+              {/* Library Admin mobile */}
               <a href="/admin/library" className="underline">
                 Library Admin
               </a>
@@ -347,12 +380,7 @@ export default function Navbar() {
 
               <button
                 className="text-left text-xs border px-2 py-1 rounded w-fit"
-                onClick={() => {
-                  localStorage.removeItem("ownerKey");
-                  localStorage.removeItem("ADMIN_KEY");
-                  localStorage.removeItem("adminToken");
-                  location.reload();
-                }}
+                onClick={handleLogout}
               >
                 Logout
               </button>
@@ -361,7 +389,7 @@ export default function Navbar() {
         </div>
       )}
 
-      {(isOwner() || adminKey === "LAWNOWNER2025") && (
+      {isAdmin && (
         <div className="text-center text-xs py-1 bg-amber-50 border-t">
           Admin Mode Enabled
         </div>
