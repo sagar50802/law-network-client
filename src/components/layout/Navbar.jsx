@@ -74,6 +74,14 @@ export default function Navbar() {
             Preparation
           </a>
 
+          {/* ⭐⭐⭐ NEW — ANSWER WRITING LINK */}
+          <a 
+            href="/answer-writing" 
+            className="text-purple-600 font-semibold hover:text-purple-800 hover:underline"
+          >
+            Answer Writing
+          </a>
+
           <a href="/tests" className="hover:text-blue-600">
             Test Series {testCount ? `(${testCount})` : ""}
           </a>
@@ -126,6 +134,17 @@ export default function Navbar() {
 
               <a href="/admin/dashboard" className="text-blue-600 underline">
                 Admin
+              </a>
+
+              {/* ⭐⭐⭐ NEW — ANSWER WRITING ADMIN LINKS */}
+              <a href="/admin/answer-writing" className="text-purple-600 underline">
+                AW Admin
+              </a>
+              <a href="/admin/answer-writing/exams" className="text-purple-600 underline">
+                AW Exams
+              </a>
+              <a href="/admin/answer-writing/manage" className="text-purple-600 underline">
+                AW Questions
               </a>
 
               <a href="/admin/prep" className="text-blue-600 underline">
@@ -238,6 +257,12 @@ export default function Navbar() {
             Consultancy
           </a>
           <a href="/prep">Preparation</a>
+          
+          {/* ⭐⭐⭐ NEW — ANSWER WRITING (Mobile) */}
+          <a href="/answer-writing" className="text-purple-600 font-semibold">
+            Answer Writing
+          </a>
+
           <a href="/tests">Test Series {testCount ? `(${testCount})` : ""}</a>
           <a href="/podcasts">Podcasts</a>
           <a href="/videos">Video Gallery</a>
@@ -254,11 +279,6 @@ export default function Navbar() {
             Library
           </a>
 
-          {/* ⭐⭐ NEW: Answer Writing (Mobile) */}
-          <a href="/answer-writing" className="text-purple-600 font-semibold">
-            Answer Writing
-          </a>
-
           <a href="/live" className="text-red-600 font-semibold">
             LIVE
           </a>
@@ -268,6 +288,18 @@ export default function Navbar() {
               <a href="/admin/dashboard" className="underline">
                 Admin
               </a>
+              
+              {/* ⭐⭐⭐ NEW — ANSWER WRITING ADMIN LINKS (Mobile) */}
+              <a href="/admin/answer-writing" className="text-purple-600 underline">
+                AW Admin
+              </a>
+              <a href="/admin/answer-writing/exams" className="text-purple-600 underline">
+                AW Exams
+              </a>
+              <a href="/admin/answer-writing/manage" className="text-purple-600 underline">
+                AW Questions
+              </a>
+
               <a href="/admin/prep" className="underline">
                 Prep Admin
               </a>
@@ -302,17 +334,6 @@ export default function Navbar() {
               </a>
               <a href="/admin/library/settings" className="underline">
                 Library Settings
-              </a>
-
-              {/* ⭐⭐⭐ NEW: Answer Writing Admin (Mobile) */}
-              <a href="/admin/answer-writing" className="underline">
-                AW Admin
-              </a>
-              <a href="/admin/answer-writing/exams" className="underline">
-                Manage Exams
-              </a>
-              <a href="/admin/answer-writing/manage" className="underline">
-                Questions Manager
               </a>
 
               <a
