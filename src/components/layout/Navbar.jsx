@@ -106,7 +106,7 @@ export default function Navbar() {
             Classroom
           </a>
 
-          {/* ⭐ Library (user) */}
+          {/* ⭐ Library */}
           <a href="/library" className="hover:text-blue-600">
             Library
           </a>
@@ -117,6 +117,11 @@ export default function Navbar() {
             className="text-red-600 font-semibold hover:underline"
           >
             LIVE
+          </a>
+
+          {/* ⭐⭐⭐ NEW — QnA SYSTEM (STUDENT) */}
+          <a href="/qna/exams" className="text-purple-600 font-semibold hover:underline">
+            QnA Practice
           </a>
 
           {/* ADMIN SECTION */}
@@ -155,7 +160,7 @@ export default function Navbar() {
                 Research Drafting Admin
               </a>
 
-              {/* ⭐⭐ NEW: LIBRARY ADMIN LINKS (DESKTOP) */}
+              {/* ⭐⭐ Library Admin */}
               <a href="/admin/library" className="text-blue-600 underline">
                 Library Admin
               </a>
@@ -170,6 +175,11 @@ export default function Navbar() {
               </a>
               <a href="/admin/library/settings" className="text-blue-600 underline">
                 Library Settings
+              </a>
+
+              {/* ⭐⭐⭐ NEW — QnA Admin */}
+              <a href="/admin/qna" className="text-purple-700 underline">
+                QnA Admin
               </a>
 
               {/* Classroom Admin */}
@@ -190,7 +200,6 @@ export default function Navbar() {
                 </a>
               )}
 
-              {/* Footer editor */}
               <a
                 href="/admin/footer"
                 className="px-2 py-1 rounded-md bg-blue-200 text-blue-900 font-semibold hover:bg-blue-300 transition"
@@ -198,7 +207,6 @@ export default function Navbar() {
                 📝 Edit Footer
               </a>
 
-              {/* 🔐 Change password */}
               <a
                 href="/admin/change-password"
                 className="px-2 py-1 rounded-md bg-red-200 text-red-900 font-semibold hover:bg-red-300 transition"
@@ -237,11 +245,12 @@ export default function Navbar() {
           <a href="/#consultancy" onClick={goConsultancy}>
             Consultancy
           </a>
+
           <a href="/prep">Preparation</a>
-          
-          {/* ⭐⭐⭐ NEW — ANSWER WRITING (Mobile) */}
-          <a href="/answer-writing" className="text-purple-600 font-semibold">
-            Answer Writing
+
+          {/* ⭐⭐⭐ NEW — QnA (mobile user) */}
+          <a href="/qna/exams" className="text-purple-600 font-semibold">
+            QnA Practice
           </a>
 
           <a href="/tests">Test Series {testCount ? `(${testCount})` : ""}</a>
@@ -255,7 +264,6 @@ export default function Navbar() {
             Classroom
           </a>
 
-          {/* ⭐ Library (mobile) */}
           <a href="/library" className="text-blue-600 font-semibold">
             Library
           </a>
@@ -269,38 +277,37 @@ export default function Navbar() {
               <a href="/admin/dashboard" className="underline">
                 Admin
               </a>
-              
-              {/* ⭐⭐⭐ NEW — ANSWER WRITING ADMIN LINKS (Mobile) */}
-              <a href="/admin/answer-writing" className="text-purple-600 underline">
-                AW Admin
-              </a>
-              <a href="/admin/answer-writing/exams" className="text-purple-600 underline">
-                AW Exams
-              </a>
-              <a href="/admin/answer-writing/manage" className="text-purple-600 underline">
-                AW Questions
+
+              {/* ⭐⭐⭐ NEW — QnA Admin (mobile) */}
+              <a href="/admin/qna" className="text-purple-600 underline">
+                QnA Admin
               </a>
 
               <a href="/admin/prep" className="underline">
                 Prep Admin
               </a>
+
               <a href="/admin/prep-access" className="underline">
                 Access Requests
               </a>
+
               <a href="/owner/tests" className="underline">
                 Manage Tests
               </a>
+
               <a href="/owner/tests/import" className="underline">
                 Import Tests
               </a>
+
               <a href="/admin/research" className="underline">
                 Research Admin
               </a>
+
               <a href="/admin/research-drafting" className="underline">
                 Research Drafting Admin
               </a>
 
-              {/* ⭐⭐ NEW: LIBRARY ADMIN LINKS */}
+              {/* Library Admin */}
               <a href="/admin/library" className="underline">
                 Library Admin
               </a>
