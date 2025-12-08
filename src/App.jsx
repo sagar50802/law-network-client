@@ -91,17 +91,6 @@ import ClassroomLinkCreator from "./pages/ClassroomLinkCreator.jsx";
 /* ---------- Theme Page ---------- */
 import ThemeFocusPage from "./pages/classroom/ThemeFocusPage.jsx";
 
-/* ========================================================= */
-/*           ✨ ANSWER WRITING MODULE IMPORTS ✨              */
-/* ========================================================= */
-import AnswerExamList from "./answerWriting/AnswerExamList";
-// ❌ REMOVE OLD DASHBOARD
-// import AnswerDashboard from "./answerWriting/AnswerDashboard";  
-import StudentSyllabusPage from "./answerWriting/StudentSyllabusPage";   // ✅ NEW
-import LiveQuestionPage from "./answerWriting/LiveQuestionPage";
-import AdminExamList from "./answerWriting/AdminExamList";
-import AdminExamBuilder from "./answerWriting/AdminExamBuilder";
-
 /* ---------- Not Found ---------- */
 function NotFound() {
   return (
@@ -156,18 +145,6 @@ function ClassroomWrapper({ children }) {
       {children}
     </>
   );
-}
-
-/* ---------- Answer Writing Helpers ---------- */
-function AdminExamBuilderRoute() {
-  const { examId } = useParams();
-  return <AdminExamBuilder examId={examId} />;
-}
-
-/* ⭐ NEW — Wrapper for StudentSyllabusPage */
-function StudentSyllabusPageWrapper() {
-  const { examId } = useParams();
-  return <StudentSyllabusPage examId={examId} />;
 }
 
 /* ========================================================= */
@@ -299,10 +276,7 @@ function AppContent() {
 
           {/* TEST SERIES */}
           <Route path="/tests" element={<TestDashboard />} />
-          <Route
-            path="/tests/:code"
-            element={<RouteWithCode Comp={TestIntro} />}
-          />
+          <Route path="/tests/:code" element={<RouteWithCode Comp={TestIntro} />} />
           <Route
             path="/tests/:code/play"
             element={<RouteWithCode Comp={TestPlayer} />}
@@ -421,63 +395,6 @@ function AppContent() {
             element={
               <AdminRoute>
                 <ChangePassword />
-              </AdminRoute>
-            }
-          />
-
-          {/* ========================================================= */}
-          {/*                ✨ ANSWER WRITING ROUTES ✨                */}
-          {/* ========================================================= */}
-
-          {/* Public — exam chooser */}
-          <Route path="/answer-writing" element={<AnswerExamList />} />
-
-          {/* Student syllabus page (wrapper) */}
-          <Route
-            path="/answer-writing/:examId"
-            element={<StudentSyllabusPageWrapper />}
-          />
-
-          {/* Live question screen */}
-          <Route
-            path="/answer-writing/:examId/live"
-            element={<LiveQuestionPage />}
-          />
-
-          {/* Admin: list of exams */}
-          <Route
-            path="/admin/answer-writing"
-            element={
-              <AdminRoute>
-                <AdminExamList
-                  onOpenExam={(examId) =>
-                    navigate(`/admin/answer-writing/${examId}`)
-                  }
-                />
-              </AdminRoute>
-            }
-          />
-
-          {/* Old admin paths → redirect */}
-          <Route
-            path="/admin/answer-writing/exams"
-            element={<Navigate to="/admin/answer-writing" replace />}
-          />
-          <Route
-            path="/admin/answer-writing/manage"
-            element={<Navigate to="/admin/answer-writing" replace />}
-          />
-          <Route
-            path="/admin/answer-writing/questions"
-            element={<Navigate to="/admin/answer-writing" replace />}
-          />
-
-          {/* Admin exam builder */}
-          <Route
-            path="/admin/answer-writing/:examId"
-            element={
-              <AdminRoute>
-                <AdminExamBuilderRoute />
               </AdminRoute>
             }
           />
