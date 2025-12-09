@@ -1,4 +1,4 @@
-import { useEffect } from "react";
+// src/App.jsx
 import {
   BrowserRouter as Router,
   Routes,
@@ -6,25 +6,24 @@ import {
   useLocation,
   useParams,
 } from "react-router-dom";
+import { useEffect } from "react";
 
 import Navbar from "./components/layout/Navbar";
 import Footer from "./components/layout/Footer.jsx";
 import AdminRoute from "./components/common/AdminRoute.jsx";
 import IfOwnerOnly from "./components/common/IfOwnerOnly.jsx";
-
 import "./styles/ui.css";
 
 /* ---------- Classroom Drawer Menu ---------- */
 import ClassroomDrawerMenu from "./components/ClassroomDrawerMenu.jsx";
 
-/* ---------- Ambience / Theme Pages ---------- */
+/* ---------- Ambience Page ---------- */
 import AmbiencePage from "./pages/classroom/AmbiencePage.jsx";
-import ThemeFocusPage from "./pages/classroom/ThemeFocusPage.jsx";
 
 /* ---------- Group Key Bridge ---------- */
 import GroupKeyBridge from "./pages/GroupKeyBridge.jsx";
 
-/* ---------- Main Public Pages ---------- */
+/* ---------- Main Pages ---------- */
 import HomePage from "./pages/HomePage.jsx";
 import ArticlesPage from "./pages/ArticlesPage.jsx";
 import NewsPage from "./pages/NewsPage.jsx";
@@ -33,13 +32,13 @@ import PodcastsPage from "./pages/PodcastsPage.jsx";
 import NotebookPage from "./pages/NotebookPage.jsx";
 import PdfDemo from "./pages/PdfDemo.jsx";
 import Plagiarism from "./pages/Plagiarism.jsx";
-import LibraryPage from "./pages/LibraryPage.jsx";
+import LibraryPage from "./pages/LibraryPage.jsx"; 
 
-/* ---------- Book Readers ---------- */
+/* ---------- BOOK READERS ---------- */
 import BookReaderPage from "./pages/library/reader/BookReaderPage.jsx";
-import BookFlipViewerPage from "./pages/library/reader/BookFlipViewerPage.jsx";
+import BookFlipViewerPage from "./pages/library/reader/BookFlipViewerPage.jsx"; // ★ NEW
 
-/* ---------- Admin General Pages ---------- */
+/* ---------- Admin Pages ---------- */
 import AdminDashboard from "./pages/AdminDashboard.jsx";
 import AdminLogin from "./pages/AdminLogin.jsx";
 import AdminConsultancyEditor from "./components/Admin/AdminConsultancyEditor.jsx";
@@ -53,7 +52,7 @@ import BookPurchasesPage from "./pages/admin/library/BookPurchasesPage.jsx";
 import SettingsPage from "./pages/admin/library/SettingsPage.jsx";
 import BooksPage from "./pages/admin/library/BooksPage.jsx";
 
-/* ---------- Change Password ---------- */
+/* ---------- NEW — Change Password ---------- */
 import ChangePassword from "./pages/ChangePassword.jsx";
 
 /* ---------- Exam Prep ---------- */
@@ -87,22 +86,18 @@ import AdminLectureManager from "./pages/AdminLectureManager.jsx";
 import ClassroomSharePage from "./pages/ClassroomSharePage.jsx";
 import ClassroomLinkCreator from "./pages/ClassroomLinkCreator.jsx";
 
-/* ---------- QnA SYSTEM ---------- */
-import QnAExamList from "./questionanswer/pages/QnAExamList.jsx";
-import QnASyllabusTree from "./questionanswer/pages/QnASyllabusTree.jsx";
-import QnALiveQuestion from "./questionanswer/pages/QnALiveQuestion.jsx";
-import QnADashboard from "./questionanswer/pages/QnADashboard.jsx";
+/* ---------- Theme Page ---------- */
+import ThemeFocusPage from "./pages/classroom/ThemeFocusPage.jsx";
 
-/* ------------------------------------------------------------------ */
-/*                            UTIL COMPONENTS                          */
-/* ------------------------------------------------------------------ */
-
+/* ========================================== */
+/*                 NOT FOUND                  */
+/* ========================================== */
 function NotFound() {
   return (
     <div className="flex flex-col items-center justify-center py-24 text-center">
       <h1 className="text-6xl font-extrabold text-[#1e293b] mb-4">404</h1>
       <p className="text-lg text-gray-600 mb-6">
-        Oops! The page you're looking for doesn't exist.
+        Oops! The page you’re looking for doesn’t exist.
       </p>
       <a
         href="/"
@@ -114,41 +109,40 @@ function NotFound() {
   );
 }
 
-/** Scroll smoothly to #hash targets on route change */
 function ScrollToHash() {
   const { hash, pathname } = useLocation();
-
   useEffect(() => {
     if (!hash) return;
-
     const id = hash.replace(/^#/, "");
-    const el = document.getElementById(id);
-
-    if (el) {
-      el.scrollIntoView({ behavior: "smooth", block: "start" });
-    }
+    const tryScroll = () => {
+      const el = document.getElementById(id);
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+    };
+    const t0 = setTimeout(tryScroll, 0);
+    const t1 = setTimeout(tryScroll, 120);
+    const t2 = setTimeout(tryScroll, 350);
+    return () => {
+      clearTimeout(t0);
+      clearTimeout(t1);
+      clearTimeout(t2);
+    };
   }, [hash, pathname]);
-
   return null;
 }
 
-/** Helper for /tests/:code and similar routes */
 function RouteWithCode({ Comp }) {
   const { code } = useParams();
   return <Comp code={code} />;
 }
 
-/** Helper for /tests/result/:id and similar routes */
 function RouteWithResultId({ Comp }) {
   const { id } = useParams();
   return <Comp id={id} />;
 }
 
-/** Wrap classroom pages with the drawer when path starts with /classroom */
 function ClassroomWrapper({ children }) {
   const location = useLocation();
   const isClassroom = location.pathname.startsWith("/classroom");
-
   return (
     <>
       {isClassroom && <ClassroomDrawerMenu />}
@@ -157,21 +151,20 @@ function ClassroomWrapper({ children }) {
   );
 }
 
-/* ------------------------------------------------------------------ */
-/*                           MAIN APP CONTENT                          */
-/* ------------------------------------------------------------------ */
-
+/* ========================================== */
+/*                 MAIN ROUTES                */
+/* ========================================== */
 function AppContent() {
   const location = useLocation();
   const isPrepHome = location.pathname === "/prep";
 
-  const backgroundClass = isPrepHome
-    ? "bg-transparent"
-    : "bg-gradient-to-br from-[#f8fafc] to-[#e6edf5]";
-
   return (
     <div
-      className={`text-[#0b1220] min-h-screen font-inter antialiased flex flex-col ${backgroundClass}`}
+      className={`text-[#0b1220] min-h-screen font-inter antialiased flex flex-col ${
+        isPrepHome
+          ? "bg-transparent"
+          : "bg-gradient-to-br from-[#f8fafc] to-[#e6edf5]"
+      }`}
     >
       <nav className="bg-white/70 backdrop-blur-md shadow-md sticky top-0 z-50">
         <Navbar />
@@ -181,7 +174,7 @@ function AppContent() {
 
       <div className="animate-fadeIn flex-1">
         <Routes>
-          {/* ----------------------- PUBLIC PAGES ----------------------- */}
+          {/* PUBLIC PAGES */}
           <Route path="/" element={<HomePage />} />
           <Route path="/articles" element={<ArticlesPage />} />
           <Route path="/news" element={<NewsPage />} />
@@ -192,11 +185,14 @@ function AppContent() {
           <Route path="/pdfdemo" element={<PdfDemo />} />
           <Route path="/library" element={<LibraryPage />} />
 
-          {/* BOOK READERS */}
+          {/* ---- BOOK READERS ---- */}
           <Route path="/library/reader/:bookId" element={<BookReaderPage />} />
+
+          {/* ★ NEW FLIP VIEWER ROUTE */}
           <Route path="/library/flip/:bookId" element={<BookFlipViewerPage />} />
 
-          {/* ----------------------- LIVE SYSTEM ------------------------ */}
+
+          {/* LIVE */}
           <Route path="/live" element={<LiveChannelPage />} />
           <Route
             path="/admin/live"
@@ -207,7 +203,7 @@ function AppContent() {
             }
           />
 
-          {/* ----------------------- CLASSROOM (STUDENT) ---------------- */}
+          {/* CLASSROOM */}
           <Route
             path="/classroom"
             element={
@@ -216,17 +212,15 @@ function AppContent() {
               </ClassroomWrapper>
             }
           />
+
           <Route path="/classroom/share" element={<ClassroomSharePage />} />
           <Route path="/classroom/ambience" element={<AmbiencePage />} />
           <Route path="/classroom/theme" element={<ThemeFocusPage />} />
 
-          {/* BRIDGE */}
-          <Route
-            path="/bridge/gk/:key/t/:token"
-            element={<GroupKeyBridge />}
-          />
+          {/* GROUP KEY */}
+          <Route path="/bridge/gk/:key/t/:token" element={<GroupKeyBridge />} />
 
-          {/* ----------------------- CLASSROOM ADMIN -------------------- */}
+          {/* ADMIN CLASSROOM */}
           <Route
             path="/admin/classroom-link"
             element={
@@ -235,6 +229,7 @@ function AppContent() {
               </AdminRoute>
             }
           />
+
           <Route
             path="/admin/classroom"
             element={
@@ -244,12 +239,13 @@ function AppContent() {
             }
           />
 
-          {/* ----------------------- RESEARCH DRAFTING ------------------ */}
+          {/* RESEARCH */}
           <Route path="/research-drafting" element={<ResearchDrafting />} />
           <Route
             path="/research-drafting/lab/:id"
             element={<ResearchDraftingLab />}
           />
+
           <Route
             path="/admin/research-drafting"
             element={
@@ -259,7 +255,7 @@ function AppContent() {
             }
           />
 
-          {/* ----------------------- PREP SYSTEM ------------------------ */}
+          {/* PREP */}
           <Route path="/prep" element={<PrepList />} />
           <Route path="/prep/:examId" element={<PrepWizard />} />
 
@@ -271,6 +267,7 @@ function AppContent() {
               </AdminRoute>
             }
           />
+
           <Route
             path="/admin/prep-overlay"
             element={
@@ -279,6 +276,7 @@ function AppContent() {
               </AdminRoute>
             }
           />
+
           <Route
             path="/admin/prep-access"
             element={
@@ -288,7 +286,7 @@ function AppContent() {
             }
           />
 
-          {/* ----------------------- TEST SERIES ------------------------ */}
+          {/* TEST SERIES */}
           <Route path="/tests" element={<TestDashboard />} />
           <Route
             path="/tests/:code"
@@ -312,6 +310,7 @@ function AppContent() {
               </IfOwnerOnly>
             }
           />
+
           <Route
             path="/owner/tests/results"
             element={
@@ -320,6 +319,7 @@ function AppContent() {
               </IfOwnerOnly>
             }
           />
+
           <Route
             path="/owner/tests"
             element={
@@ -329,8 +329,9 @@ function AppContent() {
             }
           />
 
-          {/* ----------------------- ADMIN GENERAL ---------------------- */}
+          {/* ADMIN */}
           <Route path="/admin/login" element={<AdminLogin />} />
+
           <Route
             path="/admin/dashboard"
             element={
@@ -339,6 +340,7 @@ function AppContent() {
               </AdminRoute>
             }
           />
+
           <Route
             path="/admin/consultancy"
             element={
@@ -347,6 +349,7 @@ function AppContent() {
               </AdminRoute>
             }
           />
+
           <Route
             path="/admin/footer"
             element={
@@ -356,7 +359,7 @@ function AppContent() {
             }
           />
 
-          {/* ----------------------- LIBRARY ADMIN ---------------------- */}
+          {/* LIBRARY ADMIN */}
           <Route
             path="/admin/library"
             element={
@@ -365,6 +368,7 @@ function AppContent() {
               </AdminRoute>
             }
           />
+
           <Route
             path="/admin/library/payments"
             element={
@@ -373,6 +377,7 @@ function AppContent() {
               </AdminRoute>
             }
           />
+
           <Route
             path="/admin/library/seats"
             element={
@@ -381,6 +386,7 @@ function AppContent() {
               </AdminRoute>
             }
           />
+
           <Route
             path="/admin/library/book-purchases"
             element={
@@ -389,14 +395,7 @@ function AppContent() {
               </AdminRoute>
             }
           />
-          <Route
-            path="/admin/library/settings"
-            element={
-              <AdminRoute>
-                <SettingsPage />
-              </AdminRoute>
-            }
-          />
+
           <Route
             path="/admin/library/books"
             element={
@@ -406,7 +405,16 @@ function AppContent() {
             }
           />
 
-          {/* ----------------------- CHANGE PASSWORD -------------------- */}
+          <Route
+            path="/admin/library/settings"
+            element={
+              <AdminRoute>
+                <SettingsPage />
+              </AdminRoute>
+            }
+          />
+
+          {/* CHANGE PASSWORD */}
           <Route
             path="/admin/change-password"
             element={
@@ -416,16 +424,7 @@ function AppContent() {
             }
           />
 
-          {/* ----------------------- QnA SYSTEM ------------------------- */}
-          <Route path="/qna/exams" element={<QnAExamList />} />
-          <Route path="/qna/syllabus/:examId" element={<QnASyllabusTree />} />
-          <Route
-            path="/qna/question/:questionId"
-            element={<QnALiveQuestion />}
-          />
-          <Route path="/qna/dashboard" element={<QnADashboard />} />
-
-          {/* ----------------------- 404 CATCH-ALL ---------------------- */}
+          {/* 404 */}
           <Route path="*" element={<NotFound />} />
         </Routes>
       </div>
@@ -434,10 +433,6 @@ function AppContent() {
     </div>
   );
 }
-
-/* ------------------------------------------------------------------ */
-/*                               ROOT APP                             */
-/* ------------------------------------------------------------------ */
 
 export default function App() {
   return (
