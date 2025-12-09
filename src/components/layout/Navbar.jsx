@@ -13,7 +13,7 @@ export default function Navbar() {
   const isAdmin = isOwner() || adminKey === "LAWNOWNER2025";
   const showLiveAdmin = isAdmin;
 
-  /* Keep ADMIN_KEY in sync with localStorage */
+  /* Keep ADMIN_KEY synced with localStorage */
   useEffect(() => {
     const interval = setInterval(() => {
       const current = localStorage.getItem("ADMIN_KEY") || "";
@@ -42,8 +42,11 @@ export default function Navbar() {
 
     const scrollNow = () => {
       const el = document.getElementById("consultancy");
-      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
-      else window.location.hash = "#consultancy";
+      if (el) {
+        el.scrollIntoView({ behavior: "smooth", block: "start" });
+      } else {
+        window.location.hash = "#consultancy";
+      }
     };
 
     if (window.location.pathname === "/") {
@@ -207,7 +210,7 @@ export default function Navbar() {
                 Library Settings
               </a>
 
-              {/* QnA Admin – points to dashboard (hash can be used in UI to show QnA panel) */}
+              {/* QnA Admin – anchored section on Admin Dashboard */}
               <a
                 href="/admin/dashboard#qna"
                 className="text-purple-700 underline"
