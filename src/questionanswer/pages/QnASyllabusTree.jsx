@@ -1,7 +1,7 @@
 import React, { useState, useEffect } from 'react';
 import { useParams, useNavigate } from 'react-router-dom';
 import UnitTopicTree from '../components/UnitTopicTree';
-import { fetchSyllabusTree } from '../utils/qnaApi';
+import { fetchSyllabus } from "../utils/qnaApi";
 import '../styles/qna.css';
 
 const QnASyllabusTree = () => {
@@ -19,7 +19,7 @@ const QnASyllabusTree = () => {
 
   const loadSyllabus = async () => {
     try {
-      const data = await fetchSyllabusTree(examId);
+      const data = await fetchSyllabus(examId);
       setSyllabus(data);
     } catch (error) {
       console.error('Error loading syllabus:', error);
