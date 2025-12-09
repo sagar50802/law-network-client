@@ -1,74 +1,111 @@
-const API_BASE = process.env.REACT_APP_API_BASE || 'http://localhost:3001/api';
+import { API_BASE } from "../../config/api";
 
-export const fetchExams = async () => {
-  const response = await fetch(`${API_BASE}/exams`);
-  return response.json();
-};
+/* ===========================================================
+   STUDENT QNA APIs
+   =========================================================== */
 
-export const fetchSyllabusTree = async (examId) => {
-  const response = await fetch(`${API_BASE}/syllabus/${examId}`);
-  return response.json();
-};
+export async function fetchExams() {
+  const res = await fetch(`${API_BASE}/qna/exams`);
+  if (!res.ok) throw new Error("Failed to fetch exams");
+  return res.json();
+}
 
-export const fetchQuestion = async (questionId) => {
-  const response = await fetch(`${API_BASE}/questions/${questionId}`);
-  return response.json();
-};
+export async function fetchSyllabus(examId) {
+  const res = await fetch(`${API_BASE}/qna/syllabus/${examId}`);
+  if (!res.ok) throw new Error("Failed to fetch syllabus");
+  return res.json();
+}
 
-export const saveProgress = async (questionId, data) => {
-  const response = await fetch(`${API_BASE}/progress`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify({ questionId, ...data })
+export async function fetchQuestion(questionId) {
+  const res = await fetch(`${API_BASE}/qna/question/${questionId}`);
+  if (!res.ok) throw new Error("Failed to fetch question");
+  return res.json();
+}
+
+export async function fetchProgress() {
+  const res = await fetch(`${API_BASE}/qna/progress`);
+  if (!res.ok) throw new Error("Failed to fetch progress");
+  return res.json();
+}
+
+export async function saveProgress(questionId, data) {
+  const res = await fetch(`${API_BASE}/qna/progress`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify({ questionId, ...data }),
   });
-  return response.json();
-};
+  if (!res.ok) throw new Error("Failed to save progress");
+  return res.json();
+}
 
-export const fetchProgress = async () => {
-  const response = await fetch(`${API_BASE}/progress`);
-  return response.json();
-};
+export async function fetchRecommendations() {
+  const res = await fetch(`${API_BASE}/qna/recommendations`);
+  if (!res.ok) throw new Error("Failed to fetch recommendations");
+  return res.json();
+}
 
-export const fetchRecommendations = async () => {
-  const response = await fetch(`${API_BASE}/recommendations`);
-  return response.json();
-};
+export async function getNextTopics(currentTopicId) {
+  const res = await fetch(`${API_BASE}/qna/topics/next/${currentTopicId}`);
+  if (!res.ok) throw new Error("Failed to fetch next topics");
+  return res.json();
+}
 
-export const getNextTopics = async (currentTopicId) => {
-  const response = await fetch(`${API_BASE}/topics/next/${currentTopicId}`);
-  return response.json();
-};
+export async function getDependentTopics(subtopicId) {
+  const res = await fetch(`${API_BASE}/qna/topics/dependent/${subtopicId}`);
+  if (!res.ok) throw new Error("Failed to fetch dependent topics");
+  return res.json();
+}
 
-export const getDependentTopics = async (subtopicId) => {
-  const response = await fetch(`${API_BASE}/topics/dependent/${subtopicId}`);
-  return response.json();
-};
+/* ===========================================================
+   LOCAL STORAGE (offline progress)
+   =========================================================== */
 
-// Local storage utilities for offline progress
-export const saveProgressToStorage = (progress) => {
-  localStorage.setItem('qna-progress', JSON.stringify(progress));
-};
+export function saveProgressToStorage(progress) {
+  localStorage.setItem("qna-progress", JSON.stringify(progress));
+}
 
-export const getProgressFromStorage = () => {
-  const saved = localStorage.getItem('qna-progress');
+export function getProgressFromStorage() {
+  const saved = localStorage.getItem("qna-progress");
   return saved ? JSON.parse(saved) : null;
-};
+}
 
-// Admin APIs
-export const createQuestion = async (questionData) => {
-  const response = await fetch(`${API_BASE}/admin/questions`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(questionData)
-  });
-  return response.json();
-};
+/* ===========================================================
+   ADMIN QNA APIs
+   =========================================================== */
 
-export const scheduleQuestion = async (questionId, scheduleData) => {
-  const response = await fetch(`${API_BASE}/admin/questions/${questionId}/schedule`, {
-    method: 'POST',
-    headers: { 'Content-Type': 'application/json' },
-    body: JSON.stringify(scheduleData)
+export async function adminCreateQuestion(questionData) {
+  const res = await fetch(`${API_BASE}/qna/admin/questions`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(questionData),
   });
-  return response.json();
-};
+  if (!res.ok) throw new Error("Failed to create question");
+  return res.json();
+}
+
+export async function adminScheduleQuestion(questionId, scheduleData) {
+  const res = await fetch(
+    `${API_BASE}/qna/admin/questions/${questionId}/schedule`,
+    {
+      method: "POST",
+      headers: { "Content-Type": "application/json" },
+      body: JSON.stringify(scheduleData),
+    }
+  );
+  if (!res.ok) throw new Error("Failed to schedule question");
+  return res.json();
+}
+
+export async function adminFetchQuestions() {
+  const res = await fetch(`${API_BASE}/qna/admin/questions`);
+  if (!res.ok) throw new Error("Failed to fetch admin questions");
+  return res.json();
+}
+
+export async function adminDeleteQuestion(questionId) {
+  const res = await fetch(`${API_BASE}/qna/admin/questions/${questionId}`, {
+    method: "DELETE",
+  });
+  if (!res.ok) throw new Error("Failed to delete question");
+  return res.json();
+}
