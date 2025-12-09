@@ -95,3 +95,13 @@ export async function adminDeleteQuestion(questionId) {
   if (!res.ok) throw new Error("Failed to delete question");
   return res.json();
 }
+/* ------------------- LOCAL STORAGE ------------------- */
+
+export function saveProgressToStorage(progress) {
+  localStorage.setItem("qna-progress", JSON.stringify(progress));
+}
+
+export function getProgressFromStorage() {
+  const saved = localStorage.getItem("qna-progress");
+  return saved ? JSON.parse(saved) : null;
+}
