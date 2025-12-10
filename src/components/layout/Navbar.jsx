@@ -20,7 +20,6 @@ export default function Navbar() {
     const interval = setInterval(() => {
       setAdminKey(localStorage.getItem("ADMIN_KEY") || "");
     }, 1000);
-
     return () => clearInterval(interval);
   }, []);
 
@@ -43,11 +42,8 @@ export default function Navbar() {
 
     const scrollNow = () => {
       const el = document.getElementById("consultancy");
-      if (el) {
-        el.scrollIntoView({ behavior: "smooth", block: "start" });
-      } else {
-        window.location.hash = "#consultancy";
-      }
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+      else window.location.hash = "#consultancy";
     };
 
     if (window.location.pathname === "/") {
@@ -61,12 +57,13 @@ export default function Navbar() {
     localStorage.removeItem("ownerKey");
     localStorage.removeItem("ADMIN_KEY");
     localStorage.removeItem("adminToken");
-    window.location.reload();
+    location.reload();
   }
 
   return (
     <nav className="sticky top-0 z-40 bg-white/80 backdrop-blur border-b">
       <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+
         {/* Brand */}
         <a href="/" className="font-black text-xl">
           Law Network
@@ -75,13 +72,9 @@ export default function Navbar() {
         {/* DESKTOP NAV */}
         <div className="hidden md:flex gap-6 items-center">
           <a href="/articles">Articles ({articleCount})</a>
-          <a href="/#consultancy" onClick={goConsultancy}>
-            Consultancy
-          </a>
+          <a href="/#consultancy" onClick={goConsultancy}>Consultancy</a>
           <a href="/prep">Preparation</a>
-          <a href="/tests">
-            Test Series {testCount ? `(${testCount})` : ""}
-          </a>
+          <a href="/tests">Test Series {testCount ? `(${testCount})` : ""}</a>
           <a href="/podcasts">Podcasts</a>
           <a href="/videos">Video Gallery</a>
           <a href="/notebook">PDF Notebook</a>
@@ -89,10 +82,7 @@ export default function Navbar() {
           <a href="/research-drafting">Research Drafting</a>
 
           {/* Classroom */}
-          <a
-            href="/classroom"
-            className="text-green-600 font-semibold hover:underline"
-          >
+          <a href="/classroom" className="text-green-600 font-semibold hover:underline">
             Classroom
           </a>
 
@@ -100,14 +90,11 @@ export default function Navbar() {
           <a href="/library">Library</a>
 
           {/* LIVE */}
-          <a
-            href="/live"
-            className="text-red-600 font-semibold hover:underline"
-          >
+          <a href="/live" className="text-red-600 font-semibold hover:underline">
             LIVE
           </a>
 
-          {/* QnA Practice */}
+          {/* QNA Practice */}
           <a href="/qna" className="text-purple-600 font-semibold">
             QnA Practice
           </a>
@@ -121,7 +108,7 @@ export default function Navbar() {
                 Admin
               </a>
 
-              {/* QnA ADMIN */}
+              {/* OPTION B — Only ONE QNA ADMIN LINK */}
               <a href="/admin/qna" className="text-blue-600 underline">
                 QnA Admin
               </a>
@@ -146,10 +133,7 @@ export default function Navbar() {
                 Research Admin
               </a>
 
-              <a
-                href="/admin/research-drafting"
-                className="text-blue-600 underline"
-              >
+              <a href="/admin/research-drafting" className="text-blue-600 underline">
                 Research Drafting Admin
               </a>
 
@@ -158,31 +142,19 @@ export default function Navbar() {
                 Library Admin
               </a>
 
-              <a
-                href="/admin/library/payments"
-                className="text-blue-600 underline"
-              >
+              <a href="/admin/library/payments" className="text-blue-600 underline">
                 Library Payments
               </a>
 
-              <a
-                href="/admin/library/seats"
-                className="text-blue-600 underline"
-              >
+              <a href="/admin/library/seats" className="text-blue-600 underline">
                 Library Seats
               </a>
 
-              <a
-                href="/admin/library/book-purchases"
-                className="text-blue-600 underline"
-              >
+              <a href="/admin/library/book-purchases" className="text-blue-600 underline">
                 Book Purchases
               </a>
 
-              <a
-                href="/admin/library/settings"
-                className="text-blue-600 underline"
-              >
+              <a href="/admin/library/settings" className="text-blue-600 underline">
                 Library Settings
               </a>
 
@@ -247,15 +219,11 @@ export default function Navbar() {
           </a>
 
           <a href="/prep">Preparation</a>
-
-          {/* QnA Practice */}
           <a href="/qna" className="text-purple-600 font-semibold">
             QnA Practice
           </a>
 
-          <a href="/tests">
-            Test Series {testCount ? `(${testCount})` : ""}
-          </a>
+          <a href="/tests">Test Series {testCount ? `(${testCount})` : ""}</a>
           <a href="/podcasts">Podcasts</a>
           <a href="/videos">Video Gallery</a>
           <a href="/notebook">PDF Notebook</a>
@@ -276,49 +244,25 @@ export default function Navbar() {
 
           {isAdmin && (
             <>
-              <a href="/admin/dashboard" className="underline">
-                Admin
-              </a>
+              <a href="/admin/dashboard" className="underline">Admin</a>
 
-              {/* QnA Admin */}
-              <a href="/admin/qna" className="underline">
-                QnA Admin
-              </a>
+              {/* OPTION B — Only ONE QNA ADMIN LINK */}
+              <a href="/admin/qna" className="underline">QnA Admin</a>
 
-              <a href="/admin/prep" className="underline">
-                Prep Admin
-              </a>
-              <a href="/admin/prep-access" className="underline">
-                Access Requests
-              </a>
-              <a href="/owner/tests" className="underline">
-                Manage Tests
-              </a>
-              <a href="/owner/tests/import" className="underline">
-                Import Tests
-              </a>
-              <a href="/admin/research" className="underline">
-                Research Admin
-              </a>
+              <a href="/admin/prep" className="underline">Prep Admin</a>
+              <a href="/admin/prep-access" className="underline">Access Requests</a>
+              <a href="/owner/tests" className="underline">Manage Tests</a>
+              <a href="/owner/tests/import" className="underline">Import Tests</a>
+              <a href="/admin/research" className="underline">Research Admin</a>
               <a href="/admin/research-drafting" className="underline">
                 Research Drafting Admin
               </a>
 
-              <a href="/admin/library" className="underline">
-                Library Admin
-              </a>
-              <a href="/admin/library/payments" className="underline">
-                Library Payments
-              </a>
-              <a href="/admin/library/seats" className="underline">
-                Library Seats
-              </a>
-              <a href="/admin/library/book-purchases" className="underline">
-                Book Purchases
-              </a>
-              <a href="/admin/library/settings" className="underline">
-                Library Settings
-              </a>
+              <a href="/admin/library" className="underline">Library Admin</a>
+              <a href="/admin/library/payments" className="underline">Library Payments</a>
+              <a href="/admin/library/seats" className="underline">Library Seats</a>
+              <a href="/admin/library/book-purchases" className="underline">Book Purchases</a>
+              <a href="/admin/library/settings" className="underline">Library Settings</a>
 
               <a
                 href="/admin/classroom"
