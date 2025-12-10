@@ -1,3 +1,4 @@
+// src/components/layout/Navbar.jsx
 import { useEffect, useState } from "react";
 import isOwner from "../../utils/isOwner";
 import { getJSON } from "../../utils/api";
@@ -14,12 +15,11 @@ export default function Navbar() {
   const isAdmin = isOwner() || adminKey === "LAWNOWNER2025";
   const showLiveAdmin = isAdmin;
 
-  /* Keep ADMIN_KEY synced with localStorage */
+  /* Sync ADMIN_KEY with localStorage */
   useEffect(() => {
     const interval = setInterval(() => {
       setAdminKey(localStorage.getItem("ADMIN_KEY") || "");
     }, 1000);
-
     return () => clearInterval(interval);
   }, []);
 
@@ -63,7 +63,7 @@ export default function Navbar() {
   return (
     <nav className="sticky top-0 z-40 bg-white/80 backdrop-blur border-b">
       <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
-        
+
         {/* Brand */}
         <a href="/" className="font-black text-xl">
           Law Network
@@ -72,21 +72,13 @@ export default function Navbar() {
         {/* DESKTOP NAV */}
         <div className="hidden md:flex gap-6 items-center">
           <a href="/articles">Articles ({articleCount})</a>
-
           <a href="/#consultancy" onClick={goConsultancy}>Consultancy</a>
-
           <a href="/prep">Preparation</a>
-
           <a href="/tests">Test Series {testCount ? `(${testCount})` : ""}</a>
-
           <a href="/podcasts">Podcasts</a>
-
           <a href="/videos">Video Gallery</a>
-
           <a href="/notebook">PDF Notebook</a>
-
           <a href="/plagiarism">Plagiarism</a>
-
           <a href="/research-drafting">Research Drafting</a>
 
           {/* Classroom */}
@@ -102,7 +94,10 @@ export default function Navbar() {
             LIVE
           </a>
 
-          {/* ❌ QnA Practice Removed */}
+          {/* ✅ QNA PRACTICE (RESTORED) */}
+          <a href="/qna" className="text-purple-600 font-semibold">
+            QnA Practice
+          </a>
 
           {/* ------- ADMIN ------- */}
           {isAdmin && (
@@ -111,6 +106,11 @@ export default function Navbar() {
 
               <a href="/admin/dashboard" className="text-blue-600 underline">
                 Admin
+              </a>
+
+              {/* QnA ADMIN */}
+              <a href="/admin/qna" className="text-blue-600 underline">
+                QnA Admin
               </a>
 
               <a href="/admin/prep" className="text-blue-600 underline">
@@ -157,8 +157,6 @@ export default function Navbar() {
               <a href="/admin/library/settings" className="text-blue-600 underline">
                 Library Settings
               </a>
-
-              {/* ❌ QnA Admin Removed */}
 
               {/* Classroom Admin */}
               <a
@@ -219,10 +217,13 @@ export default function Navbar() {
           <a href="/#consultancy" onClick={goConsultancy}>
             Consultancy
           </a>
+
           <a href="/prep">Preparation</a>
 
-          {/* ❌ QnA removed from mobile */}
-          {/* <a href="/qna/exams" className="text-purple-600 font-semibold">QnA Practice</a> */}
+          {/* ✅ QnA Practice */}
+          <a href="/qna" className="text-purple-600 font-semibold">
+            QnA Practice
+          </a>
 
           <a href="/tests">Test Series {testCount ? `(${testCount})` : ""}</a>
           <a href="/podcasts">Podcasts</a>
@@ -247,13 +248,13 @@ export default function Navbar() {
             <>
               <a href="/admin/dashboard" className="underline">Admin</a>
 
-              {/* ❌ QnA admin removed */}
+              {/* QnA Admin */}
+              <a href="/admin/qna" className="underline">QnA Admin</a>
 
               <a href="/admin/prep" className="underline">Prep Admin</a>
               <a href="/admin/prep-access" className="underline">Access Requests</a>
               <a href="/owner/tests" className="underline">Manage Tests</a>
               <a href="/owner/tests/import" className="underline">Import Tests</a>
-
               <a href="/admin/research" className="underline">Research Admin</a>
               <a href="/admin/research-drafting" className="underline">
                 Research Drafting Admin
