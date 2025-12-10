@@ -48,7 +48,7 @@ import AdminFooterTermsEditor from "./pages/AdminFooterTermsEditor.jsx";
 import LibraryAdminPage from "./pages/admin/library/LibraryAdminPage.jsx";
 import PaymentsPage from "./pages/admin/library/PaymentsPage.jsx";
 import SeatsPage from "./pages/admin/library/SeatsPage.jsx";
-import BookPurchasesPage from "./pages/admin/library/BookPurchasesPage.jsx";
+import BookPurchasesPage from "./pages/admin/library/BookPurchasesPage.jsx"];
 import SettingsPage from "./pages/admin/library/SettingsPage.jsx";
 import BooksPage from "./pages/admin/library/BooksPage.jsx";
 
@@ -86,13 +86,19 @@ import AdminLectureManager from "./pages/AdminLectureManager.jsx";
 import ClassroomSharePage from "./pages/ClassroomSharePage.jsx";
 import ClassroomLinkCreator from "./pages/ClassroomLinkCreator.jsx";
 
-/* ❌ QNA IMPORTS REMOVED */
+/* ---------- QNA EXAM PLATFORM (RESTORED) ---------- */
+import StudentExamList from "./pages/qna/StudentExamList.jsx";
+import StudentStudyPage from "./pages/qna/StudentStudyPage.jsx";
+import AdminQnaPortal from "./pages/qna/AdminPortal.jsx";
+import AdminExamManagement from "./pages/qna/AdminExamManagement.jsx";
+import AdminSyllabusManagement from "./pages/qna/AdminSyllabusManagement.jsx";
+import AdminQuestionManagement from "./pages/qna/AdminQuestionManagement.jsx";
 
 /* ---------- Theme Page ---------- */
 import ThemeFocusPage from "./pages/classroom/ThemeFocusPage.jsx";
 
 /* ========================================== */
-/*                 NOT FOUND                  */
+/* Not Found
 /* ========================================== */
 function NotFound() {
   return (
@@ -110,6 +116,10 @@ function NotFound() {
     </div>
   );
 }
+
+/* ========================================== */
+/* Helpers
+/* ========================================== */
 
 function ScrollToHash() {
   const { hash, pathname } = useLocation();
@@ -154,7 +164,7 @@ function ClassroomWrapper({ children }) {
 }
 
 /* ========================================== */
-/*                 MAIN ROUTES                */
+/* Main Routes
 /* ========================================== */
 function AppContent() {
   const location = useLocation();
@@ -176,6 +186,7 @@ function AppContent() {
 
       <div className="animate-fadeIn flex-1">
         <Routes>
+
           {/* PUBLIC PAGES */}
           <Route path="/" element={<HomePage />} />
           <Route path="/articles" element={<ArticlesPage />} />
@@ -187,7 +198,9 @@ function AppContent() {
           <Route path="/pdfdemo" element={<PdfDemo />} />
           <Route path="/library" element={<LibraryPage />} />
 
-          {/* ❌ QNA PUBLIC ROUTES REMOVED */}
+          {/* QNA PUBLIC ROUTES */}
+          <Route path="/qna" element={<StudentExamList />} />
+          <Route path="/qna/exams/:examId" element={<StudentStudyPage />} />
 
           {/* BOOK READERS */}
           <Route path="/library/reader/:bookId" element={<BookReaderPage />} />
@@ -243,7 +256,6 @@ function AppContent() {
           {/* RESEARCH */}
           <Route path="/research-drafting" element={<ResearchDrafting />} />
           <Route path="/research-drafting/lab/:id" element={<ResearchDraftingLab />} />
-
           <Route
             path="/admin/research-drafting"
             element={
@@ -256,7 +268,6 @@ function AppContent() {
           {/* PREP */}
           <Route path="/prep" element={<PrepList />} />
           <Route path="/prep/:examId" element={<PrepWizard />} />
-
           <Route
             path="/admin/prep"
             element={
@@ -287,14 +298,8 @@ function AppContent() {
           {/* TEST SERIES */}
           <Route path="/tests" element={<TestDashboard />} />
           <Route path="/tests/:code" element={<RouteWithCode Comp={TestIntro} />} />
-          <Route
-            path="/tests/:code/play"
-            element={<RouteWithCode Comp={TestPlayer} />}
-          />
-          <Route
-            path="/tests/result/:id"
-            element={<RouteWithResultId Comp={ResultScreen} />}
-          />
+          <Route path="/tests/:code/play" element={<RouteWithCode Comp={TestPlayer} />} />
+          <Route path="/tests/result/:id" element={<RouteWithResultId Comp={ResultScreen} />} />
 
           {/* TEST ADMIN */}
           <Route
@@ -324,7 +329,7 @@ function AppContent() {
             }
           />
 
-          {/* ADMIN */}
+          {/* ADMIN ROUTES */}
           <Route path="/admin/login" element={<AdminLogin />} />
 
           <Route
@@ -345,8 +350,44 @@ function AppContent() {
             }
           />
 
-          {/* ❌ QNA ADMIN ROUTES REMOVED */}
+          {/* QNA ADMIN ROUTES */}
+          <Route
+            path="/admin/qna"
+            element={
+              <IfOwnerOnly>
+                <AdminQnaPortal />
+              </IfOwnerOnly>
+            }
+          />
 
+          <Route
+            path="/admin/qna/exams"
+            element={
+              <IfOwnerOnly>
+                <AdminExamManagement />
+              </IfOwnerOnly>
+            }
+          />
+
+          <Route
+            path="/admin/qna/syllabus"
+            element={
+              <IfOwnerOnly>
+                <AdminSyllabusManagement />
+              </IfOwnerOnly>
+            }
+          />
+
+          <Route
+            path="/admin/qna/questions"
+            element={
+              <IfOwnerOnly>
+                <AdminQuestionManagement />
+              </IfOwnerOnly>
+            }
+          />
+
+          {/* FOOTER ADMIN */}
           <Route
             path="/admin/footer"
             element={
@@ -423,6 +464,7 @@ function AppContent() {
 
           {/* 404 */}
           <Route path="*" element={<NotFound />} />
+
         </Routes>
       </div>
 
