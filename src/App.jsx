@@ -89,7 +89,7 @@ import ClassroomLinkCreator from "./pages/ClassroomLinkCreator.jsx";
 /* ---------- QNA EXAM PLATFORM (RESTORED) ---------- */
 import StudentExamList from "./pages/qna/StudentExamList.jsx";
 import StudentStudyPage from "./pages/qna/StudentStudyPage.jsx";
-import AdminQnaPortal from "./pages/qna/AdminPortal.jsx";
+import AdminQnaPortal from "./pages/qna/AdminQnaPortal.jsx";
 import AdminExamManagement from "./pages/qna/AdminExamManagement.jsx";
 import AdminSyllabusManagement from "./pages/qna/AdminSyllabusManagement.jsx";
 import AdminQuestionManagement from "./pages/qna/AdminQuestionManagement.jsx";
