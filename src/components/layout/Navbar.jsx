@@ -102,10 +102,7 @@ export default function Navbar() {
             LIVE
           </a>
 
-          {/* QnA PRACTICE */}
-          <a href="/qna/exams" className="text-purple-600 font-semibold hover:underline">
-            QnA Practice
-          </a>
+          {/* ❌ QnA Practice Removed */}
 
           {/* ------- ADMIN ------- */}
           {isAdmin && (
@@ -161,10 +158,7 @@ export default function Navbar() {
                 Library Settings
               </a>
 
-              {/* ⭐ FIXED: QnA ADMIN route ⭐ */}
-              <a href="/admin/qna" className="text-purple-700 underline">
-                QnA Admin
-              </a>
+              {/* ❌ QnA Admin Removed */}
 
               {/* Classroom Admin */}
               <a
@@ -227,9 +221,8 @@ export default function Navbar() {
           </a>
           <a href="/prep">Preparation</a>
 
-          <a href="/qna/exams" className="text-purple-600 font-semibold">
-            QnA Practice
-          </a>
+          {/* ❌ QnA removed from mobile */}
+          {/* <a href="/qna/exams" className="text-purple-600 font-semibold">QnA Practice</a> */}
 
           <a href="/tests">Test Series {testCount ? `(${testCount})` : ""}</a>
           <a href="/podcasts">Podcasts</a>
@@ -254,10 +247,7 @@ export default function Navbar() {
             <>
               <a href="/admin/dashboard" className="underline">Admin</a>
 
-              {/* ⭐ FIXED MOBILE ROUTE ⭐ */}
-              <a href="/admin/qna" className="text-purple-600 underline">
-                QnA Admin
-              </a>
+              {/* ❌ QnA admin removed */}
 
               <a href="/admin/prep" className="underline">Prep Admin</a>
               <a href="/admin/prep-access" className="underline">Access Requests</a>
