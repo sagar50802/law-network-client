@@ -48,7 +48,7 @@ import AdminFooterTermsEditor from "./pages/AdminFooterTermsEditor.jsx";
 import LibraryAdminPage from "./pages/admin/library/LibraryAdminPage.jsx";
 import PaymentsPage from "./pages/admin/library/PaymentsPage.jsx";
 import SeatsPage from "./pages/admin/library/SeatsPage.jsx";
-import BookPurchasesPage from "./pages/admin/library/BookPurchasesPage.jsx"];
+import BookPurchasesPage from "./pages/admin/library/BookPurchasesPage.jsx";
 import SettingsPage from "./pages/admin/library/SettingsPage.jsx";
 import BooksPage from "./pages/admin/library/BooksPage.jsx";
 
