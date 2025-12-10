@@ -9,7 +9,7 @@ const AdminPortal = () => {
 
   return (
     <div className="qna-page">
-      <Link to="/" style={{ fontSize: 14, color: "#2563eb" }}>
+      <Link to="/admin/dashboard" style={{ fontSize: 14, color: "#2563eb" }}>
         ← Back to Dashboard
       </Link>
 
@@ -25,19 +25,19 @@ const AdminPortal = () => {
           icon="🎓"
           title="Exam Management"
           description="Create and manage exam entries with custom icons"
-          onClick={() => navigate("/qna/admin/exams")}
+          onClick={() => navigate("/admin/qna/exams")}
         />
         <AdminCard
           icon="📖"
           title="Syllabus Management"
           description="Build syllabus hierarchy with units, topics, and subtopics"
-          onClick={() => navigate("/qna/admin/syllabus")}
+          onClick={() => navigate("/admin/qna/syllabus")}
         />
         <AdminCard
           icon="📄"
           title="Question Management"
           description="Create questions with answers and schedule releases"
-          onClick={() => navigate("/qna/admin/questions")}
+          onClick={() => navigate("/admin/qna/questions")}
         />
       </div>
     </div>
