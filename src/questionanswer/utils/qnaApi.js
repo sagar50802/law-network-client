@@ -1,83 +1,69 @@
-import { API_BASE as ROOT_API } from "../../utils/api";
-
-// ROOT_API is usually "/api"
-// We build /api/qna as the base for all QnA endpoints
-const API_BASE = `${ROOT_API}/qna`;
+import { API_BASE } from "../../utils/api";
 
 /* ===========================================================
-   STUDENT QNA APIs
-   Backend routes (via server + qnaRoutes):
-   GET    /api/qna/exams
-   GET    /api/qna/syllabus/:examId
-   GET    /api/qna/question/:questionId
-   GET    /api/qna/progress
-   POST   /api/qna/progress
+   STUDENT QNA APIs  (all hit /api/qna/...)
    =========================================================== */
 
 export async function fetchExams() {
-  const res = await fetch(`${API_BASE}/exams`);
+  const res = await fetch(`${API_BASE}/qna/exams`);
   if (!res.ok) throw new Error("Failed to fetch exams");
   return res.json();
 }
 
 export async function fetchSyllabus(examId) {
-  const res = await fetch(`${API_BASE}/syllabus/${examId}`);
+  const res = await fetch(`${API_BASE}/qna/syllabus/${examId}`);
   if (!res.ok) throw new Error("Failed to fetch syllabus");
   return res.json();
 }
 
 export async function fetchQuestion(questionId) {
-  const res = await fetch(`${API_BASE}/question/${questionId}`);
+  const res = await fetch(`${API_BASE}/qna/question/${questionId}`);
   if (!res.ok) throw new Error("Failed to fetch question");
   return res.json();
 }
 
 export async function fetchProgress() {
-  const res = await fetch(`${API_BASE}/progress`);
+  const res = await fetch(`${API_BASE}/qna/progress`);
   if (!res.ok) throw new Error("Failed to fetch progress");
   return res.json();
 }
 
 export async function saveProgress(questionId, data) {
-  const res = await fetch(`${API_BASE}/progress`, {
+  const res = await fetch(`${API_BASE}/qna/progress`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify({ questionId, ...data }),
   });
-
   if (!res.ok) throw new Error("Failed to save progress");
   return res.json();
 }
 
 /* ===========================================================
    RECOMMENDATIONS
-   Backend:
-   GET  /api/qna/recommendations
-   POST /api/qna/recommendations/action
-   GET  /api/qna/topics/next/:topicId
-   GET  /api/qna/topics/dependent/:subtopicId
    =========================================================== */
 
 export async function fetchRecommendations() {
-  const res = await fetch(`${API_BASE}/recommendations`);
+  const res = await fetch(`${API_BASE}/qna/recommendations`);
   if (!res.ok) throw new Error("Failed to fetch recommendations");
   return res.json();
 }
 
 export async function getNextTopics(topicId) {
-  const res = await fetch(`${API_BASE}/topics/next/${topicId}`);
+  const res = await fetch(`${API_BASE}/qna/topics/next/${topicId}`);
   if (!res.ok) throw new Error("Failed to fetch next topics");
   return res.json();
 }
 
 export async function getDependentTopics(subtopicId) {
-  const res = await fetch(`${API_BASE}/topics/dependent/${subtopicId}`);
+  const res = await fetch(
+    `${API_BASE}/qna/topics/dependent/${subtopicId}`
+  );
   if (!res.ok) throw new Error("Failed to fetch dependent topics");
   return res.json();
 }
 
 /* ===========================================================
-   LOCAL STORAGE HELPERS (for useQnAProgress)
+   LOCAL STORAGE HELPERS (used by useQnAProgress)
    =========================================================== */
 
 export function saveProgressToStorage(progress) {
@@ -90,17 +76,23 @@ export function getProgressFromStorage() {
 }
 
 /* ===========================================================
-   ADMIN ROUTES
-   Backend:
-   GET    /api/qna/admin/questions
-   POST   /api/qna/admin/questions
-   POST   /api/qna/admin/questions/:id/schedule
-   DELETE /api/qna/admin/questions/:id
-   GET    /api/qna/admin/analytics
+   ADMIN APIs  (all hit /api/qna/admin/...)
    =========================================================== */
 
+// Create exam
+export async function adminCreateExam(examData) {
+  const res = await fetch(`${API_BASE}/qna/admin/exams`, {
+    method: "POST",
+    headers: { "Content-Type": "application/json" },
+    body: JSON.stringify(examData),
+  });
+  if (!res.ok) throw new Error("Failed to create exam");
+  return res.json();
+}
+
+// Questions
 export async function adminCreateQuestion(questionData) {
-  const res = await fetch(`${API_BASE}/admin/questions`, {
+  const res = await fetch(`${API_BASE}/qna/admin/questions`, {
     method: "POST",
     headers: { "Content-Type": "application/json" },
     body: JSON.stringify(questionData),
@@ -111,7 +103,7 @@ export async function adminCreateQuestion(questionData) {
 
 export async function adminScheduleQuestion(questionId, scheduleData) {
   const res = await fetch(
-    `${API_BASE}/admin/questions/${questionId}/schedule`,
+    `${API_BASE}/qna/admin/questions/${questionId}/schedule`,
     {
       method: "POST",
       headers: { "Content-Type": "application/json" },
@@ -122,16 +114,31 @@ export async function adminScheduleQuestion(questionId, scheduleData) {
   return res.json();
 }
 
-export async function adminFetchQuestions() {
-  const res = await fetch(`${API_BASE}/admin/questions`);
+export async function adminFetchQuestions(params = {}) {
+  const qs = new URLSearchParams(params).toString();
+  const url = qs
+    ? `${API_BASE}/qna/admin/questions?${qs}`
+    : `${API_BASE}/qna/admin/questions`;
+
+  const res = await fetch(url);
   if (!res.ok) throw new Error("Failed to fetch admin questions");
   return res.json();
 }
 
 export async function adminDeleteQuestion(questionId) {
-  const res = await fetch(`${API_BASE}/admin/questions/${questionId}`, {
-    method: "DELETE",
-  });
+  const res = await fetch(
+    `${API_BASE}/qna/admin/questions/${questionId}`,
+    {
+      method: "DELETE",
+    }
+  );
   if (!res.ok) throw new Error("Failed to delete question");
+  return res.json();
+}
+
+// Scheduled questions list (for scheduler page)
+export async function adminFetchScheduledQuestions() {
+  const res = await fetch(`${API_BASE}/qna/admin/scheduled-questions`);
+  if (!res.ok) throw new Error("Failed to fetch scheduled questions");
   return res.json();
 }
