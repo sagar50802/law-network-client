@@ -6,6 +6,7 @@ export default function Navbar() {
   const [articleCount, setArticleCount] = useState(0);
   const [testCount, setTestCount] = useState(0);
   const [open, setOpen] = useState(false);
+
   const [adminKey, setAdminKey] = useState(
     localStorage.getItem("ADMIN_KEY") || ""
   );
@@ -16,8 +17,7 @@ export default function Navbar() {
   /* Keep ADMIN_KEY synced with localStorage */
   useEffect(() => {
     const interval = setInterval(() => {
-      const current = localStorage.getItem("ADMIN_KEY") || "";
-      setAdminKey(current);
+      setAdminKey(localStorage.getItem("ADMIN_KEY") || "");
     }, 1000);
 
     return () => clearInterval(interval);
@@ -42,11 +42,8 @@ export default function Navbar() {
 
     const scrollNow = () => {
       const el = document.getElementById("consultancy");
-      if (el) {
-        el.scrollIntoView({ behavior: "smooth", block: "start" });
-      } else {
-        window.location.hash = "#consultancy";
-      }
+      if (el) el.scrollIntoView({ behavior: "smooth", block: "start" });
+      else window.location.hash = "#consultancy";
     };
 
     if (window.location.pathname === "/") {
@@ -66,6 +63,7 @@ export default function Navbar() {
   return (
     <nav className="sticky top-0 z-40 bg-white/80 backdrop-blur border-b">
       <div className="max-w-6xl mx-auto px-4 py-3 flex items-center justify-between">
+        
         {/* Brand */}
         <a href="/" className="font-black text-xl">
           Law Network
@@ -73,76 +71,43 @@ export default function Navbar() {
 
         {/* DESKTOP NAV */}
         <div className="hidden md:flex gap-6 items-center">
-          <a href="/articles" className="hover:text-blue-600">
-            Articles ({articleCount})
-          </a>
+          <a href="/articles">Articles ({articleCount})</a>
 
-          <a
-            href="/#consultancy"
-            onClick={goConsultancy}
-            className="hover:text-blue-600"
-          >
-            Consultancy
-          </a>
+          <a href="/#consultancy" onClick={goConsultancy}>Consultancy</a>
 
-          <a href="/prep" className="hover:text-blue-600">
-            Preparation
-          </a>
+          <a href="/prep">Preparation</a>
 
-          <a href="/tests" className="hover:text-blue-600">
-            Test Series {testCount ? `(${testCount})` : ""}
-          </a>
+          <a href="/tests">Test Series {testCount ? `(${testCount})` : ""}</a>
 
-          <a href="/podcasts" className="hover:text-blue-600">
-            Podcasts
-          </a>
+          <a href="/podcasts">Podcasts</a>
 
-          <a href="/videos" className="hover:text-blue-600">
-            Video Gallery
-          </a>
+          <a href="/videos">Video Gallery</a>
 
-          <a href="/notebook" className="hover:text-blue-600">
-            PDF Notebook
-          </a>
+          <a href="/notebook">PDF Notebook</a>
 
-          <a href="/plagiarism" className="hover:text-blue-600">
-            Plagiarism
-          </a>
+          <a href="/plagiarism">Plagiarism</a>
 
-          <a href="/research-drafting" className="hover:text-blue-600">
-            Research Drafting
-          </a>
+          <a href="/research-drafting">Research Drafting</a>
 
           {/* Classroom */}
-          <a
-            href="/classroom"
-            className="text-green-600 font-semibold hover:underline"
-          >
+          <a href="/classroom" className="text-green-600 font-semibold hover:underline">
             Classroom
           </a>
 
-          {/* Library (user) */}
-          <a href="/library" className="hover:text-blue-600">
-            Library
-          </a>
+          {/* Library */}
+          <a href="/library">Library</a>
 
           {/* LIVE */}
-          <a
-            href="/live"
-            className="text-red-600 font-semibold hover:underline"
-          >
+          <a href="/live" className="text-red-600 font-semibold hover:underline">
             LIVE
           </a>
 
-          {/* QnA PRACTICE (student) */}
-          <a
-            href="/qna/exams"
-            className="text-purple-600 font-semibold hover:underline"
-          >
+          {/* QnA PRACTICE */}
+          <a href="/qna/exams" className="text-purple-600 font-semibold hover:underline">
             QnA Practice
           </a>
 
-          {/* ADMIN SECTION */}
+          {/* ------- ADMIN ------- */}
           {isAdmin && (
             <>
               <span className="text-gray-300">|</span>
@@ -163,10 +128,7 @@ export default function Navbar() {
                 Manage Tests
               </a>
 
-              <a
-                href="/owner/tests/import"
-                className="text-blue-600 underline"
-              >
+              <a href="/owner/tests/import" className="text-blue-600 underline">
                 Import Tests
               </a>
 
@@ -174,10 +136,7 @@ export default function Navbar() {
                 Research Admin
               </a>
 
-              <a
-                href="/admin/research-drafting"
-                className="text-blue-600 underline"
-              >
+              <a href="/admin/research-drafting" className="text-blue-600 underline">
                 Research Drafting Admin
               </a>
 
@@ -185,69 +144,58 @@ export default function Navbar() {
               <a href="/admin/library" className="text-blue-600 underline">
                 Library Admin
               </a>
-              <a
-                href="/admin/library/payments"
-                className="text-blue-600 underline"
-              >
+
+              <a href="/admin/library/payments" className="text-blue-600 underline">
                 Library Payments
               </a>
-              <a
-                href="/admin/library/seats"
-                className="text-blue-600 underline"
-              >
+
+              <a href="/admin/library/seats" className="text-blue-600 underline">
                 Library Seats
               </a>
-              <a
-                href="/admin/library/book-purchases"
-                className="text-blue-600 underline"
-              >
+
+              <a href="/admin/library/book-purchases" className="text-blue-600 underline">
                 Book Purchases
               </a>
-              <a
-                href="/admin/library/settings"
-                className="text-blue-600 underline"
-              >
+
+              <a href="/admin/library/settings" className="text-blue-600 underline">
                 Library Settings
               </a>
 
-              {/* QnA Admin – anchored section on Admin Dashboard */}
-              <a
-                href="/admin/dashboard#qna"
-                className="text-purple-700 underline"
-              >
+              {/* ⭐ FIXED: QnA ADMIN route ⭐ */}
+              <a href="/admin/qna" className="text-purple-700 underline">
                 QnA Admin
               </a>
 
               {/* Classroom Admin */}
               <a
                 href="/admin/classroom"
-                className="px-2 py-1 rounded-md bg-green-200 text-green-900 font-semibold hover:bg-green-300 transition"
+                className="px-2 py-1 rounded-md bg-green-200 text-green-900 font-semibold hover:bg-green-300"
               >
                 🎓 Classroom Manager
               </a>
 
-              {/* LIVE Admin */}
+              {/* Live Admin */}
               {showLiveAdmin && (
                 <a
                   href="/admin/live"
-                  className="px-2 py-1 rounded-md bg-yellow-400 text-black font-semibold hover:bg-yellow-300 transition"
+                  className="px-2 py-1 rounded-md bg-yellow-400 text-black font-semibold hover:bg-yellow-300"
                 >
                   🎥 Live Studio
                 </a>
               )}
 
-              {/* Footer editor */}
+              {/* Footer */}
               <a
                 href="/admin/footer"
-                className="px-2 py-1 rounded-md bg-blue-200 text-blue-900 font-semibold hover:bg-blue-300 transition"
+                className="px-2 py-1 rounded-md bg-blue-200 text-blue-900 font-semibold hover:bg-blue-300"
               >
                 📝 Edit Footer
               </a>
 
-              {/* Change password */}
+              {/* Change Password */}
               <a
                 href="/admin/change-password"
-                className="px-2 py-1 rounded-md bg-red-200 text-red-900 font-semibold hover:bg-red-300 transition"
+                className="px-2 py-1 rounded-md bg-red-200 text-red-900 font-semibold hover:bg-red-300"
               >
                 🔑 Change Password
               </a>
@@ -274,14 +222,11 @@ export default function Navbar() {
       {open && (
         <div className="md:hidden px-4 pb-3 flex flex-col gap-2">
           <a href="/articles">Articles</a>
-
           <a href="/#consultancy" onClick={goConsultancy}>
             Consultancy
           </a>
-
           <a href="/prep">Preparation</a>
 
-          {/* QnA mobile user */}
           <a href="/qna/exams" className="text-purple-600 font-semibold">
             QnA Practice
           </a>
@@ -307,76 +252,46 @@ export default function Navbar() {
 
           {isAdmin && (
             <>
-              <a href="/admin/dashboard" className="underline">
-                Admin
-              </a>
+              <a href="/admin/dashboard" className="underline">Admin</a>
 
-              {/* QnA Admin mobile – same target as desktop */}
-              <a
-                href="/admin/dashboard#qna"
-                className="text-purple-600 underline"
-              >
+              {/* ⭐ FIXED MOBILE ROUTE ⭐ */}
+              <a href="/admin/qna" className="text-purple-600 underline">
                 QnA Admin
               </a>
 
-              <a href="/admin/prep" className="underline">
-                Prep Admin
-              </a>
+              <a href="/admin/prep" className="underline">Prep Admin</a>
+              <a href="/admin/prep-access" className="underline">Access Requests</a>
+              <a href="/owner/tests" className="underline">Manage Tests</a>
+              <a href="/owner/tests/import" className="underline">Import Tests</a>
 
-              <a href="/admin/prep-access" className="underline">
-                Access Requests
-              </a>
-
-              <a href="/owner/tests" className="underline">
-                Manage Tests
-              </a>
-
-              <a href="/owner/tests/import" className="underline">
-                Import Tests
-              </a>
-
-              <a href="/admin/research" className="underline">
-                Research Admin
-              </a>
-
+              <a href="/admin/research" className="underline">Research Admin</a>
               <a href="/admin/research-drafting" className="underline">
                 Research Drafting Admin
               </a>
 
-              {/* Library Admin mobile */}
-              <a href="/admin/library" className="underline">
-                Library Admin
-              </a>
-              <a href="/admin/library/payments" className="underline">
-                Library Payments
-              </a>
-              <a href="/admin/library/seats" className="underline">
-                Library Seats
-              </a>
-              <a href="/admin/library/book-purchases" className="underline">
-                Book Purchases
-              </a>
-              <a href="/admin/library/settings" className="underline">
-                Library Settings
-              </a>
+              <a href="/admin/library" className="underline">Library Admin</a>
+              <a href="/admin/library/payments" className="underline">Library Payments</a>
+              <a href="/admin/library/seats" className="underline">Library Seats</a>
+              <a href="/admin/library/book-purchases" className="underline">Book Purchases</a>
+              <a href="/admin/library/settings" className="underline">Library Settings</a>
 
               <a
                 href="/admin/classroom"
-                className="px-2 py-1 rounded-md bg-green-200 text-green-900 font-semibold text-center hover:bg-green-300 transition"
+                className="px-2 py-1 rounded-md bg-green-200 text-green-900 font-semibold text-center"
               >
                 🎓 Classroom Manager
               </a>
 
               <a
                 href="/admin/footer"
-                className="px-2 py-1 rounded-md bg-blue-200 text-blue-900 font-semibold text-center hover:bg-blue-300 transition"
+                className="px-2 py-1 rounded-md bg-blue-200 text-blue-900 font-semibold text-center"
               >
                 📝 Edit Footer
               </a>
 
               <a
                 href="/admin/change-password"
-                className="px-2 py-1 rounded-md bg-red-200 text-red-900 font-semibold text-center hover:bg-red-300 transition"
+                className="px-2 py-1 rounded-md bg-red-200 text-red-900 font-semibold text-center"
               >
                 🔑 Change Password
               </a>
