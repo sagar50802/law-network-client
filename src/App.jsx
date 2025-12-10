@@ -32,11 +32,11 @@ import PodcastsPage from "./pages/PodcastsPage.jsx";
 import NotebookPage from "./pages/NotebookPage.jsx";
 import PdfDemo from "./pages/PdfDemo.jsx";
 import Plagiarism from "./pages/Plagiarism.jsx";
-import LibraryPage from "./pages/LibraryPage.jsx"; 
+import LibraryPage from "./pages/LibraryPage.jsx";
 
 /* ---------- BOOK READERS ---------- */
 import BookReaderPage from "./pages/library/reader/BookReaderPage.jsx";
-import BookFlipViewerPage from "./pages/library/reader/BookFlipViewerPage.jsx"; // ★ NEW
+import BookFlipViewerPage from "./pages/library/reader/BookFlipViewerPage.jsx";
 
 /* ---------- Admin Pages ---------- */
 import AdminDashboard from "./pages/AdminDashboard.jsx";
@@ -86,17 +86,7 @@ import AdminLectureManager from "./pages/AdminLectureManager.jsx";
 import ClassroomSharePage from "./pages/ClassroomSharePage.jsx";
 import ClassroomLinkCreator from "./pages/ClassroomLinkCreator.jsx";
 
-import QnAExamList from "./questionanswer/pages/QnAExamList.jsx";
-import QnASyllabusTree from "./questionanswer/pages/QnASyllabusTree.jsx";
-import QnALiveQuestion from "./questionanswer/pages/QnALiveQuestion.jsx";
-import QnADashboard from "./questionanswer/pages/QnADashboard.jsx";
-/* ---------------- QNA ADMIN ROUTES ---------------- */
-import AdminQnAQuestions from "./questionanswer/admin/AdminQnAQuestions.jsx";
-import AdminQnASyllabus from "./questionanswer/admin/AdminQnASyllabus.jsx";
-import AdminQnAExams from "./questionanswer/admin/AdminQnAExams.jsx";
-import AdminQnAScheduler from "./questionanswer/admin/AdminQnAScheduler.jsx";
-
-
+/* ❌ QNA IMPORTS REMOVED */
 
 /* ---------- Theme Page ---------- */
 import ThemeFocusPage from "./pages/classroom/ThemeFocusPage.jsx";
@@ -196,19 +186,12 @@ function AppContent() {
           <Route path="/plagiarism" element={<Plagiarism />} />
           <Route path="/pdfdemo" element={<PdfDemo />} />
           <Route path="/library" element={<LibraryPage />} />
-          {/* ---------- QNA ROUTES ---------- */}
-<Route path="/qna/exams" element={<QnAExamList />} />
-<Route path="/qna/syllabus/:examId" element={<QnASyllabusTree />} />
-<Route path="/qna/question/:questionId" element={<QnALiveQuestion />} />
-<Route path="/qna/dashboard" element={<QnADashboard />} />
 
+          {/* ❌ QNA PUBLIC ROUTES REMOVED */}
 
-          {/* ---- BOOK READERS ---- */}
+          {/* BOOK READERS */}
           <Route path="/library/reader/:bookId" element={<BookReaderPage />} />
-
-          {/* ★ NEW FLIP VIEWER ROUTE */}
           <Route path="/library/flip/:bookId" element={<BookFlipViewerPage />} />
-
 
           {/* LIVE */}
           <Route path="/live" element={<LiveChannelPage />} />
@@ -259,10 +242,7 @@ function AppContent() {
 
           {/* RESEARCH */}
           <Route path="/research-drafting" element={<ResearchDrafting />} />
-          <Route
-            path="/research-drafting/lab/:id"
-            element={<ResearchDraftingLab />}
-          />
+          <Route path="/research-drafting/lab/:id" element={<ResearchDraftingLab />} />
 
           <Route
             path="/admin/research-drafting"
@@ -306,10 +286,7 @@ function AppContent() {
 
           {/* TEST SERIES */}
           <Route path="/tests" element={<TestDashboard />} />
-          <Route
-            path="/tests/:code"
-            element={<RouteWithCode Comp={TestIntro} />}
-          />
+          <Route path="/tests/:code" element={<RouteWithCode Comp={TestIntro} />} />
           <Route
             path="/tests/:code/play"
             element={<RouteWithCode Comp={TestPlayer} />}
@@ -358,7 +335,6 @@ function AppContent() {
               </AdminRoute>
             }
           />
-          
 
           <Route
             path="/admin/consultancy"
@@ -369,52 +345,7 @@ function AppContent() {
             }
           />
 
-          {/* QNA ADMIN */}
-<Route
-  path="/admin/qna"
-  element={
-    <AdminRoute>
-      <AdminQnAExams />
-    </AdminRoute>
-  }
-/>
-
-<Route
-  path="/admin/qna/exams"
-  element={
-    <AdminRoute>
-      <AdminQnAExams />
-    </AdminRoute>
-  }
-/>
-
-<Route
-  path="/admin/qna/syllabus/:examId"
-  element={
-    <AdminRoute>
-      <AdminQnASyllabus />
-    </AdminRoute>
-  }
-/>
-
-<Route
-  path="/admin/qna/questions"
-  element={
-    <AdminRoute>
-      <AdminQnAQuestions />
-    </AdminRoute>
-  }
-/>
-
-<Route
-  path="/admin/qna/schedule/:questionId"
-  element={
-    <AdminRoute>
-      <AdminQnAScheduler />
-    </AdminRoute>
-  }
-/>
-
+          {/* ❌ QNA ADMIN ROUTES REMOVED */}
 
           <Route
             path="/admin/footer"
